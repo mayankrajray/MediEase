@@ -1,0 +1,107 @@
+# CI gates for MediEase (docs/TESTING.md §5).
+# The api and web jobs switch on automatically once their manifests exist (M0-P2 / M0-P4),
+# so this workflow is valid from the first commit. Security scanning and image builds join in M0-P5.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: Detect components
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.check.outputs.api }}
+      web: ${{ steps.check.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          echo "api=$([ -f apps/api/pyproject.toml ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "web=$([ -f apps/web/package.json ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  config:
+    name: Config and contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose file is valid
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: OpenAPI contract is valid
+        run: |
+          pip install "openapi-spec-validator==0.7.1"
+          openapi-spec-validator contracts/openapi.yaml
+
+  api:
+    name: API — lint, types, tests
+    needs: detect
+    if: needs.detect.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mediease
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: mediease_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mediease -d mediease_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      APP_ENV: test
+      LOG_LEVEL: INFO
+      DB_ECHO_PARAMS: "false"
+      DATABASE_URL: postgresql+psycopg://mediease:ci-only-password@localhost:5432/mediease_test
+      # Deliberately not Asia/Kolkata: flushes out code that relies on the machine timezone.
+      TZ: America/New_York
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy src
+      - run: pytest -q
+
+  web:
+    name: Web — lint, types, tests, build
+    needs: detect
+    if: needs.detect.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test -- --run
+      - run: npm run build

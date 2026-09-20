@@ -1,0 +1,51 @@
+# Secrets and local environment
+.env
+.env.local
+.env.*.local
+.env.staging
+.env.production
+*.pem
+*.key
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+coverage/
+playwright-report/
+test-results/
+
+# Local data and generated files
+/data/
+*.sqlite
+*.dump
+exports/
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# AI tool local state (shared settings in .claude/settings.json stay committed)
+.claude/settings.local.json

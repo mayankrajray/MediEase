@@ -1,0 +1,394 @@
+# MediEase — Architecture
+
+This document describes **how the system is built**. It changes as milestones land; the durable
+principles behind it are in `CLAUDE.md`, and the reasons behind each choice are in `docs/adr/`.
+
+| Section | Contents |
+|---|---|
+| 1 | System context |
+| 2 | Containers (runtime services) |
+| 3 | Backend layers (hexagonal) |
+| 4 | Frontend structure |
+| 5 | Key request flows |
+| 6 | Multi-tenancy |
+| 7 | Background jobs |
+| 8 | Messaging |
+| 9 | Security architecture |
+| 10 | Observability |
+| 11 | Deployment |
+| 12 | Target local stack (end of M0) |
+| 13 | Scaling path |
+
+---
+
+## 1. System context
+
+```mermaid
+flowchart LR
+    FD[Front desk] -->|browser| ME
+    DR[Doctor] -->|browser / phone| ME
+    OW[Clinic owner] -->|browser| ME
+    OPS[MediEase ops] -->|browser| ME
+    PT[Patient / parent] -->|link in WhatsApp/SMS| ME
+    ME[MediEase]
+    ME -->|templates| WA[WhatsApp Business Platform]
+    ME -->|DLT templates| SMS[SMS gateway]
+    WA -->|status + inbound webhooks| ME
+    SMS -->|delivery reports| ME
+    WA -->|message| PT
+    SMS -->|message| PT
+```
+
+MediEase has no dependency on any other clinical system in the MVP. ABDM integration is an open
+question (PRD §14.3).
+
+## 2. Containers
+
+```mermaid
+flowchart TB
+    subgraph Browser
+      UI[Next.js pages]
+    end
+    subgraph "MediEase deployment (India region)"
+      WEB[web — Next.js server<br/>renders pages, proxies /api]
+      API[api — Flask + Gunicorn<br/>HTTP + webhooks]
+      WRK[worker — same codebase<br/>runs jobs]
+      MIG[migrate — one-off<br/>Alembic]
+      DB[(PostgreSQL<br/>data + job table)]
+      FS[(Object storage<br/>PDFs, attachments)]
+    end
+    UI -->|HTTPS| WEB
+    WEB -->|/api/* rewrite| API
+    API --> DB
+    WRK --> DB
+    MIG --> DB
+    API --> FS
+    WRK --> FS
+    WRK -->|HTTPS| EXT[WhatsApp / SMS]
+    EXT -->|webhooks| API
+```
+
+| Container | Responsibility | Introduced |
+|---|---|---|
+| `web` | Server-rendered UI; proxies `/api/*` to the API so auth cookies are same-origin | M0 |
+| `api` | HTTP API, webhook receivers, readiness | M0 |
+| `db` | PostgreSQL: all data, including the job table | M0 |
+| `migrate` | Runs Alembic migrations once, then exits | M0 |
+| `worker` | Claims and runs jobs (reminders, message sends, PDF rendering) | M5 |
+| object storage | Local volume in dev; S3-compatible bucket in production | M4 |
+
+The API and worker share one Python package; only the entrypoint differs.
+
+## 3. Backend layers (hexagonal)
+
+```mermaid
+flowchart LR
+    subgraph Delivery
+      HTTP[HTTP blueprints]
+      HOOK[Webhook handlers]
+      WENT[Worker entrypoint]
+    end
+    subgraph Application
+      UC[Use cases]
+      JOBS[Job handlers]
+    end
+    subgraph Domain
+      ENT[Entities, value objects,<br/>state machines, domain errors]
+    end
+    subgraph Ports
+      P1[Repositories]
+      P2[MessagingPort]
+      P3[StoragePort]
+      P4[PdfPort]
+      P5[ClockPort / IdPort]
+      P6[JobQueuePort]
+    end
+    subgraph Adapters
+      A1[SQLAlchemy repos]
+      A2[WhatsApp / SMS / Console]
+      A3[S3 / Local FS]
+      A4[PDF renderer]
+      A5[System clock / UUIDv7]
+      A6[Postgres job queue]
+    end
+    HTTP --> UC
+    HOOK --> UC
+    WENT --> JOBS
+    UC --> ENT
+    JOBS --> ENT
+    UC --> P1 & P2 & P3 & P4 & P5 & P6
+    JOBS --> P1 & P2 & P3 & P4 & P5
+    A1 -.implements.-> P1
+    A2 -.implements.-> P2
+    A3 -.implements.-> P3
+    A4 -.implements.-> P4
+    A5 -.implements.-> P5
+    A6 -.implements.-> P6
+```
+
+**Dependency rule:** arrows point inward. `domain/` imports nothing outside the standard library.
+`application/` imports `domain/` and `ports/` only. `adapters/` and `delivery/` may import anything
+inward. An import-linter check in CI enforces this (added in M0-P5).
+
+**Package layout (per feature inside each layer):**
+
+```
+src/mediease_api/
+├── domain/        appointments/ patients/ prescriptions/ reminders/ clinics/ shared/
+├── application/   appointments/book_appointment.py … jobs/send_reminder.py
+├── ports/         repositories.py messaging.py storage.py pdf.py clock.py jobs.py
+├── adapters/      db/ (engine, models, repos, tenancy) messaging/ storage/ pdf/
+├── delivery/      http/ webhooks/ worker/ errors.py middleware.py
+├── config/        settings.py logging.py
+└── bootstrap.py   builds settings → logging → engine → adapters → use cases → app
+```
+
+**Use case shape:**
+
+```python
+class BookAppointment:
+    """FR-APT-03, FR-APT-04 — book a slot or token for a patient."""
+    def __init__(self, uow: UnitOfWork, clock: ClockPort, jobs: JobQueuePort) -> None: ...
+    def execute(self, ctx: RequestContext, cmd: BookAppointmentCommand) -> AppointmentView: ...
+```
+
+`RequestContext` carries `request_id`, `clinic_id`, `user_id` and `role`. The unit of work opens a
+transaction, exposes tenancy-scoped repositories for `ctx.clinic_id`, and commits the change, its
+audit entry and any enqueued jobs **atomically**.
+
+## 4. Frontend structure
+
+```
+apps/web/src/
+├── app/
+│   ├── (clinic)/          layout with auth guard + clinic context
+│   │   ├── queue/         today's queue (default landing page)
+│   │   ├── patients/      search, profile
+│   │   ├── visits/[id]/   consultation screen
+│   │   ├── follow-ups/    pending follow-ups
+│   │   └── settings/      clinic, doctors, schedules, staff
+│   ├── (patient)/
+│   │   ├── p/[token]/     prescription view (mobile-first, bilingual)
+│   │   └── c/[slug]/      public booking page (M7)
+│   ├── (ops)/ops/         clinic onboarding, import, health
+│   └── (auth)/sign-in/
+├── features/              appointments/ queue/ patients/ prescriptions/ reminders/
+├── components/            ui primitives (buttons, dialogs, tables, forms)
+└── lib/
+    ├── api/               generated types + thin fetch wrapper (adds X-Request-ID)
+    ├── auth/              session helpers
+    ├── i18n/              en, hi dictionaries for patient pages
+    └── format/            dates in clinic timezone, phone masking, currency
+```
+
+- Server Components fetch data server-side through the API; Client Components handle interaction.
+- The patient pages ship minimal JavaScript (target < 200 KB total transfer, NFR-02).
+- The browser never talks to the Flask API directly; all calls go to `/api/*` on the web origin and
+  are rewritten to the API (ADR-0006).
+
+## 5. Key request flows
+
+### 5.1 Booking an appointment (FR-APT-03/04)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Browser (front desk)
+    participant W as web (Next.js)
+    participant A as api (Flask)
+    participant D as PostgreSQL
+    B->>W: POST /api/v1/appointments (X-Request-ID: r-123)
+    W->>A: proxy, cookies + X-Request-ID
+    A->>A: middleware: auth → RequestContext(clinic, role)
+    A->>D: BEGIN; SELECT session … FOR UPDATE
+    A->>D: count booked in session / check slot free
+    alt capacity available
+        A->>D: INSERT appointment, audit_event, job(send_booking_confirmation)
+        A->>D: COMMIT
+        A-->>B: 201 + appointment (X-Request-ID: r-123)
+    else slot taken
+        A->>D: ROLLBACK
+        A-->>B: 409 {code: APT_SLOT_TAKEN, request_id: r-123}
+    end
+```
+
+Locking the **session row** serialises bookings for that doctor-session, which makes FR-APT-04 hold
+under concurrency without application-level locks. A partial unique index on
+`(session_id, slot_start) WHERE status NOT IN ('CANCELLED')` is the second line of defence.
+
+### 5.2 Issuing a prescription and delivering the link (FR-RX-06/07/08)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Dr as Doctor
+    participant A as api
+    participant D as PostgreSQL
+    participant Wk as worker
+    participant S as Storage
+    participant WA as WhatsApp
+    participant P as Patient
+    Dr->>A: POST /api/v1/visits/{id}/prescriptions/{rx}/issue
+    A->>D: mark ISSUED (immutable), audit, jobs: render_pdf, send_rx_link
+    A-->>Dr: 200 issued
+    Wk->>D: claim render_pdf
+    Wk->>S: store PDF
+    Wk->>D: claim send_rx_link
+    Wk->>WA: template "rx_ready" with signed link (no clinical text)
+    WA-->>A: webhook status sent/delivered/read
+    A->>D: update message status (idempotent by provider id)
+    P->>A: GET /p/{token} (via web)
+    A->>A: verify signature, expiry, purpose
+    A-->>P: ask last 4 digits of phone
+    P->>A: POST verification
+    A->>D: audit rx_link_opened
+    A-->>P: prescription view (latest version)
+```
+
+### 5.3 Follow-up reminder (FR-REM-01/04/05)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as api
+    participant D as PostgreSQL
+    participant Wk as worker
+    participant WA as WhatsApp
+    A->>D: on Rx issue with follow_up_date → INSERT reminder(SCHEDULED) + job(run_at = date-1d 09:00 IST)
+    loop every few seconds
+        Wk->>D: SELECT … FROM jobs WHERE run_at <= now() AND state='queued' FOR UPDATE SKIP LOCKED LIMIT n
+    end
+    Wk->>D: load reminder + patient consent
+    alt opted out / no consent
+        Wk->>D: reminder = SKIPPED_NO_CONSENT
+    else quiet hours
+        Wk->>D: reschedule job to 08:00 clinic time
+    else send
+        Wk->>WA: send template (idempotency key = reminder id + attempt)
+        Wk->>D: message SENT, reminder SENT
+    end
+    WA-->>A: webhook delivered/read/failed
+    A->>D: update statuses
+```
+
+## 6. Multi-tenancy
+
+Details and rationale: ADR-0003.
+
+- One database, one schema. Every tenant-owned table has `clinic_id uuid not null` with a foreign
+  key and an index leading with `clinic_id`.
+- Repositories are constructed **with** a `clinic_id` by the unit of work; their methods cannot
+  take a different one. There is no unscoped repository for tenant tables in application code.
+- Cross-tenant operations (ops console, job claiming) use dedicated, explicitly named platform
+  repositories that never return clinical content.
+- A permanent `tests/tenancy/` suite creates two clinics and asserts every endpoint refuses
+  cross-clinic access with `404` (not `403`, to avoid confirming existence).
+- PostgreSQL Row-Level Security is a planned defence-in-depth step (ADR-0003, "Consequences").
+
+## 7. Background jobs
+
+Details and rationale: ADR-0005.
+
+| Column | Purpose |
+|---|---|
+| `id`, `clinic_id`, `kind`, `payload` (jsonb, IDs only) | What to do |
+| `state` (`queued`, `running`, `succeeded`, `failed`, `dead`) | Lifecycle |
+| `run_at`, `attempts`, `max_attempts`, `last_error_code` | Scheduling and retries |
+| `locked_by`, `locked_at` | Which worker holds it; stale locks are reclaimed after 5 minutes |
+| `request_id`, `dedupe_key` (unique) | Traceability and idempotent enqueueing |
+
+- Jobs are inserted in the same transaction as the change that caused them (transactional outbox).
+- Retries use exponential backoff with jitter; after `max_attempts` a job becomes `dead` and
+  appears in the ops console and in logs as `job.dead`.
+- Handlers are idempotent: re-running a handler for the same job must not send a second message.
+
+## 8. Messaging
+
+Details and rationale: ADR-0007.
+
+```python
+class MessagingPort(Protocol):
+    def send_template(self, msg: OutboundTemplateMessage) -> ProviderAccepted: ...
+```
+
+- Adapters: `ConsoleMessagingAdapter` (dev/test — writes to logs and a local table),
+  `WhatsAppCloudAdapter`, `SmsAdapter`. Selected by settings, wired in `bootstrap.py`.
+- Templates are declared in `apps/api/src/mediease_api/adapters/messaging/templates.yaml` with the
+  provider template name, language, category (utility) and variable schema. Adding a template is a
+  data change plus provider approval — no code branching.
+- Business-initiated WhatsApp messages must use approved templates. Utility templates sent inside
+  an open customer-service window are free under Meta's per-message pricing; everything else is
+  costed into the per-clinic ledger (FR-MSG-07).
+- Message variables contain only clinic name, date/time and a signed link. Never clinical text.
+- Webhooks: verify the signature header before parsing, respond `200` fast, and process
+  idempotently keyed on the provider message ID.
+
+## 9. Security architecture
+
+Full controls list: [SECURITY_AND_COMPLIANCE.md](SECURITY_AND_COMPLIANCE.md).
+
+- **Authentication:** Argon2id password hashes; JWT access token (15 min) and rotating refresh token
+  (14 days, stored hashed, reuse detection revokes the family). Cookies: `HttpOnly`, `Secure`,
+  `SameSite=Lax`, path-scoped. CSRF: double-submit token on state-changing requests.
+- **Authorisation:** route decorator declares required permission; the middleware resolves
+  membership and role for the active clinic; use cases re-check invariants.
+- **Patient links:** HMAC-signed tokens containing `purpose`, `resource_id`, `clinic_id`, `exp`;
+  server-side revocation list; last-4-digit phone challenge with attempt limits.
+- **Transport and storage:** TLS termination at the edge; database and bucket encryption at rest;
+  pre-signed, short-lived URLs for PDFs.
+- **Data minimisation:** analytics and logs use IDs and enums only.
+
+## 10. Observability
+
+See [DEBUGGING.md](DEBUGGING.md) for how to use it.
+
+- JSON logs to stdout, collected by the platform.
+- `request_id` propagated web → api → job row → worker logs → provider metadata.
+- Metrics (M6): request rate/latency/errors per route, job queue depth and age, messages by status,
+  webhook failures, sign-in failures.
+- Alerts (M6): API 5xx rate, `/ready` failing, oldest queued job > 10 minutes, dead jobs > 0,
+  WhatsApp failure rate > 5% in 15 minutes, backup job failure.
+
+## 11. Deployment (pilot)
+
+Details and rationale: ADR-0009.
+
+```mermaid
+flowchart LR
+    U[Users] -->|HTTPS| RP[Reverse proxy<br/>TLS, rate limits]
+    RP --> WEB[web]
+    RP -->|/webhooks/*| API[api]
+    WEB --> API
+    API --> PG[(Managed PostgreSQL<br/>India region, backups, PITR)]
+    WRK[worker] --> PG
+    API --> OBJ[(S3-compatible bucket<br/>India region)]
+    WRK --> OBJ
+```
+
+- Single India region. Containers built in CI, tagged with the commit SHA, pushed to a registry.
+- Release: `migrate` runs first as a one-off job; then `api`, `worker`, `web` roll.
+- Environments: `local`, `staging` (synthetic data only), `production`.
+
+## 12. Target local stack (end of M0)
+
+`docker-compose.yml` today contains only `db`. At the end of M0 it will define:
+
+```yaml
+services:
+  db:        # postgres:16-alpine, healthcheck pg_isready, named volume
+  migrate:   # api image, command: alembic upgrade head, depends_on db (healthy), restart: "no"
+  api:       # api image, gunicorn, depends_on db (healthy) + migrate (completed), healthcheck /ready
+  web:       # web image, depends_on api (healthy), API_INTERNAL_URL=http://api:8000
+```
+
+`worker` is added in M5; object storage uses a bind-mounted volume until M4 decides otherwise.
+
+## 13. Scaling path (only when measured need appears)
+
+| Signal | Next step | Requires |
+|---|---|---|
+| Job table contention or > 50 jobs/s | Move jobs to Redis + RQ/Celery behind `JobQueuePort` | ADR |
+| Queue polling load too high | Server-Sent Events for queue updates | ADR |
+| Read latency on history screens | Read replicas; query tuning first | ADR |
+| Many clinics, noisy neighbours | RLS enforcement, connection pooling (PgBouncer), per-tenant rate limits | ADR |
+| Clinic-owned WhatsApp numbers | Multi-sender support in the messaging adapter | PRD update |

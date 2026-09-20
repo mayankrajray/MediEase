@@ -1,0 +1,8 @@
+# Keeps GitHub Actions pinned versions current.
+# pip (apps/api) and npm (apps/web) ecosystems are added in M0-P5, once their manifests exist.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
