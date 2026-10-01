@@ -11,3 +11,12 @@ first production release.
   design, debugging guide, error catalogue, runbook, security and compliance notes, ADR-0001 to
   ADR-0009, feature specs for M1–M5, and the repository skeleton.
 - Local PostgreSQL service in `docker-compose.yml` and base `Makefile` targets (M0-P1).
+- `NEXT_STEPS_PLAN.md`: approved M0 implementation plan with workflow prerequisites and progress log.
+- ADR-0010: issue-driven workflow, one commit per logical change, rebase merges, CODEOWNERS approval.
+
+### Changed
+- `CLAUDE.md`: new "Commit Standards"; "Git Workflow" now issue → branch → PR with no direct pushes
+  to `main`, pushes only with permission and merges only by authorised maintainers; Docker start-up
+  order declared with `depends_on` (`api` waits for `migrate`).
+- `AGENTS.md`, `CONTRIBUTING.md`, PR template, `TASKS.md`, M0 design notes updated to match.
+- M0-P3 now includes a minimal API `Dockerfile` so the `migrate` service can run before P5.

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Accepted |
+| Status | Accepted — merge and commit-granularity rules superseded by [ADR-0010](0010-issue-driven-workflow-and-logical-commits.md) |
 | Date | 2026-09-15 |
 | Related | CONTRIBUTING.md, CLAUDE.md "Git Workflow" |
 

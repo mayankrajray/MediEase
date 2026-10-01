@@ -35,6 +35,9 @@
       "Read(./.env.production)",
       "Read(./secrets/**)",
       "Bash(git push --force:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push origin HEAD:main:*)",
+      "Bash(gh pr merge:*)",
       "Bash(git push -f:*)",
       "Bash(cat .env:*)"
     ]
