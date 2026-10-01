@@ -82,14 +82,22 @@ Sending `X-Request-ID: test-123` echoes `test-123`. Removing `DATABASE_URL` → 
 ### M0-P3 — Database readiness and migrations
 
 Planned files: `adapters/db/engine.py`, `delivery/http/platform.py` (`/ready`), `alembic.ini`,
-`migrations/env.py` (reads settings, not env vars), empty baseline revision,
-`migrate` service in compose.
+`migrations/env.py` (reads settings, not env vars), empty baseline revision, a **minimal
+`apps/api/Dockerfile`** (python:3.12-slim, non-root; hardened in P5), and `migrate` + `api`
+services in compose. `migrate` depends on `db` (`service_healthy`) and runs
+`alembic upgrade head` with `restart: "no"`; `api` depends on `db` (`service_healthy`) and
+`migrate` (`service_completed_successfully`). `make up` therefore runs migrations before the API
+starts with no manual step; the `pgdata` volume is preserved. Verify that
+`docker compose up -d --wait` exits 0 once `migrate` has exited 0 (NEXT_STEPS_PLAN.md §5).
+
 
 `/ready` runs `SELECT 1` with a 2-second statement timeout; returns
 `200 {"status":"ready","checks":{"database":"ok"}}` or
 `503` with the error envelope `READY_DB_UNAVAILABLE` / `READY_DB_TIMEOUT`.
 
-Verify: `make migrate` exits 0 and `alembic current` shows the baseline; `docker compose stop db`
+Verify: `make up` alone brings up `db` → `migrate` (exits 0) → `api` (healthy) — check with
+`docker compose ps -a`; `make migrate` exits 0 and `alembic current` shows the baseline;
+`docker compose stop db`
 → `/ready` returns 503 within ~2 s while `/health` stays 200.
 
 ### M0-P4 — Web shell
@@ -104,12 +112,14 @@ API shows a clear error state, not a blank page.
 
 ### M0-P5 — Containers and CI
 
-Planned files: `apps/api/Dockerfile` (multi-stage, non-root, gunicorn),
+Planned files: `apps/api/Dockerfile` hardened (multi-stage, non-root, gunicorn; the minimal
+version exists from P3),
 `apps/web/Dockerfile` (multi-stage, standalone output, non-root), full `docker-compose.yml`
 (`db`, `migrate`, `api`, `web` with health-based `depends_on`), `.github/workflows/ci.yml` jobs
 enabled, import-boundary check for the API.
 
-Verify: fresh clone → `cp .env.example .env && make up` → all services healthy; open a PR →
+Verify: fresh clone → `cp .env.example .env && make up` (one command, no manual migrate step) →
+`db`, `api`, `web` healthy and `migrate` exited 0; open a PR →
 lint, typecheck, test and build jobs green.
 
 ## Risks in this milestone
