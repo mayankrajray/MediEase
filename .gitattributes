@@ -1,0 +1,22 @@
+# Line endings are normalised in the repository and checked out as LF everywhere.
+# Why: the Makefile, shell scripts and container entrypoints run on Linux (WSL, Docker, CI).
+# A Windows checkout with core.autocrlf=true would otherwise write CRLF into the working tree,
+# which breaks shebangs and can make shell recipes fail in ways that are hard to trace.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF so cmd.exe and PowerShell read them correctly.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binary assets: never normalise or diff as text.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
