@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Active — Phase 1 |
+| Status | Active — Phase 2 (M0-P1 closed in #6) |
 | Covers | NFR-12 (observability), NFR-15 (portability), groundwork for NFR-05/06/14 |
 | Exit criterion | `make up` on a fresh clone → `GET /health` 200, `GET /ready` 200 (503 when db is down); CI green |
 
@@ -37,7 +37,7 @@ on, so that from M1 onward a bug can be traced from a browser click to a log lin
 
 ## Phases
 
-### M0-P1 — Repository and local database (active)
+### M0-P1 — Repository and local database (done, #6)
 
 Files: repository skeleton (this planning pack), `docker-compose.yml` (db only), `Makefile`,
 `.env.example`, `.gitignore`, `.editorconfig`.

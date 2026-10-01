@@ -120,7 +120,7 @@ Each task = one issue, one branch, one PR, with one or more logical commits. Eac
   4. `docs: align AGENTS, CONTRIBUTING and PR template with ADR-0010`
   5. `chore(claude): deny agent pushes to main and PR merges`
   6. `docs(changelog): record M0 plan and workflow adoption`
-- **Status:** issue #4 opened; commits on `m0/p0-4-adopt-workflow`; push and PR await permission.
+- **Status:** merged in PR #5 (issue #4).
 
 ### Task 1 — Environment check and close M0-P1
 
@@ -133,6 +133,12 @@ Each task = one issue, one branch, one PR, with one or more logical commits. Eac
 - **Failure path:** empty `POSTGRES_PASSWORD` → `make up` refuses with
   "set POSTGRES_PASSWORD in .env".
 - **Demo:** healthy db reachable via `make psql`; TASKS and CHANGELOG agree.
+- **Status:** issue #6, branch `m0/p1-6-close-db-stack`. Verified on Windows 11 + Docker Desktop
+  (Compose v5.5.0, PowerShell): GNU `make` is not installed on the Windows host and there is no
+  Ubuntu WSL distro, so the stack was exercised with the exact `docker compose` commands the
+  targets run, and the Makefile itself was checked with GNU make in an Alpine container
+  (`make help`, `make -n up psql down`). Installing an Ubuntu WSL distro (§4) is recommended
+  before M0-P2 adds `make test-api`/`lint`/`typecheck`.
 
 ### Task 2 — M0-P2 step 1: API package and typed settings
 
@@ -238,4 +244,5 @@ and L-06 (pilot bookings) before M6. Details in `TASKS.md`.
 | 1 Oct 2026 | Plan approved; Task 0 docs written locally | — | Done |
 | 1 Oct 2026 | Prerequisites: W-1 remote, W-2 `gh` auth (Mehtab404, `repo` scope, WRITE access), W-3 agent shell, W-4 git identity, W-6 CODEOWNERS handles, W-7 labels | — | Done |
 | 1 Oct 2026 | W-5 branch protection on `main` | — | **Open:** not configured; private repo on GitHub Free cannot enforce protection or rulesets (HTTP 403). Needs GitHub Pro/Team or a public repo, and admin access |
-| 1 Oct 2026 | Task 0 | #4 | Committed locally; awaiting push permission |
+| 1 Oct 2026 | Task 0 | #4 / PR #5 | Merged |
+| 1 Oct 2026 | Task 1 — M0-P1 verified; `.gitattributes`, `CODEOWNERS` (4 owners; `@akhtarjamal10` needs write access) | #6 | Committed on `m0/p1-6-close-db-stack`; PR opened |
