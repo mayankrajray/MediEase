@@ -6,7 +6,13 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 
-.PHONY: help env-check up down ps logs psql
+# Python API tooling runs inside the venv created in M0-P2 (apps/api/.venv).
+# Until the API is containerised in M0-P5, these targets run on the host/WSL
+# interpreter. See AGENTS.md §4.
+API_DIR := apps/api
+VENV_BIN := $(API_DIR)/.venv/bin
+
+.PHONY: help env-check up down ps logs psql test-api lint typecheck
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -29,3 +35,12 @@ logs: ## Follow logs for all services (SERVICE=db to filter)
 
 psql: env-check ## Open a psql shell on the local database
 	$(COMPOSE) exec db sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+
+test-api: ## Run the API test suite (pytest)
+	cd $(API_DIR) && .venv/bin/pytest
+
+lint: ## Lint + format-check the API (ruff)
+	cd $(API_DIR) && .venv/bin/ruff check . && .venv/bin/ruff format --check .
+
+typecheck: ## Type-check the API (mypy)
+	cd $(API_DIR) && .venv/bin/mypy
