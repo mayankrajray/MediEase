@@ -12,11 +12,11 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M0 — Foundation** |
-| Active phase | **M0-P1 — Repository and local database** |
+| Active phase | **M0-P2 — API process, settings, logging, `/health`** |
 | Design notes | `docs/milestones/M0-foundation.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (tasks 0–6, workflow prerequisites W-1..W-7, progress log) |
 | Workflow | Issue → branch → logical commits → PR → CODEOWNERS review → maintainer merge (ADR-0010) |
-| Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §9) |
+| Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §9). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
 | Last updated | 1 Oct 2026 |
 
 
@@ -48,8 +48,8 @@ database up and 503 with it down; CI green on a PR.
 
 | Phase | Scope | Verify | Status |
 |---|---|---|---|
-| M0-P1 | Repository skeleton, `.env.example`, `docker-compose.yml` with PostgreSQL, `Makefile` basics | `make up && make psql` → `select 1;` returns 1 | ▶ ACTIVE |
-| M0-P2 | Flask app factory (composition root), typed settings (fail fast on missing config), JSON logging with `request_id` middleware, `/health` | `curl -i localhost:8000/health` → 200 + `X-Request-ID` header; start with a missing required setting → process exits with a clear message | ☐ |
+| M0-P1 | Repository skeleton, `.env.example`, `docker-compose.yml` with PostgreSQL, `Makefile` basics | `make up && make psql` → `select 1;` returns 1 | ✅ |
+| M0-P2 | Flask app factory (composition root), typed settings (fail fast on missing config), JSON logging with `request_id` middleware, `/health` | `curl -i localhost:8000/health` → 200 + `X-Request-ID` header; start with a missing required setting → process exits with a clear message | ▶ ACTIVE |
 | M0-P3 | SQLAlchemy engine + `/ready` checking the database; Alembic set up with an empty baseline; minimal API `Dockerfile`; `migrate` one-off service and `api` service in compose (`api` depends on `db` healthy + `migrate` completed successfully) | `make up` alone runs db → migrate (exit 0) → api healthy; stop db → `/ready` 503 with `code=READY_DB_UNAVAILABLE`; `make migrate` exits 0 | ☐ |
 | M0-P4 | Next.js app shell, generated API client from `contracts/openapi.yaml`, status page calling `/health` | open `localhost:3000/status` → shows API healthy and the request ID | ☐ |
 | M0-P5 | Harden API `Dockerfile`, add web `Dockerfile` (non-root, multi-stage), full compose (`web`, `api`, `db`, `migrate`) started by one command, CI workflow (lint, typecheck, test, build) | fresh clone → `make up` brings up every service with no manual steps; PR shows green checks | ☐ |
@@ -162,4 +162,5 @@ drill completed; security checklist signed; two pilot clinics onboarded.
 | Milestone / phase | Date | Commit |
 |---|---|---|
 | Planning pack (PRD, agent files, architecture, ADRs) | 15 Sep 2026 | — |
-| M0 implementation plan approved; workflow and commit standards adopted (ADR-0010) | 1 Oct 2026 | PR for #4 |
+| M0 implementation plan approved; workflow and commit standards adopted (ADR-0010) | 1 Oct 2026 | #4 / PR #5 |
+| M0-P1 — local database stack verified; `.gitattributes` and `CODEOWNERS` added | 1 Oct 2026 | #6 |
