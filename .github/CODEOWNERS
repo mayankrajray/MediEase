@@ -1,0 +1,8 @@
+# Code owners for MediEase (ADR-0010).
+# GitHub requests a review from these owners on every PR that touches a matching path.
+# When branch protection requires code-owner review, approval from any one listed owner
+# satisfies the rule for that path. The last matching pattern wins, so add narrower,
+# path-specific owners *below* this default line as ownership becomes clearer.
+# Owners must have write access to the repository, otherwise GitHub ignores the entry.
+
+*   @mayankrajray @mehtab404 @srivastavHimanshu4503 @akhtarjamal10
