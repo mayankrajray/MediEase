@@ -16,6 +16,15 @@ first production release.
 - `.gitattributes`: LF line endings in the index and working tree on every platform (M0-P1).
 - `docs/specs/identity-and-tenancy.md` Approved; M1 plan (`NEXT_STEPS_PLAN.md`) and design notes
   (`docs/milestones/M1-identity-tenancy-audit.md`); M1-P1 active (#19).
+- M1-P1 (#19): domain model — `Clinic` (`ONBOARDING → ACTIVE ↔ SUSPENDED`, I1), `Doctor` (I3),
+  `User`, `ClinicMembership` with roles and the last-owner rule (R9); `PhoneNumber` (E.164,
+  masked) and `EmailAddress` value objects; domain codes `CLN_OWNER_REQUIRED`,
+  `CLN_INVALID_TRANSITION`.
+- M1-P1: `IdPort` with a UUIDv7 generator; repository and unit-of-work ports.
+- M1-P1: migration `0002` (`clinics`, `users`, `clinic_memberships`, `doctors`); SQLAlchemy models,
+  `TenantScopedRepository`, repositories and unit of work; permanent tenancy suite in
+  `tests/tenancy/`; models-vs-migrations drift test.
+- M1-P1: coverage gate ≥ 80% on `domain/` + `application/` in `make test-api` and CI (NFR-14).
 - `.github/CODEOWNERS`: default owners for every path (M0-P1, W-6).
 - API package `mediease_api` (M0-P2): `pyproject.toml` with pinned runtime and dev dependencies;
   typed `AppSettings` + `load_settings()` that fail fast on invalid config (`CFG_INVALID`, naming

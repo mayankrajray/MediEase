@@ -26,8 +26,8 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | `CFG_INVALID` | — (process exits) | Settings failed validation | Missing/invalid env var | Start-up log `config.invalid` naming the field(s), `.env.example` (M0-P2) |
 | `READY_DB_UNAVAILABLE` | 503 | Database not reachable | db down, wrong host (`db` inside compose, `localhost` outside), wrong credentials | `ready.check_failed` (WARNING) with `cause`; `make ps`, db logs, DEBUGGING §5.2 (M0-P3) |
 | `READY_DB_TIMEOUT` | 503 | Database check exceeded 2 s | Connect, pool wait or `SELECT 1` took over 2 s: db overloaded, network, pool exhausted | `ready.check_failed` with `cause` (`ConnectionTimeout`, `QueryCanceled`, `TimeoutError`); db metrics, slow queries (M0-P3) |
-| `REQ_VALIDATION_FAILED` | 422 | Request body/query invalid | Client sent wrong shape | `details.fields[]` lists each field and reason *(planned, M0)* |
-| `REQ_NOT_FOUND` | 404 | Resource not found | Unknown route (M0-P2); wrong ID **or other clinic's resource** (M1+) | Access log `route` is null for unknown routes; tenancy context for resources — expected for cross-clinic access |
+| `REQ_VALIDATION_FAILED` | 422 | Request body/query invalid | Client sent wrong shape, or a value failed a domain rule (M1-P1: `InvalidValue`) | `details.field` and `details.reason`; the value itself is never echoed *(HTTP mapping planned, M1-P3)* |
+| `REQ_NOT_FOUND` | 404 | Resource not found | Unknown route (M0-P2); wrong ID **or other clinic's resource** (M1+; repositories raise `NotFound` from M1-P1) | Access log `route` is null for unknown routes; tenancy context for resources — expected for cross-clinic access |
 | `REQ_METHOD_NOT_ALLOWED` | 405 | Method not allowed on this URL | Client used the wrong HTTP method | `Allow` response header lists valid methods (M0-P2) |
 | `REQ_CONFLICT_IDEMPOTENCY` | 409 | Same `Idempotency-Key` with a different body | Client retry bug | Client code *(planned, M1)* |
 | `REQ_RATE_LIMITED` | 429 | Too many requests | Abuse or client loop | `Retry-After` header; rate-limit logs *(planned, M1)* |
@@ -61,7 +61,16 @@ absent there, the request never reached the API.
 | `PERM_DENIED` | 403 | You don't have access to this action | Role lacks permission (same clinic) | PRD permission matrix |
 | `PERM_CLINIC_REQUIRED` | 400 | Choose a clinic | Multi-clinic user without `X-Clinic-ID` | Clinic switcher |
 | `CLN_SLUG_TAKEN` | 409 | That clinic URL is taken | Duplicate slug | Ops form |
-| `CLN_LAST_OWNER` | 409 | A clinic needs at least one owner | Demoting/deactivating the only owner | Staff settings |
+| `CLN_LAST_OWNER` | 409 | A clinic needs at least one owner | Demoting/deactivating the only active owner (R9) | Staff settings; raised by `ClinicMembership.change_role`/`deactivate` (domain, M1-P1) |
+| `CLN_OWNER_REQUIRED` | 409 | A clinic needs an active owner before it can be activated | Activating a clinic whose owner has not accepted the invite yet (I1) | Ops onboarding; `Clinic.activate` (domain, M1-P1) |
+| `CLN_INVALID_TRANSITION` | 409 | That status change isn't allowed | e.g. deactivating a deactivated membership, suspending an onboarding clinic; `details`: `entity`, `state`, `action` | State machines in `domain/clinics`, `domain/identity` (domain, M1-P1) |
+
+Domain codes marked *(domain, M1-P1)* are raised by the domain today; they reach HTTP clients
+through the error envelope once endpoints use them (M1-P3/P5). Input that fails a domain value
+rule (phone, email, slug, PIN code, time zone, required text) raises `REQ_VALIDATION_FAILED` with
+`details.field` and `details.reason` — never the rejected value. A repository given another
+clinic's entity raises `TenancyViolation`, a programming error that surfaces as `SYS_UNEXPECTED`
+(see "Platform"), not as a user-facing code.
 
 ## Patients (M2)
 

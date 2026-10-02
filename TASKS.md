@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M1 — Identity, tenancy and audit** (issue #19, branch `m1/19-identity-tenancy-audit`, one PR for the milestone) |
-| Active phase | **M1-P1 — ▶ ACTIVE:** domain model, migration `0002`, tenancy-scoped repositories, coverage gate |
+| Active phase | **M1-P1 — ▶ ACTIVE:** implemented (domain model, migration `0002`, tenancy-scoped repositories, coverage gate); awaiting developer confirmation before M1-P2 |
 | Design notes | `docs/milestones/M1-identity-tenancy-audit.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M1 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |

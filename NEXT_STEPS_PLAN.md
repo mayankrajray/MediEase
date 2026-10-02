@@ -91,3 +91,4 @@ M5; L-03, L-05 and L-07 should be under way. Details in `TASKS.md`.
 | 1–2 Oct 2026 | M0 — Foundation (Tasks 0–6: workflow, db stack, API settings/logging/health, readiness + migrations, web shell, hardened images + CI) | #4–#14 / PRs #5, #7, #9, #11, #13, #15 | Merged; exit criteria met |
 | 2 Oct 2026 | Workflow change: one issue, branch and PR per milestone (ADR-0011) | #19 | Committed on `m1/19-identity-tenancy-audit` |
 | 2 Oct 2026 | `identity-and-tenancy.md` Approved; M1 plan and design notes | #19 | Committed on `m1/19-identity-tenancy-audit` |
+| 2 Oct 2026 | M1-P1 — domain model, ports, UUIDv7, migration `0002`, tenancy-scoped repositories + unit of work, core coverage gate. `make lint typecheck test` green (API 166 tests, package 98%, core 100%); `make up` applies `0002` | #19 | Implemented on `m1/19-identity-tenancy-audit`; pushed to the draft milestone PR; **awaiting developer confirmation** before M1-P2 |
