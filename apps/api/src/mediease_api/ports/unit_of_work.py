@@ -22,9 +22,11 @@ from typing import Protocol, Self
 from uuid import UUID
 
 from mediease_api.ports.repositories import (
+    ClinicAccessRepository,
     ClinicRepository,
     DoctorRepository,
     MembershipRepository,
+    RefreshTokenRepository,
     UserRepository,
 )
 
@@ -45,6 +47,10 @@ class UnitOfWork(Protocol):
     def clinics(self) -> ClinicRepository: ...
     @property
     def users(self) -> UserRepository: ...
+    @property
+    def refresh_tokens(self) -> RefreshTokenRepository: ...
+    @property
+    def clinic_access(self) -> ClinicAccessRepository: ...
 
     def tenant(self, clinic_id: UUID) -> TenantRepositories:
         """Repositories scoped to ``clinic_id``; the only way to reach tenant rows."""

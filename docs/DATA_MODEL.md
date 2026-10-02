@@ -26,6 +26,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 |---|---|---|
 | `0001` | Empty baseline. Creates no tables; only `alembic_version` exists after `upgrade head` | M0-P3 |
 | `0002` | `clinics`, `users`, `clinic_memberships`, `doctors` (columns marked *P1* below; the rest arrive with the phase or milestone that uses them) | M1-P1 |
+| `0003` | `users` credentials and lockout columns; `refresh_tokens` (marked *P2*) | M1-P2 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -99,10 +100,10 @@ Not tenant-owned: one user can hold memberships in several clinics.
 | phone_e164 | text unique null | *P1* `uq_users_phone_e164`; `ck_users_email_or_phone`: `email IS NOT NULL OR phone_e164 IS NOT NULL` |
 | is_platform_ops | boolean not null default false | *P1* MediEase staff (R10) |
 | status | text not null | *P1* `ACTIVE` \| `DISABLED` (`ck_users_status`) |
-| password_hash | text not null | M1-P2 — Argon2id |
-| failed_login_count | integer not null default 0 | M1-P2 — FR-AUTH-04 |
-| locked_until | timestamptz null | M1-P2 |
-| last_login_at | timestamptz null | M1-P2 |
+| password_hash | text null | *P2* Argon2id hash string; null until a password is set (invited users), and a null hash never signs in |
+| failed_login_count | integer not null default 0 | *P2* consecutive failures; `ck_users_failed_login_count_non_negative` (FR-AUTH-04) |
+| locked_until | timestamptz null | *P2* set to failure time + 15 min on the 5th failure |
+| last_login_at | timestamptz null | *P2* last successful sign-in |
 
 ### `clinic_memberships`
 | Column | Type | Notes |
@@ -128,14 +129,17 @@ Not tenant-owned: one user can hold memberships in several clinics.
 | is_active | boolean not null default true | *P1* |
 
 ### `refresh_tokens`
+Owned by a user, not a clinic. *P2* = created by migration `0003`.
+
 | Column | Type | Notes |
 |---|---|---|
-| id | uuid PK | |
-| user_id | uuid FK | |
-| family_id | uuid not null | Reuse of a rotated token revokes the whole family |
-| token_hash | text unique not null | SHA-256 of the token |
-| expires_at, revoked_at | timestamptz | |
-| replaced_by_id | uuid null | |
+| id | uuid PK | *P2* |
+| user_id | uuid FK not null | *P2* index `ix_refresh_tokens_user_id` |
+| family_id | uuid not null | *P2* one family per sign-in; reuse of a rotated token revokes the whole family (R5); index `ix_refresh_tokens_family_id` |
+| token_hash | text unique not null | *P2* SHA-256 hex of the token (`uq_refresh_tokens_token_hash`); the token itself is never stored |
+| expires_at | timestamptz not null | *P2* issue time + `REFRESH_TOKEN_TTL_SECONDS` |
+| revoked_at | timestamptz null | *P2* set by rotation, sign-out or family revocation |
+| replaced_by_id | uuid FK `refresh_tokens` null | *P2* set by rotation; a token with it set is "rotated", and presenting it again is reuse |
 
 ### `audit_events` (append-only)
 | Column | Type | Notes |

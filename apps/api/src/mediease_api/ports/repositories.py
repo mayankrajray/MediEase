@@ -18,12 +18,15 @@ durable only after ``UnitOfWork.commit``.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
+from mediease_api.domain.identity.access import ClinicAccess
 from mediease_api.domain.identity.membership import ClinicMembership
+from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.phone import PhoneNumber
@@ -41,9 +44,35 @@ class ClinicRepository(Protocol):
 class UserRepository(Protocol):
     def add(self, user: User) -> None: ...
     def get(self, user_id: UUID) -> User | None: ...
-    def get_by_email(self, email: EmailAddress) -> User | None: ...
-    def get_by_phone(self, phone: PhoneNumber) -> User | None: ...
+    def get_by_email(self, email: EmailAddress, *, for_update: bool = False) -> User | None:
+        """``for_update`` locks the row until the unit of work ends (sign-in counting)."""
+        ...
+
+    def get_by_phone(self, phone: PhoneNumber, *, for_update: bool = False) -> User | None: ...
     def update(self, user: User) -> None: ...
+
+
+class RefreshTokenRepository(Protocol):
+    """Refresh tokens are owned by users, not clinics (platform repository)."""
+
+    def add(self, token: RefreshToken) -> None: ...
+    def get_by_hash(self, token_hash: str, *, for_update: bool = False) -> RefreshToken | None: ...
+    def update(self, token: RefreshToken) -> None: ...
+    def revoke_family(self, family_id: UUID, *, now: datetime) -> int:
+        """Revoke every not-yet-revoked token in the family; returns how many."""
+        ...
+
+
+class ClinicAccessRepository(Protocol):
+    """Which clinics a user may work in — a deliberate cross-clinic read (ADR-0003).
+
+    Platform repository keyed by user: it returns IDs, clinic names and roles
+    only, never tenant content.
+    """
+
+    def list_active_for_user(self, user_id: UUID) -> Sequence[ClinicAccess]:
+        """The user's ``ACTIVE`` memberships with their clinic, ordered by clinic name."""
+        ...
 
 
 # --- Tenant repositories (bound to one clinic) ---------------------------------------------

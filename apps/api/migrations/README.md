@@ -7,6 +7,7 @@ Schema history for the MediEase database (ADR-0004). Config: `../alembic.ini`; e
 |---|---|---|
 | `0001` | Empty baseline — no tables | M0-P3 |
 | `0002` | `clinics`, `users`, `clinic_memberships`, `doctors` | M1-P1 |
+| `0003` | `users` credentials + lockout; `refresh_tokens` | M1-P2 |
 
 ## Running
 
@@ -18,7 +19,7 @@ Schema history for the MediEase database (ADR-0004). Config: `../alembic.ini`; e
 ## Adding a revision
 
 1. Change the models in `src/mediease_api/adapters/db/models/`, then
-   `alembic revision --rev-id 0003 -m "add refresh tokens"` — revisions are numbered, not hashed.
+   `alembic revision --rev-id 0004 -m "add audit events"` — revisions are numbered, not hashed.
    `--autogenerate` may draft it; review every line and spell enum values out instead of importing
    them, so the revision never changes when the code does.
 2. Write `upgrade()` and `downgrade()`; follow expand → migrate → contract so the previous app
