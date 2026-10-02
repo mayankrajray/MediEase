@@ -3,9 +3,8 @@ name = "mediease-api"
 version = "0.0.0"
 description = "MediEase API — WhatsApp-native clinic operating system (hexagonal Flask backend)"
 requires-python = ">=3.12,<3.13"
-# Runtime dependencies are pinned to the exact versions installed and tested in
-# M0-P2 (see m0-p2-pip-freeze.txt at the repo root). Bumping a version is a
-# deliberate change recorded in the PR, per AGENTS.md §2.
+# Pinned to the exact versions installed and tested in M0-P2 (issue #8).
+# Bumping a version is a deliberate change recorded in its PR (AGENTS.md §2).
 dependencies = [
     "flask==3.1.3",
     "gunicorn==26.2.0",
@@ -23,11 +22,8 @@ dev = [
 ]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -39,24 +35,23 @@ target-version = "py312"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-# A pragmatic, strict-leaning default set. Expanded as the codebase grows.
 select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["mediease_api"]
 
-# --- mypy: strict for the inner layers --------------------------------------
-# CLAUDE.md / AGENTS.md §6: mypy strict for domain/ and application/. The whole
-# package is type-checked; the inner layers get strict mode via an override.
+# --- mypy ----------------------------------------------------------------------
+# The whole package is type-checked; domain/ and application/ are strict
+# (AGENTS.md §6). Those overrides take effect once the layers have modules.
 [tool.mypy]
 python_version = "3.12"
 packages = ["mediease_api"]
 mypy_path = "src"
-warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 no_implicit_reexport = true
 check_untyped_defs = true
+disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = ["mediease_api.domain.*", "mediease_api.application.*"]
@@ -65,5 +60,4 @@ strict = true
 # --- pytest ------------------------------------------------------------------
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
-addopts = "-ra"
+addopts = "-ra --strict-markers"

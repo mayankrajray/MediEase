@@ -2,47 +2,46 @@
 
 For every request:
 
-* Accept an inbound ``X-Request-ID`` (<= 64 chars) or generate a ULID.
-* Bind it (and later ``clinic_id`` / ``user_id``) into structlog contextvars so
-  all log lines for the request carry it.
-* Echo it back in the ``X-Request-ID`` response header.
-* Emit one ``http.access`` log event per request with ``duration_ms``.
+* Accept an inbound ``X-Request-ID`` if it is 1-64 safe characters, otherwise
+  generate a ULID.
+* Bind it into structlog contextvars so every log line for the request has it.
+* Echo it in the ``X-Request-ID`` response header (also on error responses).
+* Emit one ``http.access`` event with ``method``, ``route``, ``status`` and
+  ``duration_ms``.
 """
 
 from __future__ import annotations
 
+import re
 import time
 
 import structlog
-from flask import Flask, Response, g, request
+from flask import Flask, Response, g, has_app_context, request
 from structlog.contextvars import bind_contextvars, clear_contextvars
 from ulid import ULID
 
 logger = structlog.get_logger(__name__)
 
-# Guard against unbounded/abusive inbound IDs.
+REQUEST_ID_HEADER = "X-Request-ID"
 MAX_REQUEST_ID_LEN = 64
 
-_REQUEST_ID_HEADER = "X-Request-ID"
-_START_KEY = "_request_start_perf"
+# Letters, digits and . _ : - only. The ID is written into logs and headers, so
+# anything else (spaces, quotes, control characters) is replaced, not trusted.
+_SAFE_REQUEST_ID = re.compile(rf"[A-Za-z0-9._:\-]{{1,{MAX_REQUEST_ID_LEN}}}")
 
 
 def get_request_id() -> str | None:
-    """Return the current request's ID, if a request is in scope."""
-    return g.get("request_id") if _in_request() else None
-
-
-def _in_request() -> bool:
-    try:
-        return bool(g)
-    except RuntimeError:
-        return False
+    """Return the current request's ID, or None outside a request."""
+    if not has_app_context():
+        return None
+    request_id = g.get("request_id")
+    return request_id if isinstance(request_id, str) else None
 
 
 def _resolve_request_id() -> str:
     """Use a valid inbound header, otherwise generate a fresh ULID."""
-    inbound = request.headers.get(_REQUEST_ID_HEADER, "").strip()
-    if inbound and len(inbound) <= MAX_REQUEST_ID_LEN:
+    inbound = request.headers.get(REQUEST_ID_HEADER, "").strip()
+    if _SAFE_REQUEST_ID.fullmatch(inbound):
         return inbound
     return str(ULID())
 
@@ -52,21 +51,24 @@ def register_request_middleware(app: Flask) -> None:
 
     @app.before_request
     def _bind_request_context() -> None:
-        request_id = _resolve_request_id()
-        g.request_id = request_id
-        g.__dict__[_START_KEY] = time.perf_counter()
+        g.request_id = _resolve_request_id()
+        g.request_started = time.perf_counter()
         clear_contextvars()
-        bind_contextvars(request_id=request_id)
+        bind_contextvars(request_id=g.request_id)
 
     @app.after_request
     def _echo_and_log(response: Response) -> Response:
-        response.headers[_REQUEST_ID_HEADER] = g.get("request_id", "")
-        start = g.get(_START_KEY)
-        duration_ms = round((time.perf_counter() - start) * 1000, 2) if start else None
+        request_id = get_request_id()
+        if request_id:
+            response.headers[REQUEST_ID_HEADER] = request_id
+        started = g.get("request_started")
+        duration_ms = round((time.perf_counter() - started) * 1000, 2) if started else None
         logger.info(
             "http.access",
             method=request.method,
-            route=request.path,
+            # The route template (e.g. /patients/<id>), never the raw path, so
+            # identifiers in URLs do not end up in logs.
+            route=request.url_rule.rule if request.url_rule else None,
             status=response.status_code,
             duration_ms=duration_ms,
         )

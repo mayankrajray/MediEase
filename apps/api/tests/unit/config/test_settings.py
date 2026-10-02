@@ -1,134 +1,118 @@
 """Unit tests for typed settings (NFR-12 — fail fast on misconfiguration).
 
-Covers the acceptance criteria in docs/milestones/M0-foundation.md:
-valid local config; missing DATABASE_URL; DEBUG in production; insecure cookies
-in staging; DB_ECHO_PARAMS=true anywhere.
+Acceptance criteria from docs/milestones/M0-foundation.md: a valid config
+loads; a missing DATABASE_URL, DEBUG in production, insecure cookies in staging
+and DB_ECHO_PARAMS=true each stop start-up with CFG_INVALID naming the field.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import pytest
+from pydantic import ValidationError
 
-from mediease_api.config.settings import (
-    CFG_INVALID,
-    AppEnv,
-    AppSettings,
-    load_settings,
-)
-from tests.conftest import VALID_LOCAL_ENV
-
-SetEnv = Callable[[dict[str, str]], None]
+from mediease_api.config.settings import CFG_INVALID, AppEnv, AppSettings, load_settings
+from tests.conftest import SetEnv
 
 
-def test_valid_local_config_loads(set_env: SetEnv) -> None:
-    set_env(VALID_LOCAL_ENV)
+def _invalid_fields(env: dict[str, str], set_env: SetEnv) -> set[str]:
+    """Load settings expecting failure; return the names of the rejected fields."""
+    set_env(env)
+    with pytest.raises(ValidationError) as excinfo:
+        AppSettings()  # type: ignore[call-arg]
+    return {str(err["loc"][0]) for err in excinfo.value.errors()}
+
+
+def test_nfr_12_valid_config_loads(set_env: SetEnv, valid_env: dict[str, str]) -> None:
+    set_env(valid_env)
     settings = load_settings()
-    assert settings.APP_ENV is AppEnv.LOCAL
+    assert settings.APP_ENV is AppEnv.TEST
     assert settings.LOG_LEVEL == "INFO"
     assert settings.DB_ECHO_PARAMS is False
     assert settings.COOKIE_SECURE is False
 
 
-def test_missing_database_url_exits(set_env: SetEnv) -> None:
-    env = {k: v for k, v in VALID_LOCAL_ENV.items() if k != "DATABASE_URL"}
-    set_env(env)
+def test_nfr_12_defaults_apply_when_optional_vars_absent(set_env: SetEnv) -> None:
+    set_env({"DATABASE_URL": "postgresql+psycopg://u:p@localhost:5432/db"})
+    settings = load_settings()
+    assert settings.APP_ENV is AppEnv.LOCAL
+    assert settings.LOG_LEVEL == "INFO"
+
+
+def test_nfr_12_missing_database_url_exits_naming_the_field(
+    set_env: SetEnv, valid_env: dict[str, str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    del valid_env["DATABASE_URL"]
+    set_env(valid_env)
     with pytest.raises(SystemExit) as excinfo:
         load_settings()
     assert excinfo.value.code == 1
-
-
-def test_missing_database_url_names_field(
-    set_env: SetEnv, capsys: pytest.CaptureFixture[str]
-) -> None:
-    env = {k: v for k, v in VALID_LOCAL_ENV.items() if k != "DATABASE_URL"}
-    set_env(env)
-    with pytest.raises(SystemExit):
-        load_settings()
     err = capsys.readouterr().err
     assert CFG_INVALID in err
     assert "DATABASE_URL" in err
 
 
-def test_debug_log_level_rejected_in_production(set_env: SetEnv) -> None:
-    set_env(
-        {
-            **VALID_LOCAL_ENV,
-            "APP_ENV": "production",
-            "LOG_LEVEL": "DEBUG",
-            "COOKIE_SECURE": "true",
-            "DATABASE_URL": "postgresql+psycopg://u:realpw@db:5432/mediease",
-        }
-    )
-    with pytest.raises(SystemExit):
-        load_settings()
+def test_nfr_12_debug_rejected_in_production(set_env: SetEnv, valid_env: dict[str, str]) -> None:
+    env = {**valid_env, "APP_ENV": "production", "LOG_LEVEL": "DEBUG", "COOKIE_SECURE": "true"}
+    assert _invalid_fields(env, set_env) == {"LOG_LEVEL"}
 
 
-def test_insecure_cookies_rejected_in_staging(
-    set_env: SetEnv, capsys: pytest.CaptureFixture[str]
+def test_nfr_12_debug_allowed_in_local(set_env: SetEnv, valid_env: dict[str, str]) -> None:
+    set_env({**valid_env, "APP_ENV": "local", "LOG_LEVEL": "DEBUG"})
+    assert load_settings().LOG_LEVEL == "DEBUG"
+
+
+def test_nfr_12_insecure_cookies_rejected_in_staging(
+    set_env: SetEnv, valid_env: dict[str, str]
 ) -> None:
-    set_env(
-        {
-            **VALID_LOCAL_ENV,
-            "APP_ENV": "staging",
-            "COOKIE_SECURE": "false",
-            "DATABASE_URL": "postgresql+psycopg://u:realpw@db:5432/mediease",
-        }
-    )
-    with pytest.raises(SystemExit):
-        load_settings()
-    assert "COOKIE_SECURE" in capsys.readouterr().err
+    env = {**valid_env, "APP_ENV": "staging", "COOKIE_SECURE": "false"}
+    assert _invalid_fields(env, set_env) == {"COOKIE_SECURE"}
 
 
-def test_db_echo_params_true_rejected_everywhere(set_env: SetEnv) -> None:
-    set_env({**VALID_LOCAL_ENV, "DB_ECHO_PARAMS": "true"})
-    with pytest.raises(SystemExit) as excinfo:
-        load_settings()
-    assert excinfo.value.code == 1
-
-
-def test_placeholder_database_url_rejected_in_production(
-    set_env: SetEnv, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize("app_env", ["local", "test", "staging", "production"])
+def test_nfr_12_db_echo_params_rejected_in_every_environment(
+    app_env: str, set_env: SetEnv, valid_env: dict[str, str]
 ) -> None:
-    set_env(
-        {
-            **VALID_LOCAL_ENV,
-            "APP_ENV": "production",
-            "COOKIE_SECURE": "true",
-            "DATABASE_URL": "postgresql+psycopg://u:change-me@db:5432/mediease",
-        }
-    )
+    env = {**valid_env, "APP_ENV": app_env, "COOKIE_SECURE": "true", "DB_ECHO_PARAMS": "true"}
+    assert _invalid_fields(env, set_env) == {"DB_ECHO_PARAMS"}
+
+
+@pytest.mark.parametrize("app_env", ["test", "staging", "production"])
+def test_nfr_12_placeholder_rejected_outside_local(
+    app_env: str, set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    env = {
+        **valid_env,
+        "APP_ENV": app_env,
+        "COOKIE_SECURE": "true",
+        "DATABASE_URL": "postgresql+psycopg://mediease:change-me@db:5432/mediease",
+    }
+    assert _invalid_fields(env, set_env) == {"DATABASE_URL"}
+
+
+def test_nfr_12_placeholder_allowed_in_local(set_env: SetEnv, valid_env: dict[str, str]) -> None:
+    # .env.example ships a change-me password so `cp .env.example .env` works locally.
+    url = "postgresql+psycopg://mediease:change-me-local-only@db:5432/mediease"
+    set_env({**valid_env, "APP_ENV": "local", "DATABASE_URL": url})
+    assert url == load_settings().DATABASE_URL
+
+
+def test_nfr_12_unknown_app_env_rejected(set_env: SetEnv, valid_env: dict[str, str]) -> None:
+    assert _invalid_fields({**valid_env, "APP_ENV": "prod"}, set_env) == {"APP_ENV"}
+
+
+def test_nfr_12_config_invalid_never_echoes_values(
+    set_env: SetEnv, valid_env: dict[str, str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    secret = "postgresql+psycopg://mediease:change-me-SECRET@db:5432/mediease"
+    set_env({**valid_env, "APP_ENV": "production", "COOKIE_SECURE": "true", "DATABASE_URL": secret})
     with pytest.raises(SystemExit):
         load_settings()
-    assert "DATABASE_URL" in capsys.readouterr().err
+    captured = capsys.readouterr()
+    assert "SECRET" not in captured.out + captured.err
 
 
-def test_placeholder_database_url_allowed_in_local(set_env: SetEnv) -> None:
-    # The local .env ships a change-me password; that must be allowed locally.
-    set_env(
-        {
-            **VALID_LOCAL_ENV,
-            "DATABASE_URL": "postgresql+psycopg://mediease:change-me-local-only@db:5432/mediease",
-        }
-    )
+def test_nfr_12_settings_are_immutable(set_env: SetEnv, valid_env: dict[str, str]) -> None:
+    set_env(valid_env)
     settings = load_settings()
-    assert settings.APP_ENV is AppEnv.LOCAL
-
-
-def test_invalid_app_env_rejected(set_env: SetEnv) -> None:
-    set_env({**VALID_LOCAL_ENV, "APP_ENV": "prod"})  # not in the allowed set
-    with pytest.raises(SystemExit):
-        load_settings()
-
-
-def test_settings_are_frozen(set_env: SetEnv) -> None:
-    set_env(VALID_LOCAL_ENV)
-    settings = load_settings()
-    with pytest.raises(Exception):  # noqa: B017 — pydantic raises on frozen mutation
+    with pytest.raises(ValidationError):
         settings.APP_ENV = AppEnv.PRODUCTION  # type: ignore[misc]
-
-
-def test_appsettings_type() -> None:
-    # Guard: the public type is what the composition root depends on.
-    assert issubclass(AppSettings, object)
