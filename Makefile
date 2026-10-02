@@ -6,8 +6,10 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 
-# API tooling runs in a virtualenv at apps/api/.venv until the API is
-# containerised (M0-P5). Override the interpreter with: make install-api PYTHON=...
+# API tooling runs in a virtualenv at apps/api/.venv and web tooling in
+# apps/web/node_modules until both apps are containerised (M0-P5). On Windows run
+# make inside WSL with Python 3.12 and Node (apps/web/.nvmrc) installed there.
+# Override the Python interpreter with: make install-api PYTHON=...
 API_DIR := apps/api
 WEB_DIR := apps/web
 VENV_BIN := .venv/bin
@@ -20,11 +22,13 @@ PYTHON ?= python3.12
 TEST_DATABASE_URL ?= postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)
 export TEST_DATABASE_URL
 
-.PHONY: help env-check up down ps logs psql migrate install-api api-venv-check test test-api lint typecheck contract contract-check
+.PHONY: help env-check up down ps logs psql migrate install-api install-web api-venv-check \
+	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
+	typecheck-web dev-web contract contract-check
 
 help: ## List available targets
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 env-check: ## Fail early if .env is missing
 	@test -f .env || { echo "Missing .env — run: cp .env.example .env"; exit 1; }
@@ -53,22 +57,45 @@ install-api: ## Create apps/api/.venv and install the API with dev tools
 		&& $(VENV_BIN)/python -m pip install --upgrade pip \
 		&& $(VENV_BIN)/python -m pip install --prefer-binary -e ".[dev]"
 
+install-web: ## Install the web app's exact dependencies from package-lock.json
+	@command -v node >/dev/null || { echo "node not found — install Node $$(cat $(WEB_DIR)/.nvmrc) (see README)"; exit 1; }
+	cd $(WEB_DIR) && npm ci
+
 api-venv-check:
 	@test -x $(API_DIR)/$(VENV_BIN)/python || { echo "Missing $(API_DIR)/.venv — run: make install-api"; exit 1; }
 
-test: test-api ## Run all test suites (web joins in M0-P4)
+web-deps-check:
+	@test -d $(WEB_DIR)/node_modules || { echo "Missing $(WEB_DIR)/node_modules — run: make install-web"; exit 1; }
+
+test: test-api test-web ## Run all test suites
 
 test-api: env-check api-venv-check ## Run the API test suite (needs the db: make up)
 	cd $(API_DIR) && $(VENV_BIN)/pytest -q
 
-lint: api-venv-check ## Lint and format-check the API (ruff)
+test-web: web-deps-check ## Run the web test suite (Vitest)
+	cd $(WEB_DIR) && npm test -- --run
+
+lint: lint-api lint-web ## Lint API (ruff) and web (ESLint)
+
+lint-api: api-venv-check
 	cd $(API_DIR) && $(VENV_BIN)/ruff check . && $(VENV_BIN)/ruff format --check .
 
-typecheck: api-venv-check ## Type-check the API (mypy)
+lint-web: web-deps-check
+	cd $(WEB_DIR) && npm run -s lint
+
+typecheck: typecheck-api typecheck-web ## Type-check API (mypy) and web (tsc)
+
+typecheck-api: api-venv-check
 	cd $(API_DIR) && $(VENV_BIN)/mypy
 
-contract: ## Regenerate web API types from contracts/openapi.yaml (ADR-0008)
+typecheck-web: web-deps-check
+	cd $(WEB_DIR) && npm run -s typecheck
+
+dev-web: web-deps-check ## Run the web app on :3000 against the API on localhost (make up first)
+	cd $(WEB_DIR) && API_INTERNAL_URL=http://localhost:$(or $(API_PORT),8000) npm run dev
+
+contract: web-deps-check ## Regenerate web API types from contracts/openapi.yaml (ADR-0008)
 	cd $(WEB_DIR) && npm run -s gen:api
 
-contract-check: ## Fail if the committed web API types are out of date
+contract-check: web-deps-check ## Fail if the committed web API types are out of date
 	cd $(WEB_DIR) && npm run -s gen:api:check
