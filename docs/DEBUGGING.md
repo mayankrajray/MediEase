@@ -128,6 +128,10 @@ Inside containers the host is `db`; from your laptop it is `localhost`.
   not restarted for that; it turns healthy again once the database answers.
 - `migrate` exited non-zero → `api` never starts: `docker compose logs migrate` (RUNBOOK
   "Migration failed").
+- The web `/status` page shows the same picture: "DB: not ready" with the `READY_*` code, or
+  "API: unreachable" (`WEB_API_UNREACHABLE`). Its "Ref" is the request ID sent for both `/health`
+  and `/ready`; `docker compose logs api | grep <ref>` finds them. No line for the Ref means the
+  request never reached the API — check `API_INTERNAL_URL`.
 
 ### 5.3 Auth cookies not sticking
 - The browser must call `http://localhost:3000/api/...` (web origin), which rewrites to the API.

@@ -58,7 +58,7 @@ Use this list in the M6 security review. Each row names where it is implemented.
 - [ ] Input validation with Pydantic at every boundary; output encoding in React (M0+)
 - [ ] Parameterised SQL only (SQLAlchemy); no string-built queries (M0+)
 - [ ] File uploads: type allow-list, size limit, stored outside web root, served via signed URL (P1)
-- [ ] Security headers: CSP, X-Content-Type-Options, Referrer-Policy, frame-ancestors none (M0-P4)
+- [x] Security headers: CSP, X-Content-Type-Options, Referrer-Policy, frame-ancestors none (M0-P4: nonce-based CSP per request in `apps/web/src/proxy.ts`, `script-src` without `'unsafe-inline'`; `Referrer-Policy: no-referrer`; `X-Frame-Options: DENY`; `Permissions-Policy`. HSTS joins with TLS in M6)
 - [ ] Webhook signature verification on raw body; replay-safe processing (M5)
 - [ ] Dependency and container image scanning in CI (M0-P5)
 - [ ] Secrets scanning in CI (M0-P5)

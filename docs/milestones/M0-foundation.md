@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Active — Phase 4 (M0-P1 #6, M0-P2 #8, M0-P3 #10 closed) |
+| Status | Active — Phase 5 (M0-P1 #6, M0-P2 #8, M0-P3 #10, M0-P4 #12 closed) |
 | Covers | NFR-12 (observability), NFR-15 (portability), groundwork for NFR-05/06/14 |
 | Exit criterion | `make up` on a fresh clone → `GET /health` 200, `GET /ready` 200 (503 when db is down); CI green |
 
@@ -100,7 +100,7 @@ Verify: `make up` alone brings up `db` → `migrate` (exits 0) → `api` (health
 `docker compose stop db`
 → `/ready` returns 503 within ~2 s while `/health` stays 200.
 
-### M0-P4 — Web shell
+### M0-P4 — Web shell (done, #12)
 
 Planned files (`apps/web/`): Next.js App Router project (TypeScript strict, ESLint, Tailwind),
 `next.config` rewrite `/api/:path*` → `${API_INTERNAL_URL}/api/:path*` plus `/health` and `/ready`
