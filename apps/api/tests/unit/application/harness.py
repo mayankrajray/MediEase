@@ -18,6 +18,8 @@ from mediease_api.application.auth.refresh_session import RefreshSession
 from mediease_api.application.auth.sign_in import SignIn, SignInCommand
 from mediease_api.application.auth.sign_out import SignOut
 from mediease_api.application.auth.views import SessionResult
+from mediease_api.application.context import RequestInfo
+from mediease_api.domain.audit.event import AuditEvent
 from mediease_api.domain.clinics.clinic import ClinicStatus
 from mediease_api.domain.identity.access import ClinicAccess
 from mediease_api.domain.identity.membership import Role
@@ -50,6 +52,7 @@ class Auth:
     refresh: RefreshSession
     sign_out: SignOut
     authenticate: AuthenticateRequest
+    info: RequestInfo
 
     def add_user(
         self,
@@ -83,11 +86,15 @@ class Auth:
     def session_of(self, user: User) -> SessionResult:
         """Sign ``user`` in by email and return the whole result (tokens included)."""
         assert user.email is not None
-        return self.sign_in.execute(cmd(user.email.value))
+        return self.sign_in.execute(cmd(user.email.value), self.info)
 
     def signed_in(self, user: User) -> str:
         """The access token delivery would put in the ``me_access`` cookie."""
         return self.session_of(user).tokens.access_token
+
+    def events(self) -> list[AuditEvent]:
+        """The audit events committed so far (the table is append-only)."""
+        return list(self.uow.committed.audit_events)
 
     def stored(self, user: User) -> User:
         return self.uow.committed.users[user.id]
@@ -96,9 +103,9 @@ class Auth:
         return [a.clinic_id for a in self.access_of(user)]
 
 
-def build_auth() -> Auth:
+def build_auth(*, audit_fails: bool = False) -> Auth:
     uow, clock, hasher, secrets = (
-        InMemoryUnitOfWork(),
+        InMemoryUnitOfWork(audit_fails=audit_fails),
         FakeClock(),
         FakeHasher(),
         FakeRefreshSecrets(),
@@ -121,7 +128,9 @@ def build_auth() -> Auth:
             sessions=sessions,
             dummy_password_hash=hasher.hash("dummy-password-never-used"),
         ),
-        refresh=RefreshSession(uow=uow, clock=clock, secrets=secrets, sessions=sessions),
-        sign_out=SignOut(uow=uow, clock=clock, secrets=secrets),
+        refresh=RefreshSession(uow=uow, clock=clock, ids=ids, secrets=secrets, sessions=sessions),
+        sign_out=SignOut(uow=uow, clock=clock, ids=ids, secrets=secrets),
         authenticate=AuthenticateRequest(uow=uow, clock=clock, access_tokens=access_tokens),
+        # What delivery would pass in: a request ID and an already-hashed IP.
+        info=RequestInfo(request_id="01J8Z5W6X4K7Q2N3R5T8V9Y0AB", ip_hash="a" * 32),
     )

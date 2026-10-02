@@ -156,7 +156,7 @@ def test_r10_platform_ops_cannot_use_a_clinic_route(auth: Auth, json_logs: LogRe
 def _context(auth: Auth, role: Role, **kwargs: object) -> RequestContext:
     user = auth.add_user(role=role, **kwargs)
     principal = auth.authenticate.execute(auth.signed_in(user))
-    return RequestContext.of(principal, resolve_clinic(principal, None), request_id="req-1")
+    return RequestContext.of(principal, resolve_clinic(principal, None), info=auth.info)
 
 
 def test_fr_auth_03_context_carries_the_members_permissions(auth: Auth) -> None:

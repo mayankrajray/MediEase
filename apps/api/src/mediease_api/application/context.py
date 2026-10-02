@@ -25,6 +25,19 @@ from mediease_api.domain.identity.user import User
 
 
 @dataclass(frozen=True, slots=True)
+class RequestInfo:
+    """What delivery knows about the call itself, for correlation and audit (M1-P4).
+
+    Built once per request and passed into use cases explicitly. ``ip_hash`` is
+    already a salted fingerprint (``ports.security.IpHasher``): the application
+    never sees the address.
+    """
+
+    request_id: str | None = None
+    ip_hash: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Principal:
     """An authenticated caller: the user, their session and their clinic access."""
 
@@ -46,7 +59,7 @@ class Principal:
 class RequestContext:
     """One request, one user, one clinic (ADR-0003). Built by delivery, used by use cases."""
 
-    request_id: str | None
+    info: RequestInfo
     user_id: UUID
     session_id: UUID
     clinic_id: UUID
@@ -55,11 +68,9 @@ class RequestContext:
     permissions: frozenset[Permission]
 
     @classmethod
-    def of(
-        cls, principal: Principal, access: ClinicAccess, *, request_id: str | None
-    ) -> RequestContext:
+    def of(cls, principal: Principal, access: ClinicAccess, *, info: RequestInfo) -> RequestContext:
         return cls(
-            request_id=request_id,
+            info=info,
             user_id=principal.user_id,
             session_id=principal.session_id,
             clinic_id=access.clinic_id,
@@ -67,6 +78,14 @@ class RequestContext:
             role=access.role,
             permissions=access.permissions,
         )
+
+    @property
+    def request_id(self) -> str | None:
+        return self.info.request_id
+
+    @property
+    def ip_hash(self) -> str | None:
+        return self.info.ip_hash
 
     def allows(self, permission: Permission) -> bool:
         return permission in self.permissions

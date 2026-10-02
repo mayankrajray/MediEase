@@ -35,8 +35,8 @@ from structlog.contextvars import bind_contextvars
 from mediease_api.application.auth.authenticate import AuthenticateRequest, resolve_clinic
 from mediease_api.application.auth.errors import PermissionDenied
 from mediease_api.application.context import Principal, RequestContext
+from mediease_api.delivery.http.request_info import request_info
 from mediease_api.delivery.http.session_cookies import ACCESS_COOKIE
-from mediease_api.delivery.middleware import get_request_id
 from mediease_api.domain.identity.permissions import Permission
 
 logger = structlog.get_logger(__name__)
@@ -167,7 +167,7 @@ def register_access_control(app: Flask, authenticator: Authenticator) -> None:
             return
 
         access = resolve_clinic(principal, request.headers.get(CLINIC_HEADER))
-        context = RequestContext.of(principal, access, request_id=get_request_id())
+        context = RequestContext.of(principal, access, info=request_info())
         assert policy.permission is not None  # a CLINIC policy always carries one
         context.require(policy.permission)
         setattr(g, _CONTEXT, context)

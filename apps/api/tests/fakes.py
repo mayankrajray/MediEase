@@ -16,6 +16,7 @@ from types import TracebackType
 from typing import Self
 from uuid import UUID
 
+from mediease_api.domain.audit.event import AuditEvent
 from mediease_api.domain.identity.access import ClinicAccess
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User
@@ -99,8 +100,24 @@ class FakeRefreshSecrets:
 class Store:
     users: dict[UUID, User] = field(default_factory=dict)
     refresh_tokens: dict[UUID, RefreshToken] = field(default_factory=dict)
+    # Append-only, like the table: tests read it, nothing edits it.
+    audit_events: list[AuditEvent] = field(default_factory=list)
     # Not owned by the use cases under test: arranged by tests, read-only here.
     access: dict[UUID, list[ClinicAccess]] = field(default_factory=dict)
+
+    def copy(self) -> Store:
+        """A private copy for one unit of work.
+
+        Entities are deep-copied so a use case cannot change committed state by
+        accident; audit events are frozen, so copying the list is enough (and a
+        read-only mapping cannot be deep-copied anyway).
+        """
+        return Store(
+            users=copy.deepcopy(self.users),
+            refresh_tokens=copy.deepcopy(self.refresh_tokens),
+            audit_events=list(self.audit_events),
+            access=copy.deepcopy(self.access),
+        )
 
 
 class _Users:
@@ -170,18 +187,38 @@ class _ClinicAccess:
         return list(self._store.access.get(user_id, []))
 
 
+class _Audit:
+    """The audit writer: appends to the working store, so a rollback drops the row."""
+
+    def __init__(self, store: Store, *, fail: bool = False) -> None:
+        self._store = store
+        self._fail = fail
+
+    def record(self, event: AuditEvent) -> None:
+        if self._fail:
+            # Stands in for a constraint violation or a dead connection: an
+            # unaudited change must not commit (spec R11).
+            raise AuditWriteFailed(event.action.value)
+        self._store.audit_events.append(event)
+
+
+class AuditWriteFailed(RuntimeError):
+    """Raised by the fake audit writer when a test asks it to fail."""
+
+
 class InMemoryUnitOfWork:
     """Implements the parts of ``UnitOfWork`` the auth use cases use."""
 
-    def __init__(self, store: Store | None = None) -> None:
+    def __init__(self, store: Store | None = None, *, audit_fails: bool = False) -> None:
         self.committed = store or Store()
         self._working: Store | None = None
+        self._audit_fails = audit_fails
         self.commits = 0
 
     def __enter__(self) -> Self:
         if self._working is not None:
             raise RuntimeError("unit of work is already open")
-        self._working = copy.deepcopy(self.committed)
+        self._working = self.committed.copy()
         return self
 
     def __exit__(
@@ -193,11 +230,11 @@ class InMemoryUnitOfWork:
         self._working = None
 
     def commit(self) -> None:
-        self.committed = copy.deepcopy(self._open())
+        self.committed = self._open().copy()
         self.commits += 1
 
     def rollback(self) -> None:
-        self._working = copy.deepcopy(self.committed)
+        self._working = self.committed.copy()
 
     @property
     def users(self) -> _Users:
@@ -210,6 +247,10 @@ class InMemoryUnitOfWork:
     @property
     def clinic_access(self) -> _ClinicAccess:
         return _ClinicAccess(self._open())
+
+    @property
+    def audit(self) -> _Audit:
+        return _Audit(self._open(), fail=self._audit_fails)
 
     def _open(self) -> Store:
         if self._working is None:
