@@ -1,65 +1,91 @@
 """Structured logging setup (NFR-12, CLAUDE.md "Observability Standards").
 
-JSON, one event per line, with a stable set of fields. Correlation IDs
-(``request_id``, ``clinic_id``, ``user_id``) are carried in contextvars so every
-log line emitted while handling a request is automatically tagged — a single ID
-traces a request end to end.
+One event per line on stdout. ``APP_ENV=local`` uses a human-readable console
+renderer; every other environment (test, staging, production) emits JSON.
+
+structlog events and stdlib records (Flask, werkzeug, libraries) go through the
+same formatter, so every line has the same shape: ``timestamp``, ``level``,
+``event``, ``logger`` and any bound context. Correlation IDs (``request_id``,
+later ``clinic_id`` and ``user_id``) live in contextvars and are merged into
+every event emitted while a request is handled.
 
 Never log PII or clinical content (CLAUDE.md). This module only wires the
-pipeline; call sites are responsible for not passing sensitive values.
+pipeline; call sites are responsible for passing internal IDs and enums only.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+import sys
 
 import structlog
-from structlog.contextvars import merge_contextvars
-from structlog.types import EventDict, Processor
+from structlog.types import Processor
 
 from mediease_api.config.settings import AppEnv, AppSettings
 
 
-def configure_logging(settings: AppSettings) -> None:
-    """Configure structlog + stdlib logging for JSON output.
+class _StdoutHandler(logging.Handler):
+    """Write each record to whatever ``sys.stdout`` is at emit time.
 
-    Idempotent: safe to call once from the composition root. In ``local`` and
-    ``test`` a console renderer is used for readability; deployed environments
-    always emit JSON.
+    A plain ``StreamHandler`` keeps the stream it was created with; resolving it
+    per record keeps logging correct when gunicorn or pytest swap ``sys.stdout``.
     """
-    level = logging.getLevelNamesMapping()[settings.LOG_LEVEL]
 
-    shared_processors: list[Processor] = [
-        merge_contextvars,
-        structlog.processors.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso", utc=True),
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            sys.stdout.write(self.format(record) + "\n")
+            sys.stdout.flush()
+        except Exception:
+            self.handleError(record)
+
+
+def configure_logging(settings: AppSettings) -> None:
+    """Configure structlog and the stdlib root logger from settings.
+
+    Safe to call more than once (each call replaces the root handlers), which
+    keeps tests that build several apps independent of each other.
+    """
+    shared: list[Processor] = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso", utc=True, key="timestamp"),
         structlog.processors.StackInfoRenderer(),
-        _rename_event_key,
     ]
 
-    renderer: Processor
-    if settings.APP_ENV == AppEnv.LOCAL:
-        renderer = structlog.dev.ConsoleRenderer()
+    renderer_chain: list[Processor]
+    if settings.APP_ENV is AppEnv.LOCAL:
+        renderer_chain = [structlog.dev.ConsoleRenderer()]
     else:
-        renderer = structlog.processors.JSONRenderer()
+        renderer_chain = [
+            structlog.processors.format_exc_info,
+            structlog.processors.JSONRenderer(),
+        ]
 
     structlog.configure(
-        processors=[*shared_processors, renderer],
-        wrapper_class=structlog.make_filtering_bound_logger(level),
-        logger_factory=structlog.PrintLoggerFactory(),
+        processors=[
+            # Level filtering reads the stdlib logger's level at call time, so a
+            # later configure_logging() with another LOG_LEVEL takes effect.
+            structlog.stdlib.filter_by_level,
+            *shared,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
 
-    # Route stdlib logging (Flask, werkzeug) through the same level.
-    logging.basicConfig(level=level, format="%(message)s")
+    handler = _StdoutHandler()
+    handler.setFormatter(
+        structlog.stdlib.ProcessorFormatter(
+            foreign_pre_chain=shared,
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                *renderer_chain,
+            ],
+        )
+    )
 
-
-def _rename_event_key(_: Any, __: str, event_dict: EventDict) -> EventDict:
-    """Expose the message under the stable ``event`` field name.
-
-    CLAUDE.md requires an ``event`` field ("log events, not prose"). structlog's
-    positional message already lands in ``event``; this hook is the single place
-    to adjust the shape if that changes, keeping the contract in one spot.
-    """
-    return event_dict
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(settings.LOG_LEVEL)
