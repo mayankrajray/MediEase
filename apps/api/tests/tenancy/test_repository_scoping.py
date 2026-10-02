@@ -33,6 +33,15 @@ class Tenant:
     owner: ClinicMembership
 
 
+# Reviewed exception (M1-P4): audit_events carries clinic_id but is deliberately
+# not reachable through a tenant repository. It is append-only, written only by
+# the audit writer with the clinic ID from the request context, and it also holds
+# platform-level rows (clinic_id null for a sign-in). Nothing in the application
+# reads it; an owner-facing read (FR-AUD-03) must scope its own query by clinic
+# and add cases to this suite.
+NOT_TENANT_SCOPED = {"audit_events"}
+
+
 @pytest.fixture
 def two_clinics(uow_factory: UowFactory) -> tuple[Tenant, Tenant]:
     """Clinics A and B, each with one doctor and one active owner."""
@@ -145,7 +154,15 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         repo.model.__table__.name  # type: ignore[attr-defined]
         for repo in TenantScopedRepository.__subclasses__()
     }
-    assert tenant_tables == scoped_tables == {"doctors", "clinic_memberships"}
+    assert (
+        tenant_tables
+        == scoped_tables | NOT_TENANT_SCOPED
+        == {
+            "doctors",
+            "clinic_memberships",
+            "audit_events",
+        }
+    )
     assert {SqlAlchemyDoctorRepository, SqlAlchemyMembershipRepository} == set(
         TenantScopedRepository.__subclasses__()
     )

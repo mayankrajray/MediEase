@@ -25,7 +25,7 @@ from mediease_api.ports.readiness import (
     DatabaseTimeout,
     DatabaseUnavailable,
 )
-from tests.conftest import TEST_SIGNING_KEY
+from tests.conftest import TEST_IP_SALT, TEST_SIGNING_KEY
 
 # Allowance over the 2 s budget for process scheduling on slow CI runners.
 _SLACK_SECONDS = 1.5
@@ -40,6 +40,7 @@ def _engine(url: str) -> Engine:
             APP_ENV=AppEnv.LOCAL,
             DATABASE_URL=url,
             JWT_SIGNING_KEY=SecretStr(TEST_SIGNING_KEY),
+            AUDIT_IP_SALT=SecretStr(TEST_IP_SALT),
         )
     )
 

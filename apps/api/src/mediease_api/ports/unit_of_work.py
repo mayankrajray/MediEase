@@ -21,6 +21,7 @@ from types import TracebackType
 from typing import Protocol, Self
 from uuid import UUID
 
+from mediease_api.ports.audit import AuditWriter
 from mediease_api.ports.repositories import (
     ClinicAccessRepository,
     ClinicRepository,
@@ -51,6 +52,10 @@ class UnitOfWork(Protocol):
     def refresh_tokens(self) -> RefreshTokenRepository: ...
     @property
     def clinic_access(self) -> ClinicAccessRepository: ...
+    @property
+    def audit(self) -> AuditWriter:
+        """Appends audit events in this transaction, so a change is never unaudited (R11)."""
+        ...
 
     def tenant(self, clinic_id: UUID) -> TenantRepositories:
         """Repositories scoped to ``clinic_id``; the only way to reach tenant rows."""

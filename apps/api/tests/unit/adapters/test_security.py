@@ -10,6 +10,7 @@ import pytest
 from mediease_api.adapters.clock.system import SystemClock
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
 from mediease_api.adapters.security.argon2_hasher import Argon2PasswordHasher
+from mediease_api.adapters.security.ip_hash import HmacIpHasher
 from mediease_api.adapters.security.jwt_tokens import AUDIENCE, ISSUER, JwtAccessTokenIssuer
 from mediease_api.adapters.security.refresh_secrets import Sha256RefreshTokenSecrets
 from mediease_api.ports.security import InvalidAccessToken
@@ -161,3 +162,24 @@ def test_system_clock_is_utc() -> None:
     now = SystemClock().now()
     assert now.tzinfo is UTC
     assert abs(now - datetime.now(UTC)) < timedelta(seconds=5)
+
+
+# --- IP fingerprints for audit events (M1-P4) -------------------------------------------------
+
+
+def test_fr_aud_01_ip_hash_is_stable_salted_and_irreversible() -> None:
+    hasher = HmacIpHasher(KEY)
+    fingerprint = hasher.hash("203.0.113.42")
+
+    assert fingerprint == hasher.hash(" 203.0.113.42 ")  # stable, whitespace ignored
+    assert fingerprint is not None and len(fingerprint) == 32
+    assert "203.0.113.42" not in fingerprint
+    assert fingerprint != hasher.hash("203.0.113.43")
+    # A different salt gives a different fingerprint, so one leaked table does
+    # not identify addresses in another environment.
+    assert fingerprint != HmacIpHasher("another-unit-test-salt-0123456789").hash("203.0.113.42")
+
+
+@pytest.mark.parametrize("address", [None, "", "   "])
+def test_an_unknown_address_has_no_fingerprint(address: str | None) -> None:
+    assert HmacIpHasher(KEY).hash(address) is None

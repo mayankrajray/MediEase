@@ -88,6 +88,7 @@ jobs:
       DB_ECHO_PARAMS: "false"
       DATABASE_URL: postgresql+psycopg://mediease:ci-only-password@localhost:5432/mediease_test
       JWT_SIGNING_KEY: ci-only-signing-key-not-a-secret-0123456789
+      AUDIT_IP_SALT: ci-only-audit-ip-salt-not-a-secret-0123456789
       # Real-PostgreSQL integration tests (tests/conftest.py::database_url).
       TEST_DATABASE_URL: postgresql+psycopg://mediease:ci-only-password@localhost:5432/mediease_test
       # Deliberately not Asia/Kolkata: flushes out code that relies on the machine timezone.

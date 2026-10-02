@@ -72,3 +72,15 @@ class RefreshTokenSecrets(Protocol):
     def digest(self, token: str) -> str:
         """The value stored and looked up instead of the token itself."""
         ...
+
+
+class IpHasher(Protocol):
+    """Reduces a caller's IP address to a stable, salted fingerprint (M1-P4).
+
+    An audit row needs to answer "was this the same device?", not "which
+    address was it": a raw IP is personal data we have no reason to keep.
+    """
+
+    def hash(self, ip_address: str | None) -> str | None:
+        """The fingerprint, or None when the address is unknown."""
+        ...

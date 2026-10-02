@@ -9,7 +9,7 @@ from mediease_api.delivery.cli import seed
 from mediease_api.domain.clinics.clinic import ClinicStatus
 from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.shared.email import EmailAddress
-from tests.conftest import TEST_SIGNING_KEY, SetEnv, UowFactory
+from tests.conftest import TEST_IP_SALT, TEST_SIGNING_KEY, SetEnv, UowFactory
 
 
 @pytest.fixture
@@ -18,6 +18,7 @@ def seed_env(set_env: SetEnv, migrated_database_url: str) -> dict[str, str]:
         "APP_ENV": "local",
         "DATABASE_URL": migrated_database_url,
         "JWT_SIGNING_KEY": TEST_SIGNING_KEY,
+        "AUDIT_IP_SALT": TEST_IP_SALT,
     }
     set_env(env)
     return env
