@@ -81,12 +81,15 @@ def test_clinic_endpoint_returns_the_requests_clinic(world: World) -> None:
 
 def test_doctors_and_staff_lists_describe_this_clinic(world: World) -> None:
     client = world.client_for(world.a.owner)
-    doctors = client.get(DOCTORS).get_json()["items"]
+    doctors_resp = client.get(DOCTORS)
+    doctors = doctors_resp.get_json()["items"]
     assert [d["id"] for d in doctors] == [str(world.a.doctor.id)]
     assert doctors[0]["registration_number"] == world.a.doctor.registration_number
+    assert doctors_resp.headers["Cache-Control"] == "no-store"
 
-    staff = client.get(STAFF).get_json()["items"]
-    assert [(s["full_name"], s["role"], s["status"]) for s in staff] == [
+    staff_resp = client.get(STAFF)
+    assert staff_resp.headers["Cache-Control"] == "no-store"
+    assert [(s["full_name"], s["role"], s["status"]) for s in staff_resp.get_json()["items"]] == [
         ("Alpha Doctor", "DOCTOR", "ACTIVE"),
         ("Alpha Front_Desk", "FRONT_DESK", "ACTIVE"),
         ("Alpha Owner", "OWNER", "ACTIVE"),
@@ -98,6 +101,7 @@ def test_one_doctor_of_this_clinic_is_readable_by_id(world: World) -> None:
     resp = world.client_for(world.a.doctor_user).get(f"{DOCTORS}/{world.a.doctor.id}")
     assert resp.status_code == 200
     assert resp.get_json()["display_name"] == "Dr. Alpha Sample"
+    assert resp.headers["Cache-Control"] == "no-store"
 
 
 def test_unknown_doctor_id_is_404(world: World) -> None:

@@ -5,7 +5,7 @@
 | Requirements | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08 |
 | Milestone / phases | M1 / P1–P6 |
 | Status | Approved (developer sign-off 2026-10-02) |
-| Last updated | 2026-10-02 |
+| Last updated | 2026-10-03 (§10: the `auth.rejected` event added by M1-P3; no change to behaviour) |
 
 ## 1. Context
 Clinics must trust that only their own staff can see their patients, and that each staff member
@@ -89,7 +89,9 @@ See API.md "Auth and session", "Clinic administration", "Ops console".
 
 ## 10. Observability
 Events: `auth.sign_in_failed` (with `reason` enum), `auth.locked`, `auth.refresh_reused`,
-`perm.denied`, `tenancy.not_found`. Metric: sign-in failures per minute.
+`auth.rejected` (per-request authentication, with `reason`: `invalid_token`, `session_ended`,
+`account_disabled`, `unknown_user` — added in M1-P3), `perm.denied`, `tenancy.not_found`.
+Metric: sign-in failures per minute.
 
 ## 11. Out of scope
 OTP sign-in, password reset by message, support-access grants, SSO.

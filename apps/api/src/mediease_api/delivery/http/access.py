@@ -175,11 +175,12 @@ def register_access_control(app: Flask, authenticator: Authenticator) -> None:
 
 
 def check_every_route_has_policy(app: Flask) -> None:
-    """Fail at start-up if any registered route is unprotected (default deny)."""
-    missing = [
-        endpoint
-        for endpoint, view in app.view_functions.items()
-        if policy_of(view) is None and endpoint != "static"
-    ]
+    """Fail at start-up if any registered route is unprotected (default deny).
+
+    No exemptions: the API serves JSON only (``static_folder=None``), so a
+    route appearing here without a policy is always a mistake to fix at the
+    route, not a case to skip.
+    """
+    missing = [endpoint for endpoint, view in app.view_functions.items() if policy_of(view) is None]
     if missing:
         raise MissingAccessPolicy(missing)
