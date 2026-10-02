@@ -16,12 +16,13 @@ first production release.
 - `.gitattributes`: LF line endings in the index and working tree on every platform (M0-P1).
 - `.github/CODEOWNERS`: default owners for every path (M0-P1, W-6).
 - API package `mediease_api` (M0-P2): `pyproject.toml` with pinned runtime and dev dependencies;
-  typed `AppSettings` + `load_settings()` that fail fast on invalid config (`CFG_INVALID`);
-  structlog JSON logging with `request_id`/`clinic_id`/`user_id` contextvars; `X-Request-ID`
-  middleware (ULID generation, echo, access log with `duration_ms`); error envelope with
-  `SYS_UNEXPECTED` handler; `GET /health`; Flask app factory (`create_app`) and gunicorn `wsgi`
-  entrypoint; unit tests for settings and integration tests for `/health` (17 tests).
-- `Makefile` targets `test-api`, `lint`, `typecheck` running in the API venv (M0-P2).
+  typed `AppSettings` + `load_settings()` that fail fast on invalid config (`CFG_INVALID`, naming
+  each rejected field); structlog JSON logging for app and framework records with `request_id`
+  in contextvars; `X-Request-ID` middleware (safe inbound IDs echoed, otherwise a ULID; access log
+  with route template and `duration_ms`); error envelope with `REQ_NOT_FOUND`,
+  `REQ_METHOD_NOT_ALLOWED` and `SYS_UNEXPECTED`; `GET /health`; Flask app factory (`create_app`)
+  and gunicorn `wsgi` entrypoint; 31 unit and integration tests.
+- `Makefile` targets `install-api`, `test`, `test-api`, `lint`, `typecheck` (M0-P2).
 
 ### Verified
 - M0-P1 closed: `db` starts healthy, `select 1` returns 1 in UTC, `down` keeps `pgdata`, and an

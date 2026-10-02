@@ -27,14 +27,15 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | `READY_DB_UNAVAILABLE` | 503 | Database not reachable | db down, wrong host, credentials | `make ps`, db logs, DEBUGGING §5.2 *(planned, M0)* |
 | `READY_DB_TIMEOUT` | 503 | Database check exceeded 2 s | db overloaded or network | db metrics, slow queries *(planned, M0)* |
 | `REQ_VALIDATION_FAILED` | 422 | Request body/query invalid | Client sent wrong shape | `details.fields[]` lists each field and reason *(planned, M0)* |
-| `REQ_NOT_FOUND` | 404 | Resource not found | Wrong ID **or other clinic's resource** | Tenancy context; this is expected for cross-clinic access *(planned, M0)* |
+| `REQ_NOT_FOUND` | 404 | Resource not found | Unknown route (M0-P2); wrong ID **or other clinic's resource** (M1+) | Access log `route` is null for unknown routes; tenancy context for resources — expected for cross-clinic access |
+| `REQ_METHOD_NOT_ALLOWED` | 405 | Method not allowed on this URL | Client used the wrong HTTP method | `Allow` response header lists valid methods (M0-P2) |
 | `REQ_CONFLICT_IDEMPOTENCY` | 409 | Same `Idempotency-Key` with a different body | Client retry bug | Client code *(planned, M1)* |
 | `REQ_RATE_LIMITED` | 429 | Too many requests | Abuse or client loop | `Retry-After` header; rate-limit logs *(planned, M1)* |
 | `SYS_UNEXPECTED` | 500 | Something went wrong | Unhandled exception | API log `level=ERROR` (`app.unexpected_error`) with same `request_id`, stack trace (M0-P2) |
 
-From M0-P2, unmatched routes and other framework-level HTTP errors are returned in the standard
-envelope with an uppercased werkzeug code (e.g. `NOT_FOUND` for 404, `METHOD_NOT_ALLOWED` for 405).
-These are superseded by the structured `REQ_*` codes above as each feature adds explicit handling.
+Other framework-level 4xx errors without a catalogued code are returned in the envelope as
+`REQ_<WERKZEUG_NAME>` (e.g. `REQ_UNSUPPORTED_MEDIA_TYPE`); give them a row here when a feature
+starts relying on them. Any 5xx is returned as `SYS_UNEXPECTED` (M0-P2).
 
 ## Auth and permissions (M1)
 

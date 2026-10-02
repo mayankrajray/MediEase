@@ -99,10 +99,11 @@ do not exist.
 | `make down` | Stop the stack | now |
 | `make ps` / `make logs` | Service status / follow logs | now |
 | `make psql` | Open a psql shell on the local database | now |
+| `make install-api` | Create `apps/api/.venv` (Python 3.12) and install the API with dev tools | now |
 | `make migrate` | Re-run Alembic migrations as a one-off container (`make up` already runs them) | M0 |
-| `make test` | API + web test suites | M0 |
-| `make test-api` / `make test-web` | One side only | M0 |
-| `make lint` / `make typecheck` | Ruff + mypy; ESLint + tsc | M0 |
+| `make test` | API + web test suites | now (API only; web from M0-P4) |
+| `make test-api` / `make test-web` | One side only | `test-api` now; `test-web` M0-P4 |
+| `make lint` / `make typecheck` | Ruff + mypy; ESLint + tsc | now (API); web from M0-P4 |
 | `make contract` | Validate `openapi.yaml` and regenerate web types | M0 |
 | `make seed` | Load generated (never real) demo data | M1 |
 | `make worker` | Run the job worker in the foreground | M5 |
