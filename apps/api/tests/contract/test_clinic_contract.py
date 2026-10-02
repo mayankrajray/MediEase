@@ -7,13 +7,15 @@ types — for every success and error shape the endpoints can return.
 
 from __future__ import annotations
 
+from json import dumps
 from pathlib import Path
 
 import pytest
 from flask.testing import FlaskClient
 from openapi_core import OpenAPI
 from openapi_core.contrib.werkzeug import WerkzeugOpenAPIRequest, WerkzeugOpenAPIResponse
-from werkzeug.test import TestResponse
+from werkzeug.test import EnvironBuilder, TestResponse
+from werkzeug.wrappers import Request
 
 from tests.conftest import World
 
@@ -95,3 +97,67 @@ def test_adr_0008_suspended_clinic_matches_contract(openapi: OpenAPI, world: Wor
     resp = _get(world.client_for(world.suspended_owner), "/api/v1/clinic")
     assert resp.status_code == 403
     _check(openapi, resp)
+
+
+# --- The role change (M1-P4) ------------------------------------------------------------------
+
+
+def _patch(client: FlaskClient, path: str, body: dict[str, str]) -> TestResponse:
+    csrf = client.get_cookie("me_csrf", domain="localhost", path="/")
+    assert csrf is not None
+    resp = client.patch(path, base_url=_BASE_URL, json=body, headers={"X-CSRF-Token": csrf.value})
+    resp.sent_body = dumps(body).encode()  # type: ignore[attr-defined]
+    return resp
+
+
+def _rebuilt(resp: TestResponse) -> WerkzeugOpenAPIRequest:
+    """The app consumed the body stream; rebuild the request so it can be validated."""
+    sent = resp.request
+    return WerkzeugOpenAPIRequest(
+        Request(
+            EnvironBuilder(
+                base_url=_BASE_URL,
+                path=sent.path,
+                method=sent.method,
+                headers=dict(sent.headers),
+                data=getattr(resp, "sent_body", b""),
+            ).get_environ()
+        )
+    )
+
+
+def _check_body_request(openapi: OpenAPI, resp: TestResponse, *, valid: bool = True) -> None:
+    request = _rebuilt(resp)
+    if valid:
+        openapi.validate_request(request)
+    openapi.validate_response(request, WerkzeugOpenAPIResponse(resp))
+
+
+def _membership_id(client: FlaskClient, full_name: str) -> str:
+    staff = _get(client, "/api/v1/clinic/staff").get_json()["items"]
+    return str(next(m["membership_id"] for m in staff if m["full_name"] == full_name))
+
+
+def test_adr_0008_role_change_200_matches_contract(openapi: OpenAPI, world: World) -> None:
+    owner = world.client_for(world.a.owner)
+    membership_id = _membership_id(owner, "Alpha Front_Desk")
+    resp = _patch(owner, f"/api/v1/clinic/staff/{membership_id}", {"role": "DOCTOR"})
+    assert resp.status_code == 200
+    _check_body_request(openapi, resp)
+
+
+def test_adr_0008_last_owner_409_matches_contract(openapi: OpenAPI, world: World) -> None:
+    owner = world.client_for(world.a.owner)
+    membership_id = _membership_id(owner, "Alpha Owner")
+    resp = _patch(owner, f"/api/v1/clinic/staff/{membership_id}", {"role": "DOCTOR"})
+    assert resp.status_code == 409
+    _check_body_request(openapi, resp)
+
+
+def test_adr_0008_invalid_role_422_matches_contract(openapi: OpenAPI, world: World) -> None:
+    owner = world.client_for(world.a.owner)
+    membership_id = _membership_id(owner, "Alpha Doctor")
+    resp = _patch(owner, f"/api/v1/clinic/staff/{membership_id}", {"role": "SUPERUSER"})
+    assert resp.status_code == 422
+    # A deliberately invalid body is not checked against the request schema.
+    _check_body_request(openapi, resp, valid=False)

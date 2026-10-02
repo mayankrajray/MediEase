@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -26,9 +26,10 @@ tags:
       or deactivating a member takes effect on their next request.
   - name: clinic
     description: |
-      Read-only clinic settings, doctors and staff (M1-P3). The clinic is never a parameter:
-      it is the caller's only membership, or the one named in X-Clinic-ID. Another clinic's
-      resource is 404, never 403 (NFR-08). Staff and doctor changes arrive in M1-P5.
+      Clinic settings, doctors and staff (M1-P3 reads, M1-P4 the role change). The clinic is
+      never a parameter: it is the caller's only membership, or the one named in X-Clinic-ID.
+      Another clinic's resource is 404, never 403 (NFR-08). Inviting and deactivating staff,
+      and doctor management, arrive in M1-P5.
 paths:
   /api/v1/auth/sign-in:
     post:
@@ -269,6 +270,62 @@ paths:
           $ref: '#/components/responses/AuthError'
         '403':
           $ref: '#/components/responses/PermissionError'
+  /api/v1/clinic/staff/{membership_id}:
+    patch:
+      tags: [clinic]
+      operationId: changeStaffRole
+      summary: Change a member's role
+      description: |
+        FR-ORG-04, FR-AUD-01. Permission: STAFF_MANAGE (owners only). The new role and a
+        staff.role_changed audit event are written in one transaction, so a role change is
+        never unrecorded (spec R11). The last active owner can be neither demoted nor
+        deactivated (409 CLN_LAST_OWNER). The member keeps their session: the new role
+        applies to their next request. Setting the role they already hold changes nothing
+        and records nothing. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: membership_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffRoleUpdate'
+      responses:
+        '200':
+          description: The member after the change
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffMember'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
   /health:
     get:
       tags: [platform]
@@ -380,6 +437,17 @@ components:
         PERM_CLINIC_REQUIRED (400, choose a clinic); PERM_DENIED (403, the role lacks the
         permission, or an ops user on a clinic route); CLN_SUSPENDED (403); REQ_NOT_FOUND
         (404, unknown id — or another clinic's resource, which is never distinguishable)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ConflictError:
+      description: |
+        The change conflicts with a clinic rule: CLN_LAST_OWNER (a clinic needs at least one
+        active owner), CLN_INVALID_TRANSITION (the entity's state does not allow it)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -638,6 +706,14 @@ components:
           $ref: '#/components/schemas/Role'
         status:
           $ref: '#/components/schemas/MembershipStatus'
+    StaffRoleUpdate:
+      type: object
+      additionalProperties: false
+      required: [role]
+      description: The only staff field M1-P4 can change; invite and deactivate land in M1-P5
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
     Error:
       type: object
       required: [code, message, request_id]

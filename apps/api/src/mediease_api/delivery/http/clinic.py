@@ -1,4 +1,4 @@
-"""Read-only clinic endpoints for the staff of one clinic (FR-ORG-02..04, NFR-08).
+"""Clinic endpoints for the staff of one clinic (FR-ORG-02..04, NFR-08).
 
 | Endpoint | Permission |
 |---|---|
@@ -6,6 +6,7 @@
 | ``GET /api/v1/clinic/doctors`` | ``DOCTORS_VIEW`` |
 | ``GET /api/v1/clinic/doctors/{doctor_id}`` | ``DOCTORS_VIEW`` |
 | ``GET /api/v1/clinic/staff`` | ``STAFF_MANAGE`` (owners) |
+| ``PATCH /api/v1/clinic/staff/{membership_id}`` | ``STAFF_MANAGE`` (owners) |
 
 The clinic is never a path or query parameter: it comes from the request
 context the access hook resolved (spec R6), and every query runs through
@@ -15,7 +16,8 @@ Lists are unpaginated by design: a clinic has a handful of doctors and staff,
 so they return ``{"items": [...]}`` without a cursor. The paginated envelope
 in docs/API.md arrives with the first list that can grow (patients, M2).
 
-Writes (invite, role change, deactivate) arrive in M1-P5, after the audit log.
+The role change (M1-P4) is the only write here; inviting and deactivating
+staff arrive in M1-P5, as does doctor management.
 """
 
 from __future__ import annotations
@@ -25,25 +27,41 @@ from typing import Any, Protocol
 from uuid import UUID
 
 from flask import Blueprint, Response, jsonify
+from pydantic import BaseModel, ConfigDict
 
+from mediease_api.application.clinics.change_staff_role import (
+    ChangeStaffRole,
+    ChangeStaffRoleCommand,
+)
 from mediease_api.application.clinics.queries import GetClinic, GetDoctor, ListDoctors, ListStaff
 from mediease_api.delivery.http.access import clinic, current_context
+from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.access import StaffMember
+from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.identity.permissions import Permission
 
 
-class ClinicQueries(Protocol):
+class ClinicUseCases(Protocol):
     """Fresh use cases for one request, supplied by bootstrap.py."""
 
     def get_clinic(self) -> GetClinic: ...
     def list_doctors(self) -> ListDoctors: ...
     def get_doctor(self) -> GetDoctor: ...
     def list_staff(self) -> ListStaff: ...
+    def change_staff_role(self) -> ChangeStaffRole: ...
 
 
-def create_clinic_blueprint(queries: ClinicQueries) -> Blueprint:
+class StaffRoleRequest(BaseModel):
+    """The only staff field M1-P4 can change; invite and deactivate land in M1-P5."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: Role
+
+
+def create_clinic_blueprint(queries: ClinicUseCases) -> Blueprint:
     bp = Blueprint("clinic", __name__, url_prefix="/api/v1/clinic")
 
     @bp.after_request
@@ -74,6 +92,16 @@ def create_clinic_blueprint(queries: ClinicQueries) -> Blueprint:
     def list_staff() -> Response:
         staff = queries.list_staff().execute(current_context())
         return jsonify(_items(_staff_body(m) for m in staff))
+
+    @bp.patch("/staff/<uuid:membership_id>")
+    @clinic(Permission.STAFF_MANAGE)
+    def change_staff_role(membership_id: UUID) -> Response:
+        body = parse_json(StaffRoleRequest)
+        member = queries.change_staff_role().execute(
+            current_context(),
+            ChangeStaffRoleCommand(membership_id=membership_id, role=body.role),
+        )
+        return jsonify(_staff_body(member))
 
     return bp
 
