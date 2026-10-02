@@ -12,6 +12,13 @@ API_DIR := apps/api
 VENV_BIN := .venv/bin
 PYTHON ?= python3.12
 
+# Database tests run against the compose `db` through its localhost port.
+# POSTGRES_* come from .env (optional here; env-check guards the targets that need it).
+# The URL reaches pytest through the environment, so it is never echoed.
+-include .env
+TEST_DATABASE_URL ?= postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)
+export TEST_DATABASE_URL
+
 .PHONY: help env-check up down ps logs psql install-api api-venv-check test test-api lint typecheck
 
 help: ## List available targets
@@ -47,7 +54,7 @@ api-venv-check:
 
 test: test-api ## Run all test suites (web joins in M0-P4)
 
-test-api: api-venv-check ## Run the API test suite (pytest)
+test-api: env-check api-venv-check ## Run the API test suite (needs the db: make up)
 	cd $(API_DIR) && $(VENV_BIN)/pytest -q
 
 lint: api-venv-check ## Lint and format-check the API (ruff)

@@ -100,6 +100,17 @@ def test_nfr_12_unknown_app_env_rejected(set_env: SetEnv, valid_env: dict[str, s
     assert _invalid_fields({**valid_env, "APP_ENV": "prod"}, set_env) == {"APP_ENV"}
 
 
+@pytest.mark.parametrize(
+    "url",
+    ["postgresql://u:p@db:5432/mediease", "sqlite:///mediease.db", "not-a-url"],
+    ids=["psycopg2-default", "other-database", "garbage"],
+)
+def test_nfr_12_database_url_must_use_psycopg_driver(
+    url: str, set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    assert _invalid_fields({**valid_env, "DATABASE_URL": url}, set_env) == {"DATABASE_URL"}
+
+
 def test_nfr_12_config_invalid_never_echoes_values(
     set_env: SetEnv, valid_env: dict[str, str], capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -7,6 +7,7 @@ outside production).
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Iterator
 
 import pytest
@@ -60,3 +61,20 @@ def app(set_env: SetEnv, valid_env: dict[str, str]) -> Flask:
 def client(app: Flask) -> Iterator[FlaskClient]:
     with app.test_client() as test_client:
         yield test_client
+
+
+@pytest.fixture(scope="session")
+def database_url() -> str:
+    """URL of a real PostgreSQL for integration tests (TESTING.md: no mocks for the db).
+
+    `make test-api` derives it from .env and points at the compose `db` on
+    localhost; CI sets it to its PostgreSQL service. Missing is a failure, not
+    a skip, so database behaviour is never silently untested.
+    """
+    url = os.environ.get("TEST_DATABASE_URL", "")
+    if not url:
+        pytest.fail(
+            "TEST_DATABASE_URL is not set. Run tests with `make test-api` "
+            "(start the database first with `make up`), or export it yourself."
+        )
+    return url
