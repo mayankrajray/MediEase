@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M1-P1 and M1-P2 done (confirmed 3 Oct 2026); M1-P3 design proposed |
+| Status | In progress — M1-P1 and M1-P2 done (confirmed 3 Oct 2026); M1-P3 implemented, awaiting the developer's confirmation |
 | Spec | `docs/specs/identity-and-tenancy.md` (Approved 2026-10-02) |
 | Covers | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08, NFR-14 |
 | Issue / branch / PR | #19 · `m1/19-identity-tenancy-audit` · one draft PR for the whole milestone (ADR-0011) |
@@ -46,8 +46,8 @@ branch and appear in the one milestone PR.
 
 ## M1-P3 — Authorisation on every route
 
-**Status: proposed, awaiting the developer's approval.** Covers FR-AUTH-03, FR-ORG-04 ("effective
-on the next request"), NFR-08; spec R6, R7, R8, R10; AC3, AC4.
+**Status: implemented (3 Oct 2026), awaiting the developer's confirmation.** Covers FR-AUTH-03,
+FR-ORG-04 ("effective on the next request"), NFR-08; spec R6, R7, R8, R10; AC3, AC4.
 
 ### Concepts
 
@@ -186,6 +186,19 @@ make up && make seed
 # sign in as owner@ → GET /api/v1/clinic/staff 200
 # sign out → the old me_access on GET /api/v1/me → 401 AUTH_SESSION_EXPIRED
 ```
+
+### Decisions taken while implementing (3 Oct 2026)
+
+| Decision | Reason |
+|---|---|
+| The doctor-profile check rides along in the `ClinicAccess` query (left join on the user's active doctor row) | R7 re-reads access on every request; an extra query per request only to answer "is this owner also a doctor" would be wasted work |
+| `/me`, sign-in and refresh share one `{user, memberships}` body, and `Membership` now carries `clinic_status` and `permissions` | P2 returned memberships without them, so the web app would have had two shapes for the same thing. The contract change is additive (0.3.0) |
+| Doctor and staff lists return `{"items": [...]}` with no cursor | A clinic has one to four doctors and a handful of staff. A `next_cursor` that is always null would be a promise the endpoint does not keep; the paginated envelope starts with patients (M2) |
+| The clinic queries return domain entities and delivery serialises them | Nothing is dropped or transformed, so an application-level view layer would only duplicate the fields. Views stay where they earn their place (`SessionResult` redacts tokens) |
+| `AuthenticateRequest` converts the adapter's `InvalidAccessToken` into `SessionExpired` | Both are `AUTH_SESSION_EXPIRED`; one error type for "the session is over" keeps the hook and its tests honest |
+| `Flask(static_folder=None)` | The API serves JSON only. Without this, Flask registers a `static` route that the policy check would have to special-case |
+| A test-only `@ops` route proves R10 in both directions until P5 adds real ops endpoints | The policy is enforced now, so the first real ops endpoint inherits a tested rule |
+| The application tests share one harness module (`tests/unit/application/harness.py`) instead of fixtures copied per file | Sign-in (P2) and authorisation (P3) exercise the same composition; one place to wire it means the tests cannot drift apart |
 
 ---
 

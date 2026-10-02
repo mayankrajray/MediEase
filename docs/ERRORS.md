@@ -55,20 +55,20 @@ absent there, the request never reached the API.
 |---|---|---|---|---|
 | `AUTH_INVALID_CREDENTIALS` | 401 | Wrong login details | Typo, unknown email/phone, or no password set yet; never reveals which | `auth.sign_in_failed` with `reason` (`unknown_identifier`, `no_password`, `wrong_password`) and `user_id` when known (M1-P2) |
 | `AUTH_LOCKED` | 423 | Account temporarily locked | 5 consecutive wrong passwords (FR-AUTH-04); `Retry-After` and `details.retry_after_seconds` give the remaining time | `auth.locked` (WARNING); `users.locked_until`. Waiting 15 min unlocks; ops can clear `locked_until` (RUNBOOK §17) (M1-P2) |
-| `AUTH_SESSION_EXPIRED` | 401 | Please sign in again | Refresh token missing, unknown, expired or revoked (signed out); from M1-P3 also an invalid or expired access token | `auth.refresh_failed` with `reason`; cookie jar; `refresh_tokens` row (M1-P2) |
+| `AUTH_SESSION_EXPIRED` | 401 | Please sign in again | Refresh token missing, unknown, expired or revoked (signed out); from M1-P3 also a missing, invalid or expired `me_access` token, or a session whose refresh-token family is no longer live (sign-out and reuse revocation end access at once) | `auth.refresh_failed` / `auth.rejected` with `reason`; cookie jar; `refresh_tokens` row (M1-P2, M1-P3) |
 | `AUTH_REFRESH_REUSED` | 401 | Session ended for safety | A rotated refresh token was presented again → whole family revoked. Possible token theft, or two tabs refreshing at once | `auth.refresh_reused` (WARNING) with `user_id`, `session_id` (= `refresh_tokens.family_id`) (M1-P2) |
 | `AUTH_CSRF_INVALID` | 403 | Request could not be verified | Unsafe `/api/*` request with session cookies but missing/mismatched `X-CSRF-Token` (must equal the `me_csrf` cookie) | Web client; DEBUGGING §5.3 (M1-P2) |
-| `AUTH_ACCOUNT_DISABLED` | 403 | Account disabled | Right password, but user disabled or no `ACTIVE` membership (and not ops); on refresh it also revokes the session | `auth.sign_in_failed` / `auth.refresh_failed` with `reason`; `users.status`, `clinic_memberships.status` (M1-P2) |
-| `PERM_DENIED` | 403 | You don't have access to this action | Role lacks permission (same clinic) | PRD permission matrix |
-| `PERM_CLINIC_REQUIRED` | 400 | Choose a clinic | Multi-clinic user without `X-Clinic-ID` | Clinic switcher |
+| `AUTH_ACCOUNT_DISABLED` | 403 | Account disabled | Right password, but user disabled or no `ACTIVE` membership (and not ops); on refresh it also revokes the session; from M1-P3 also returned mid-session when the user or their last membership is deactivated (R7, AC4) | `auth.sign_in_failed` / `auth.refresh_failed` / `auth.rejected` with `reason`; `users.status`, `clinic_memberships.status` (M1-P2, M1-P3) |
+| `PERM_DENIED` | 403 | You don't have access to this action | The role lacks the permission the endpoint declared (`details.permission`, `details.role`), an ops user called a clinic route, or clinic staff called an ops route (R10) | `perm.denied` with `reason`; PRD §8.1 matrix in `domain/identity/permissions.py` and its table test (M1-P3) |
+| `PERM_CLINIC_REQUIRED` | 400 | Choose a clinic | A user with several memberships sent no `X-Clinic-ID`, or sent one that is malformed or not one of their clinics — the same answer either way, so it never reveals that a clinic exists (R6) | `perm.denied` `reason=clinic_required` with `clinic_count`; clinic switcher (M1-P3) |
+| `CLN_SUSPENDED` | 403 | This clinic is suspended | The resolved clinic is `SUSPENDED`; `/me` still lists it with its status so the web app can explain why | `perm.denied` `reason=clinic_suspended`; `clinics.status`; ops reactivates (M1-P3) |
 | `CLN_SLUG_TAKEN` | 409 | That clinic URL is taken | Duplicate slug | Ops form |
 | `CLN_LAST_OWNER` | 409 | A clinic needs at least one owner | Demoting/deactivating the only active owner (R9) | Staff settings; raised by `ClinicMembership.change_role`/`deactivate` (domain, M1-P1) |
 | `CLN_OWNER_REQUIRED` | 409 | A clinic needs an active owner before it can be activated | Activating a clinic whose owner has not accepted the invite yet (I1) | Ops onboarding; `Clinic.activate` (domain, M1-P1) |
 | `CLN_INVALID_TRANSITION` | 409 | That status change isn't allowed | e.g. deactivating a deactivated membership, suspending an onboarding clinic; `details`: `entity`, `state`, `action` | State machines in `domain/clinics`, `domain/identity` (domain, M1-P1) |
 
 Domain codes marked *(domain, M1-P1)* are raised by the domain today; they reach HTTP clients
-through the error envelope once endpoints use them (M1-P3/P5). Every domain or application code
-has its HTTP status in `delivery/errors.py::DOMAIN_ERROR_STATUS`; a code missing there is logged
+through the error envelope once endpoints use them (M1-P3/P5). Every domain or application codehas its HTTP status in `delivery/errors.py::DOMAIN_ERROR_STATUS`; a code missing there is logged
 as `app.unmapped_domain_error` and answered as `SYS_UNEXPECTED`. Input that fails a domain value
 rule (phone, email, slug, PIN code, time zone, required text) raises `REQ_VALIDATION_FAILED` with
 `details.fields` — never the rejected value. A repository given another

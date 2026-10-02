@@ -145,6 +145,22 @@ Inside containers the host is `db`; from your laptop it is `localhost`.
 - `AUTH_REFRESH_REUSED` right after a refresh usually means two refreshes ran in parallel (two
   tabs, a retry): the second presented the already-rotated token. Serialise refreshes.
 
+### 5.3a Unexpected 401 or 403 on an API call (M1-P3)
+Read the code before assuming a bug — each one means something different:
+
+| Code | What it means | First checks |
+|---|---|---|
+| `401 AUTH_SESSION_EXPIRED` | No usable `me_access`, or the session's refresh-token family was revoked | Was the user signed out (another tab, `AUTH_REFRESH_REUSED`)? Is the cookie being sent — right origin, path `/api`? Refresh once, then retry |
+| `403 AUTH_ACCOUNT_DISABLED` | `users.status = DISABLED`, or no `ACTIVE` membership left | `select status from users where id = …`; `select status, role from clinic_memberships where user_id = …`. Expected right after a deactivation (AC4) |
+| `403 PERM_DENIED` | The role lacks the permission (`details.permission`, `details.role`), or an ops account called a clinic route | PRD §8.1 and `domain/identity/permissions.py`; use a staff account for clinic work, not an ops one |
+| `400 PERM_CLINIC_REQUIRED` | Several memberships and no `X-Clinic-ID`, or a header that is malformed or not one of the user's clinics | `GET /api/v1/me` lists the clinic IDs the user may send |
+| `403 CLN_SUSPENDED` | The resolved clinic is suspended | `select status from clinics where id = …`; ops reactivates |
+| `404 REQ_NOT_FOUND` on an ID the user can see elsewhere | The resource belongs to another clinic (R8) | Log line `tenancy.not_found` with the scope that refused; check `X-Clinic-ID` |
+
+Every authorisation decision is logged with the request ID: `auth.rejected` (with `reason`) for
+401/403 from the session, `perm.denied` for permission and clinic problems. `grep <request_id>`
+in the API log shows which check refused the request.
+
 ### 5.4 Timezone errors
 - Database columns are `timestamptz`; Python datetimes must be timezone-aware (`datetime.now(UTC)`
   via the clock port — never `datetime.now()` or `utcnow()`).

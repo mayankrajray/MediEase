@@ -35,14 +35,14 @@ Use this list in the M6 security review. Each row names where it is implemented.
 - [x] Access token 15 min, refresh 14 days, rotation with reuse detection (M1-P2: HS256 JWT with pinned algorithm and required claims; refresh tokens stored as SHA-256; a rotated token revokes its family)
 - [x] Cookies `HttpOnly`, `Secure` (non-local), `SameSite=Lax`; CSRF double-submit (M1-P2: path-scoped cookies; one hook guards every unsafe `/api/*` request with session cookies)
 - [ ] Lockout after 5 failed sign-ins; rate limit per IP and per account (M1-P2: per-account lockout done, constant-time unknown-account path; per-IP rate limiting at the reverse proxy in M6-P1)
-- [ ] Role + membership check on every route; permission matrix tests (M1)
-- [ ] Ops users cannot read clinical data; support access is owner-granted, time-boxed, audited (M1, P1 for grants)
-- [ ] Deactivation effective on the next request (M1)
+- [x] Role + membership check on every route; permission matrix tests (M1-P3: each route declares an access policy and one hook enforces it; `create_app` refuses to start if a route has none; the PRD §8.1 matrix is domain data with a table test, and the role × endpoint matrix is tested over HTTP)
+- [ ] Ops users cannot read clinical data; support access is owner-granted, time-boxed, audited (M1-P3: ops accounts are refused on clinic routes and clinic staff on ops routes (R10); owner-granted support access is post-pilot, FR-OPS-05)
+- [x] Deactivation effective on the next request (M1-P3: the session, user status and membership are re-read on every request — no cached permissions; sign-out ends access at once)
 
 ### Tenancy
-- [ ] `clinic_id` on every tenant table; scoped repositories only (M1+)
-- [ ] Permanent cross-tenant test suite covering every endpoint (M1+)
-- [ ] Cross-tenant access returns 404 (M1+)
+- [x] `clinic_id` on every tenant table; scoped repositories only (M1-P1: `TenantScopedRepository`, reachable only through `UnitOfWork.tenant(clinic_id)`; M1-P3: that ID comes from the request's resolved membership, never from the body)
+- [ ] Permanent cross-tenant test suite covering every endpoint (M1-P1 repositories; M1-P3 adds the HTTP suite and a guard that fails when a clinic route taking a resource ID has no cross-clinic case; extended by every later milestone)
+- [x] Cross-tenant access returns 404 (M1-P3: AC3 proved over HTTP; scoped repositories raise `NotFound`, logged as `tenancy.not_found`)
 - [ ] PostgreSQL Row-Level Security as defence in depth (post-pilot, ADR-0003)
 
 ### Data protection

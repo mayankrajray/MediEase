@@ -305,7 +305,9 @@ flowchart LR
   M1-P3 the `clinic_id` comes from the request's resolved membership (`RequestContext`), never
   from the request body.
 - `tests/tenancy/test_repository_scoping.py` proves isolation at the repository layer and fails if
-  a table with `clinic_id` has no scoped repository.
+  a table with `clinic_id` has no scoped repository. `tests/tenancy/test_http_isolation.py`
+  (M1-P3) proves the same over HTTP and fails if a clinic route that takes a resource ID has no
+  cross-clinic case.
 
 ## 7. Background jobs
 
@@ -352,8 +354,14 @@ Full controls list: [SECURITY_AND_COMPLIANCE.md](SECURITY_AND_COMPLIANCE.md).
 - **Authentication:** Argon2id password hashes; JWT access token (15 min) and rotating refresh token
   (14 days, stored hashed, reuse detection revokes the family). Cookies: `HttpOnly`, `Secure`,
   `SameSite=Lax`, path-scoped. CSRF: double-submit token on state-changing requests.
-- **Authorisation:** route decorator declares required permission; the middleware resolves
-  membership and role for the active clinic; use cases re-check invariants.
+- **Authorisation:** every route declares an access policy (`public`, `authenticated`,
+  `clinic(permission)`, `ops`) and one `before_request` hook enforces it: it authenticates the
+  `me_access` cookie, re-reads the session, user and membership, resolves the request's clinic and
+  checks the permission before the view runs. `create_app` refuses to start if any route has no
+  policy (default deny). The permission matrix is domain data (PRD §8.1); use cases re-check
+  invariants. Implementation (M1-P3): `delivery/http/access.py`,
+  `application/auth/authenticate.py`, `application/context.py`,
+  `domain/identity/permissions.py`.
 - **Patient links:** HMAC-signed tokens containing `purpose`, `resource_id`, `clinic_id`, `exp`;
   server-side revocation list; last-4-digit phone challenge with attempt limits.
 - **Transport and storage:** TLS termination at the edge; database and bucket encryption at rest;
