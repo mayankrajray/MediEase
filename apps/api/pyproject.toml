@@ -12,6 +12,10 @@ dependencies = [
     "pydantic-settings==2.15.0",
     "structlog==26.1.0",
     "python-ulid==4.0.1",
+    # M0-P3 (issue #10). psycopg's binary wheel bundles libpq, so neither the
+    # host nor the image needs PostgreSQL client libraries or a compiler.
+    "sqlalchemy==2.1.2",
+    "psycopg[binary]==3.3.6",
 ]
 
 [project.optional-dependencies]

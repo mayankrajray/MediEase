@@ -29,6 +29,9 @@ CFG_INVALID = "CFG_INVALID"
 # Placeholder marker used in .env.example; rejected outside APP_ENV=local.
 _PLACEHOLDER = "change-me"
 
+# SQLAlchemy URL scheme for PostgreSQL through psycopg 3 (ADR-0004).
+_DATABASE_URL_PREFIX = "postgresql+psycopg://"
+
 
 class AppEnv(StrEnum):
     """Deployment environment. Drives environment-specific validation."""
@@ -98,6 +101,15 @@ class AppSettings(BaseSettings):
             raise ValueError(
                 "must be false in every environment (SQL parameters may hold patient data)"
             )
+        return value
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _psycopg_driver(cls, value: str) -> str:
+        # A bare postgresql:// URL makes SQLAlchemy load psycopg2, which is not
+        # installed; catch it at start-up with a clear message instead.
+        if not value.startswith(_DATABASE_URL_PREFIX):
+            raise ValueError(f"must start with '{_DATABASE_URL_PREFIX}' (psycopg 3 driver)")
         return value
 
     @field_validator("DATABASE_URL")
