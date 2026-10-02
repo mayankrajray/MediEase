@@ -21,8 +21,9 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0002"
+HEAD = "0003"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
+M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 
 
 @pytest.fixture
@@ -95,9 +96,31 @@ def test_0002_creates_the_m1_tables(alembic_config: Config, scratch_database_url
     assert _tables(scratch_database_url) == ["alembic_version"]
 
 
+def _user_columns(url: str) -> set[str]:
+    engine = create_engine(url)
+    try:
+        with engine.connect() as conn:
+            return {column["name"] for column in inspect(conn).get_columns("users")}
+    finally:
+        engine.dispose()
+
+
+def test_0003_adds_credentials_and_refresh_tokens(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    credentials = {"password_hash", "failed_login_count", "locked_until", "last_login_at"}
+    command.upgrade(alembic_config, "0003")
+    assert _tables(scratch_database_url) == M1_P2_TABLES
+    assert credentials <= _user_columns(scratch_database_url)
+
+    command.downgrade(alembic_config, "0002")
+    assert _tables(scratch_database_url) == M1_TABLES
+    assert not credentials & _user_columns(scratch_database_url)
+
+
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M1_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M1_P2_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:

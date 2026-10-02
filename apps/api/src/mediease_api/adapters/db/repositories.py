@@ -16,14 +16,22 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, select, update
 from sqlalchemy.orm import Session
 
-from mediease_api.adapters.db.models import ClinicMembershipRow, ClinicRow, DoctorRow, UserRow
+from mediease_api.adapters.db.models import (
+    ClinicMembershipRow,
+    ClinicRow,
+    DoctorRow,
+    RefreshTokenRow,
+    UserRow,
+)
 from mediease_api.adapters.db.tenancy import TenantScopedRepository
 from mediease_api.domain.clinics.clinic import Clinic, ClinicStatus
 from mediease_api.domain.clinics.doctor import Doctor
+from mediease_api.domain.identity.access import ClinicAccess
 from mediease_api.domain.identity.membership import ClinicMembership, MembershipStatus, Role
+from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User, UserStatus
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.errors import NotFound
@@ -33,6 +41,10 @@ from mediease_api.domain.shared.phone import PhoneNumber
 def _utc(value: datetime) -> datetime:
     # psycopg returns timestamptz in the session's TimeZone; the domain works in UTC.
     return value.astimezone(UTC)
+
+
+def _utc_or_none(value: datetime | None) -> datetime | None:
+    return _utc(value) if value is not None else None
 
 
 # --- Clinics (platform) --------------------------------------------------------------------
@@ -109,6 +121,10 @@ def _user_from_row(row: UserRow) -> User:
         status=UserStatus(row.status),
         created_at=_utc(row.created_at),
         updated_at=_utc(row.updated_at),
+        password_hash=row.password_hash,
+        failed_sign_in_count=row.failed_login_count,
+        locked_until=_utc_or_none(row.locked_until),
+        last_signed_in_at=_utc_or_none(row.last_login_at),
     )
 
 
@@ -118,6 +134,10 @@ def _write_user(row: UserRow, user: User) -> None:
     row.phone_e164 = user.phone.e164 if user.phone else None
     row.is_platform_ops = user.is_platform_ops
     row.status = user.status.value
+    row.password_hash = user.password_hash
+    row.failed_login_count = user.failed_sign_in_count
+    row.locked_until = user.locked_until
+    row.last_login_at = user.last_signed_in_at
     row.updated_at = user.updated_at
 
 
@@ -135,11 +155,11 @@ class SqlAlchemyUserRepository:
         row = self._session.get(UserRow, user_id)
         return _user_from_row(row) if row else None
 
-    def get_by_email(self, email: EmailAddress) -> User | None:
-        return self._one(select(UserRow).where(UserRow.email == email.value))
+    def get_by_email(self, email: EmailAddress, *, for_update: bool = False) -> User | None:
+        return self._one(select(UserRow).where(UserRow.email == email.value), for_update)
 
-    def get_by_phone(self, phone: PhoneNumber) -> User | None:
-        return self._one(select(UserRow).where(UserRow.phone_e164 == phone.e164))
+    def get_by_phone(self, phone: PhoneNumber, *, for_update: bool = False) -> User | None:
+        return self._one(select(UserRow).where(UserRow.phone_e164 == phone.e164), for_update)
 
     def update(self, user: User) -> None:
         row = self._session.get(UserRow, user.id)
@@ -148,9 +168,111 @@ class SqlAlchemyUserRepository:
         _write_user(row, user)
         self._session.flush()
 
-    def _one(self, query: Select[UserRow]) -> User | None:
+    def _one(self, query: Select[UserRow], for_update: bool) -> User | None:
+        if for_update:
+            # populate_existing: a row already in the session is re-read under the lock.
+            query = query.with_for_update().execution_options(populate_existing=True)
         row = self._session.scalars(query).one_or_none()
         return _user_from_row(row) if row else None
+
+
+# --- Refresh tokens (platform, owned by users) -------------------------------------------------
+
+
+def _refresh_token_from_row(row: RefreshTokenRow) -> RefreshToken:
+    return RefreshToken(
+        id=row.id,
+        user_id=row.user_id,
+        family_id=row.family_id,
+        token_hash=row.token_hash,
+        expires_at=_utc(row.expires_at),
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+        revoked_at=_utc_or_none(row.revoked_at),
+        replaced_by_id=row.replaced_by_id,
+    )
+
+
+class SqlAlchemyRefreshTokenRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, token: RefreshToken) -> None:
+        self._session.add(
+            RefreshTokenRow(
+                id=token.id,
+                user_id=token.user_id,
+                family_id=token.family_id,
+                token_hash=token.token_hash,
+                expires_at=token.expires_at,
+                revoked_at=token.revoked_at,
+                replaced_by_id=token.replaced_by_id,
+                created_at=token.created_at,
+                updated_at=token.updated_at,
+            )
+        )
+        self._session.flush()
+
+    def get_by_hash(self, token_hash: str, *, for_update: bool = False) -> RefreshToken | None:
+        query = select(RefreshTokenRow).where(RefreshTokenRow.token_hash == token_hash)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        row = self._session.scalars(query).one_or_none()
+        return _refresh_token_from_row(row) if row else None
+
+    def update(self, token: RefreshToken) -> None:
+        # Only the lifecycle changes; identity, family and hash are fixed at issue.
+        row = self._session.get(RefreshTokenRow, token.id)
+        if row is None:
+            raise NotFound("refresh token")
+        row.revoked_at = token.revoked_at
+        row.replaced_by_id = token.replaced_by_id
+        row.updated_at = token.updated_at
+        self._session.flush()
+
+    def revoke_family(self, family_id: UUID, *, now: datetime) -> int:
+        result = self._session.execute(
+            update(RefreshTokenRow)
+            .where(RefreshTokenRow.family_id == family_id, RefreshTokenRow.revoked_at.is_(None))
+            .values(revoked_at=now, updated_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        return int(result.rowcount)  # type: ignore[attr-defined]
+
+
+# --- Clinic access (platform, cross-clinic by user) ---------------------------------------------
+
+
+class SqlAlchemyClinicAccessRepository:
+    """Reads ``clinic_memberships`` by user across clinics, joined to the clinic's name.
+
+    The one sanctioned cross-clinic read of memberships (ADR-0003 "platform
+    repositories"): keyed by the signed-in user, returning IDs, names and enums.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def list_active_for_user(self, user_id: UUID) -> Sequence[ClinicAccess]:
+        query = (
+            select(ClinicMembershipRow, ClinicRow)
+            .join(ClinicRow, ClinicRow.id == ClinicMembershipRow.clinic_id)
+            .where(
+                ClinicMembershipRow.user_id == user_id,
+                ClinicMembershipRow.status == MembershipStatus.ACTIVE.value,
+            )
+            .order_by(ClinicRow.name, ClinicRow.id)
+        )
+        return [
+            ClinicAccess(
+                membership_id=membership.id,
+                clinic_id=clinic.id,
+                clinic_name=clinic.name,
+                clinic_status=ClinicStatus(clinic.status),
+                role=Role(membership.role),
+            )
+            for membership, clinic in self._session.execute(query)
+        ]
 
 
 # --- Doctors (tenant) ----------------------------------------------------------------------

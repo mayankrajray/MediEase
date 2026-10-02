@@ -18,9 +18,11 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from mediease_api.adapters.db.repositories import (
+    SqlAlchemyClinicAccessRepository,
     SqlAlchemyClinicRepository,
     SqlAlchemyDoctorRepository,
     SqlAlchemyMembershipRepository,
+    SqlAlchemyRefreshTokenRepository,
     SqlAlchemyUserRepository,
 )
 
@@ -63,6 +65,8 @@ class _OpenUnit:
         self.session = session
         self.clinics = SqlAlchemyClinicRepository(session)
         self.users = SqlAlchemyUserRepository(session)
+        self.refresh_tokens = SqlAlchemyRefreshTokenRepository(session)
+        self.clinic_access = SqlAlchemyClinicAccessRepository(session)
 
 
 class SqlAlchemyUnitOfWork:
@@ -99,6 +103,14 @@ class SqlAlchemyUnitOfWork:
     @property
     def users(self) -> SqlAlchemyUserRepository:
         return self._require_open().users
+
+    @property
+    def refresh_tokens(self) -> SqlAlchemyRefreshTokenRepository:
+        return self._require_open().refresh_tokens
+
+    @property
+    def clinic_access(self) -> SqlAlchemyClinicAccessRepository:
+        return self._require_open().clinic_access
 
     def tenant(self, clinic_id: UUID) -> SqlAlchemyTenantRepositories:
         return SqlAlchemyTenantRepositories(self._require_open().session, clinic_id)
