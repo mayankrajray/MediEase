@@ -22,6 +22,10 @@ PYTHON ?= python3.12
 TEST_DATABASE_URL ?= postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)
 export TEST_DATABASE_URL
 
+# NFR-14: >= 80% on the business core, on top of the >= 90% whole-package gate
+# in pyproject.toml. CI runs the same command (.github/workflows/ci.yml).
+CORE_COVERAGE := --include='*/mediease_api/domain/*,*/mediease_api/application/*' --fail-under=80
+
 .PHONY: help env-check up down ps logs psql migrate smoke install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
 	typecheck-web dev-web contract contract-check audit
@@ -72,8 +76,8 @@ web-deps-check:
 
 test: test-api test-web ## Run all test suites
 
-test-api: env-check api-venv-check ## Run the API test suite with the coverage gate (needs the db: make up)
-	cd $(API_DIR) && $(VENV_BIN)/pytest -q --cov
+test-api: env-check api-venv-check ## Run the API tests with both coverage gates (needs the db: make up)
+	cd $(API_DIR) && $(VENV_BIN)/pytest -q --cov && $(VENV_BIN)/coverage report $(CORE_COVERAGE)
 
 test-web: web-deps-check ## Run the web test suite (Vitest)
 	cd $(WEB_DIR) && npm test -- --run

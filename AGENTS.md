@@ -103,7 +103,7 @@ do not exist.
 | `make psql` | Open a psql shell on the local database | now |
 | `make install-api` | Create `apps/api/.venv` (Python 3.12) and install the API with dev tools | now |
 | `make migrate` | Re-run Alembic migrations as a one-off container (`make up` already runs them) | now |
-| `make test` | API + web test suites (API with the ≥ 90% coverage gate) | now |
+| `make test` | API + web test suites (API with the ≥ 90% package and ≥ 80% `domain/` + `application/` coverage gates) | now |
 | `make test-api` / `make test-web` | One side only (`test-api` needs the db: `make up`) | now |
 | `make lint` / `make typecheck` | Ruff + layer boundaries (import-linter) + mypy; ESLint + tsc | now |
 | `make install-web` | `npm ci` in `apps/web` (Node from `apps/web/.nvmrc`, installed in WSL on Windows) | now |
