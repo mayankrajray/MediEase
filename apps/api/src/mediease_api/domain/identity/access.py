@@ -1,8 +1,9 @@
-"""ClinicAccess — which clinic a user may work in, and as what (read model).
+"""Read models of who may work where (ADR-0003 platform and tenant reads).
 
-Built by a platform repository from a membership and its clinic, for sign-in
-responses and (from M1-P3) for resolving the request's active clinic (R6).
-Carries IDs, the clinic's display name and enums only — never clinical data.
+``ClinicAccess`` — one of a user's active memberships with its clinic, built
+by a platform repository keyed by user (sign-in, ``/me``, clinic resolution
+R6). ``StaffMember`` — one membership of a clinic with the member's name,
+built by a tenant repository. Both carry IDs, names and enums only.
 """
 
 from __future__ import annotations
@@ -11,7 +12,8 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from mediease_api.domain.clinics.clinic import ClinicStatus
-from mediease_api.domain.identity.membership import Role
+from mediease_api.domain.identity.membership import MembershipStatus, Role
+from mediease_api.domain.identity.permissions import Permission, permissions_for
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,3 +23,18 @@ class ClinicAccess:
     clinic_name: str
     clinic_status: ClinicStatus
     role: Role
+    # The user also has a doctor profile at this clinic (owner-who-is-a-doctor, spec §8).
+    has_doctor_profile: bool = False
+
+    @property
+    def permissions(self) -> frozenset[Permission]:
+        return permissions_for(self.role, has_doctor_profile=self.has_doctor_profile)
+
+
+@dataclass(frozen=True, slots=True)
+class StaffMember:
+    membership_id: UUID
+    user_id: UUID
+    full_name: str
+    role: Role
+    status: MembershipStatus

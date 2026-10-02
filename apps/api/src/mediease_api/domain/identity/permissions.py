@@ -1,0 +1,63 @@
+"""The permission matrix (PRD §8.1, normative; spec §2).
+
+One ``Permission`` per P0 action; each role maps to the set it may perform.
+Endpoints declare the permission they need; they never test roles directly, so
+changing who may do what is a change to this table and its test.
+
+Platform ops are not a role: ops routes require ``is_platform_ops`` and clinic
+routes refuse ops users (spec R10).
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+
+from mediease_api.domain.identity.membership import Role
+
+
+class Permission(StrEnum):
+    CLINIC_VIEW = "CLINIC_VIEW"
+    DOCTORS_VIEW = "DOCTORS_VIEW"
+    CLINIC_MANAGE = "CLINIC_MANAGE"
+    STAFF_MANAGE = "STAFF_MANAGE"
+    PATIENTS_MANAGE = "PATIENTS_MANAGE"
+    APPOINTMENTS_MANAGE = "APPOINTMENTS_MANAGE"
+    QUEUE_MOVE = "QUEUE_MOVE"
+    REMINDERS_SCHEDULE = "REMINDERS_SCHEDULE"
+    CLINICAL_VIEW = "CLINICAL_VIEW"
+    CLINICAL_WRITE = "CLINICAL_WRITE"
+    USAGE_METRICS_VIEW = "USAGE_METRICS_VIEW"
+
+
+_EVERY_ROLE = frozenset(
+    {
+        Permission.CLINIC_VIEW,
+        Permission.DOCTORS_VIEW,
+        Permission.PATIENTS_MANAGE,
+        Permission.APPOINTMENTS_MANAGE,
+        Permission.QUEUE_MOVE,
+        Permission.REMINDERS_SCHEDULE,
+    }
+)
+
+ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
+    Role.OWNER: _EVERY_ROLE
+    | {
+        Permission.CLINIC_MANAGE,
+        Permission.STAFF_MANAGE,
+        Permission.CLINICAL_VIEW,
+        Permission.USAGE_METRICS_VIEW,
+    },
+    Role.DOCTOR: _EVERY_ROLE
+    | {Permission.CLINICAL_VIEW, Permission.CLINICAL_WRITE, Permission.USAGE_METRICS_VIEW},
+    # Front desk sees only a "prescription issued" flag, never clinical content.
+    Role.FRONT_DESK: _EVERY_ROLE,
+}
+
+
+def permissions_for(role: Role, *, has_doctor_profile: bool) -> frozenset[Permission]:
+    """What a member may do. An owner writes clinical records only if also a doctor (§8)."""
+    granted = ROLE_PERMISSIONS[role]
+    if role is Role.OWNER and has_doctor_profile:
+        granted = granted | {Permission.CLINICAL_WRITE}
+    return granted
