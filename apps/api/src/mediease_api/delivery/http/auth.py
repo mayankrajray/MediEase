@@ -27,6 +27,7 @@ from mediease_api.application.auth.views import SessionResult
 from mediease_api.delivery.errors import domain_error_response
 from mediease_api.delivery.http.access import public
 from mediease_api.delivery.http.me import identity_body
+from mediease_api.delivery.http.request_info import request_info
 from mediease_api.delivery.http.session_cookies import (
     REFRESH_COOKIE,
     clear_session_cookies,
@@ -65,7 +66,7 @@ def create_auth_blueprint(use_cases: AuthUseCases, *, cookie_secure: bool) -> Bl
     def sign_in() -> Response:
         body = parse_json(SignInRequest)
         result = use_cases.sign_in().execute(
-            SignInCommand(identifier=body.identifier, password=body.password)
+            SignInCommand(identifier=body.identifier, password=body.password), request_info()
         )
         return _session_response(result, cookie_secure)
 
@@ -76,7 +77,7 @@ def create_auth_blueprint(use_cases: AuthUseCases, *, cookie_secure: bool) -> Bl
         try:
             if not token:
                 raise SessionExpired()
-            result = use_cases.refresh().execute(token)
+            result = use_cases.refresh().execute(token, request_info())
         except (SessionExpired, RefreshTokenReused, AccountDisabled) as exc:
             # The session is over: tell the browser to drop the cookies too.
             response, status = domain_error_response(exc)
@@ -87,7 +88,7 @@ def create_auth_blueprint(use_cases: AuthUseCases, *, cookie_secure: bool) -> Bl
     @bp.post("/sign-out")
     @public
     def sign_out() -> Response:
-        use_cases.sign_out().execute(request.cookies.get(REFRESH_COOKIE))
+        use_cases.sign_out().execute(request.cookies.get(REFRESH_COOKIE), request_info())
         response = Response(status=204)
         clear_session_cookies(response, secure=cookie_secure)
         return response

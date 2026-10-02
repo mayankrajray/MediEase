@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import structlog
 
+from mediease_api.application.audit import record_user_event
 from mediease_api.application.auth._session import SessionIssuer, may_hold_session, session_result
 from mediease_api.application.auth.errors import (
     AccountDisabled,
@@ -25,8 +26,11 @@ from mediease_api.application.auth.errors import (
     SessionExpired,
 )
 from mediease_api.application.auth.views import SessionResult
+from mediease_api.application.context import RequestInfo
+from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.identity.session import RefreshTokenState
 from mediease_api.ports.clock import ClockPort
+from mediease_api.ports.ids import IdPort
 from mediease_api.ports.security import RefreshTokenSecrets
 from mediease_api.ports.unit_of_work import UnitOfWork
 
@@ -39,15 +43,18 @@ class RefreshSession:
         *,
         uow: UnitOfWork,
         clock: ClockPort,
+        ids: IdPort,
         secrets: RefreshTokenSecrets,
         sessions: SessionIssuer,
     ) -> None:
         self._uow = uow
         self._clock = clock
+        self._ids = ids
         self._secrets = secrets
         self._sessions = sessions
 
-    def execute(self, refresh_token: str) -> SessionResult:
+    def execute(self, refresh_token: str, info: RequestInfo | None = None) -> SessionResult:
+        info = info or RequestInfo()
         digest = self._secrets.digest(refresh_token)
         with self._uow as uow:
             now = self._clock.now()
@@ -59,6 +66,22 @@ class RefreshSession:
             state = token.state(now)
             if state is RefreshTokenState.ROTATED:
                 revoked = uow.refresh_tokens.revoke_family(token.family_id, now=now)
+                user = uow.users.get(token.user_id)
+                if user is not None:
+                    # Possible token theft: the audit trail must show it even
+                    # though no account state changed (spec R5).
+                    record_user_event(
+                        uow,
+                        event_id=self._ids.new_id(),
+                        action=AuditAction.AUTH_REFRESH_REUSED,
+                        user=user,
+                        info=info,
+                        now=now,
+                        metadata={
+                            "session_id": str(token.family_id),
+                            "revoked_count": str(revoked),
+                        },
+                    )
                 uow.commit()
                 logger.warning(
                     "auth.refresh_reused",

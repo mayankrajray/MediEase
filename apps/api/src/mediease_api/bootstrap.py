@@ -22,6 +22,7 @@ from mediease_api.adapters.db.readiness import SqlAlchemyDatabaseCheck
 from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork, build_session_factory
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
 from mediease_api.adapters.security.argon2_hasher import Argon2PasswordHasher
+from mediease_api.adapters.security.ip_hash import HmacIpHasher
 from mediease_api.adapters.security.jwt_tokens import JwtAccessTokenIssuer
 from mediease_api.adapters.security.refresh_secrets import Sha256RefreshTokenSecrets
 from mediease_api.application.auth._session import SessionIssuer
@@ -29,6 +30,7 @@ from mediease_api.application.auth.authenticate import AuthenticateRequest
 from mediease_api.application.auth.refresh_session import RefreshSession
 from mediease_api.application.auth.sign_in import SignIn
 from mediease_api.application.auth.sign_out import SignOut
+from mediease_api.application.clinics.change_staff_role import ChangeStaffRole
 from mediease_api.application.clinics.queries import GetClinic, GetDoctor, ListDoctors, ListStaff
 from mediease_api.config.logging import configure_logging
 from mediease_api.config.settings import AppSettings
@@ -39,6 +41,7 @@ from mediease_api.delivery.http.clinic import create_clinic_blueprint
 from mediease_api.delivery.http.csrf import register_csrf_protection
 from mediease_api.delivery.http.me import create_me_blueprint
 from mediease_api.delivery.http.platform import create_platform_blueprint
+from mediease_api.delivery.http.request_info import register_request_info
 from mediease_api.delivery.middleware import register_request_middleware
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -81,12 +84,15 @@ class _UseCases:
         return RefreshSession(
             uow=self._uow(),
             clock=self.clock,
+            ids=self.ids,
             secrets=self.refresh_secrets,
             sessions=self.sessions,
         )
 
     def sign_out(self) -> SignOut:
-        return SignOut(uow=self._uow(), clock=self.clock, secrets=self.refresh_secrets)
+        return SignOut(
+            uow=self._uow(), clock=self.clock, ids=self.ids, secrets=self.refresh_secrets
+        )
 
     def authenticate(self) -> AuthenticateRequest:
         return AuthenticateRequest(
@@ -104,6 +110,9 @@ class _UseCases:
 
     def list_staff(self) -> ListStaff:
         return ListStaff(uow=self._uow())
+
+    def change_staff_role(self) -> ChangeStaffRole:
+        return ChangeStaffRole(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def _uow(self) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(self.session_factory)
@@ -185,11 +194,12 @@ def create_app(
     # Keep the validated settings on the app for handlers that need them later.
     app.config["SETTINGS"] = settings
 
-    # Order matters: request context is bound first, then CSRF is checked (it
-    # costs no database call), then each route's access policy decides who may
-    # continue; error handlers wrap everything so failures still carry the
-    # request_id.
+    # Order matters: request context is bound first, then the request's ID and
+    # IP fingerprint, then CSRF is checked (it costs no database call), then
+    # each route's access policy decides who may continue; error handlers wrap
+    # everything so failures still carry the request_id.
     register_request_middleware(app)
+    register_request_info(app, HmacIpHasher(settings.AUDIT_IP_SALT.get_secret_value()))
     register_csrf_protection(app)
     register_access_control(app, use_cases)
     register_error_handlers(app)
