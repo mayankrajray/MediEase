@@ -42,7 +42,7 @@ After Milestone 0 is complete:
 | I want to… | Read |
 |---|---|
 | Understand the product and requirements | [docs/PRD.md](docs/PRD.md) |
-| Know what is being built right now | [TASKS.md](TASKS.md) |
+| Know what is being built right now | [TASKS.md](TASKS.md), [NEXT_STEPS_PLAN.md](NEXT_STEPS_PLAN.md) |
 | Understand the system design | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | See the database design | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) |
 | See the API design | [docs/API.md](docs/API.md), [contracts/openapi.yaml](contracts/openapi.yaml) |

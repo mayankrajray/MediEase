@@ -11,6 +11,7 @@ disagree, `CLAUDE.md` wins and this file must be corrected.
 | Order | File | Why |
 |---|---|---|
 | 1 | `TASKS.md` | Which milestone and phase is active. **Only work on the active phase.** |
+| 1a | `NEXT_STEPS_PLAN.md` | Approved plan for the current milestone, workflow prerequisites and progress log |
 | 2 | `docs/specs/<feature>.md` for that phase | Acceptance criteria you must satisfy |
 | 3 | `docs/PRD.md` | Requirement IDs and product intent |
 | 4 | `docs/ARCHITECTURE.md` | Layers, request flow, where code goes |
@@ -43,6 +44,7 @@ Exact library versions are pinned in `apps/api/pyproject.toml` and `apps/web/pac
 ```
 mediease/
 ├── AGENTS.md / CLAUDE.md / TASKS.md / SPECS.md   ← agent + planning files (root)
+├── NEXT_STEPS_PLAN.md      ← approved plan for the active milestone + progress log
 ├── README.md / CONTRIBUTING.md / SECURITY.md / CHANGELOG.md
 ├── .env.example            ← every setting, documented; copy to .env
 ├── docker-compose.yml      ← services that exist *today*
@@ -93,14 +95,15 @@ do not exist.
 | Command | What it does | Available |
 |---|---|---|
 | `make help` | List targets | now |
-| `make up` | Start the local stack | now (database only), full stack from M0 |
+| `make up` | Start the whole local stack with one command (`db` → `migrate` → `api` → `web` via `depends_on`) | now (database only), full stack from M0 |
 | `make down` | Stop the stack | now |
 | `make ps` / `make logs` | Service status / follow logs | now |
 | `make psql` | Open a psql shell on the local database | now |
-| `make migrate` | Run Alembic migrations as a one-off container | M0 |
-| `make test` | API + web test suites | M0 |
-| `make test-api` / `make test-web` | One side only | M0 |
-| `make lint` / `make typecheck` | Ruff + mypy; ESLint + tsc | M0 |
+| `make install-api` | Create `apps/api/.venv` (Python 3.12) and install the API with dev tools | now |
+| `make migrate` | Re-run Alembic migrations as a one-off container (`make up` already runs them) | M0 |
+| `make test` | API + web test suites | now (API only; web from M0-P4) |
+| `make test-api` / `make test-web` | One side only | `test-api` now; `test-web` M0-P4 |
+| `make lint` / `make typecheck` | Ruff + mypy; ESLint + tsc | now (API); web from M0-P4 |
 | `make contract` | Validate `openapi.yaml` and regenerate web types | M0 |
 | `make seed` | Load generated (never real) demo data | M1 |
 | `make worker` | Run the job worker in the foreground | M5 |
@@ -139,7 +142,8 @@ Verification before declaring a phase done: `make lint typecheck test` must pass
 - **Phones:** E.164, validated and normalised at the boundary; masked in logs.
 - **Errors:** raise domain/application errors with a stable `code`; the HTTP layer maps them.
 - **Tests:** name the requirement, e.g. `test_fr_apt_04_concurrent_booking_one_wins`.
-- **Commits:** Conventional Commits with requirement IDs.
+- **Commits:** one commit per logical change; Conventional Commits subject in imperative mood with
+  requirement IDs, plus a body explaining what and why, and `Refs #<issue>` (CLAUDE.md "Commit Standards").
 
 ---
 
@@ -151,7 +155,9 @@ Verification before declaring a phase done: `make lint typecheck test` must pass
 - Never put clinical content in logs, message bodies, analytics or error messages.
 - Never generate medical advice, drug suggestions or dosage logic.
 - Never run migrations inside application start-up.
-- Never commit, push, merge, rebase or force anything unless the developer asks.
+- Never push to `origin/main`, never merge a PR, and never force-push or rewrite pushed history.
+- Push only to the task's own branch, and only after the developer explicitly permits it for that task.
+- Never combine unrelated tasks in one branch, commit or PR (CLAUDE.md "Git Workflow").
 - Never start work on a milestone other than the active one in `TASKS.md`.
 - Never disable, skip or loosen a test to make a build pass.
 
@@ -165,4 +171,5 @@ End each phase with:
 2. **Changed Files manifest** — added / modified / deleted.
 3. **How to verify** — exact commands and expected output, including one failure path.
 4. **Docs updated** — which of the files in CLAUDE.md's documentation table were touched.
-5. **Suggested commit message** — Conventional Commit format.
+5. **Commits and PR** — the list of logical commits (subject + body, per CLAUDE.md "Commit
+   Standards"), the issue number, the branch name, and the PR link once pushed with permission.

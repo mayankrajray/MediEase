@@ -1,0 +1,63 @@
+[project]
+name = "mediease-api"
+version = "0.0.0"
+description = "MediEase API — WhatsApp-native clinic operating system (hexagonal Flask backend)"
+requires-python = ">=3.12,<3.13"
+# Pinned to the exact versions installed and tested in M0-P2 (issue #8).
+# Bumping a version is a deliberate change recorded in its PR (AGENTS.md §2).
+dependencies = [
+    "flask==3.1.3",
+    "gunicorn==26.2.0",
+    "pydantic==2.13.5",
+    "pydantic-settings==2.15.0",
+    "structlog==26.1.0",
+    "python-ulid==4.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.16.10",
+    "mypy==2.3.1",
+]
+
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# --- Ruff: lint + format -----------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["mediease_api"]
+
+# --- mypy ----------------------------------------------------------------------
+# The whole package is type-checked; domain/ and application/ are strict
+# (AGENTS.md §6). Those overrides take effect once the layers have modules.
+[tool.mypy]
+python_version = "3.12"
+packages = ["mediease_api"]
+mypy_path = "src"
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_reexport = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["mediease_api.domain.*", "mediease_api.application.*"]
+strict = true
+
+# --- pytest ------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"

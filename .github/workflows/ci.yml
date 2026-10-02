@@ -24,7 +24,7 @@ jobs:
       api: ${{ steps.check.outputs.api }}
       web: ${{ steps.check.outputs.web }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: check
         run: |
           echo "api=$([ -f apps/api/pyproject.toml ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
@@ -34,7 +34,7 @@ jobs:
     name: Config and contract
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Compose file is valid
         run: |
           cp .env.example .env
@@ -74,8 +74,8 @@ jobs:
       # Deliberately not Asia/Kolkata: flushes out code that relies on the machine timezone.
       TZ: America/New_York
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
@@ -94,7 +94,7 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*

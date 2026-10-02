@@ -131,6 +131,7 @@ it affects are current.
 | An architectural choice | a new ADR |
 | A bug you fixed | an entry in `docs/DEBUG_JOURNAL.md` (symptom → root cause → fix → prevention) |
 | Milestone status | `TASKS.md` and `CHANGELOG.md` |
+| Scope, order or approach of the active plan | `NEXT_STEPS_PLAN.md` (progress log included) |
 
 **Before debugging anything, read `docs/DEBUGGING.md` and search `docs/DEBUG_JOURNAL.md`** — the
 same failure may already be explained.
@@ -161,6 +162,8 @@ same failure may already be explained.
   a future milestone.
 - **Phased rollout within a milestone.** Large milestones are split into small logical phases
   (see `TASKS.md`). Each phase is explained, implemented and tested before the next begins.
+- **One issue per logical task.** Every task is tracked by a repository issue before work starts;
+  the issue links the phase, requirement IDs and acceptance criteria.
 - **Spec before code.** A phase that adds behaviour has a spec in `docs/specs/` (format in
   `SPECS.md`) with acceptance criteria tied to requirement IDs.
 - **Explain before implementing.** Every phase starts with the design: what is being built, why,
@@ -169,6 +172,8 @@ same failure may already be explained.
   begins only after the current one is tested and confirmed by the developer.
 - **The connected repository is the single source of truth.** Changes are surgical — only the files
   that must change are touched.
+- **The plan stays in sync.** `NEXT_STEPS_PLAN.md` is updated in the same PR as any change to the
+  agreed scope, order or approach.
 
 ---
 
@@ -188,14 +193,22 @@ same failure may already be explained.
 
 ## Docker / Service Architecture
 
-- **Containerised and reproducible.** Every service runs in a container and starts from one
-  documented command (`make up`).
+- **Containerised and reproducible.** Every service runs in a container and the whole stack starts
+  from one documented command (`make up`, a single `docker compose up`). No separate manual start-up
+  steps.
 - **Each running service must have a current purpose.** A service appears in `docker-compose.yml`
   only when the application actually uses it.
 - **Health and readiness are first-class.** Services expose liveness (`/health`) and readiness
   (`/ready`, including dependencies). Dependents wait for readiness, not mere startup.
+- **Start-up order is declared, not scripted.** Dependencies use Compose `depends_on` conditions:
+  the migration service waits for the database to be `service_healthy`; the API waits for the
+  database (`service_healthy`) and for the migration service (`service_completed_successfully`);
+  the web app waits for the API (`service_healthy`).
 - **Schema changes run as a discrete step.** Migrations run as their own one-off container, never
   inside the API process at boot.
+- **Volumes are explicit and preserved.** Persistent data lives in named volumes declared in
+  compose (e.g. `pgdata`); `make down` never removes them. Code and migrations are baked into
+  images rather than bind-mounted outside local development.
 - **Configuration and secrets come from the environment.** Nothing sensitive is baked into images
   or committed.
 - **Least privilege.** Non-root users, minimal images, read-only filesystems where practical.
@@ -217,15 +230,62 @@ same failure may already be explained.
 
 ## Git Workflow
 
-- **The developer owns the Git history.** Claude does not run Git commands that change history or
-  remotes (commit, push, merge, rebase, reset) unless explicitly asked.
-- **Short-lived branches** named `m<milestone>/<phase>-<slug>`, e.g. `m3/p2-token-queue`.
-- **Conventional commits** referencing requirement IDs, e.g.
-  `feat(appointments): prevent double booking under concurrency (FR-APT-04)`.
-- **One commit per completed phase**, representing a tested, working state.
-- **Every change set ends with a Changed Files manifest** (added / modified / deleted) and a
-  suggested commit message.
+Every task follows the same path (ADR-0010):
+
+```
+Issue → task branch → implementation → logical commits → push (with permission) → PR
+      → CI green → review + CODEOWNERS approval → merge by an authorised maintainer
+```
+
+- **One issue per logical task.** Each issue has exactly one branch and one PR. Unrelated tasks or
+  logic are never combined in the same branch or PR.
+- **Short-lived branches** named `m<milestone>/p<phase>-<issue#>-<slug>`, e.g.
+  `m3/p2-41-token-queue`, created from the latest `origin/main`.
+- **Never push to `origin/main`**, directly or by any other route. Work reaches `main` only through
+  a reviewed PR.
+- **Push only with permission.** Agents may create issues, branches and local commits for the
+  active task. They push to the task branch and open the PR only after the developer explicitly
+  permits it for that task.
+- **Never merge.** Merging is done by an authorised maintainer after green CI and the required
+  reviews, including CODEOWNERS approval where the repository enforces it. Merge method:
+  **rebase and merge**, so logical commits are preserved with a linear history.
+- **No history rewriting on shared branches.** No force push, `reset --hard` or rebase of a pushed
+  branch without the developer's explicit approval.
+- **Every change set ends with a Changed Files manifest** (added / modified / deleted) and the
+  list of commits.
 - **Build artifacts and secrets are never committed.**
+
+---
+
+## Commit Standards
+
+- **One commit per logical change.** A commit does one thing that can be reviewed, tested and
+  reverted on its own. Tests that prove a change travel with it. Never mix refactoring,
+  formatting and behaviour changes in one commit.
+- **Every commit builds and passes tests**, so `git bisect` works.
+- **Subject line:** Conventional Commits prefix, imperative mood, ≤ 72 characters, no trailing
+  period, requirement ID where one applies.
+- **Blank line, then a body** wrapped at 72 characters explaining *what* changed and *why* — the
+  problem, the approach, trade-offs or follow-ups. The diff shows *how*.
+- **Footer:** `Refs #<issue>` on every commit; `Closes #<issue>` on the final commit of the PR.
+  Add `BREAKING CHANGE:` when applicable.
+- **Types:** `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`, `security`, `build`, `ci`.
+
+Example:
+
+```
+feat(config): add typed settings with fail-fast validation (NFR-12)
+
+All configuration is loaded once into AppSettings so no module reads
+os.environ directly. Invalid or missing values stop the process at
+start-up with config.invalid naming the field, instead of failing deep
+inside a request.
+
+Staging and production reject DEBUG logging, insecure cookies and
+change-me placeholders.
+
+Refs #4
+```
 
 ---
 
@@ -278,6 +338,7 @@ exception, or disabling a test.
 
 A milestone (or phase) is complete only when:
 
+- An issue tracks the task, and its branch and PR contain only that task's changes.
 - Architecture has been explained.
 - A spec exists with acceptance criteria linked to requirement IDs.
 - Code has been generated, and only required files were modified.
@@ -285,6 +346,8 @@ A milestone (or phase) is complete only when:
 - Documentation listed in "Documentation That Makes Debugging Possible" is updated.
 - A Changed Files manifest and testing steps are provided.
 - The developer has successfully tested the phase.
-- `TASKS.md` and `CHANGELOG.md` reflect the new state.
-- The Git commit is completed.
+- `TASKS.md`, `CHANGELOG.md` and `NEXT_STEPS_PLAN.md` reflect the new state.
+- Each logical change is its own commit following "Commit Standards".
+- The branch is pushed (with permission), the PR is green, reviewed and CODEOWNERS-approved, and an
+  authorised maintainer has merged it.
 - Approval is received before the next milestone begins.
