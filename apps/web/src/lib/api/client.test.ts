@@ -133,6 +133,17 @@ describe("apiBaseUrl", () => {
     expect(() => apiBaseUrl()).toThrow(/API_INTERNAL_URL is not set/);
   });
 
+  it("reports missing API_INTERNAL_URL as itself, not as WEB_API_UNREACHABLE", async () => {
+    vi.stubEnv("API_INTERNAL_URL", "");
+    const fetchImpl = vi.fn<typeof fetch>();
+
+    const failure = await apiGet("/health", { fetchImpl }).catch((error: unknown) => error);
+
+    expect(failure).not.toBeInstanceOf(ApiError);
+    expect(String(failure)).toMatch(/API_INTERNAL_URL is not set/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("uses the same origin in the browser, so calls go through the /api rewrite", () => {
     vi.stubGlobal("window", {});
     expect(apiBaseUrl()).toBe("");

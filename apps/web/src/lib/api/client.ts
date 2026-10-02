@@ -91,10 +91,13 @@ export async function apiGet<P extends GetPath>(
   const sentRequestId = options.requestId ?? newRequestId();
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  // Outside the try below: a configuration error must surface as itself, not
+  // be mistaken for the API being unreachable.
+  const url = `${apiBaseUrl()}${path}`;
 
   let response: Response;
   try {
-    response = await fetchImpl(`${apiBaseUrl()}${path}`, {
+    response = await fetchImpl(url, {
       method: "GET",
       headers: { Accept: "application/json", [REQUEST_ID_HEADER]: sentRequestId },
       cache: "no-store",
