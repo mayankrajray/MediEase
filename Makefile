@@ -9,6 +9,7 @@ COMPOSE := docker compose
 # API tooling runs in a virtualenv at apps/api/.venv until the API is
 # containerised (M0-P5). Override the interpreter with: make install-api PYTHON=...
 API_DIR := apps/api
+WEB_DIR := apps/web
 VENV_BIN := .venv/bin
 PYTHON ?= python3.12
 
@@ -19,7 +20,7 @@ PYTHON ?= python3.12
 TEST_DATABASE_URL ?= postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)
 export TEST_DATABASE_URL
 
-.PHONY: help env-check up down ps logs psql migrate install-api api-venv-check test test-api lint typecheck
+.PHONY: help env-check up down ps logs psql migrate install-api api-venv-check test test-api lint typecheck contract contract-check
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -65,3 +66,9 @@ lint: api-venv-check ## Lint and format-check the API (ruff)
 
 typecheck: api-venv-check ## Type-check the API (mypy)
 	cd $(API_DIR) && $(VENV_BIN)/mypy
+
+contract: ## Regenerate web API types from contracts/openapi.yaml (ADR-0008)
+	cd $(WEB_DIR) && npm run -s gen:api
+
+contract-check: ## Fail if the committed web API types are out of date
+	cd $(WEB_DIR) && npm run -s gen:api:check
