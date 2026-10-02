@@ -1,7 +1,8 @@
 # Local development stack. `make up` starts everything with one command.
 # Rule (CLAUDE.md): a service appears here only when the application uses it today.
-# Start-up order is declared, not scripted:  db (healthy) -> migrate (exits 0) -> api (healthy).
-# web joins in M0-P4/P5 and worker in M5. Target shape: docs/ARCHITECTURE.md §12.
+# Start-up order is declared, not scripted:
+#   db (healthy) -> migrate (exits 0) -> api (healthy) -> web (healthy).
+# worker joins in M5. Target shape: docs/ARCHITECTURE.md §12.
 
 name: mediease
 
@@ -13,6 +14,22 @@ x-api-environment: &api-environment
   DB_ECHO_PARAMS: ${DB_ECHO_PARAMS:-false}
   DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
   COOKIE_SECURE: ${COOKIE_SECURE:-false}
+
+# Least privilege for our own containers (CLAUDE.md): read-only root
+# filesystem, no Linux capabilities, no privilege escalation. Writable scratch
+# space is an explicit tmpfs. `db` keeps the PostgreSQL image's defaults: its
+# entrypoint needs to own its data directory.
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+# When a service is stopped, Docker's DNS forwards its name upstream and the
+# lookup takes ~4 s to fail (DEBUG_JOURNAL 2026-10-02). One 1-second attempt
+# keeps "unreachable" answers inside the 2 s readiness / 5 s client budgets.
+x-fast-dns: &fast-dns
+  - timeout:1
+  - attempts:1
 
 services:
   db:
@@ -40,19 +57,23 @@ services:
   # One-off schema migration on the API image. Runs to completion, then exits;
   # the API never migrates at boot (CLAUDE.md "Schema changes run as a discrete step").
   migrate:
+    <<: *hardened
     build: ./apps/api
     image: mediease-api:local
     command: ["alembic", "upgrade", "head"]
     environment: *api-environment
+    tmpfs: ["/tmp"]
     depends_on:
       db:
         condition: service_healthy
     restart: "no"
 
   api:
+    <<: *hardened
     build: ./apps/api
     image: mediease-api:local
     environment: *api-environment
+    tmpfs: ["/tmp"]
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     depends_on:
@@ -60,13 +81,7 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    # When `db` is stopped, Docker's DNS forwards the name upstream and the
-    # lookup takes ~4 s to fail (measured on Docker Desktop/WSL), which is
-    # outside psycopg's 2 s connect_timeout. One 1-second attempt keeps an
-    # unreachable database reported as READY_DB_UNAVAILABLE in ~2 s.
-    dns_opt:
-      - timeout:1
-      - attempts:1
+    dns_opt: *fast-dns
     # Healthy means ready: the database answers within 2 s. The slim image has
     # no curl, so the probe uses Python's standard library.
     healthcheck:
@@ -79,6 +94,39 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    restart: unless-stopped
+
+  web:
+    <<: *hardened
+    build:
+      context: ./apps/web
+      args:
+        # next build bakes the rewrite destinations into the image (NEXT_STEPS_PLAN Task 5).
+        API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:8000}
+    image: mediease-web:local
+    environment:
+      # Read at runtime by the server-side API client (src/lib/api/client.ts).
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:8000}
+    # Next.js writes its runtime cache here; the node user (uid 1000) must own it.
+    tmpfs: ["/tmp", "/app/.next/cache:uid=1000,gid=1000"]
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    dns_opt: *fast-dns
+    # Liveness of the web process only (/livez calls nothing); /status is the
+    # whole-system view for people.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/livez').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     restart: unless-stopped
 
 volumes:

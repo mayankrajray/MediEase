@@ -22,7 +22,7 @@ PYTHON ?= python3.12
 TEST_DATABASE_URL ?= postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)
 export TEST_DATABASE_URL
 
-.PHONY: help env-check up down ps logs psql migrate install-api install-web api-venv-check \
+.PHONY: help env-check up down ps logs psql migrate smoke install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
 	typecheck-web dev-web contract contract-check
 
@@ -33,8 +33,11 @@ help: ## List available targets
 env-check: ## Fail early if .env is missing
 	@test -f .env || { echo "Missing .env — run: cp .env.example .env"; exit 1; }
 
-up: env-check ## Build images and start the stack: db -> migrate -> api
+up: env-check ## Build images and start the stack: db -> migrate -> api -> web
 	$(COMPOSE) up -d --wait --build
+
+smoke: ## Check the running stack end to end, incl. least privilege (make up first)
+	API_PORT=$(or $(API_PORT),8000) WEB_PORT=$(or $(WEB_PORT),3000) bash scripts/smoke.sh
 
 down: ## Stop the local stack (data volume is kept)
 	$(COMPOSE) down
