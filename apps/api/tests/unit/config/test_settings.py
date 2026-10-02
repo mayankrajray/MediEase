@@ -11,7 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from mediease_api.config.settings import CFG_INVALID, AppEnv, AppSettings, load_settings
-from tests.conftest import SetEnv
+from tests.conftest import TEST_SIGNING_KEY, SetEnv
 
 
 def _invalid_fields(env: dict[str, str], set_env: SetEnv) -> set[str]:
@@ -32,10 +32,17 @@ def test_nfr_12_valid_config_loads(set_env: SetEnv, valid_env: dict[str, str]) -
 
 
 def test_nfr_12_defaults_apply_when_optional_vars_absent(set_env: SetEnv) -> None:
-    set_env({"DATABASE_URL": "postgresql+psycopg://u:p@localhost:5432/db"})
+    set_env(
+        {
+            "DATABASE_URL": "postgresql+psycopg://u:p@localhost:5432/db",
+            "JWT_SIGNING_KEY": TEST_SIGNING_KEY,
+        }
+    )
     settings = load_settings()
     assert settings.APP_ENV is AppEnv.LOCAL
     assert settings.LOG_LEVEL == "INFO"
+    assert settings.ACCESS_TOKEN_TTL_SECONDS == 900
+    assert settings.REFRESH_TOKEN_TTL_SECONDS == 14 * 24 * 3600
 
 
 def test_nfr_12_missing_database_url_exits_naming_the_field(
@@ -127,3 +134,57 @@ def test_nfr_12_settings_are_immutable(set_env: SetEnv, valid_env: dict[str, str
     settings = load_settings()
     with pytest.raises(ValidationError):
         settings.APP_ENV = AppEnv.PRODUCTION  # type: ignore[misc]
+
+
+# --- Auth settings (M1-P2) -------------------------------------------------------------
+
+
+def test_fr_auth_02_signing_key_is_required(set_env: SetEnv, valid_env: dict[str, str]) -> None:
+    del valid_env["JWT_SIGNING_KEY"]
+    assert _invalid_fields(valid_env, set_env) == {"JWT_SIGNING_KEY"}
+
+
+def test_fr_auth_02_short_signing_key_is_rejected_everywhere(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    env = {**valid_env, "APP_ENV": "local", "JWT_SIGNING_KEY": "change-me"}
+    assert _invalid_fields(env, set_env) == {"JWT_SIGNING_KEY"}
+
+
+def test_fr_auth_02_placeholder_signing_key_only_in_local(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    placeholder = "change-me-local-only-jwt-signing-key-000"
+    set_env({**valid_env, "APP_ENV": "local", "JWT_SIGNING_KEY": placeholder})
+    assert load_settings().JWT_SIGNING_KEY.get_secret_value() == placeholder
+
+    env = {**valid_env, "APP_ENV": "production", "COOKIE_SECURE": "true"}
+    assert _invalid_fields({**env, "JWT_SIGNING_KEY": placeholder}, set_env) == {"JWT_SIGNING_KEY"}
+
+
+def test_fr_auth_02_signing_key_never_appears_in_repr_or_errors(
+    set_env: SetEnv, valid_env: dict[str, str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    set_env(valid_env)
+    assert TEST_SIGNING_KEY not in repr(load_settings())
+
+    set_env({**valid_env, "JWT_SIGNING_KEY": "short-SECRET"})
+    with pytest.raises(SystemExit):
+        load_settings()
+    captured = capsys.readouterr()
+    assert "SECRET" not in captured.out + captured.err
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("ACCESS_TOKEN_TTL_SECONDS", "30"),
+        ("ACCESS_TOKEN_TTL_SECONDS", "7200"),
+        ("REFRESH_TOKEN_TTL_SECONDS", "60"),
+        ("REFRESH_TOKEN_TTL_SECONDS", "5000000"),
+    ],
+)
+def test_token_lifetimes_are_bounded(
+    name: str, value: str, set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    assert _invalid_fields({**valid_env, name: value}, set_env) == {name}

@@ -13,6 +13,7 @@ import time
 from collections.abc import Iterator
 
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import Engine
 from sqlalchemy.engine import make_url
 
@@ -24,6 +25,7 @@ from mediease_api.ports.readiness import (
     DatabaseTimeout,
     DatabaseUnavailable,
 )
+from tests.conftest import TEST_SIGNING_KEY
 
 # Allowance over the 2 s budget for process scheduling on slow CI runners.
 _SLACK_SECONDS = 1.5
@@ -33,7 +35,13 @@ def _engine(url: str) -> Engine:
     # LOCAL because the target is a developer/CI database: the compose db's
     # password is the change-me placeholder from .env.example, which only
     # APP_ENV=local accepts. The settings object only carries the URL here.
-    return build_engine(AppSettings(APP_ENV=AppEnv.LOCAL, DATABASE_URL=url))
+    return build_engine(
+        AppSettings(
+            APP_ENV=AppEnv.LOCAL,
+            DATABASE_URL=url,
+            JWT_SIGNING_KEY=SecretStr(TEST_SIGNING_KEY),
+        )
+    )
 
 
 @pytest.fixture

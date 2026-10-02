@@ -33,7 +33,19 @@ SetEnv = Callable[[dict[str, str]], None]
 ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 
 # Every variable AppSettings reads. Cleared before each test that uses set_env.
-_MANAGED_VARS = ("APP_ENV", "LOG_LEVEL", "DB_ECHO_PARAMS", "DATABASE_URL", "COOKIE_SECURE")
+_MANAGED_VARS = (
+    "APP_ENV",
+    "LOG_LEVEL",
+    "DB_ECHO_PARAMS",
+    "DATABASE_URL",
+    "COOKIE_SECURE",
+    "JWT_SIGNING_KEY",
+    "ACCESS_TOKEN_TTL_SECONDS",
+    "REFRESH_TOKEN_TTL_SECONDS",
+)
+
+# Synthetic, test-only signing key (>= 32 characters).
+TEST_SIGNING_KEY = "test-only-signing-key-0123456789abcdef"
 
 _VALID_TEST_ENV = {
     "APP_ENV": "test",
@@ -41,6 +53,7 @@ _VALID_TEST_ENV = {
     "DB_ECHO_PARAMS": "false",
     "DATABASE_URL": "postgresql+psycopg://mediease:test-password@localhost:5432/mediease_test",
     "COOKIE_SECURE": "false",
+    "JWT_SIGNING_KEY": TEST_SIGNING_KEY,
 }
 
 
@@ -136,6 +149,7 @@ def upgrade_to_head(url: str, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("APP_ENV", "local")
     monkeypatch.setenv("DATABASE_URL", url)
+    monkeypatch.setenv("JWT_SIGNING_KEY", TEST_SIGNING_KEY)
     command.upgrade(Config(str(ALEMBIC_INI)), "head")
 
 
