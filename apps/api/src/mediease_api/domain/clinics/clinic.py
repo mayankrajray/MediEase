@@ -1,0 +1,142 @@
+"""Clinic — the tenant. Every tenant-owned row belongs to exactly one clinic (ADR-0003).
+
+Lifecycle (spec §3): ``ONBOARDING → ACTIVE ↔ SUSPENDED``. Invariant **I1**: an
+``ACTIVE`` clinic has at least one active owner, so activation needs the
+clinic's active-owner count from the caller (the domain does no I/O).
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from datetime import datetime
+from enum import StrEnum
+from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from mediease_api.domain.shared.errors import DomainError, InvalidTransition, InvalidValue
+from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.domain.shared.text import optional_text, required_text
+from mediease_api.domain.shared.time import require_utc
+
+DEFAULT_TIMEZONE = "Asia/Kolkata"
+
+# Lower-case words joined by single hyphens; used in public URLs from M7.
+_SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+_SLUG_LENGTH = range(3, 64)
+# Indian PIN code: six digits, never starting with 0.
+_PINCODE = re.compile(r"[1-9]\d{5}")
+
+
+class ClinicStatus(StrEnum):
+    ONBOARDING = "ONBOARDING"
+    ACTIVE = "ACTIVE"
+    SUSPENDED = "SUSPENDED"
+
+
+class ClinicOwnerRequired(DomainError):
+    """I1: a clinic cannot be active without an active owner."""
+
+    code = "CLN_OWNER_REQUIRED"
+
+    def __init__(self) -> None:
+        super().__init__("A clinic needs an active owner before it can be activated.")
+
+
+@dataclass(slots=True)
+class Clinic:
+    """A clinic. Build new ones with ``Clinic.create``; the constructor rehydrates."""
+
+    id: UUID
+    name: str
+    slug: str
+    timezone: str
+    status: ClinicStatus
+    phone: PhoneNumber | None
+    address_line: str | None
+    city: str | None
+    state: str | None
+    pincode: str | None
+    specialties: tuple[str, ...]
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        id: UUID,
+        name: str,
+        slug: str,
+        now: datetime,
+        timezone: str = DEFAULT_TIMEZONE,
+        phone: PhoneNumber | None = None,
+        address_line: str | None = None,
+        city: str | None = None,
+        state: str | None = None,
+        pincode: str | None = None,
+        specialties: tuple[str, ...] = (),
+    ) -> Clinic:
+        """A new clinic in ``ONBOARDING`` (FR-ORG-01)."""
+        now = require_utc(now, "now")
+        return cls(
+            id=id,
+            name=required_text(name, "name", max_length=200),
+            slug=_validate_slug(slug),
+            timezone=_validate_timezone(timezone),
+            status=ClinicStatus.ONBOARDING,
+            phone=phone,
+            address_line=optional_text(address_line, "address_line", max_length=300),
+            city=optional_text(city, "city", max_length=100),
+            state=optional_text(state, "state", max_length=100),
+            pincode=_validate_pincode(pincode),
+            specialties=_clean_specialties(specialties),
+            created_at=now,
+            updated_at=now,
+        )
+
+    def activate(self, *, active_owner_count: int, now: datetime) -> None:
+        """``ONBOARDING``/``SUSPENDED`` → ``ACTIVE``; requires an active owner (I1)."""
+        if self.status is ClinicStatus.ACTIVE:
+            raise InvalidTransition("clinic", self.status, "activate")
+        if active_owner_count < 1:
+            raise ClinicOwnerRequired()
+        self._set_status(ClinicStatus.ACTIVE, now)
+
+    def suspend(self, *, now: datetime) -> None:
+        """``ACTIVE`` → ``SUSPENDED``."""
+        if self.status is not ClinicStatus.ACTIVE:
+            raise InvalidTransition("clinic", self.status, "suspend")
+        self._set_status(ClinicStatus.SUSPENDED, now)
+
+    def _set_status(self, status: ClinicStatus, now: datetime) -> None:
+        self.updated_at = require_utc(now, "now")  # validated first: a bad value changes nothing
+        self.status = status
+
+
+def _validate_slug(slug: str) -> str:
+    if len(slug) not in _SLUG_LENGTH or not _SLUG.fullmatch(slug):
+        raise InvalidValue(
+            "slug", "must be 3-63 lower-case letters or digits, separated by single hyphens"
+        )
+    return slug
+
+
+def _validate_timezone(name: str) -> str:
+    try:
+        ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise InvalidValue("timezone", "must be an IANA time zone name") from None
+    return name
+
+
+def _validate_pincode(pincode: str | None) -> str | None:
+    cleaned = optional_text(pincode, "pincode", max_length=6)
+    if cleaned is not None and not _PINCODE.fullmatch(cleaned):
+        raise InvalidValue("pincode", "must be a 6-digit PIN code")
+    return cleaned
+
+
+def _clean_specialties(specialties: tuple[str, ...]) -> tuple[str, ...]:
+    cleaned = (required_text(s, "specialties", max_length=100) for s in specialties)
+    return tuple(dict.fromkeys(cleaned))  # de-duplicated, order kept
