@@ -68,6 +68,112 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/me": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The signed-in user, their clinics and their permissions
+         * @description FR-AUTH-03. Needs a session but no clinic: the response lists every active
+         *     membership with the clinic's status, the role and the permissions that role holds
+         *     (PRD §8.1), which is what the web app needs to render a clinic switcher and a
+         *     role's screens. Cache-Control: no-store.
+         */
+        readonly get: operations["getMe"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The clinic this request is for
+         * @description Permission: CLINIC_VIEW (every role).
+         */
+        readonly get: operations["getClinic"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/doctors": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The clinic's doctors
+         * @description Permission: DOCTORS_VIEW (every role). Unpaginated: a clinic has one to four
+         *     doctors (PRD §2). Adding a doctor arrives in M1-P5.
+         */
+        readonly get: operations["listDoctors"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/doctors/{doctor_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * One doctor of this clinic
+         * @description Permission: DOCTORS_VIEW. A doctor of another clinic returns 404 REQ_NOT_FOUND,
+         *     so the resource's existence is never confirmed (NFR-08, spec R8).
+         */
+        readonly get: operations["getDoctor"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/staff": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The clinic's members with their roles
+         * @description Permission: STAFF_MANAGE (owners only; FR-ORG-03). Includes invited and
+         *     deactivated memberships so an owner can see the whole team. Unpaginated.
+         */
+        readonly get: operations["listStaff"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/health": {
         readonly parameters: {
             readonly query?: never;
@@ -148,6 +254,11 @@ export interface components {
                 readonly refresh_expires_at: string;
             };
         };
+        readonly Identity: {
+            readonly user: components["schemas"]["SessionUser"];
+            /** @description Active clinic memberships, ordered by clinic name */
+            readonly memberships: readonly components["schemas"]["Membership"][];
+        };
         readonly SessionUser: {
             /** Format: uuid */
             readonly id: string;
@@ -162,8 +273,64 @@ export interface components {
             /** Format: uuid */
             readonly clinic_id: string;
             readonly clinic_name: string;
-            /** @enum {string} */
-            readonly role: "OWNER" | "DOCTOR" | "FRONT_DESK";
+            readonly clinic_status: components["schemas"]["ClinicStatus"];
+            readonly role: components["schemas"]["Role"];
+            /** @description What this role may do at this clinic (PRD §8.1), sorted */
+            readonly permissions: readonly components["schemas"]["Permission"][];
+        };
+        /** @enum {string} */
+        readonly Role: "OWNER" | "DOCTOR" | "FRONT_DESK";
+        /** @enum {string} */
+        readonly ClinicStatus: "ONBOARDING" | "ACTIVE" | "SUSPENDED";
+        /** @enum {string} */
+        readonly MembershipStatus: "INVITED" | "ACTIVE" | "DEACTIVATED";
+        /** @enum {string} */
+        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW";
+        readonly Clinic: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            /** @description Lower-case URL segment, used in public links from M7 */
+            readonly slug: string;
+            /** @description IANA time zone name, e.g. Asia/Kolkata */
+            readonly timezone: string;
+            readonly status: components["schemas"]["ClinicStatus"];
+            readonly phone_e164: string | null;
+            readonly address_line: string | null;
+            readonly city: string | null;
+            readonly state: string | null;
+            readonly pincode: string | null;
+            readonly specialties: readonly string[];
+        };
+        /** @description Unpaginated by design; a clinic has one to four doctors */
+        readonly DoctorList: {
+            readonly items: readonly components["schemas"]["Doctor"][];
+        };
+        readonly Doctor: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description The staff account that signs in as this doctor, if any */
+            readonly user_id: string | null;
+            readonly display_name: string;
+            readonly qualification: string;
+            /** @description Printed on every prescription (FR-RX-04) */
+            readonly registration_number: string;
+            readonly registration_council: string;
+            readonly specialty: string | null;
+            readonly is_active: boolean;
+        };
+        /** @description Unpaginated by design; a clinic has a handful of staff */
+        readonly StaffList: {
+            readonly items: readonly components["schemas"]["StaffMember"][];
+        };
+        readonly StaffMember: {
+            /** Format: uuid */
+            readonly membership_id: string;
+            /** Format: uuid */
+            readonly user_id: string;
+            readonly full_name: string;
+            readonly role: components["schemas"]["Role"];
+            readonly status: components["schemas"]["MembershipStatus"];
         };
         readonly Error: {
             /**
@@ -205,12 +372,32 @@ export interface components {
                 readonly "application/json": components["schemas"]["ErrorEnvelope"];
             };
         };
+        /**
+         * @description PERM_CLINIC_REQUIRED (400, choose a clinic); PERM_DENIED (403, the role lacks the
+         *     permission, or an ops user on a clinic route); CLN_SUSPENDED (403); REQ_NOT_FOUND
+         *     (404, unknown id — or another clinic's resource, which is never distinguishable)
+         */
+        readonly PermissionError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
     };
     parameters: {
         /** @description Correlation ID. Generated by the API when absent and always echoed back. */
         readonly RequestId: string;
         /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
         readonly CsrfToken: string;
+        /**
+         * @description Which clinic the request is for. Optional for a user with a single membership;
+         *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+         *     value that is not one of the caller's clinics gets the same 400, never a 404.
+         */
+        readonly ClinicId: string;
     };
     requestBodies: never;
     headers: {
@@ -298,6 +485,168 @@ export interface operations {
                 content?: never;
             };
             readonly 403: components["responses"]["AuthError"];
+        };
+    };
+    readonly getMe: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The current user and their memberships */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Identity"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["AuthError"];
+        };
+    };
+    readonly getClinic: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The clinic */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Clinic"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly listDoctors: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Doctors of this clinic, oldest first */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["DoctorList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+        };
+    };
+    readonly getDoctor: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                readonly doctor_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The doctor */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Doctor"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly listStaff: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Memberships of this clinic, by member name */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["StaffList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
         };
     };
     readonly getHealth: {

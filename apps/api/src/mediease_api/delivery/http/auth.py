@@ -25,6 +25,8 @@ from mediease_api.application.auth.sign_in import SignIn, SignInCommand
 from mediease_api.application.auth.sign_out import SignOut
 from mediease_api.application.auth.views import SessionResult
 from mediease_api.delivery.errors import domain_error_response
+from mediease_api.delivery.http.access import public
+from mediease_api.delivery.http.me import identity_body
 from mediease_api.delivery.http.session_cookies import (
     REFRESH_COOKIE,
     clear_session_cookies,
@@ -59,6 +61,7 @@ def create_auth_blueprint(use_cases: AuthUseCases, *, cookie_secure: bool) -> Bl
         return response
 
     @bp.post("/sign-in")
+    @public
     def sign_in() -> Response:
         body = parse_json(SignInRequest)
         result = use_cases.sign_in().execute(
@@ -67,6 +70,7 @@ def create_auth_blueprint(use_cases: AuthUseCases, *, cookie_secure: bool) -> Bl
         return _session_response(result, cookie_secure)
 
     @bp.post("/refresh")
+    @public
     def refresh() -> Response | tuple[Response, int]:
         token = request.cookies.get(REFRESH_COOKIE)
         try:
@@ -81,6 +85,7 @@ def create_auth_blueprint(use_cases: AuthUseCases, *, cookie_secure: bool) -> Bl
         return _session_response(result, cookie_secure)
 
     @bp.post("/sign-out")
+    @public
     def sign_out() -> Response:
         use_cases.sign_out().execute(request.cookies.get(REFRESH_COOKIE))
         response = Response(status=204)
@@ -97,24 +102,8 @@ def _session_response(result: SessionResult, cookie_secure: bool) -> Response:
 
 
 def _session_body(result: SessionResult) -> dict[str, Any]:
-    user = result.user
     return {
-        "user": {
-            "id": str(user.id),
-            "full_name": user.full_name,
-            "email": user.email,
-            "phone_e164": user.phone_e164,
-            "is_platform_ops": user.is_platform_ops,
-        },
-        "memberships": [
-            {
-                "membership_id": str(m.membership_id),
-                "clinic_id": str(m.clinic_id),
-                "clinic_name": m.clinic_name,
-                "role": m.role.value,
-            }
-            for m in result.memberships
-        ],
+        **identity_body(result.user, result.memberships),
         "session": {
             "access_expires_at": result.tokens.access_expires_at.isoformat(),
             "refresh_expires_at": result.tokens.refresh_expires_at.isoformat(),
