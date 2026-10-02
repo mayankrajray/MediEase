@@ -17,7 +17,7 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | `PERM_` | Authorisation | | `LINK_` | Patient links |
 | `CLN_` | Clinic administration | | `REM_` | Reminders |
 | `PAT_` | Patients | | `MSG_` / `WH_` / `JOB_` | Messaging, webhooks, jobs |
-| `SYS_` | Unexpected server errors | | | |
+| `SYS_` | Unexpected server errors | | `WEB_` | Web app → API (raised in the browser/web server, never by the API) |
 
 ## Platform
 
@@ -36,6 +36,17 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 Other framework-level 4xx errors without a catalogued code are returned in the envelope as
 `REQ_<WERKZEUG_NAME>` (e.g. `REQ_UNSUPPORTED_MEDIA_TYPE`); give them a row here when a feature
 starts relying on them. Any 5xx is returned as `SYS_UNEXPECTED` (M0-P2).
+
+## Web app → API (M0-P4)
+
+Raised by `apps/web/src/lib/api/client.ts`, never by the API. Shown to staff with
+"Ref: <request_id>"; the ID is the one the web app sent, so search the API log for it — if it is
+absent there, the request never reached the API.
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `WEB_API_UNREACHABLE` | — (status 0) | The API could not be reached | API down or starting, wrong `API_INTERNAL_URL`, DNS, or no answer within 5 s (`details.reason`: `network` or `timeout`) | `make ps`, `docker compose logs api`, `API_INTERNAL_URL` in the web environment |
+| `WEB_API_BAD_RESPONSE` | as received | The response was not the contract's JSON | A proxy's HTML error page (502/504), an empty body, or contract drift | Response body in the web server log; `make contract-check`; API contract tests |
 
 ## Auth and permissions (M1)
 
