@@ -227,7 +227,7 @@ def uow_factory(session_factory: sessionmaker[Session]) -> Iterator[UowFactory]:
 
 # Argon2id with minimal cost: same algorithm and code path, ~1 ms instead of ~50 ms.
 CHEAP_HASHER = Argon2PasswordHasher(time_cost=1, memory_cost_kib=8, parallelism=1)
-DEMO_PASSWORD = "synthetic-Passw0rd-for-tests"
+DEMO_PASSWORD = "synthetic-Passw0rd-for-tests"  # gitleaks:allow (synthetic test value)
 
 
 def make_db_app(database_url: str, *, cookie_secure: bool = False) -> Flask:
