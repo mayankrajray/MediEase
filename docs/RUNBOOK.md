@@ -28,6 +28,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 15. Suspected data breach
 16. Break-glass production database access
 17. Locked-out staff account
+18. Read the audit log
 
 ---
 
@@ -175,3 +176,38 @@ every query run. Never export clinical data to a laptop.
 4. A sudden `auth.refresh_reused` warning for one user means a refresh token was replayed: the
    session has already been ended; ask the user to sign in again and check the device.
 **Confirm:** the user signs in; `users.failed_login_count` is 0.
+
+### 18. Read the audit log (M1-P4)
+**When:** a clinic asks "who changed this?", or an incident needs a timeline. There is no API for
+it yet (FR-AUD-03 is a later, owner-facing feature), so this is a `make psql` procedure.
+
+```sql
+-- One clinic's recent activity (newest first)
+select occurred_at, action, actor_user_id, entity_type, entity_id, request_id, metadata
+from audit_events where clinic_id = '<clinic id>' order by occurred_at desc limit 50;
+
+-- Everything one request did, across tables (DEBUGGING §2)
+select * from audit_events where request_id = '<request id>';
+
+-- Is this clinic being used at all? (no clinical columns)
+select * from v_clinic_activity where clinic_id = '<clinic id>';
+```
+
+Rows carry IDs, enums and a salted IP fingerprint only — never names, phone numbers or clinical
+content — so this output is safe to quote in a support ticket.
+
+**The table refuses changes.** `UPDATE`, `DELETE` and `TRUNCATE` fail with `AUD_APPEND_ONLY`
+(FR-AUD-02). If a correction is genuinely required — a data migration, not a cover-up — it needs
+the founder's approval, a written record, and an explicit, temporary lift of the guard inside one
+transaction:
+
+```sql
+BEGIN;
+ALTER TABLE audit_events DISABLE TRIGGER USER;  -- requires the table owner
+-- the corrective statement, with its reason recorded in the change ticket
+ALTER TABLE audit_events ENABLE TRIGGER USER;
+COMMIT;
+```
+
+Retention is at least three years (DATA_MODEL "Retention"); monthly partitioning is a post-pilot
+step and nothing prunes the table today.

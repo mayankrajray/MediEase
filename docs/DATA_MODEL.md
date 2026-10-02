@@ -145,18 +145,31 @@ Owned by a user, not a clinic. *P2* = created by migration `0003`.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
-| clinic_id | uuid null | Null for platform-level events |
-| actor_user_id | uuid null | Null for patient/system actors |
-| actor_type | text not null | `STAFF` \| `OPS` \| `PATIENT_LINK` \| `SYSTEM` |
-| action | text not null | e.g. `prescription.issued`, `patient_link.opened` |
-| entity_type, entity_id | text, uuid | |
-| request_id | text | |
-| ip_hash | text | Salted hash, never raw IP |
-| metadata | jsonb | IDs and enums only |
-| occurred_at | timestamptz not null | |
+| clinic_id | uuid FK `clinics` null | Null for platform-level events (a sign-in belongs to a user) |
+| actor_user_id | uuid FK `users` null | Null for patient/system actors |
+| actor_type | text not null | `STAFF` \| `OPS` \| `PATIENT_LINK` \| `SYSTEM` (CHECK) |
+| action | text not null | `area.past_tense`, from `domain/audit/actions.py`: `auth.signed_in`, `auth.sign_in_failed`, `auth.signed_out`, `auth.refresh_reused`, `staff.role_changed` (M1-P4); more per milestone |
+| entity_type, entity_id | text, uuid | Given together or not at all |
+| request_id | text | Ties the row to the API log and to the client's "Ref" |
+| ip_hash | text | HMAC-SHA256 of the caller's IP under `AUDIT_IP_SALT`, 32 hex chars; never a raw address |
+| metadata | jsonb not null default `{}` | IDs and enums only: at most 20 keys, values at most 200 characters (enforced by the domain) |
+| occurred_at | timestamptz not null | No `updated_at`: the row never changes |
 
-The application database role has `INSERT, SELECT` only on this table. Index:
-`(clinic_id, occurred_at desc)`.
+Indexes: `(clinic_id, occurred_at)` and `(actor_user_id, occurred_at)`. Stored ascending —
+PostgreSQL scans a btree backwards, so these serve "newest first" without a `DESC` index.
+
+**Immutability (FR-AUD-02, AC6).** Two triggers created by migration `0004` refuse `UPDATE`,
+`DELETE` and `TRUNCATE` with `AUD_APPEND_ONLY`, for every non-superuser role including the
+application's. A `REVOKE` would not be a boundary today, because the application connects as the
+role that owns the schema and an owner can grant its own privileges back; a dedicated
+least-privilege role is defence in depth in M6-P1. A deliberate correction (a data migration, or
+emptying the table in tests) has to disable the triggers explicitly — see RUNBOOK §18.
+
+### `v_clinic_activity` (support view, FR-OPS-04)
+`clinic_id, clinic_name, status, active_owners, active_doctors, active_front_desk,
+last_sign_in_at, audit_events_7d, audit_events_30d, last_event_at` — "is this clinic being used,
+and by whom?" during a support call, with no clinical column and no patient data. Created by
+migration `0004`; read by the ops console from M6-P4.
 
 ### `onboarding_checklists`
 `id, clinic_id (unique), started_at, clinic_created_at, doctors_added_at, staff_invited_at,

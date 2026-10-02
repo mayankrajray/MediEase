@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M1 — Identity, tenancy and audit** (issue #19, branch `m1/19-identity-tenancy-audit`, one PR for the milestone) |
-| Active phase | **M1-P4 — ▶ ACTIVE (design proposed, awaiting approval):** append-only `audit_events` written in the same transaction as the change, `v_clinic_activity` support view (M1-P3 ✅ implemented 3 Oct 2026, pushed to PR #20, awaiting the developer's confirmation) |
+| Active phase | **M1-P5 — ☐ todo (design not started):** ops API (create clinic → doctors → owner invite), owner staff and doctor management, onboarding checklist (M1-P4 ✅ implemented 3 Oct 2026, awaiting the developer's confirmation; M1-P3 ✅ pushed to PR #20) |
 | Design notes | `docs/milestones/M1-identity-tenancy-audit.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M1 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -69,8 +69,8 @@ only their clinic; the tenancy test suite proves isolation.
 | M1-P1 | Domain: Clinic, User, ClinicMembership, Doctor, Role; tables + migration `0002`; tenancy-scoped repository base + unit of work; add the ≥ 80% coverage gate on `domain/` + `application/` (NFR-14) | ✅ |
 | M1-P2 | Password hashing, sign-in, refresh rotation, sign-out, lockout (FR-AUTH-01..04) | ✅ |
 | M1-P3 | Authorisation: role + clinic membership check on every route; permission matrix tests | ✅ |
-| M1-P4 | Audit log (append-only) written in the same transaction as the change; non-clinical support views (`v_clinic_activity`) | ▶ |
-| M1-P5 | Ops console: create clinic → doctors → owner invite; onboarding checklist timestamps | ☐ |
+| M1-P4 | Audit log (append-only) written in the same transaction as the change; non-clinical support views (`v_clinic_activity`); audited staff role change | ✅ |
+| M1-P5 | Ops console: create clinic → doctors → owner invite; onboarding checklist timestamps; staff invite and deactivate | ▶ |
 | M1-P6 | Web: sign-in, clinic switcher (for multi-clinic users), empty dashboard shell | ☐ |
 
 ## M2 — Patients  `☐`
