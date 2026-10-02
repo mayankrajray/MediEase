@@ -18,6 +18,14 @@ any migration.
 | JSON | `jsonb` only for genuinely variable shapes (vitals, advice, payloads); never for data we query by |
 | Names | `snake_case`, plural table names |
 
+## Migration history
+
+Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/migrations/README.md`).
+
+| Revision | Change | Milestone |
+|---|---|---|
+| `0001` | Empty baseline. Creates no tables; only `alembic_version` exists after `upgrade head` | M0-P3 |
+
 ## Entity-relationship overview
 
 ```mermaid
