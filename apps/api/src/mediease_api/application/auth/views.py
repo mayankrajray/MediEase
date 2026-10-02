@@ -1,7 +1,10 @@
-"""What the auth use cases return. Plain data: delivery decides what goes where.
+"""What the auth and identity use cases return. Plain data: delivery decides what goes where.
 
 ``SessionTokens`` holds secrets; delivery puts them in cookies and never in a
-response body (spec R4). Their ``repr`` hides the values.
+response body (spec R4). Their ``repr`` hides the values. A ``MembershipView``
+carries the clinic's status and the member's permissions, so sign-in and
+``/me`` tell the web app everything it needs to render a role's screens
+without asking again.
 """
 
 from __future__ import annotations
@@ -10,8 +13,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from mediease_api.domain.clinics.clinic import ClinicStatus
 from mediease_api.domain.identity.access import ClinicAccess
 from mediease_api.domain.identity.membership import Role
+from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.identity.user import User
 
 
@@ -39,7 +44,10 @@ class MembershipView:
     membership_id: UUID
     clinic_id: UUID
     clinic_name: str
+    clinic_status: ClinicStatus
     role: Role
+    # Sorted, so the body is stable and diffable; the matrix is PRD §8.1.
+    permissions: tuple[Permission, ...]
 
     @classmethod
     def of(cls, access: ClinicAccess) -> MembershipView:
@@ -47,7 +55,9 @@ class MembershipView:
             membership_id=access.membership_id,
             clinic_id=access.clinic_id,
             clinic_name=access.clinic_name,
+            clinic_status=access.clinic_status,
             role=access.role,
+            permissions=tuple(sorted(access.permissions)),
         )
 
 

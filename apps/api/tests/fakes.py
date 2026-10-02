@@ -155,6 +155,12 @@ class _RefreshTokens:
             token.revoked_at = token.updated_at = now
         return len(live)
 
+    def is_family_live(self, family_id: UUID, *, now: datetime) -> bool:
+        return any(
+            t.family_id == family_id and t.revoked_at is None and now < t.expires_at
+            for t in self._store.refresh_tokens.values()
+        )
+
 
 class _ClinicAccess:
     def __init__(self, store: Store) -> None:
