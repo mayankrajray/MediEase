@@ -48,6 +48,21 @@ jobs:
           pip install "openapi-spec-validator==0.7.1"
           openapi-spec-validator contracts/openapi.yaml
 
+  secrets:
+    name: Secrets scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # scan every commit, not only the tip
+      # gitleaks from its official image, pinned by tag and digest. Findings are
+      # redacted in the log; any finding fails the job.
+      - name: gitleaks (full history)
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" \
+            ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git /repo --redact --no-banner --exit-code 1
+
   api:
     name: API — lint, types, tests
     needs: detect
@@ -87,6 +102,8 @@ jobs:
       - run: ruff format --check .
       - run: mypy src
       - run: pytest -q
+      - name: Dependency vulnerabilities (pip-audit)
+        run: pip-audit --skip-editable
 
   web:
     name: Web — lint, types, tests, build
@@ -107,6 +124,8 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
+      - name: Dependency vulnerabilities (npm audit, high and above)
+        run: npm audit --audit-level=high
       - name: Generated API types match contracts/openapi.yaml
         run: npm run gen:api:check
       - run: npm run lint
