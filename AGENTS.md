@@ -95,12 +95,12 @@ do not exist.
 | Command | What it does | Available |
 |---|---|---|
 | `make help` | List targets | now |
-| `make up` | Start the whole local stack with one command (`db` → `migrate` → `api` → `web` via `depends_on`) | now (database only), full stack from M0 |
+| `make up` | Build images and start the whole local stack with one command (`db` → `migrate` → `api` → `web` via `depends_on`; runs `docker compose up -d --wait --build`) | now (`db`, `migrate`, `api`); `web` from M0-P5 |
 | `make down` | Stop the stack | now |
 | `make ps` / `make logs` | Service status / follow logs | now |
 | `make psql` | Open a psql shell on the local database | now |
 | `make install-api` | Create `apps/api/.venv` (Python 3.12) and install the API with dev tools | now |
-| `make migrate` | Re-run Alembic migrations as a one-off container (`make up` already runs them) | M0 |
+| `make migrate` | Re-run Alembic migrations as a one-off container (`make up` already runs them) | now |
 | `make test` | API + web test suites | now (API only; web from M0-P4) |
 | `make test-api` / `make test-web` | One side only | `test-api` now; `test-web` M0-P4 |
 | `make lint` / `make typecheck` | Ruff + mypy; ESLint + tsc | now (API); web from M0-P4 |
@@ -108,7 +108,12 @@ do not exist.
 | `make seed` | Load generated (never real) demo data | M1 |
 | `make worker` | Run the job worker in the foreground | M5 |
 
-Verification before declaring a phase done: `make lint typecheck test` must pass.
+Verification before declaring a phase done: `make lint typecheck test` must pass. API tests include
+real-PostgreSQL integration tests, so start the database first (`make up`); `make test-api` points
+them at it through `TEST_DATABASE_URL`.
+
+`make up` uses `--wait` with the one-off `migrate` service: verified on Compose v5.5.0 (M0-P3) that
+it waits for `migrate` to exit 0 and for `api` to be healthy, and exits 0.
 
 ---
 

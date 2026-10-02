@@ -1,9 +1,18 @@
-# Local development stack.
+# Local development stack. `make up` starts everything with one command.
 # Rule (CLAUDE.md): a service appears here only when the application uses it today.
-# M0-P1: database only. api, migrate and web are added in M0-P3..P5; worker in M5.
-# Target shape: docs/ARCHITECTURE.md §12.
+# Start-up order is declared, not scripted:  db (healthy) -> migrate (exits 0) -> api (healthy).
+# web joins in M0-P4/P5 and worker in M5. Target shape: docs/ARCHITECTURE.md §12.
 
 name: mediease
+
+# The only settings the API reads (config/settings.py). Passed explicitly rather
+# than via env_file, so containers never receive variables they do not use.
+x-api-environment: &api-environment
+  APP_ENV: ${APP_ENV:-local}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  DB_ECHO_PARAMS: ${DB_ECHO_PARAMS:-false}
+  DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
 
 services:
   db:
@@ -27,6 +36,50 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
+
+  # One-off schema migration on the API image. Runs to completion, then exits;
+  # the API never migrates at boot (CLAUDE.md "Schema changes run as a discrete step").
+  migrate:
+    build: ./apps/api
+    image: mediease-api:local
+    command: ["alembic", "upgrade", "head"]
+    environment: *api-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: ./apps/api
+    image: mediease-api:local
+    environment: *api-environment
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # When `db` is stopped, Docker's DNS forwards the name upstream and the
+    # lookup takes ~4 s to fail (measured on Docker Desktop/WSL), which is
+    # outside psycopg's 2 s connect_timeout. One 1-second attempt keeps an
+    # unreachable database reported as READY_DB_UNAVAILABLE in ~2 s.
+    dns_opt:
+      - timeout:1
+      - attempts:1
+    # Healthy means ready: the database answers within 2 s. The slim image has
+    # no curl, so the probe uses Python's standard library.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
 
 volumes:
   pgdata:
