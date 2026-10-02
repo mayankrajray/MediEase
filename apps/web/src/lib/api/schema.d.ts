@@ -352,6 +352,7 @@ export interface components {
         readonly SessionStarted: {
             headers: {
                 readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly "Cache-Control": components["headers"]["NoStore"];
                 readonly [name: string]: unknown;
             };
             content: {
@@ -403,6 +404,8 @@ export interface components {
     headers: {
         /** @description Correlation ID for this request; quote it when reporting a problem. */
         readonly RequestId: string;
+        /** @description Always "no-store" — identity, permissions and clinic data are never cached. */
+        readonly NoStore: string;
     };
     pathItems: never;
 }
@@ -503,6 +506,7 @@ export interface operations {
             readonly 200: {
                 headers: {
                     readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
                     readonly [name: string]: unknown;
                 };
                 content: {
@@ -535,6 +539,7 @@ export interface operations {
             readonly 200: {
                 headers: {
                     readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
                     readonly [name: string]: unknown;
                 };
                 content: {
@@ -569,6 +574,7 @@ export interface operations {
             readonly 200: {
                 headers: {
                     readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
                     readonly [name: string]: unknown;
                 };
                 content: {
@@ -604,6 +610,7 @@ export interface operations {
             readonly 200: {
                 headers: {
                     readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
                     readonly [name: string]: unknown;
                 };
                 content: {
@@ -638,6 +645,7 @@ export interface operations {
             readonly 200: {
                 headers: {
                     readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
                     readonly [name: string]: unknown;
                 };
                 content: {
