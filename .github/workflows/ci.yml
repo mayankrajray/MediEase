@@ -100,8 +100,11 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
+      - name: Layer boundaries (import-linter)
+        run: lint-imports
       - run: mypy src
-      - run: pytest -q
+      - name: Tests with coverage gate (NFR-14)
+        run: pytest -q --cov
       - name: Dependency vulnerabilities (pip-audit)
         run: pip-audit --skip-editable
 

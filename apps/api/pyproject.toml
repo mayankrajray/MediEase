@@ -28,6 +28,9 @@ dev = [
     "openapi-core==0.23.1",
     # Known-vulnerability check of installed dependencies (make audit, CI).
     "pip-audit==2.10.1",
+    # Layer boundaries (apps/api/CLAUDE.md) and the coverage gate (NFR-14).
+    "import-linter==2.15",
+    "pytest-cov==7.1.0",
 ]
 
 [build-system]
@@ -70,3 +73,63 @@ strict = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+
+# --- Coverage gate (NFR-14) -------------------------------------------------------
+# make test-api and CI run `pytest --cov`; below the threshold the run fails.
+# M0 gates the whole package because domain/ and application/ are still empty;
+# M1-P1 adds the >= 80% gate on those two layers when they get code.
+[tool.coverage.run]
+source = ["mediease_api"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+
+# --- Layer boundaries (apps/api/CLAUDE.md "Layer rules") ---------------------------
+# `lint-imports` (make lint, CI) fails when a module crosses a boundary.
+[tool.importlinter]
+root_package = "mediease_api"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "domain imports only the standard library"
+type = "forbidden"
+source_modules = ["mediease_api.domain"]
+forbidden_modules = [
+    "mediease_api.application", "mediease_api.ports", "mediease_api.adapters",
+    "mediease_api.delivery", "mediease_api.config", "mediease_api.bootstrap", "mediease_api.wsgi",
+    "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
+    "structlog", "gunicorn", "ulid",
+]
+
+[[tool.importlinter.contracts]]
+name = "application depends only on domain and ports"
+type = "forbidden"
+source_modules = ["mediease_api.application"]
+forbidden_modules = [
+    "mediease_api.adapters", "mediease_api.delivery", "mediease_api.config",
+    "mediease_api.bootstrap", "mediease_api.wsgi",
+    "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
+    "gunicorn",
+]
+
+[[tool.importlinter.contracts]]
+name = "ports are interfaces over the domain only"
+type = "forbidden"
+source_modules = ["mediease_api.ports"]
+forbidden_modules = [
+    "mediease_api.application", "mediease_api.adapters", "mediease_api.delivery",
+    "mediease_api.config", "mediease_api.bootstrap", "mediease_api.wsgi",
+    "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
+    "gunicorn",
+]
+
+[[tool.importlinter.contracts]]
+name = "adapters know nothing about HTTP or the composition root"
+type = "forbidden"
+source_modules = ["mediease_api.adapters"]
+forbidden_modules = [
+    "mediease_api.delivery", "mediease_api.bootstrap", "mediease_api.wsgi", "flask", "werkzeug",
+]

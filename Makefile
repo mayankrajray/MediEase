@@ -72,16 +72,16 @@ web-deps-check:
 
 test: test-api test-web ## Run all test suites
 
-test-api: env-check api-venv-check ## Run the API test suite (needs the db: make up)
-	cd $(API_DIR) && $(VENV_BIN)/pytest -q
+test-api: env-check api-venv-check ## Run the API test suite with the coverage gate (needs the db: make up)
+	cd $(API_DIR) && $(VENV_BIN)/pytest -q --cov
 
 test-web: web-deps-check ## Run the web test suite (Vitest)
 	cd $(WEB_DIR) && npm test -- --run
 
-lint: lint-api lint-web ## Lint API (ruff) and web (ESLint)
+lint: lint-api lint-web ## Lint API (ruff, layer boundaries) and web (ESLint)
 
 lint-api: api-venv-check
-	cd $(API_DIR) && $(VENV_BIN)/ruff check . && $(VENV_BIN)/ruff format --check .
+	cd $(API_DIR) && $(VENV_BIN)/ruff check . && $(VENV_BIN)/ruff format --check . && $(VENV_BIN)/lint-imports
 
 lint-web: web-deps-check
 	cd $(WEB_DIR) && npm run -s lint
