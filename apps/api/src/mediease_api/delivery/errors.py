@@ -4,11 +4,12 @@ Every API error returns:
 
     { "error": { "code", "message", "request_id", "details" } }
 
-Codes are catalogued in ``docs/ERRORS.md``. Readiness failures become a 503 with
-their ``READY_*`` code. Unhandled exceptions become a single
-``SYS_UNEXPECTED`` 500 with no stack trace in the body; the trace is logged
-server-side with the same ``request_id``, so the failure is traceable without
-leaking internals to the client.
+Codes are catalogued in ``docs/ERRORS.md``. Domain and application errors
+(``DomainError``) get the status in ``DOMAIN_ERROR_STATUS``. Readiness
+failures become a 503 with their ``READY_*`` code. Unhandled exceptions become
+a single ``SYS_UNEXPECTED`` 500 with no stack trace in the body; the trace is
+logged server-side with the same ``request_id``, so the failure is traceable
+without leaking internals to the client.
 """
 
 from __future__ import annotations
@@ -20,7 +21,10 @@ import structlog
 from flask import Flask, Response, jsonify
 from werkzeug.exceptions import HTTPException
 
+from mediease_api.application.auth.errors import AccountLocked
+from mediease_api.delivery.http.validation import RequestValidationFailed
 from mediease_api.delivery.middleware import get_request_id
+from mediease_api.domain.shared.errors import DomainError, InvalidValue
 from mediease_api.ports.readiness import DatabaseTimeout, DatabaseUnavailable, ReadinessError
 
 logger = structlog.get_logger(__name__)
@@ -43,6 +47,40 @@ _HTTP_CODES = {
 
 # Werkzeug headers worth keeping on the envelope response (405 must say what is allowed).
 _PRESERVED_HEADERS = ("Allow", "Retry-After")
+
+# HTTP status for every domain/application error code (docs/ERRORS.md). A code
+# missing here is a programming error: it is logged and answered as a 500.
+DOMAIN_ERROR_STATUS = {
+    "REQ_VALIDATION_FAILED": 422,
+    "REQ_NOT_FOUND": 404,
+    "AUTH_INVALID_CREDENTIALS": 401,
+    "AUTH_SESSION_EXPIRED": 401,
+    "AUTH_REFRESH_REUSED": 401,
+    "AUTH_LOCKED": 423,
+    "AUTH_CSRF_INVALID": 403,
+    "AUTH_ACCOUNT_DISABLED": 403,
+    "CLN_LAST_OWNER": 409,
+    "CLN_OWNER_REQUIRED": 409,
+    "CLN_INVALID_TRANSITION": 409,
+}
+
+
+def domain_error_response(exc: DomainError) -> tuple[Response, int]:
+    """The envelope for a domain or application error, with its catalogued status."""
+    status = DOMAIN_ERROR_STATUS.get(exc.code)
+    if status is None:
+        logger.error("app.unmapped_domain_error", code=SYS_UNEXPECTED, domain_code=exc.code)
+        return error_response(SYS_UNEXPECTED, _SYS_UNEXPECTED_MESSAGE, 500)
+
+    details: dict[str, Any] = dict(exc.details)
+    if isinstance(exc, RequestValidationFailed):
+        details = {"fields": exc.fields}
+    elif isinstance(exc, InvalidValue):
+        details = {"fields": [{"field": exc.field, "reason": exc.reason}]}
+    response, _ = error_response(exc.code, exc.message, status, details)
+    if isinstance(exc, AccountLocked):
+        response.headers["Retry-After"] = str(exc.retry_after_seconds)
+    return response, status
 
 
 def error_response(
@@ -86,6 +124,13 @@ def register_error_handlers(app: Flask) -> None:
             cause=type(cause).__name__ if cause else None,
         )
         return error_response(exc.code, _READINESS_MESSAGES[exc.code], 503)
+
+    @app.errorhandler(DomainError)
+    def _handle_domain_error(exc: DomainError) -> tuple[Response, int]:
+        # Expected outcomes (wrong password, not found, ...): the use case has
+        # already logged the business event, so this is a DEBUG-level trace only.
+        logger.debug("http.domain_error", code=exc.code)
+        return domain_error_response(exc)
 
     @app.errorhandler(HTTPException)
     def _handle_http_exception(exc: HTTPException) -> tuple[Response, int]:

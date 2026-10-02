@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 import pytest
-from structlog.testing import capture_logs
 
 from mediease_api.application.auth._session import SessionIssuer
 from mediease_api.application.auth.errors import (
@@ -25,6 +24,7 @@ from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.identity.session import RefreshTokenState
 from mediease_api.domain.identity.user import User
 from tests.builders import a_user, new_id
+from tests.conftest import LogReader
 from tests.fakes import (
     FakeAccessTokens,
     FakeClock,
@@ -200,13 +200,15 @@ def test_r3_failures_are_committed_and_a_success_in_between_resets_them(auth: Au
     assert auth.stored(user).locked_until is None
 
 
-def test_locking_failure_logs_auth_locked_without_the_identifier(auth: Auth) -> None:
+def test_locking_failure_logs_auth_locked_without_the_identifier(
+    auth: Auth, json_logs: LogReader
+) -> None:
     user = auth.add_user()
     assert user.email is not None
-    with capture_logs() as logs:
-        for _ in range(5):
-            with pytest.raises(InvalidCredentials):
-                auth.sign_in.execute(_cmd(user.email.value, "Typo-Secret-42"))
+    for _ in range(5):
+        with pytest.raises(InvalidCredentials):
+            auth.sign_in.execute(_cmd(user.email.value, "Typo-Secret-42"))
+    logs = json_logs()
     events = [e["event"] for e in logs]
     assert events.count("auth.sign_in_failed") == 5
     assert events[-1] == "auth.locked"
@@ -283,14 +285,16 @@ def test_fr_auth_02_refresh_rotates_within_the_family(auth: Auth) -> None:
     assert new.expires_at == auth.clock.now() + REFRESH_TTL
 
 
-def test_ac2_r5_reusing_a_rotated_token_revokes_the_whole_family(auth: Auth) -> None:
+def test_ac2_r5_reusing_a_rotated_token_revokes_the_whole_family(
+    auth: Auth, json_logs: LogReader
+) -> None:
     _, first = _signed_in(auth)
     second = auth.refresh.execute(first).tokens.refresh_token
 
-    with capture_logs() as logs, pytest.raises(RefreshTokenReused) as excinfo:
+    with pytest.raises(RefreshTokenReused) as excinfo:
         auth.refresh.execute(first)
     assert excinfo.value.code == "AUTH_REFRESH_REUSED"
-    assert any(e["event"] == "auth.refresh_reused" and e["log_level"] == "warning" for e in logs)
+    assert any(e["event"] == "auth.refresh_reused" and e["level"] == "warning" for e in json_logs())
 
     # The newer token in the family stopped working too.
     with pytest.raises(SessionExpired):
@@ -341,12 +345,12 @@ def test_r7_losing_the_last_membership_ends_the_session_on_refresh(auth: Auth) -
 # --- Sign-out ---------------------------------------------------------------------------------
 
 
-def test_fr_auth_02_sign_out_revokes_the_family(auth: Auth) -> None:
+def test_fr_auth_02_sign_out_revokes_the_family(auth: Auth, json_logs: LogReader) -> None:
     _, first = _signed_in(auth)
     second = auth.refresh.execute(first).tokens.refresh_token
-    with capture_logs() as logs:
-        auth.sign_out.execute(second)
-    assert any(e["event"] == "auth.signed_out" for e in logs)
+    json_logs()  # discard sign-in and refresh events
+    auth.sign_out.execute(second)
+    assert any(e["event"] == "auth.signed_out" for e in json_logs())
     with pytest.raises(SessionExpired):
         auth.refresh.execute(second)
 

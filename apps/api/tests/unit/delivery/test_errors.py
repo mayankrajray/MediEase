@@ -7,6 +7,10 @@ import json
 import pytest
 from flask import Flask
 
+from mediease_api.application.auth.errors import AccountLocked
+from mediease_api.domain.identity.membership import LastOwnerError
+from mediease_api.domain.shared.errors import DomainError, InvalidValue
+
 
 def _add_failing_route(app: Flask) -> None:
     @app.get("/boom")
@@ -58,3 +62,46 @@ def test_nfr_12_wrong_method_returns_req_method_not_allowed_with_allow_header(ap
     assert resp.status_code == 405
     assert resp.get_json()["error"]["code"] == "REQ_METHOD_NOT_ALLOWED"
     assert "GET" in resp.headers["Allow"]
+
+
+def _raise_on(app: Flask, path: str, exc: Exception) -> None:
+    def _view() -> str:
+        raise exc
+
+    app.add_url_rule(path, endpoint=path, view_func=_view)
+
+
+def test_domain_errors_map_to_their_catalogued_status(app: Flask) -> None:
+    _raise_on(app, "/last-owner", LastOwnerError())
+    resp = app.test_client().get("/last-owner")
+    assert resp.status_code == 409
+    assert resp.get_json()["error"]["code"] == "CLN_LAST_OWNER"
+
+
+def test_invalid_value_lists_the_field_without_the_value(app: Flask) -> None:
+    _raise_on(app, "/bad-phone", InvalidValue("phone", "is not a valid phone number"))
+    resp = app.test_client().get("/bad-phone")
+    assert resp.status_code == 422
+    assert resp.get_json()["error"]["details"] == {
+        "fields": [{"field": "phone", "reason": "is not a valid phone number"}]
+    }
+
+
+def test_auth_locked_sets_retry_after(app: Flask) -> None:
+    _raise_on(app, "/locked", AccountLocked(120))
+    resp = app.test_client().get("/locked")
+    assert resp.status_code == 423
+    assert resp.headers["Retry-After"] == "120"
+
+
+def test_unmapped_domain_error_is_a_logged_500(
+    app: Flask, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class Unmapped(DomainError):
+        code = "XYZ_NOT_CATALOGUED"
+
+    _raise_on(app, "/unmapped", Unmapped("internal"))
+    resp = app.test_client().get("/unmapped")
+    assert resp.status_code == 500
+    assert resp.get_json()["error"]["code"] == "SYS_UNEXPECTED"
+    assert "app.unmapped_domain_error" in capsys.readouterr().out

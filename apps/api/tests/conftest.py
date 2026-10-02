@@ -7,26 +7,34 @@ outside production).
 
 from __future__ import annotations
 
+import json
 import os
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import pytest
 from alembic import command
 from alembic.config import Config
 from flask import Flask
 from flask.testing import FlaskClient
+from pydantic import SecretStr
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from mediease_api.adapters.db.models import Base
 from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork, build_session_factory
+from mediease_api.adapters.security.argon2_hasher import Argon2PasswordHasher
 from mediease_api.bootstrap import create_app
-from mediease_api.config.settings import AppSettings
+from mediease_api.config.logging import configure_logging
+from mediease_api.config.settings import AppEnv, AppSettings
+from mediease_api.domain.identity.membership import Role
+from mediease_api.domain.identity.user import User
 from mediease_api.ports.readiness import ReadinessError
+from tests.builders import a_clinic, a_membership, a_user
 
 SetEnv = Callable[[dict[str, str]], None]
 
@@ -70,6 +78,35 @@ class FakeDatabaseCheck:
             raise self.error
 
 
+def _json_log_settings() -> AppSettings:
+    return AppSettings(
+        APP_ENV=AppEnv.TEST,
+        DATABASE_URL=_VALID_TEST_ENV["DATABASE_URL"],
+        JWT_SIGNING_KEY=SecretStr(TEST_SIGNING_KEY),
+    )
+
+
+LogReader = Callable[[], list[dict[str, Any]]]
+
+
+@pytest.fixture
+def json_logs(capsys: pytest.CaptureFixture[str]) -> LogReader:
+    """JSON log events written to stdout from now on in this test.
+
+    Use this instead of ``structlog.testing.capture_logs``: once any app has
+    configured logging, structlog caches loggers on first use and
+    ``capture_logs`` no longer sees their events.
+    """
+    configure_logging(_json_log_settings())
+    capsys.readouterr()
+
+    def _read() -> list[dict[str, Any]]:
+        lines = capsys.readouterr().out.splitlines()
+        return [json.loads(line) for line in lines if line.startswith("{")]
+
+    return _read
+
+
 @pytest.fixture
 def valid_env() -> dict[str, str]:
     """A valid APP_ENV=test configuration; tests copy and override it."""
@@ -98,7 +135,11 @@ def database_check() -> FakeDatabaseCheck:
 def app(set_env: SetEnv, valid_env: dict[str, str], database_check: FakeDatabaseCheck) -> Flask:
     """An app from the composition root with a fake database check (no network)."""
     set_env(valid_env)
-    return create_app(AppSettings(), database_check=database_check)  # type: ignore[call-arg]
+    return create_app(
+        AppSettings(),  # type: ignore[call-arg]
+        database_check=database_check,
+        password_hasher=CHEAP_HASHER,
+    )
 
 
 @pytest.fixture
@@ -180,3 +221,46 @@ def uow_factory(session_factory: sessionmaker[Session]) -> Iterator[UowFactory]:
     with session_factory() as session:
         session.execute(text(f"TRUNCATE {tables}"))
         session.commit()
+
+
+# --- HTTP against the real database (M1-P2) ------------------------------------------------
+
+# Argon2id with minimal cost: same algorithm and code path, ~1 ms instead of ~50 ms.
+CHEAP_HASHER = Argon2PasswordHasher(time_cost=1, memory_cost_kib=8, parallelism=1)
+DEMO_PASSWORD = "synthetic-Passw0rd-for-tests"
+
+
+def make_db_app(database_url: str, *, cookie_secure: bool = False) -> Flask:
+    # APP_ENV=local: the compose db's password is a change-me placeholder.
+    settings = AppSettings(
+        APP_ENV=AppEnv.LOCAL,
+        DATABASE_URL=database_url,
+        COOKIE_SECURE=cookie_secure,
+        JWT_SIGNING_KEY=SecretStr(TEST_SIGNING_KEY),
+    )
+    return create_app(settings, password_hasher=CHEAP_HASHER)
+
+
+@pytest.fixture
+def db_client(migrated_database_url: str, uow_factory: UowFactory) -> Iterator[FlaskClient]:
+    """A client for an app wired to the migrated test database (tables emptied after)."""
+    with make_db_app(migrated_database_url).test_client() as test_client:
+        yield test_client
+
+
+def seed_staff(
+    uow_factory: UowFactory,
+    *,
+    role: Role = Role.OWNER,
+    password: str | None = DEMO_PASSWORD,
+    **user_fields: object,
+) -> User:
+    """A user with an active membership in a new clinic (and a password unless None)."""
+    user = a_user(password_hash=CHEAP_HASHER.hash(password) if password else None, **user_fields)
+    clinic = a_clinic()
+    with uow_factory() as uow:
+        uow.clinics.add(clinic)
+        uow.users.add(user)
+        uow.tenant(clinic.id).memberships.add(a_membership(clinic.id, user.id, role))
+        uow.commit()
+    return user

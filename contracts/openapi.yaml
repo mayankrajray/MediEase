@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -14,7 +14,89 @@ servers:
 tags:
   - name: platform
     description: Liveness and readiness (M0)
+  - name: auth
+    description: |
+      Sign-in, refresh rotation and sign-out (M1-P2, ADR-0006). Tokens travel only in
+      HttpOnly cookies (me_access, me_refresh) and never in a body. Unsafe requests that
+      carry a session cookie must send X-CSRF-Token equal to the me_csrf cookie.
 paths:
+  /api/v1/auth/sign-in:
+    post:
+      tags: [auth]
+      operationId: signIn
+      summary: Sign in with an email or phone number and a password
+      description: |
+        FR-AUTH-01, FR-AUTH-04. Phone numbers are normalised to E.164 (Indian 10-digit input
+        accepted). Five consecutive wrong passwords lock the account for 15 minutes.
+        Sets me_access, me_refresh and me_csrf. Exempt from the CSRF header.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignInRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/SessionStarted'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+        '423':
+          description: Account locked (AUTH_LOCKED)
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Retry-After:
+              description: Seconds until the lock ends
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshSession
+      summary: Rotate the refresh token and issue a new access token
+      description: |
+        FR-AUTH-02. Reads me_refresh. Presenting an already-rotated token revokes the whole
+        session (AUTH_REFRESH_REUSED). On any 401/403 from the session itself the cookies are
+        cleared.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          $ref: '#/components/responses/SessionStarted'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+  /api/v1/auth/sign-out:
+    post:
+      tags: [auth]
+      operationId: signOut
+      summary: End the session (revokes its refresh-token family)
+      description: Idempotent. Always clears the session cookies.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Signed out
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '403':
+          $ref: '#/components/responses/AuthError'
   /health:
     get:
       tags: [platform]
@@ -70,6 +152,35 @@ components:
       schema:
         type: string
         maxLength: 64
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      description: Copy of the me_csrf cookie; required when session cookies are sent.
+      schema:
+        type: string
+  responses:
+    SessionStarted:
+      description: Session started or renewed; me_access, me_refresh and me_csrf are set
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Session'
+    AuthError:
+      description: |
+        AUTH_INVALID_CREDENTIALS, AUTH_SESSION_EXPIRED, AUTH_REFRESH_REUSED (401);
+        AUTH_ACCOUNT_DISABLED, AUTH_CSRF_INVALID (403); REQ_UNSUPPORTED_MEDIA_TYPE (415);
+        REQ_VALIDATION_FAILED (422)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
   headers:
     RequestId:
       description: Correlation ID for this request; quote it when reporting a problem.
@@ -103,6 +214,73 @@ components:
       properties:
         error:
           $ref: '#/components/schemas/Error'
+    SignInRequest:
+      type: object
+      additionalProperties: false
+      required: [identifier, password]
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+          maxLength: 254
+          description: Email address or phone number
+          examples: [owner@sample-clinic.example, '9000000001']
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          format: password
+    Session:
+      type: object
+      required: [user, memberships, session]
+      properties:
+        user:
+          $ref: '#/components/schemas/SessionUser'
+        memberships:
+          type: array
+          description: Active clinic memberships, ordered by clinic name
+          items:
+            $ref: '#/components/schemas/Membership'
+        session:
+          type: object
+          required: [access_expires_at, refresh_expires_at]
+          properties:
+            access_expires_at:
+              type: string
+              format: date-time
+            refresh_expires_at:
+              type: string
+              format: date-time
+    SessionUser:
+      type: object
+      required: [id, full_name, email, phone_e164, is_platform_ops]
+      properties:
+        id:
+          type: string
+          format: uuid
+        full_name:
+          type: string
+        email:
+          type: [string, 'null']
+        phone_e164:
+          type: [string, 'null']
+        is_platform_ops:
+          type: boolean
+    Membership:
+      type: object
+      required: [membership_id, clinic_id, clinic_name, role]
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        clinic_id:
+          type: string
+          format: uuid
+        clinic_name:
+          type: string
+        role:
+          type: string
+          enum: [OWNER, DOCTOR, FRONT_DESK]
     Error:
       type: object
       required: [code, message, request_id]
