@@ -14,6 +14,8 @@ first production release.
 - `NEXT_STEPS_PLAN.md`: approved M0 implementation plan with workflow prerequisites and progress log.
 - ADR-0010: issue-driven workflow, one commit per logical change, rebase merges, CODEOWNERS approval.
 - `.gitattributes`: LF line endings in the index and working tree on every platform (M0-P1).
+- `docs/specs/identity-and-tenancy.md` Approved; M1 plan (`NEXT_STEPS_PLAN.md`) and design notes
+  (`docs/milestones/M1-identity-tenancy-audit.md`); M1-P1 active (#19).
 - `.github/CODEOWNERS`: default owners for every path (M0-P1, W-6).
 - API package `mediease_api` (M0-P2): `pyproject.toml` with pinned runtime and dev dependencies;
   typed `AppSettings` + `load_settings()` that fail fast on invalid config (`CFG_INVALID`, naming
