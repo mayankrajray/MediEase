@@ -15,6 +15,10 @@ fail() { printf '  FAIL  %s\n' "$1" >&2; exit 1; }
 
 # Body of a URL, failing on non-2xx or no answer within 15 s.
 get() { curl -fsS -m 15 "$1"; }
+# Response headers of a URL. Output is captured, never piped straight into
+# `grep -q`: grep exits on the first match, curl then dies of SIGPIPE, and
+# pipefail turns a passing check into a random failure.
+headers() { curl -fsS -m 15 -D - -o /dev/null "$1"; }
 # Visible text of an HTML page (tags stripped).
 text() { get "$1" | sed 's/<[^>]*>//g'; }
 
@@ -27,15 +31,18 @@ done
 
 echo "API"
 [[ "$(get "$API/health")" == '{"status":"ok"}' ]] && pass "/health" || fail "/health"
-get "$API/ready" | grep -q '"database":"ok"' && pass "/ready (database ok)" || fail "/ready"
+[[ "$(get "$API/ready")" == *'"database":"ok"'* ]] && pass "/ready (database ok)" || fail "/ready"
 
 echo "Web"
 [[ "$(get "$WEB/livez")" == '{"status":"ok"}' ]] && pass "/livez" || fail "/livez"
-curl -fsS -m 15 -D - -o /dev/null "$WEB/health" | grep -qi '^x-request-id:' \
+proxied=$(headers "$WEB/health")
+grep -qi '^x-request-id:' <<<"$proxied" \
   && pass "/health proxied to the API (X-Request-ID returned)" || fail "/health proxy"
-text "$WEB/status" | grep -q 'API: healthy · DB: ready · Ref: ' \
+page=$(text "$WEB/status")
+grep -q 'API: healthy · DB: ready · Ref: ' <<<"$page" \
   && pass "/status shows API healthy and DB ready" || fail "/status"
-curl -fsS -m 15 -D - -o /dev/null "$WEB/status" | grep -qi "^content-security-policy:.*'nonce-" \
+page_headers=$(headers "$WEB/status")
+grep -qi "^content-security-policy:.*'nonce-" <<<"$page_headers" \
   && pass "/status sends a nonce CSP" || fail "CSP header"
 
 echo "Least privilege"
