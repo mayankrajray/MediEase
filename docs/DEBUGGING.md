@@ -161,6 +161,23 @@ Every authorisation decision is logged with the request ID: `auth.rejected` (wit
 401/403 from the session, `perm.denied` for permission and clinic problems. `grep <request_id>`
 in the API log shows which check refused the request.
 
+### 5.3b "Who changed this?" (M1-P4)
+Audited actions leave a row keyed by `request_id`, so the log and the audit trail answer together:
+
+```bash
+make psql
+select occurred_at, action, actor_user_id, entity_type, entity_id, metadata
+from audit_events where clinic_id = '<clinic id>' order by occurred_at desc limit 20;
+```
+
+- A change with no row is a bug, not a gap: the row and the change share one transaction, so
+  either both exist or neither does (spec R11). Look for `app.unexpected_error` at that
+  `request_id`.
+- `AUD_APPEND_ONLY` from a statement means something tried to rewrite history — read
+  RUNBOOK §18 before doing anything else.
+- Sign-ins have `clinic_id` null (they belong to a user): filter by `actor_user_id`, or use
+  `v_clinic_activity` for a per-clinic summary.
+
 ### 5.4 Timezone errors
 - Database columns are `timestamptz`; Python datetimes must be timezone-aware (`datetime.now(UTC)`
   via the clock port — never `datetime.now()` or `utcnow()`).

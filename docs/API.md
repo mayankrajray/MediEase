@@ -101,16 +101,32 @@ Any tenant resource outside the request's clinic returns `404 REQ_NOT_FOUND` (R8
 | GET | `/api/v1/clinic/doctors` | List doctors | every role (`DOCTORS_VIEW`) | Implemented (M1-P3) |
 | GET | `/api/v1/clinic/doctors/{doctor_id}` | One doctor | every role (`DOCTORS_VIEW`) | Implemented (M1-P3) |
 | GET | `/api/v1/clinic/staff` | List staff with roles | OWNER (`STAFF_MANAGE`) | Implemented (M1-P3) |
+| PATCH | `/api/v1/clinic/staff/{membership_id}` | Change role | OWNER (`STAFF_MANAGE`) | Implemented (M1-P4) |
 | PATCH | `/api/v1/clinic` | Edit clinic settings | OWNER | M1-P5 |
 | POST | `/api/v1/clinic/doctors` | Add a doctor | OWNER | M1-P5 |
 | PATCH | `/api/v1/clinic/doctors/{doctor_id}` | Edit doctor | OWNER | M1-P5 |
 | POST | `/api/v1/clinic/staff` | Invite staff | OWNER | M1-P5 |
-| PATCH | `/api/v1/clinic/staff/{membership_id}` | Change role / deactivate | OWNER | M1-P4 (role change) / M1-P5 |
+| PATCH | `/api/v1/clinic/staff/{membership_id}` | Deactivate | OWNER | M1-P5 |
 | GET | `/api/v1/clinic/audit-events` | Audit log | OWNER | FR-AUD-03 (P1) — backlog; not in the P0 permission matrix |
 
 The doctor and staff lists return `{"items": [...]}` with no cursor: a clinic has one to four
 doctors and a handful of staff, so the paginated envelope above starts with the first list that
 can grow (patients, M2).
+
+**Role change** `PATCH /api/v1/clinic/staff/{membership_id}` `{"role": "DOCTOR"}` → `200` with the
+updated member. The new role and a `staff.role_changed` audit event are written in one
+transaction (FR-AUD-01, spec R11). The last active owner can neither be demoted nor deactivated
+(`409 CLN_LAST_OWNER`). Setting the role a member already holds changes nothing and records
+nothing. The member keeps their session: the new role applies to their next request, because
+every request re-reads the membership (FR-ORG-04).
+
+### Audit trail (M1-P4)
+
+Every audited action writes one row to `audit_events` in the same transaction as the change, so a
+committed change always has its record. Rows hold IDs, enums, the `request_id` and a salted IP
+fingerprint — never names, phone numbers or clinical content. The table refuses `UPDATE`,
+`DELETE` and `TRUNCATE` in the database itself (FR-AUD-02). There is no endpoint yet: reading it
+is a documented `make psql` procedure (RUNBOOK §18), and the owner-facing view is FR-AUD-03.
 
 ### Ops console (M1, M2, M6)
 

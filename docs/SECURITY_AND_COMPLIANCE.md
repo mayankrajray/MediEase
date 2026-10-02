@@ -64,8 +64,9 @@ Use this list in the M6 security review. Each row names where it is implemented.
 - [x] Secrets scanning in CI (M0-P5: gitleaks over the full git history, pinned image, redacted output)
 
 ### Audit and monitoring
-- [ ] Append-only audit events for FR-AUD-01 actions, written in the same transaction (M1)
-- [ ] Database role for the app cannot update/delete audit rows (M1)
+- [x] Append-only audit events for FR-AUD-01 actions, written in the same transaction (M1-P4: `uow.audit` shares the change's transaction, so a failed audit insert fails the change; sign-in, sign-in failure, sign-out, refresh reuse and staff role changes are recorded, with later actions added by the milestone that writes them)
+- [x] Database role for the app cannot update/delete audit rows (M1-P4: two triggers refuse `UPDATE`, `DELETE` and `TRUNCATE` with `AUD_APPEND_ONLY` for every non-superuser role — a `REVOKE` would not bind the schema owner. A dedicated least-privilege role is M6-P1; lifting the guard is a documented, approved procedure, RUNBOOK §18)
+- [x] Audit rows carry no personal data beyond IDs (M1-P4: metadata is capped to 20 short ID/enum values and the caller's IP is stored only as an HMAC under `AUDIT_IP_SALT`)
 - [ ] Alerts: 5xx rate, readiness, sign-in failure spikes, webhook signature failures, dead jobs (M6)
 - [ ] Log review confirms no PII/clinical leakage (M6)
 

@@ -60,10 +60,30 @@ first production release.
   shape. Lists return `{"items": [...]}` and are unpaginated by design at this size.
 - M1-P3: HTTP tenancy suite (`tests/tenancy/test_http_isolation.py`) proving AC3 end to end, with
   a guard that fails when a new clinic route taking a resource ID has no cross-clinic case.
+- M1-P4 (#19): append-only audit log (FR-AUD-01, FR-AUD-02). `audit_events` (migration `0004`)
+  records who did what, to which record, when, with the `request_id` and a salted HMAC of the
+  caller's IP; `metadata` holds IDs and enums only. Rows are written through the same unit of
+  work as the change, so a failed audit insert fails the change (spec R11).
+- M1-P4: the database refuses to rewrite history — two triggers reject `UPDATE`, `DELETE` and
+  `TRUNCATE` with `AUD_APPEND_ONLY` for every non-superuser role (AC6); lifting the guard is an
+  approved, recorded procedure (RUNBOOK §18). A dedicated least-privilege database role remains
+  on the M6-P1 list as defence in depth.
+- M1-P4: recorded actions — `auth.signed_in`, `auth.sign_in_failed` (known accounts only),
+  `auth.signed_out`, `auth.refresh_reused` and `staff.role_changed`.
+- M1-P4: `PATCH /api/v1/clinic/staff/{membership_id}` (owners, `STAFF_MANAGE`) changes a member's
+  role (FR-ORG-04, AC5); the last active owner cannot be demoted (`409 CLN_LAST_OWNER`), a no-op
+  change records nothing, and the new role applies to the member's next request. Contract 0.4.0.
+- M1-P4: `v_clinic_activity` support view (FR-OPS-04): per-clinic staff counts, last sign-in and
+  7/30-day event counts, with no clinical column.
+- M1-P4: setting `AUDIT_IP_SALT` (≥ 32 characters, required) and `IpHasher`; RUNBOOK §18
+  (reading the audit log), DEBUGGING §5.3b ("who changed this?").
 
 ### Upgrade notes
 - M1-P2: existing local `.env` files need `JWT_SIGNING_KEY` of at least 32 characters (copy the
   line from `.env.example`); otherwise `make up` stops with `CFG_INVALID`.
+- M1-P4: existing local `.env` files need `AUDIT_IP_SALT` of at least 32 characters (copy the
+  line from `.env.example`); otherwise `make up` stops before starting a container, because
+  compose requires the variable.
 - `.github/CODEOWNERS`: default owners for every path (M0-P1, W-6).
 - API package `mediease_api` (M0-P2): `pyproject.toml` with pinned runtime and dev dependencies;
   typed `AppSettings` + `load_settings()` that fail fast on invalid config (`CFG_INVALID`, naming

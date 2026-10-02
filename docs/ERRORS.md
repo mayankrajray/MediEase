@@ -63,7 +63,7 @@ absent there, the request never reached the API.
 | `PERM_CLINIC_REQUIRED` | 400 | Choose a clinic | A user with several memberships sent no `X-Clinic-ID`, or sent one that is malformed or not one of their clinics — the same answer either way, so it never reveals that a clinic exists (R6) | `perm.denied` `reason=clinic_required` with `clinic_count`; clinic switcher (M1-P3) |
 | `CLN_SUSPENDED` | 403 | This clinic is suspended | The resolved clinic is `SUSPENDED`; `/me` still lists it with its status so the web app can explain why | `perm.denied` `reason=clinic_suspended`; `clinics.status`; ops reactivates (M1-P3) |
 | `CLN_SLUG_TAKEN` | 409 | That clinic URL is taken | Duplicate slug | Ops form |
-| `CLN_LAST_OWNER` | 409 | A clinic needs at least one owner | Demoting/deactivating the only active owner (R9) | Staff settings; raised by `ClinicMembership.change_role`/`deactivate` (domain, M1-P1) |
+| `CLN_LAST_OWNER` | 409 | A clinic needs at least one owner | Demoting or deactivating the only active owner (R9). Raised by `ClinicMembership.change_role`/`deactivate`; reached over HTTP by `PATCH /api/v1/clinic/staff/{membership_id}` (M1-P4), which records nothing when it refuses | Staff settings; `clinic_memberships` roles and statuses for that clinic |
 | `CLN_OWNER_REQUIRED` | 409 | A clinic needs an active owner before it can be activated | Activating a clinic whose owner has not accepted the invite yet (I1) | Ops onboarding; `Clinic.activate` (domain, M1-P1) |
 | `CLN_INVALID_TRANSITION` | 409 | That status change isn't allowed | e.g. deactivating a deactivated membership, suspending an onboarding clinic; `details`: `entity`, `state`, `action` | State machines in `domain/clinics`, `domain/identity` (domain, M1-P1) |
 
@@ -74,6 +74,12 @@ rule (phone, email, slug, PIN code, time zone, required text) raises `REQ_VALIDA
 `details.fields` — never the rejected value. A repository given another
 clinic's entity raises `TenancyViolation`, a programming error that surfaces as `SYS_UNEXPECTED`
 (see "Platform"), not as a user-facing code.
+
+**Database-level guard (not an API code).** `UPDATE`, `DELETE` and `TRUNCATE` on `audit_events`
+fail with `AUD_APPEND_ONLY` (FR-AUD-02, M1-P4). No request can reach it — nothing in the
+application issues those statements — so it never appears in an error envelope; it protects
+against a bug, a migration mistake or a stolen connection. Lifting it is an approved procedure
+(RUNBOOK §18).
 
 ## Patients (M2)
 

@@ -364,6 +364,13 @@ Full controls list: [SECURITY_AND_COMPLIANCE.md](SECURITY_AND_COMPLIANCE.md).
   `domain/identity/permissions.py`.
 - **Patient links:** HMAC-signed tokens containing `purpose`, `resource_id`, `clinic_id`, `exp`;
   server-side revocation list; last-4-digit phone challenge with attempt limits.
+- **Audit trail:** every audited action writes one `audit_events` row through the same unit of
+  work as the change, so a committed change always has its record (spec R11). The table is
+  append-only in the database: triggers refuse `UPDATE`, `DELETE` and `TRUNCATE` for every
+  non-superuser role (FR-AUD-02); lifting the guard is an approved, recorded procedure
+  (RUNBOOK §18). Rows carry IDs, enums, the `request_id` and an HMAC of the caller's IP — never
+  names, phone numbers or clinical content. Implementation (M1-P4): `domain/audit/`,
+  `application/audit.py`, `adapters/db/audit.py`, migration `0004`.
 - **Transport and storage:** TLS termination at the edge; database and bucket encryption at rest;
   pre-signed, short-lived URLs for PDFs.
 - **Data minimisation:** analytics and logs use IDs and enums only.

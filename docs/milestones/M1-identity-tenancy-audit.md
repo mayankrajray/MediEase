@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M1-P1 to M1-P3 implemented (P1 and P2 confirmed 3 Oct 2026; P3 awaiting confirmation); M1-P4 design proposed |
+| Status | In progress — M1-P1 to M1-P4 implemented (P1 and P2 confirmed 3 Oct 2026; P3 and P4 awaiting confirmation) |
 | Spec | `docs/specs/identity-and-tenancy.md` (Approved 2026-10-02) |
 | Covers | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08, NFR-14 |
 | Issue / branch / PR | #19 · `m1/19-identity-tenancy-audit` · one draft PR for the whole milestone (ADR-0011) |
@@ -46,8 +46,9 @@ branch and appear in the one milestone PR.
 
 ## M1-P4 — Append-only audit log
 
-**Status: approved 3 Oct 2026 (option B below chosen); in implementation.** Covers FR-AUD-01,
-FR-AUD-02, FR-OPS-04 (support view); spec R11; AC5, AC6.
+**Status: approved 3 Oct 2026 (option B below chosen); implemented 3 Oct 2026, awaiting the
+developer's confirmation.** Covers FR-AUD-01, FR-AUD-02, FR-OPS-04 (support view); spec R11;
+AC5, AC6.
 
 ### Concepts
 
