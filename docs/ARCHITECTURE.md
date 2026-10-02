@@ -285,6 +285,28 @@ Details and rationale: ADR-0003.
   cross-clinic access with `404` (not `403`, to avoid confirming existence).
 - PostgreSQL Row-Level Security is a planned defence-in-depth step (ADR-0003, "Consequences").
 
+**Implementation (M1-P1).**
+
+```mermaid
+flowchart LR
+    UC[Use case] -->|"with uow:"| UOW[SqlAlchemyUnitOfWork<br/>one session, one transaction]
+    UOW --> PLAT[Platform repos<br/>clinics, users]
+    UOW -->|"tenant(clinic_id)"| TEN[Tenant repos<br/>doctors, memberships]
+    TEN --> BASE[TenantScopedRepository<br/>_scoped_select: WHERE clinic_id = bound id]
+    BASE --> DB[(PostgreSQL)]
+    PLAT --> DB
+```
+
+- `adapters/db/tenancy.py::TenantScopedRepository` is the only place tenant queries start. It is
+  built with one `clinic_id`; `_scoped_select()` already filters by it, and `_check_owned()`
+  rejects writing another clinic's entity (`TenancyViolation`). `session.get()` is not used for
+  tenant rows because it bypasses the filter through the identity map.
+- `UnitOfWork.tenant(clinic_id)` is the only way application code reaches tenant repositories. In
+  M1-P3 the `clinic_id` comes from the request's resolved membership (`RequestContext`), never
+  from the request body.
+- `tests/tenancy/test_repository_scoping.py` proves isolation at the repository layer and fails if
+  a table with `clinic_id` has no scoped repository.
+
 ## 7. Background jobs
 
 Details and rationale: ADR-0005.

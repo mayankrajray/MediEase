@@ -5,10 +5,13 @@ Architecture: `docs/ARCHITECTURE.md` §3. Rules for agents: `CLAUDE.md` in this 
 
 ## Status
 
-M0-P3: package, typed settings, structured logging, request IDs, error envelope, `GET /health`,
-`GET /ready` (database check), Alembic with an empty baseline, and a minimal `Dockerfile` used by
-the compose `migrate` and `api` services. The image is hardened in M0-P5
-(see `docs/milestones/M0-foundation.md`).
+M0: package, typed settings, structured logging, request IDs, error envelope, `GET /health`,
+`GET /ready` (database check), Alembic, and hardened images for the compose `migrate` and `api`
+services (see `docs/milestones/M0-foundation.md`).
+
+M1-P1: domain model (clinics, doctors, users, memberships), ID / repository / unit-of-work ports,
+UUIDv7 IDs, migration `0002`, tenancy-scoped SQLAlchemy repositories and unit of work (see
+`docs/milestones/M1-identity-tenancy-audit.md`). No endpoint uses them yet.
 
 ## Layout
 
