@@ -1,6 +1,7 @@
 # CI gates for MediEase (docs/TESTING.md §5).
-# The api and web jobs switch on automatically once their manifests exist (M0-P2 / M0-P4),
-# so this workflow is valid from the first commit. Security scanning and image builds join in M0-P5.
+# The api and web jobs switch on automatically once their manifests exist, so this workflow is
+# valid from the first commit. From M0-P5: image builds + vulnerability scan, a fresh-clone smoke
+# test of the whole stack, and security scans.
 
 name: CI
 
@@ -112,3 +113,45 @@ jobs:
       - run: npm run typecheck
       - run: npm test -- --run
       - run: npm run build
+
+  images:
+    name: Images — build and scan
+    needs: detect
+    if: needs.detect.outputs.api == 'true' && needs.detect.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build API image
+        run: docker build -t mediease-api:ci apps/api
+      - name: Build web image
+        run: docker build --build-arg API_INTERNAL_URL=http://api:8000 -t mediease-web:ci apps/web
+      # Fails on any HIGH or CRITICAL vulnerability that has a fix available.
+      # Trivy is pinned and run from its official image (no third-party action).
+      - name: Scan images (Trivy)
+        run: |
+          for image in mediease-api:ci mediease-web:ci; do
+            echo "::group::$image"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.75.0 \
+              image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$image"
+            echo "::endgroup::"
+          done
+
+  smoke:
+    name: Stack — fresh-clone smoke test
+    needs: detect
+    if: needs.detect.outputs.api == 'true' && needs.detect.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The M0 exit criterion, exactly as a developer runs it on a fresh clone.
+      - run: cp .env.example .env
+      - run: make up
+      - run: make smoke
+      - name: Show service state and logs
+        if: failure()
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color
+      - name: Stop the stack
+        if: always()
+        run: docker compose down --volumes
