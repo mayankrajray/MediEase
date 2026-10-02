@@ -1,8 +1,10 @@
-"""Credentials, refresh tokens and clinic access against real PostgreSQL (M1-P2).
+"""Credentials, refresh tokens and clinic access against real PostgreSQL (M1-P2, M1-P3).
 
 Proves the sign-in state round-trips, refresh tokens rotate and revoke by
-family, row locks really serialise concurrent sign-ins, and the cross-clinic
-access read returns only active memberships.
+family, row locks really serialise concurrent sign-ins, and the reads M1-P3
+checks on every request return what authorisation needs: whether a session's
+token family is still live, which clinics a user may work in (with a linked
+doctor profile where there is one), and a clinic's staff directory.
 """
 
 from __future__ import annotations
@@ -16,10 +18,11 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from mediease_api.domain.clinics.clinic import ClinicStatus
-from mediease_api.domain.identity.membership import Role
+from mediease_api.domain.identity.membership import MembershipStatus, Role
+from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.identity.session import RefreshToken, RefreshTokenState
 from mediease_api.domain.shared.errors import NotFound
-from tests.builders import LATER, NOW, a_clinic, a_membership, a_user, new_id
+from tests.builders import LATER, NOW, a_clinic, a_doctor, a_membership, a_user, new_id
 from tests.conftest import UowFactory
 
 
@@ -149,6 +152,34 @@ def test_r5_revoke_family_ends_every_live_token_in_it(uow_factory: UowFactory) -
         assert untouched is not None and untouched.state(LATER) is RefreshTokenState.ACTIVE
 
 
+def test_r7_is_family_live_follows_rotation_revocation_and_expiry(
+    uow_factory: UowFactory,
+) -> None:
+    """The per-request session check (M1-P3): live while one token in the family is usable."""
+    user = a_user()
+    first = _token(user.id)
+    successor = _token(user.id, first.family_id)
+    first.mark_replaced(successor.id, now=NOW)
+    with uow_factory() as uow:
+        uow.users.add(user)
+        uow.refresh_tokens.add(successor)
+        uow.refresh_tokens.add(first)
+        uow.commit()
+
+    with uow_factory() as uow:
+        # A rotated token is spent, but its successor keeps the session alive.
+        assert uow.refresh_tokens.is_family_live(first.family_id, now=LATER) is True
+        assert uow.refresh_tokens.is_family_live(new_id(), now=LATER) is False
+        # Every token expired: access ends without anyone signing out.
+        expired_at = NOW + timedelta(days=15)
+        assert uow.refresh_tokens.is_family_live(first.family_id, now=expired_at) is False
+        uow.refresh_tokens.revoke_family(first.family_id, now=LATER)
+        uow.commit()
+
+    with uow_factory() as uow:
+        assert uow.refresh_tokens.is_family_live(first.family_id, now=LATER) is False
+
+
 def test_refresh_token_digest_is_unique_and_update_needs_a_row(uow_factory: UowFactory) -> None:
     user = a_user()
     with uow_factory() as uow:
@@ -195,3 +226,76 @@ def test_clinic_access_lists_only_active_memberships_by_clinic_name(
         assert access[0].membership_id == alpha_m.id
         assert access[0].clinic_status is ClinicStatus.ONBOARDING
         assert uow.clinic_access.list_active_for_user(new_id()) == []
+
+
+def test_clinic_access_reports_a_linked_doctor_profile_per_clinic(
+    uow_factory: UowFactory,
+) -> None:
+    """An owner who is also a doctor may write clinical records (spec §8) — in that clinic only."""
+    user = a_user()
+    prescribing, desk_only = a_clinic(name="Alpha Sample Clinic"), a_clinic(name="Beta Clinic")
+    with uow_factory() as uow:
+        uow.users.add(user)
+        for clinic in (prescribing, desk_only):
+            uow.clinics.add(clinic)
+            uow.tenant(clinic.id).memberships.add(a_membership(clinic.id, user.id, Role.OWNER))
+        uow.tenant(prescribing.id).doctors.add(a_doctor(prescribing.id, user_id=user.id))
+        # Another clinic's doctor profile for somebody else must not count.
+        colleague = a_user()
+        uow.users.add(colleague)
+        uow.tenant(desk_only.id).doctors.add(a_doctor(desk_only.id, user_id=colleague.id))
+        uow.commit()
+
+    with uow_factory() as uow:
+        access = uow.clinic_access.list_active_for_user(user.id)
+        assert [(a.clinic_name, a.has_doctor_profile) for a in access] == [
+            ("Alpha Sample Clinic", True),
+            ("Beta Clinic", False),
+        ]
+        assert Permission.CLINICAL_WRITE in access[0].permissions
+        assert Permission.CLINICAL_WRITE not in access[1].permissions
+
+
+def test_clinic_access_ignores_a_deactivated_doctor_profile(uow_factory: UowFactory) -> None:
+    user, clinic = a_user(), a_clinic()
+    doctor = a_doctor(clinic.id, user_id=user.id)
+    doctor.deactivate(now=LATER)
+    with uow_factory() as uow:
+        uow.users.add(user)
+        uow.clinics.add(clinic)
+        uow.tenant(clinic.id).memberships.add(a_membership(clinic.id, user.id, Role.OWNER))
+        uow.tenant(clinic.id).doctors.add(doctor)
+        uow.commit()
+
+    with uow_factory() as uow:
+        assert uow.clinic_access.list_active_for_user(user.id)[0].has_doctor_profile is False
+
+
+def test_list_staff_returns_every_membership_of_the_clinic_by_name(
+    uow_factory: UowFactory,
+) -> None:
+    clinic, other = a_clinic(), a_clinic()
+    owner = a_user(full_name="Anita Sample")
+    invited = a_user(full_name="Zara Sample")
+    outsider = a_user(full_name="Aaron Other")
+    with uow_factory() as uow:
+        for clinic_row in (clinic, other):
+            uow.clinics.add(clinic_row)
+        for user in (owner, invited, outsider):
+            uow.users.add(user)
+        uow.tenant(clinic.id).memberships.add(a_membership(clinic.id, owner.id, Role.OWNER))
+        uow.tenant(clinic.id).memberships.add(
+            a_membership(clinic.id, invited.id, Role.FRONT_DESK, active=False)
+        )
+        uow.tenant(other.id).memberships.add(a_membership(other.id, outsider.id, Role.OWNER))
+        uow.commit()
+
+    with uow_factory() as uow:
+        staff = uow.tenant(clinic.id).memberships.list_staff()
+        assert [(s.full_name, s.role, s.status) for s in staff] == [
+            ("Anita Sample", Role.OWNER, MembershipStatus.ACTIVE),
+            ("Zara Sample", Role.FRONT_DESK, MembershipStatus.INVITED),
+        ]
+        assert staff[0].user_id == owner.id
+        # R8: another clinic's staff are not reachable through this scope.
+        assert uow.tenant(new_id()).memberships.list_staff() == []

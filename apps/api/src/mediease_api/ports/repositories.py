@@ -24,7 +24,7 @@ from uuid import UUID
 
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
-from mediease_api.domain.identity.access import ClinicAccess
+from mediease_api.domain.identity.access import ClinicAccess, StaffMember
 from mediease_api.domain.identity.membership import ClinicMembership
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User
@@ -60,6 +60,10 @@ class RefreshTokenRepository(Protocol):
     def update(self, token: RefreshToken) -> None: ...
     def revoke_family(self, family_id: UUID, *, now: datetime) -> int:
         """Revoke every not-yet-revoked token in the family; returns how many."""
+        ...
+
+    def is_family_live(self, family_id: UUID, *, now: datetime) -> bool:
+        """True while the session has an unrevoked, unexpired token (checked per request)."""
         ...
 
 
@@ -101,6 +105,10 @@ class MembershipRepository(Protocol):
 
     def count_active_owners(self) -> int:
         """Active ``OWNER`` memberships, for I1 and R9."""
+        ...
+
+    def list_staff(self) -> Sequence[StaffMember]:
+        """Every membership of this clinic with the member's name, ordered by name."""
         ...
 
     def update(self, membership: ClinicMembership) -> None: ...
