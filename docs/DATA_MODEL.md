@@ -25,6 +25,13 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | Revision | Change | Milestone |
 |---|---|---|
 | `0001` | Empty baseline. Creates no tables; only `alembic_version` exists after `upgrade head` | M0-P3 |
+| `0002` | `clinics`, `users`, `clinic_memberships`, `doctors` (columns marked *P1* below; the rest arrive with the phase or milestone that uses them) | M1-P1 |
+
+Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
+`fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
+`ix_<table>_<columns>`. An `IntegrityError` therefore names the rule that was broken.
+`tests/integration/db/test_migrations.py::test_models_match_migrations` fails if the models and
+the migrations drift apart.
 
 ## Entity-relationship overview
 
@@ -62,58 +69,63 @@ erDiagram
 
 ## M1 — Identity, tenancy, audit
 
+Every table has `id uuid` (UUIDv7 from `IdPort`), `created_at` and `updated_at` (`timestamptz`,
+set by the application). *P1* = created by migration `0002`.
+
 ### `clinics`
 | Column | Type | Notes |
 |---|---|---|
-| id | uuid PK | |
-| name | text not null | Shown in messages and letterhead |
-| slug | text unique not null | Public page URL (M7) |
-| patient_code_prefix | text not null | e.g. `ME` → `ME-0142` |
-| next_patient_seq | integer not null default 1 | Incremented under row lock |
-| phone_e164 | text | |
-| address_line, city, state, pincode | text | |
-| timezone | text not null default `Asia/Kolkata` | IANA name |
-| booking_mode | text not null | `SLOTS` \| `TOKENS` |
-| specialties | text[] | |
-| plan | text not null default `PILOT` | `PILOT` \| `STARTER` \| `CLINIC` |
-| status | text not null | `ONBOARDING` \| `ACTIVE` \| `SUSPENDED` |
+| id | uuid PK | *P1* |
+| name | text not null | *P1* Shown in messages and letterhead |
+| slug | text unique not null | *P1* `uq_clinics_slug`; lower-case words and hyphens, 3–63 chars; public page URL (M7) |
+| timezone | text not null default `Asia/Kolkata` | *P1* IANA name, validated by the domain |
+| status | text not null | *P1* `ONBOARDING` \| `ACTIVE` \| `SUSPENDED` (`ck_clinics_status`) |
+| phone_e164 | text | *P1* |
+| address_line, city, state, pincode | text | *P1* PIN code: 6 digits |
+| specialties | text[] not null default `{}` | *P1* |
+| patient_code_prefix | text not null | M2 — e.g. `ME` → `ME-0142` |
+| next_patient_seq | integer not null default 1 | M2 — incremented under row lock |
+| booking_mode | text not null | M3 — `SLOTS` \| `TOKENS` |
+| plan | text not null default `PILOT` | Billing (post-pilot) — `PILOT` \| `STARTER` \| `CLINIC` |
 
 ### `users`
+Not tenant-owned: one user can hold memberships in several clinics.
+
 | Column | Type | Notes |
 |---|---|---|
-| id | uuid PK | |
-| full_name | text not null | |
-| email | citext unique null | |
-| phone_e164 | text unique null | `CHECK (email IS NOT NULL OR phone_e164 IS NOT NULL)` |
-| password_hash | text not null | Argon2id |
-| is_platform_ops | boolean not null default false | MediEase staff |
-| status | text not null | `ACTIVE` \| `DISABLED` |
-| failed_login_count | integer not null default 0 | FR-AUTH-04 |
-| locked_until | timestamptz null | |
-| last_login_at | timestamptz null | |
+| id | uuid PK | *P1* |
+| full_name | text not null | *P1* |
+| email | text unique null | *P1* `uq_users_email`; stored lower-case (`ck_users_email_lower_case`) instead of `citext`, so no extension is needed |
+| phone_e164 | text unique null | *P1* `uq_users_phone_e164`; `ck_users_email_or_phone`: `email IS NOT NULL OR phone_e164 IS NOT NULL` |
+| is_platform_ops | boolean not null default false | *P1* MediEase staff (R10) |
+| status | text not null | *P1* `ACTIVE` \| `DISABLED` (`ck_users_status`) |
+| password_hash | text not null | M1-P2 — Argon2id |
+| failed_login_count | integer not null default 0 | M1-P2 — FR-AUTH-04 |
+| locked_until | timestamptz null | M1-P2 |
+| last_login_at | timestamptz null | M1-P2 |
 
 ### `clinic_memberships`
 | Column | Type | Notes |
 |---|---|---|
-| id | uuid PK | |
-| clinic_id | uuid FK | |
-| user_id | uuid FK | |
-| role | text not null | `OWNER` \| `DOCTOR` \| `FRONT_DESK` |
-| status | text not null | `INVITED` \| `ACTIVE` \| `DEACTIVATED` |
-| | | `UNIQUE (clinic_id, user_id)` |
+| id | uuid PK | *P1* |
+| clinic_id | uuid FK not null | *P1* |
+| user_id | uuid FK not null | *P1* index `ix_clinic_memberships_user_id` (a user's clinics) |
+| role | text not null | *P1* `OWNER` \| `DOCTOR` \| `FRONT_DESK` (`ck_clinic_memberships_role`) |
+| status | text not null | *P1* `INVITED` \| `ACTIVE` \| `DEACTIVATED` (`ck_clinic_memberships_status`) |
+| | | *P1* `uq_clinic_memberships_clinic_id_user_id` — invariant I2 |
 
 ### `doctors`
 | Column | Type | Notes |
 |---|---|---|
-| id | uuid PK | |
-| clinic_id | uuid FK | |
-| user_id | uuid FK null | Null for a doctor who never signs in |
-| display_name | text not null | "Dr. A. Sample" |
-| qualification | text not null | Printed on Rx |
-| registration_number | text not null | Printed on Rx (FR-ORG-02) |
-| registration_council | text not null | e.g. state medical council |
-| specialty | text | |
-| is_active | boolean not null default true | |
+| id | uuid PK | *P1* |
+| clinic_id | uuid FK not null | *P1* index `ix_doctors_clinic_id` |
+| user_id | uuid FK null | *P1* Null for a doctor who never signs in; `uq_doctors_clinic_id_user_id` (partial, `WHERE user_id IS NOT NULL`): one profile per user per clinic |
+| display_name | text not null | *P1* "Dr. A. Sample" |
+| qualification | text not null | *P1* Printed on Rx (I3) |
+| registration_number | text not null | *P1* Printed on Rx (FR-ORG-02, I3) |
+| registration_council | text not null | *P1* e.g. state medical council (I3) |
+| specialty | text | *P1* |
+| is_active | boolean not null default true | *P1* |
 
 ### `refresh_tokens`
 | Column | Type | Notes |

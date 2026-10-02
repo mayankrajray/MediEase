@@ -11,15 +11,16 @@ from __future__ import annotations
 from alembic import context
 
 from mediease_api.adapters.db.engine import build_engine
+from mediease_api.adapters.db.models import Base
 from mediease_api.config.logging import configure_logging
 from mediease_api.config.settings import load_settings
 
 settings = load_settings()
 configure_logging(settings)
 
-# No ORM models yet. M1 sets this to the declarative metadata so autogenerate
-# can compare models with the database.
-target_metadata = None
+# The declarative metadata, so `alembic revision --autogenerate` can compare the
+# models with the database (review its output; revisions are kept hand-written).
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
