@@ -18,7 +18,7 @@ from enum import StrEnum
 from typing import Literal
 
 import structlog
-from pydantic import Field, ValidationError, ValidationInfo, field_validator
+from pydantic import Field, SecretStr, ValidationError, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = structlog.get_logger(__name__)
@@ -31,6 +31,8 @@ _PLACEHOLDER = "change-me"
 
 # SQLAlchemy URL scheme for PostgreSQL through psycopg 3 (ADR-0004).
 _DATABASE_URL_PREFIX = "postgresql+psycopg://"
+
+_MIN_SIGNING_KEY_LENGTH = 32
 
 
 class AppEnv(StrEnum):
@@ -85,6 +87,12 @@ class AppSettings(BaseSettings):
     DATABASE_URL: str = Field(min_length=1)
     # false only for local http; must be true anywhere served over https.
     COOKIE_SECURE: bool = False
+    # HS256 key for access tokens (M1-P2). Never logged: SecretStr hides it from repr.
+    JWT_SIGNING_KEY: SecretStr
+    # Access token lifetime: 15 min by default (spec R4); 1-60 minutes allowed.
+    ACCESS_TOKEN_TTL_SECONDS: int = Field(default=900, ge=60, le=3600)
+    # Refresh token lifetime: 14 days by default (spec R4); 1 hour to 30 days allowed.
+    REFRESH_TOKEN_TTL_SECONDS: int = Field(default=1_209_600, ge=3600, le=2_592_000)
 
     @field_validator("LOG_LEVEL")
     @classmethod
@@ -128,6 +136,20 @@ class AppSettings(BaseSettings):
         env = _app_env(info)
         if env is not None and env.is_deployed and not value:
             raise ValueError(f"must be true when APP_ENV={env.value}")
+        return value
+
+    @field_validator("JWT_SIGNING_KEY")
+    @classmethod
+    def _strong_signing_key(cls, value: SecretStr, info: ValidationInfo) -> SecretStr:
+        key = value.get_secret_value()
+        # HS256 produces a 256-bit tag; a shorter key is the weakest link.
+        if len(key) < _MIN_SIGNING_KEY_LENGTH:
+            raise ValueError(f"must be at least {_MIN_SIGNING_KEY_LENGTH} characters")
+        env = _app_env(info)
+        if env is not None and env is not AppEnv.LOCAL and _PLACEHOLDER in key:
+            raise ValueError(
+                f"contains a '{_PLACEHOLDER}' placeholder; set a real value for APP_ENV={env.value}"
+            )
         return value
 
 
