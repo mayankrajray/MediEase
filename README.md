@@ -23,11 +23,15 @@ if you run tools outside containers.
 ```bash
 git clone <repo-url> mediease && cd mediease
 cp .env.example .env          # then fill in local values
-make up                        # starts the services that exist today
-make ps                        # check status
+make up                        # builds and starts db -> migrate -> api
+make ps                        # check status (migrate shows "exited (0)")
+curl -i localhost:8000/ready   # API ready: database reachable
 make psql                      # open a database shell
-make down                      # stop
+make down                      # stop (data volume is kept)
 ```
+
+Running tests and linters needs Python 3.12 and, on Windows, WSL:
+`make install-api && make lint typecheck test` (with the stack up).
 
 After Milestone 0 is complete:
 

@@ -31,6 +31,28 @@ Rules:
 
 ## Entries
 
+### 2026-10-02 — `/ready` took 4 s to report a stopped database (`READY_DB_UNAVAILABLE`)
+
+- **Milestone / area:** M0-P3 / readiness, compose networking
+- **Symptom:** With `docker compose stop db`, `/ready` returned the right 503
+  `READY_DB_UNAVAILABLE` but after ~4.0 s on every call, outside the 2-second budget.
+- **Impact:** Local only, caught before merge.
+- **Reproduction:** `make up`, `docker compose stop db`, `curl -w '%{time_total}' localhost:8000/ready`.
+- **Investigation:** Inside the `api` container, `socket.getaddrinfo("db", 5432)` alone took 4.03 s
+  to fail; a direct psycopg connect with `connect_timeout=2` also took 4.0 s, so neither the pool
+  nor the query was the cause. libpq's `connect_timeout` does not cover name resolution.
+- **Root cause:** When a compose service is stopped, Docker's embedded DNS no longer knows its
+  name and forwards the lookup upstream; with default resolver options the failure arrives after
+  ~4 s (measured on Docker Desktop + WSL2).
+- **Fix:** `dns_opt: [timeout:1, attempts:1]` on the `api` service. Lookup failure now takes
+  ~2.0 s on the first call and ~1.0 s after. Commit: see PR for #10.
+- **Guard:** Manual check in the M0-P3 verification steps (`time_total` with db stopped).
+  Adapter-level timeouts are covered by `tests/integration/db/test_readiness_check.py`.
+- **Prevention / follow-up:** Any service that probes another compose service by name inside a
+  time budget needs the same resolver options. Revisit when production networking is chosen (M6).
+- **Search keywords:** ready slow, 4 seconds, DNS, getaddrinfo, stopped container, dns_opt,
+  connect_timeout, compose
+
 ### 2026-10-01 — WSL terminal crashes during the M0-P2 dependency install
 
 - **Milestone / area:** M0-P2 / developer environment (Windows 11 + WSL2 + Docker Desktop)
