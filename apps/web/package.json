@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint --max-warnings=0 .",
-    "typecheck": "next typegen && tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest",
     "gen:api": "openapi-typescript ../../contracts/openapi.yaml --immutable -o src/lib/api/schema.d.ts",
     "gen:api:check": "openapi-typescript ../../contracts/openapi.yaml --immutable -o src/lib/api/schema.d.ts --check"
