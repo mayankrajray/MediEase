@@ -32,6 +32,17 @@ first production release.
   `make up` builds and starts db → migrate → api; `make migrate` (M0-P3).
 - Contract tests validating `/health` and `/ready` against `contracts/openapi.yaml`; real-PostgreSQL
   integration tests for readiness and migrations; 55 tests in total (M0-P3).
+- Web app (M0-P4): Next.js 16 App Router project in `apps/web` (TypeScript strict, ESLint, Tailwind 4),
+  exact versions in `package-lock.json`, Node 24.21.0 in `.nvmrc`.
+- API types generated from `contracts/openapi.yaml` (`npm run gen:api`, `make contract`) with a
+  drift gate (`make contract-check`, CI) (M0-P4).
+- Web API client `src/lib/api/client.ts`: `X-Request-ID` on every call, 5 s timeout, typed
+  `ApiError`; web-side codes `WEB_API_UNREACHABLE` and `WEB_API_BAD_RESPONSE` (M0-P4).
+- Same-origin proxy: `/api/*`, `/health`, `/ready` rewritten to `API_INTERNAL_URL` (ADR-0006);
+  security headers with a per-request nonce CSP (M0-P4).
+- `/status` page: healthy, degraded and API-down states, each with "Ref: <request_id>" (M0-P4).
+- `make install-web`, `test-web`, `dev-web`; `make lint typecheck test` cover API and web; CI web
+  job enabled with Node from `.nvmrc` (M0-P4).
 
 ### Verified
 - M0-P1 closed: `db` starts healthy, `select 1` returns 1 in UTC, `down` keeps `pgdata`, and an

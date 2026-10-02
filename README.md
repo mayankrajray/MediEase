@@ -30,8 +30,9 @@ make psql                      # open a database shell
 make down                      # stop (data volume is kept)
 ```
 
-Running tests and linters needs Python 3.12 and, on Windows, WSL:
-`make install-api && make lint typecheck test` (with the stack up).
+Running tests and linters needs Python 3.12 and Node 24 (`apps/web/.nvmrc`); on Windows install
+both inside WSL. With the stack up: `make install-api install-web && make lint typecheck test`.
+`make dev-web` serves the web app at http://localhost:3000/status.
 
 After Milestone 0 is complete:
 

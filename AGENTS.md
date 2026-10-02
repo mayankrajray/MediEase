@@ -101,10 +101,12 @@ do not exist.
 | `make psql` | Open a psql shell on the local database | now |
 | `make install-api` | Create `apps/api/.venv` (Python 3.12) and install the API with dev tools | now |
 | `make migrate` | Re-run Alembic migrations as a one-off container (`make up` already runs them) | now |
-| `make test` | API + web test suites | now (API only; web from M0-P4) |
-| `make test-api` / `make test-web` | One side only | `test-api` now; `test-web` M0-P4 |
-| `make lint` / `make typecheck` | Ruff + mypy; ESLint + tsc | now (API); web from M0-P4 |
-| `make contract` | Validate `openapi.yaml` and regenerate web types | M0 |
+| `make test` | API + web test suites | now |
+| `make test-api` / `make test-web` | One side only (`test-api` needs the db: `make up`) | now |
+| `make lint` / `make typecheck` | Ruff + mypy; ESLint + tsc | now |
+| `make install-web` | `npm ci` in `apps/web` (Node from `apps/web/.nvmrc`, installed in WSL on Windows) | now |
+| `make dev-web` | Next.js dev server on :3000 proxying to the API on localhost (`make up` first) | now |
+| `make contract` / `make contract-check` | Regenerate web types from `contracts/openapi.yaml` / fail if the committed types are stale | now |
 | `make seed` | Load generated (never real) demo data | M1 |
 | `make worker` | Run the job worker in the foreground | M5 |
 
