@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M1-P1 and M1-P2 done (confirmed 3 Oct 2026); M1-P3 implemented, awaiting the developer's confirmation |
+| Status | In progress — M1-P1 to M1-P3 implemented (P1 and P2 confirmed 3 Oct 2026; P3 awaiting confirmation); M1-P4 design proposed |
 | Spec | `docs/specs/identity-and-tenancy.md` (Approved 2026-10-02) |
 | Covers | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08, NFR-14 |
 | Issue / branch / PR | #19 · `m1/19-identity-tenancy-audit` · one draft PR for the whole milestone (ADR-0011) |
@@ -41,6 +41,154 @@
 Each phase starts with its design (`/plan-phase`), is approved, implemented, verified by the
 developer and confirmed before the next phase starts. All phases are committed to the milestone
 branch and appear in the one milestone PR.
+
+---
+
+## M1-P4 — Append-only audit log
+
+**Status: proposed, awaiting the developer's approval.** Covers FR-AUD-01, FR-AUD-02, FR-OPS-04
+(support view); spec R11; AC5, AC6.
+
+### Concepts
+
+1. **Audit events are not logs.** Logs answer "what was the system doing?" and are rotated away in
+   weeks. An audit event answers "who did what, to which record, when?" and must still be
+   answerable three years later, by an owner during a staff dispute or by us during a DPDP
+   enquiry. That is a table with a retention policy, not a log line.
+2. **Same transaction (R11).** The audit row is written through the same unit of work as the
+   change it describes, so either both land or neither does. An unaudited change is worse than a
+   refused one: it is a record nobody can account for.
+3. **Append-only in the database (FR-AUD-02, AC6).** No endpoint can edit an audit event, and the
+   database itself refuses `UPDATE` and `DELETE` on the table. Correctness that depends on every
+   future developer remembering a rule is not correctness.
+4. **Nothing sensitive inside.** `metadata` carries IDs and enums only — never names, phone
+   numbers or clinical content. The caller's IP is stored as a salted HMAC, so "was this the same
+   device?" can be answered without keeping an address.
+5. **A closed set of actions.** Action names live in one `StrEnum`, so a typo cannot invent a new
+   action, and "where is `staff.role_changed` written?" is one grep.
+
+### Request flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant R as Route
+    participant U as Use case
+    participant W as uow.audit
+    participant D as PostgreSQL
+    R->>U: command + RequestInfo(request_id, ip_hash)
+    U->>D: the change (UPDATE users / clinic_memberships …)
+    U->>W: record(action, actor, entity, metadata)
+    W->>D: INSERT INTO audit_events … (flushed at once)
+    alt audit insert fails
+        U-->>R: error; the whole transaction rolls back (R11)
+    else both succeed
+        U->>D: COMMIT
+        U-->>R: view
+    end
+```
+
+### What is audited in P4
+
+| Trigger | Action | Actor | `clinic_id` | `metadata` |
+|---|---|---|---|---|
+| Sign-in succeeds | `auth.signed_in` | the user (`STAFF`, or `OPS` for platform ops) | null — a sign-in belongs to a user, not a clinic | `session_id`, `clinic_count` |
+| Wrong password for a **known** user | `auth.sign_in_failed` | the user | null | `reason` (`wrong_password`, `locked`, `no_password`, `account_disabled`) |
+| Sign-out | `auth.signed_out` | the user | null | `session_id`, `revoked_count` |
+| A rotated refresh token is replayed | `auth.refresh_reused` | the user | null | `session_id`, `revoked_count` |
+| Role changed (if the P4 scope option below is taken) | `staff.role_changed` | the acting owner | the clinic | `membership_id`, `from_role`, `to_role` |
+
+Unknown identifiers are logged but **not** audited: that path has no lockout, so it is the one
+place where an anonymous caller could grow the table without bound. Everything audited here is
+already bounded by the per-account lockout.
+
+### Rules
+
+| Check | Outcome |
+|---|---|
+| A change commits | exactly one audit row per change, in the same transaction (R11, AC5) |
+| The audit insert fails | the change fails; nothing is committed |
+| `UPDATE audit_events` / `DELETE FROM audit_events` | refused by the database (`AUD_APPEND_ONLY` raised by a trigger), whatever role attempts it (AC6) |
+| Any audit row | no name, phone number, email or clinical content; IP only as a 32-character HMAC |
+| An event with no clinic (sign-in, ops action) | `clinic_id` null; clinic activity is derived by joining the actor's memberships |
+| Reading audit events | not exposed by any endpoint in P4 (see decisions) |
+
+### `v_clinic_activity` (FR-OPS-04 support view)
+
+Per clinic, non-clinical only: `clinic_id`, `clinic_name`, `status`, `active_owners`,
+`active_doctors`, `active_front_desk`, `last_sign_in_at` (max over active members'
+`users.last_login_at`), `audit_events_7d`, `audit_events_30d`, `last_event_at`. It answers "is
+this clinic actually being used, and by whom?" during a support call without opening a single
+patient record. The ops console reads it in M6-P4; P4 creates and tests it.
+
+### Decisions
+
+| Decision | Reason |
+|---|---|
+| Immutability is enforced by a `BEFORE UPDATE OR DELETE` trigger that raises, created in migration `0004` | The application connects as the role that owns the schema, so `REVOKE UPDATE, DELETE` is not a real boundary (an owner can grant it back). A trigger refuses the statement for every non-superuser role, is version-controlled with the schema, and is provable in a test today. A dedicated least-privilege application role lands with production infrastructure (M6-P1) and is defence in depth, not the primary control |
+| The audit writer is a port (`AuditWriter`) reached as `uow.audit`, and flushes each insert immediately | The unit of work already is the transaction boundary (R11 for free), and flushing means a constraint violation surfaces at the call that caused it, not at commit |
+| Use cases receive `RequestInfo(request_id, ip_hash)` explicitly | apps/api/CLAUDE.md: application code never reads Flask globals. Delivery computes both once per request; `RequestContext` composes `RequestInfo` for clinic routes |
+| The IP is hashed with HMAC-SHA256 under a new `AUDIT_IP_SALT` setting and truncated to 32 hex characters | A raw IP is personal data we have no reason to keep. A dedicated salt (not the JWT key) means rotating one does not break the other; truncation keeps the column small while staying collision-free at pilot volume |
+| No audit-read endpoint in P4 | FR-AUD-03 ("owner can view and export the audit log") is priority P1 and absent from the PRD §8.1 P0 matrix, so it needs a permission the matrix does not define yet. `make psql` and `v_clinic_activity` cover support needs until then; `docs/API.md` is corrected to show the endpoint as P1 backlog rather than M1-P4 |
+| No partitioning yet; indexes `(clinic_id, occurred_at desc)` and `(actor_user_id, occurred_at desc)` | Three years of pilot traffic is a small table; monthly partitioning is recorded in `docs/DATA_MODEL.md` as a post-pilot step |
+| Four auth actions, not just the two the spec names | Sign-out and refresh reuse are security events an owner or we would want in the record of a disputed session; each is two lines on an existing path |
+
+### Open choice for approval — how AC5 is proved
+
+**AC5** requires that a staff role change writes exactly one `staff.role_changed` event with
+actor, target and `request_id`. P3 deliberately left every mutation to P5 so that mutations land
+after the audit log, which leaves P4 with no role change to audit.
+
+- **Option A — keep P4 mechanism-only.** P4 audits the auth events, proves R11 and AC6, and AC5 is
+  proved in P5 when `PATCH /api/v1/clinic/staff/{membership_id}` is built. Smallest P4; AC5 stays
+  open one phase longer.
+- **Option B (recommended) — pull the role change into P4.** Add one use case
+  (`ChangeStaffRole`, using the existing R9 last-owner rule) and one endpoint
+  (`PATCH /api/v1/clinic/staff/{membership_id}` under `STAFF_MANAGE`). AC5 is then proved end to
+  end in the phase that builds the audit log, and R11 is proved against a real clinic mutation
+  rather than only against sign-in. P5 keeps invite, deactivate and the ops onboarding flow.
+
+### Files
+
+| Layer | Files |
+|---|---|
+| Domain | `domain/audit/{actions.py,event.py}` (`AuditAction`, `ActorType`, `AuditEvent.record()`) |
+| Application | `context.py` (+`RequestInfo`), `auth/{sign_in,refresh_session,sign_out}.py` (record events), `clinics/change_staff_role.py` (option B) |
+| Ports | `ports/audit.py` (`AuditWriter`), `ports/unit_of_work.py` (+`audit`), `ports/security.py` (+`IpHasher`) |
+| Adapters | `adapters/db/models/audit.py`, `adapters/db/audit.py`, `adapters/security/ip_hash.py`, migration `0004` (table, indexes, trigger, `v_clinic_activity`) |
+| Delivery | `delivery/http/{auth,clinic}.py` (build `RequestInfo`; `PATCH` staff under option B), `delivery/errors.py` (`CLN_LAST_OWNER` is already mapped) |
+| Config | `config/settings.py` (`AUDIT_IP_SALT`), `.env.example`, `docker-compose.yml` |
+| Contract / docs | `openapi.yaml` (option B only), `DATA_MODEL.md`, `ERRORS.md`, `ARCHITECTURE.md`, `SECURITY_AND_COMPLIANCE.md`, `RUNBOOK.md` (reading the audit log), `API.md` (audit endpoint → P1 backlog) |
+
+### Tests
+
+- Domain: an `AuditEvent` requires an action, an actor type and a timestamp; `metadata` accepts
+  IDs and enums only; every `AuditAction` value matches the `area.past_tense` convention.
+- Application (fakes): sign-in writes exactly one `auth.signed_in` with the session ID; a wrong
+  password writes one `auth.sign_in_failed` with its reason and an unknown identifier writes none;
+  an audit writer that raises makes the use case fail and commits nothing (R11); no audit row
+  contains the identifier or the password.
+- Integration (PostgreSQL): row round-trip including `ip_hash` (a hash, not an address) and
+  `request_id`; **AC6** — `UPDATE audit_events` and `DELETE FROM audit_events` both raise;
+  `v_clinic_activity` returns the expected counts and exposes no clinical column; migration
+  `0004` up and down.
+- HTTP (option B): **AC5** — an owner changes a doctor's role and exactly one
+  `staff.role_changed` row exists with actor, target and the request's `X-Request-ID`; demoting
+  the last owner is `409 CLN_LAST_OWNER` and writes nothing; a front desk attempting the change is
+  `403 PERM_DENIED` and writes nothing.
+- Tenancy: the role-change endpoint joins the HTTP cross-tenant guard (a membership of clinic B is
+  `404` for clinic A).
+
+### Verify
+
+```bash
+make up && make seed
+# sign in as owner@ → select action, actor_user_id, clinic_id, request_id from audit_events;
+# make psql → update audit_events set action='x';   → ERROR: audit_events is append-only
+#             delete from audit_events;             → ERROR: audit_events is append-only
+# select * from v_clinic_activity;                  → one row per clinic, no clinical columns
+# option B: PATCH /api/v1/clinic/staff/<id> {"role":"FRONT_DESK"} → 200 + exactly one audit row
+```
 
 ---
 
