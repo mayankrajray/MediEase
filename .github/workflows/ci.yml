@@ -95,14 +95,19 @@ jobs:
     defaults:
       run:
         working-directory: apps/web
+    env:
+      # next.config builds the /api rewrites from this; the build fails without it.
+      API_INTERNAL_URL: http://api:8000
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: lts/*
+          node-version-file: apps/web/.nvmrc
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
+      - name: Generated API types match contracts/openapi.yaml
+        run: npm run gen:api:check
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test -- --run
