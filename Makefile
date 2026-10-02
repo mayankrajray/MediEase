@@ -24,7 +24,7 @@ export TEST_DATABASE_URL
 
 .PHONY: help env-check up down ps logs psql migrate smoke install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
-	typecheck-web dev-web contract contract-check
+	typecheck-web dev-web contract contract-check audit
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | \
@@ -102,3 +102,7 @@ contract: web-deps-check ## Regenerate web API types from contracts/openapi.yaml
 
 contract-check: web-deps-check ## Fail if the committed web API types are out of date
 	cd $(WEB_DIR) && npm run -s gen:api:check
+
+audit: api-venv-check web-deps-check ## Check API and web dependencies for known vulnerabilities
+	cd $(API_DIR) && $(VENV_BIN)/pip-audit --skip-editable
+	cd $(WEB_DIR) && npm audit --audit-level=high

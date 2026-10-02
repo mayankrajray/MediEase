@@ -1,8 +1,34 @@
-# Keeps GitHub Actions pinned versions current.
-# pip (apps/api) and npm (apps/web) ecosystems are added in M0-P5, once their manifests exist.
+# Dependency updates as pull requests. Every update still goes through CI
+# (tests, audits, image scan) and review like any other change.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+
+  - package-ecosystem: pip
+    directory: /apps/api
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build(deps)
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build(deps)
+    open-pull-requests-limit: 5
+
+  # Base images are pinned by digest in the Dockerfiles; this keeps them current.
+  - package-ecosystem: docker
+    directories:
+      - /apps/api
+      - /apps/web
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build(deps)
