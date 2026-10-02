@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M1 — Identity, tenancy and audit** (issue #19, branch `m1/19-identity-tenancy-audit`, one PR for the milestone) |
-| Active phase | **M1-P4 — ☐ todo (design not started):** append-only audit log in the same transaction as the change, and the non-clinical `v_clinic_activity` support view (M1-P3 ✅ implemented 3 Oct 2026, awaiting the developer's confirmation) |
+| Active phase | **M1-P4 — ▶ ACTIVE (design proposed, awaiting approval):** append-only `audit_events` written in the same transaction as the change, `v_clinic_activity` support view (M1-P3 ✅ implemented 3 Oct 2026, pushed to PR #20, awaiting the developer's confirmation) |
 | Design notes | `docs/milestones/M1-identity-tenancy-audit.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M1 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |

@@ -105,8 +105,8 @@ Any tenant resource outside the request's clinic returns `404 REQ_NOT_FOUND` (R8
 | POST | `/api/v1/clinic/doctors` | Add a doctor | OWNER | M1-P5 |
 | PATCH | `/api/v1/clinic/doctors/{doctor_id}` | Edit doctor | OWNER | M1-P5 |
 | POST | `/api/v1/clinic/staff` | Invite staff | OWNER | M1-P5 |
-| PATCH | `/api/v1/clinic/staff/{membership_id}` | Change role / deactivate | OWNER | M1-P5 |
-| GET | `/api/v1/clinic/audit-events` | Audit log | OWNER | M1-P4 |
+| PATCH | `/api/v1/clinic/staff/{membership_id}` | Change role / deactivate | OWNER | M1-P4 (role change) / M1-P5 |
+| GET | `/api/v1/clinic/audit-events` | Audit log | OWNER | FR-AUD-03 (P1) — backlog; not in the P0 permission matrix |
 
 The doctor and staff lists return `{"items": [...]}` with no cursor: a clinic has one to four
 doctors and a handful of staff, so the paginated envelope above starts with the first list that
