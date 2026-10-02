@@ -19,7 +19,7 @@ PYTHON ?= python3.12
 TEST_DATABASE_URL ?= postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)
 export TEST_DATABASE_URL
 
-.PHONY: help env-check up down ps logs psql install-api api-venv-check test test-api lint typecheck
+.PHONY: help env-check up down ps logs psql migrate install-api api-venv-check test test-api lint typecheck
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -28,11 +28,14 @@ help: ## List available targets
 env-check: ## Fail early if .env is missing
 	@test -f .env || { echo "Missing .env — run: cp .env.example .env"; exit 1; }
 
-up: env-check ## Start the local stack in the background
-	$(COMPOSE) up -d --wait
+up: env-check ## Build images and start the stack: db -> migrate -> api
+	$(COMPOSE) up -d --wait --build
 
 down: ## Stop the local stack (data volume is kept)
 	$(COMPOSE) down
+
+migrate: env-check ## Re-run database migrations (make up already runs them)
+	$(COMPOSE) run --rm --build migrate
 
 ps: ## Show service status and health
 	$(COMPOSE) ps
