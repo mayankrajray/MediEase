@@ -36,8 +36,10 @@ from mediease_api.delivery.http.csrf import register_csrf_protection
 from mediease_api.delivery.http.platform import create_platform_blueprint
 from mediease_api.delivery.middleware import register_request_middleware
 from mediease_api.ports.clock import ClockPort
+from mediease_api.ports.ids import IdPort
 from mediease_api.ports.readiness import DatabaseCheck
 from mediease_api.ports.security import PasswordHasher
+from mediease_api.ports.unit_of_work import UnitOfWork
 
 logger = structlog.get_logger(__name__)
 
@@ -83,6 +85,25 @@ class _AuthUseCases:
 def build_password_hasher() -> PasswordHasher:
     """Production Argon2id parameters (also used by ``make seed``)."""
     return Argon2PasswordHasher()
+
+
+@dataclass(frozen=True, slots=True)
+class SeedDependencies:
+    uow: UnitOfWork
+    clock: ClockPort
+    ids: IdPort
+    hasher: PasswordHasher
+
+
+def build_seed_dependencies(settings: AppSettings) -> SeedDependencies:
+    """Adapters for ``delivery/cli/seed.py``, chosen here like everything else."""
+    configure_logging(settings)
+    return SeedDependencies(
+        uow=SqlAlchemyUnitOfWork(build_session_factory(build_engine(settings))),
+        clock=SystemClock(),
+        ids=Uuid7Generator(),
+        hasher=build_password_hasher(),
+    )
 
 
 def create_app(
