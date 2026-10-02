@@ -43,10 +43,22 @@ first production release.
 - `/status` page: healthy, degraded and API-down states, each with "Ref: <request_id>" (M0-P4).
 - `make install-web`, `test-web`, `dev-web`; `make lint typecheck test` cover API and web; CI web
   job enabled with Node from `.nvmrc` (M0-P4).
+- Container images (M0-P5): multi-stage, non-root API and web images with digest-pinned bases,
+  Debian security updates applied and package managers removed from the runtime stage; web
+  liveness route `/livez`.
+- Full compose stack (M0-P5): `web` service after `api` is healthy; `migrate`, `api` and `web` run
+  with a read-only root filesystem, no capabilities and `no-new-privileges`. `make smoke`
+  (`scripts/smoke.sh`) checks the running stack, including those properties.
+- CI gates (M0-P5): image build + Trivy scan, fresh-clone smoke test, gitleaks secrets scan,
+  `pip-audit`, `npm audit`, import-linter layer contracts, API coverage gate ≥ 90%; `make audit`.
+- Dependabot for pip (`apps/api`), npm (`apps/web`) and Docker base images (M0-P5).
 
 ### Verified
 - M0-P1 closed: `db` starts healthy, `select 1` returns 1 in UTC, `down` keeps `pgdata`, and an
   empty `POSTGRES_PASSWORD` is refused before any container starts (#6).
+- **M0 — Foundation closed** (#14): a fresh clone with an empty volume runs
+  `cp .env.example .env && make up` to `db`, `api`, `web` healthy and `migrate` exited 0 in 77 s;
+  `make smoke` passes; CI is green on the PR.
 
 ### Changed
 - `DATABASE_URL` must use the `postgresql+psycopg://` scheme; anything else fails start-up with

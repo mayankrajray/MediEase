@@ -226,6 +226,12 @@ Each task = one issue, one branch, one PR, with one or more logical commits. Eac
   `make lint typecheck test`.
 - **Demo:** fresh clone → `cp .env.example .env && make up` → `db`, `api`, `web` healthy and
   `migrate` exited 0; PR shows all checks green → **M0 exit criteria met**.
+- **Status:** issue #14, branch `m0/p5-14-images-compose-ci`. Decisions: web liveness is a
+  dedicated `/livez` (no API call) instead of `/status`; coverage gate on the whole API package
+  (≥ 90%) until `domain/`/`application/` have code — the ≥ 80% gate on those layers moves to
+  M1-P1; base images pinned by tag and digest. Found while verifying: fixed HIGH CVEs in the
+  pinned Debian bases (runtime stages now `apt-get upgrade`), and a SIGPIPE flake in the smoke
+  script. Next: M1-P1 is blocked until `docs/specs/identity-and-tenancy.md` is `Approved`.
 
 ## 7. Parallel non-code track (start now)
 
@@ -259,4 +265,5 @@ and L-06 (pilot bookings) before M6. Details in `TASKS.md`.
 | 1 Oct 2026 | Task 1 — M0-P1 verified; `.gitattributes`, `CODEOWNERS` (4 owners; `@akhtarjamal10` needs write access) | #6 | Committed on `m0/p1-6-close-db-stack`; PR opened |
 | 1–2 Oct 2026 | Tasks 2+3 — M0-P2 implemented: API package, typed settings (fail-fast, field-named errors), structlog JSON logging, `X-Request-ID` middleware, error envelope, `/health`; 31 tests; `make lint typecheck test` green; gunicorn verified (200 + `X-Request-ID`, `test-123` echoed, 405 `REQ_METHOD_NOT_ALLOWED` with `Allow`, JSON logs carry `request_id`, missing `DATABASE_URL` → exit 1 with `CFG_INVALID`) | #8 / PR #9 | Merged 2 Oct 2026 (rebase and merge) |
 | 2 Oct 2026 | Task 4 — M0-P3: engine + `DatabaseCheck` port, `/ready` (200 / 503 `READY_DB_*`), Alembic empty baseline `0001`, minimal non-root Dockerfile, compose `migrate` + `api`; 55 tests incl. real-PostgreSQL and contract tests. Verified: `make up` → db healthy, migrate exited 0, api healthy (Compose v5.5.0 `--wait` handles the one-off service — §5 risk closed, no fallback needed); db stopped → 503 `READY_DB_UNAVAILABLE` in 2.0 s with `/health` 200 (after `dns_opt`, see DEBUG_JOURNAL); `make migrate` exit 0, `alembic current` = `0001 (head)` | #10 / PR #11 | Merged 2 Oct 2026 (rebase and merge) |
-| 2 Oct 2026 | Task 5 — M0-P4: Next.js 16 shell, generated types + drift gate, typed API client (`WEB_*` codes), `/api`·`/health`·`/ready` rewrites, nonce CSP + security headers, `/status` (healthy / degraded / down with Ref); web 31 tests, API 55. Verified with `next start` against compose: three states correct, Ref found in API log for `/health` and `/ready`, page scripts carry the response nonce | #12 | PR opened from `m0/p4-12-web-shell-status`; awaiting review and maintainer merge |
+| 2 Oct 2026 | Task 5 — M0-P4: Next.js 16 shell, generated types + drift gate, typed API client (`WEB_*` codes), `/api`·`/health`·`/ready` rewrites, nonce CSP + security headers, `/status` (healthy / degraded / down with Ref); web 31 tests, API 55. Verified with `next start` against compose: three states correct, Ref found in API log for `/health` and `/ready`, page scripts carry the response nonce | #12 / PR #13 | Merged 2 Oct 2026 (rebase and merge) |
+| 2 Oct 2026 | Task 6 — M0-P5: multi-stage non-root API and web images (digest-pinned bases, Debian security updates, package managers removed), `web` in compose, `read_only` + `cap_drop: [ALL]` + `no-new-privileges` for `migrate`/`api`/`web`, `scripts/smoke.sh`; CI adds images (build + Trivy), smoke (fresh `.env.example` → `make up` → `make smoke`), secrets (gitleaks), pip-audit, npm audit, import-linter (4 contracts), coverage gate (≥ 90%, at 93.9%); Dependabot for pip, npm, Docker. Verified on a fresh clone with an empty volume: `make up` 77 s, smoke 17/17 | #14 | PR opened from `m0/p5-14-images-compose-ci`; awaiting review and maintainer merge. **M0 exit criteria met** |

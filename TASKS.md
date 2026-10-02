@@ -11,8 +11,8 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M0 — Foundation** |
-| Active phase | **M0-P5 — hardened images, web container, full compose, CI gates** (starts after the M0-P4 PR is merged) |
+| Active milestone | **M1 — Identity, tenancy and audit** (not started) |
+| Active phase | **M1-P1 — ⏸ blocked:** `docs/specs/identity-and-tenancy.md` is `Draft` and must be `Approved` before any M1 code (CLAUDE.md "Spec before code") |
 | Design notes | `docs/milestones/M0-foundation.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (tasks 0–6, workflow prerequisites W-1..W-7, progress log) |
 | Workflow | Issue → branch → logical commits → PR → CODEOWNERS review → maintainer merge (ADR-0010) |
@@ -39,7 +39,7 @@ done before the pilot.
 
 ---
 
-## M0 — Foundation  `▶ ACTIVE`
+## M0 — Foundation  `✅`
 
 **Outcome:** a reproducible local stack with typed configuration, structured logging, health and
 readiness, a migration step, and CI. No business features.
@@ -52,11 +52,11 @@ database up and 503 with it down; CI green on a PR.
 | M0-P2 | Flask app factory (composition root), typed settings (fail fast on missing config), JSON logging with `request_id` middleware, `/health` | `curl -i localhost:8000/health` → 200 + `X-Request-ID` header; start with a missing required setting → process exits with a clear message | ✅ |
 | M0-P3 | SQLAlchemy engine + `/ready` checking the database; Alembic set up with an empty baseline; minimal API `Dockerfile`; `migrate` one-off service and `api` service in compose (`api` depends on `db` healthy + `migrate` completed successfully) | `make up` alone runs db → migrate (exit 0) → api healthy; stop db → `/ready` 503 with `code=READY_DB_UNAVAILABLE`; `make migrate` exits 0 | ✅ |
 | M0-P4 | Next.js app shell, generated API client from `contracts/openapi.yaml`, status page calling `/health` | open `localhost:3000/status` → shows API healthy and the request ID | ✅ |
-| M0-P5 | Harden API `Dockerfile`, add web `Dockerfile` (non-root, multi-stage), full compose (`web`, `api`, `db`, `migrate`) started by one command, CI workflow (lint, typecheck, test, build) | fresh clone → `make up` brings up every service with no manual steps; PR shows green checks | ▶ ACTIVE |
+| M0-P5 | Harden API `Dockerfile`, add web `Dockerfile` (non-root, multi-stage), full compose (`web`, `api`, `db`, `migrate`) started by one command, CI workflow (lint, typecheck, test, build) | fresh clone → `make up` brings up every service with no manual steps; PR shows green checks | ✅ |
 
 ---
 
-## M1 — Identity, tenancy and audit  `☐`
+## M1 — Identity, tenancy and audit  `⏸ blocked: spec approval`
 
 **Covers:** FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04.
 **Exit:** an ops user onboards a clinic with an owner, doctor and front desk; each signs in and sees
@@ -64,7 +64,7 @@ only their clinic; the tenancy test suite proves isolation.
 
 | Phase | Scope | Status |
 |---|---|---|
-| M1-P1 | Domain: Clinic, Doctor, StaffMembership, Role; tables + migration; tenancy-scoped repository base | ☐ |
+| M1-P1 | Domain: Clinic, Doctor, StaffMembership, Role; tables + migration; tenancy-scoped repository base; add the ≥ 80% coverage gate on `domain/` + `application/` (NFR-14) | ⏸ spec `Draft` |
 | M1-P2 | Password hashing, sign-in, refresh rotation, sign-out, lockout (FR-AUTH-01..04) | ☐ |
 | M1-P3 | Authorisation: role + clinic membership check on every route; permission matrix tests | ☐ |
 | M1-P4 | Audit log (append-only) written in the same transaction as the change; non-clinical support views (`v_clinic_activity`) | ☐ |
@@ -166,4 +166,6 @@ drill completed; security checklist signed; two pilot clinics onboarded.
 | M0-P1 — local database stack verified; `.gitattributes` and `CODEOWNERS` added | 1 Oct 2026 | #6 |
 | M0-P2 — API package, typed settings, JSON logging, request IDs, error envelope, `/health` | 2 Oct 2026 | #8 / PR #9 |
 | M0-P3 — `/ready`, Alembic baseline, minimal API Dockerfile, compose `migrate` + `api` | 2 Oct 2026 | #10 / PR #11 |
-| M0-P4 — Next.js shell, generated API client, `/status`, nonce CSP and security headers | 2 Oct 2026 | #12 |
+| M0-P4 — Next.js shell, generated API client, `/status`, nonce CSP and security headers | 2 Oct 2026 | #12 / PR #13 |
+| M0-P5 — hardened images, web container, full compose, CI gates (images, smoke, security, boundaries, coverage) | 2 Oct 2026 | #14 |
+| **M0 — Foundation** (exit criteria met: fresh clone → `make up` → all healthy; CI green) | 2 Oct 2026 | #6, #8, #10, #12, #14 |

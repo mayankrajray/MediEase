@@ -4,7 +4,8 @@ A WhatsApp-native clinic operating system for independent clinics with one to fo
 India: booking, a live daily queue, a searchable patient record, a digital prescription patients
 can re-read, and follow-up reminders that actually arrive.
 
-> **Status:** planning complete, Milestone 0 (Foundation) in progress. See [TASKS.md](TASKS.md).
+> **Status:** Milestone 0 (Foundation) complete; Milestone 1 waits for its spec to be approved.
+> See [TASKS.md](TASKS.md).
 
 ---
 
@@ -23,7 +24,7 @@ if you run tools outside containers.
 ```bash
 git clone <repo-url> mediease && cd mediease
 cp .env.example .env          # then fill in local values
-make up                        # builds and starts db -> migrate -> api
+make up                        # builds and starts db -> migrate -> api -> web
 make ps                        # check status (migrate shows "exited (0)")
 curl -i localhost:8000/ready   # API ready: database reachable
 make psql                      # open a database shell
@@ -32,13 +33,11 @@ make down                      # stop (data volume is kept)
 
 Running tests and linters needs Python 3.12 and Node 24 (`apps/web/.nvmrc`); on Windows install
 both inside WSL. With the stack up: `make install-api install-web && make lint typecheck test`.
-`make dev-web` serves the web app at http://localhost:3000/status.
-
-After Milestone 0 is complete:
+`make smoke` checks the running stack end to end; `make dev-web` runs the web app with hot reload.
 
 | Service | URL |
 |---|---|
-| Web app | http://localhost:3000 |
+| Web app | http://localhost:3000 (`/status`) |
 | API | http://localhost:8000 (`/health`, `/ready`) |
 | PostgreSQL | localhost:5432 |
 

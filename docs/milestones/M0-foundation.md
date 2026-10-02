@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Active — Phase 5 (M0-P1 #6, M0-P2 #8, M0-P3 #10, M0-P4 #12 closed) |
+| Status | Done — all five phases closed (#6, #8, #10, #12, #14); exit criteria met 2 Oct 2026 |
 | Covers | NFR-12 (observability), NFR-15 (portability), groundwork for NFR-05/06/14 |
 | Exit criterion | `make up` on a fresh clone → `GET /health` 200, `GET /ready` 200 (503 when db is down); CI green |
 
@@ -110,7 +110,7 @@ for the status page, `src/lib/api/` (generated types + fetch wrapper that adds `
 Verify: `localhost:3000/status` shows "API: healthy · DB: ready · Ref: <request_id>"; stopping the
 API shows a clear error state, not a blank page.
 
-### M0-P5 — Containers and CI
+### M0-P5 — Containers and CI (done, #14)
 
 Planned files: `apps/api/Dockerfile` hardened (multi-stage, non-root, gunicorn; the minimal
 version exists from P3),

@@ -369,17 +369,21 @@ flowchart LR
 - Release: `migrate` runs first as a one-off job; then `api`, `worker`, `web` roll.
 - Environments: `local`, `staging` (synthetic data only), `production`.
 
-## 12. Target local stack (end of M0)
+## 12. Local stack (M0)
 
-`docker-compose.yml` today contains only `db`. At the end of M0 it will define:
+`docker-compose.yml` defines the whole local stack; `make up` starts it with one command:
 
 ```yaml
 services:
-  db:        # postgres:16-alpine, healthcheck pg_isready, named volume
-  migrate:   # api image, command: alembic upgrade head, depends_on db (healthy), restart: "no"
+  db:        # postgres:16-alpine, healthcheck pg_isready, named volume pgdata, 127.0.0.1 only
+  migrate:   # api image, alembic upgrade head, depends_on db (healthy), restart: "no"
   api:       # api image, gunicorn, depends_on db (healthy) + migrate (completed), healthcheck /ready
-  web:       # web image, depends_on api (healthy), API_INTERNAL_URL=http://api:8000
+  web:       # web image, depends_on api (healthy), API_INTERNAL_URL=http://api:8000, healthcheck /livez
 ```
+
+`migrate`, `api` and `web` run as non-root users with a read-only root filesystem, no Linux
+capabilities and `no-new-privileges`; writable space is an explicit `tmpfs`. Base images are
+pinned by tag and digest. `make smoke` (also a CI job) checks all of this on the running stack.
 
 `worker` is added in M5; object storage uses a bind-mounted volume until M4 decides otherwise.
 

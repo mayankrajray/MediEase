@@ -95,15 +95,17 @@ do not exist.
 | Command | What it does | Available |
 |---|---|---|
 | `make help` | List targets | now |
-| `make up` | Build images and start the whole local stack with one command (`db` → `migrate` → `api` → `web` via `depends_on`; runs `docker compose up -d --wait --build`) | now (`db`, `migrate`, `api`); `web` from M0-P5 |
+| `make up` | Build images and start the whole local stack with one command (`db` → `migrate` → `api` → `web` via `depends_on`; runs `docker compose up -d --wait --build`) | now |
+| `make smoke` | End-to-end check of the running stack, including non-root / read-only / no capabilities (also a CI job) | now |
+| `make audit` | Known-vulnerability check of API (pip-audit) and web (npm audit) dependencies | now |
 | `make down` | Stop the stack | now |
 | `make ps` / `make logs` | Service status / follow logs | now |
 | `make psql` | Open a psql shell on the local database | now |
 | `make install-api` | Create `apps/api/.venv` (Python 3.12) and install the API with dev tools | now |
 | `make migrate` | Re-run Alembic migrations as a one-off container (`make up` already runs them) | now |
-| `make test` | API + web test suites | now |
+| `make test` | API + web test suites (API with the ≥ 90% coverage gate) | now |
 | `make test-api` / `make test-web` | One side only (`test-api` needs the db: `make up`) | now |
-| `make lint` / `make typecheck` | Ruff + mypy; ESLint + tsc | now |
+| `make lint` / `make typecheck` | Ruff + layer boundaries (import-linter) + mypy; ESLint + tsc | now |
 | `make install-web` | `npm ci` in `apps/web` (Node from `apps/web/.nvmrc`, installed in WSL on Windows) | now |
 | `make dev-web` | Next.js dev server on :3000 proxying to the API on localhost (`make up` first) | now |
 | `make contract` / `make contract-check` | Regenerate web types from `contracts/openapi.yaml` / fail if the committed types are stale | now |
@@ -114,8 +116,9 @@ Verification before declaring a phase done: `make lint typecheck test` must pass
 real-PostgreSQL integration tests, so start the database first (`make up`); `make test-api` points
 them at it through `TEST_DATABASE_URL`.
 
-`make up` uses `--wait` with the one-off `migrate` service: verified on Compose v5.5.0 (M0-P3) that
-it waits for `migrate` to exit 0 and for `api` to be healthy, and exits 0.
+`make up` uses `--wait` with the one-off `migrate` service: verified on Compose v5.5.0 (M0-P3, and
+again in M0-P5 with `web`) that it waits for `migrate` to exit 0 and for `api` and `web` to be
+healthy, and exits 0.
 
 ---
 
