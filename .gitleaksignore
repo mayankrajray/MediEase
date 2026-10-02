@@ -1,0 +1,6 @@
+# Reviewed gitleaks false positives, one fingerprint per line (commit:file:rule:line).
+# Add an entry only after confirming the value is synthetic, with the reason above it.
+# Real secrets are never "ignored": rotate them (docs/RUNBOOK.md §13).
+
+# Synthetic test-only password used to seed users in the test database (M1-P2, #19).
+244905a3bdc594811b035b2d17cc39c6a892775e:apps/api/tests/conftest.py:generic-api-key:230
