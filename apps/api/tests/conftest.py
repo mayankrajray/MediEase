@@ -16,6 +16,7 @@ from flask.testing import FlaskClient
 
 from mediease_api.bootstrap import create_app
 from mediease_api.config.settings import AppSettings
+from mediease_api.ports.readiness import ReadinessError
 
 SetEnv = Callable[[dict[str, str]], None]
 
@@ -29,6 +30,19 @@ _VALID_TEST_ENV = {
     "DATABASE_URL": "postgresql+psycopg://mediease:test-password@localhost:5432/mediease_test",
     "COOKIE_SECURE": "false",
 }
+
+
+class FakeDatabaseCheck:
+    """In-memory DatabaseCheck: passes, or raises the error a test assigns."""
+
+    def __init__(self) -> None:
+        self.error: ReadinessError | None = None
+        self.calls = 0
+
+    def check(self) -> None:
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
 
 
 @pytest.fixture
@@ -51,10 +65,15 @@ def set_env(monkeypatch: pytest.MonkeyPatch) -> SetEnv:
 
 
 @pytest.fixture
-def app(set_env: SetEnv, valid_env: dict[str, str]) -> Flask:
-    """An app built by the composition root from a valid test configuration."""
+def database_check() -> FakeDatabaseCheck:
+    return FakeDatabaseCheck()
+
+
+@pytest.fixture
+def app(set_env: SetEnv, valid_env: dict[str, str], database_check: FakeDatabaseCheck) -> Flask:
+    """An app from the composition root with a fake database check (no network)."""
     set_env(valid_env)
-    return create_app(AppSettings())  # type: ignore[call-arg]  # values come from the environment
+    return create_app(AppSettings(), database_check=database_check)  # type: ignore[call-arg]
 
 
 @pytest.fixture

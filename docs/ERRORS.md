@@ -24,8 +24,8 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | Code | HTTP | Meaning | Likely cause | Where to look |
 |---|---|---|---|---|
 | `CFG_INVALID` | — (process exits) | Settings failed validation | Missing/invalid env var | Start-up log `config.invalid` naming the field(s), `.env.example` (M0-P2) |
-| `READY_DB_UNAVAILABLE` | 503 | Database not reachable | db down, wrong host, credentials | `make ps`, db logs, DEBUGGING §5.2 *(planned, M0)* |
-| `READY_DB_TIMEOUT` | 503 | Database check exceeded 2 s | db overloaded or network | db metrics, slow queries *(planned, M0)* |
+| `READY_DB_UNAVAILABLE` | 503 | Database not reachable | db down, wrong host (`db` inside compose, `localhost` outside), wrong credentials | `ready.check_failed` (WARNING) with `cause`; `make ps`, db logs, DEBUGGING §5.2 (M0-P3) |
+| `READY_DB_TIMEOUT` | 503 | Database check exceeded 2 s | Connect, pool wait or `SELECT 1` took over 2 s: db overloaded, network, pool exhausted | `ready.check_failed` with `cause` (`ConnectionTimeout`, `QueryCanceled`, `TimeoutError`); db metrics, slow queries (M0-P3) |
 | `REQ_VALIDATION_FAILED` | 422 | Request body/query invalid | Client sent wrong shape | `details.fields[]` lists each field and reason *(planned, M0)* |
 | `REQ_NOT_FOUND` | 404 | Resource not found | Unknown route (M0-P2); wrong ID **or other clinic's resource** (M1+) | Access log `route` is null for unknown routes; tenancy context for resources — expected for cross-clinic access |
 | `REQ_METHOD_NOT_ALLOWED` | 405 | Method not allowed on this URL | Client used the wrong HTTP method | `Allow` response header lists valid methods (M0-P2) |
