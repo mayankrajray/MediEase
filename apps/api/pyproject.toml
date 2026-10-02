@@ -76,8 +76,8 @@ addopts = "-ra --strict-markers"
 
 # --- Coverage gate (NFR-14) -------------------------------------------------------
 # make test-api and CI run `pytest --cov`; below the threshold the run fails.
-# M0 gates the whole package because domain/ and application/ are still empty;
-# M1-P1 adds the >= 80% gate on those two layers when they get code.
+# A second gate, `coverage report --include=domain,application --fail-under=80`
+# (Makefile CORE_COVERAGE, CI), holds the business core to NFR-14 on its own (M1-P1).
 [tool.coverage.run]
 source = ["mediease_api"]
 branch = true

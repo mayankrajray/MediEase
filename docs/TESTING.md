@@ -62,7 +62,8 @@ A PR merges only when all pass:
 4. Import-boundary check (domain/application purity)
 5. Build of all images
 6. Dependency, image and secrets scanning
-7. Coverage ≥ 80% on `domain/` and `application/` (NFR-14)
+7. Coverage ≥ 80% on `domain/` and `application/` (NFR-14), plus ≥ 90% on the whole API package
+   (`make test-api`, CI "API" job; from M1-P1)
 
 End-to-end tests run on every PR once the stack exists (M3+), and nightly against staging (M6+).
 

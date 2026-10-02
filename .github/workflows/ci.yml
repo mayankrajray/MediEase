@@ -105,6 +105,8 @@ jobs:
       - run: mypy src
       - name: Tests with coverage gate (NFR-14)
         run: pytest -q --cov
+      - name: Coverage gate on domain and application (NFR-14, >= 80%)
+        run: coverage report --include='*/mediease_api/domain/*,*/mediease_api/application/*' --fail-under=80
       - name: Dependency vulnerabilities (pip-audit)
         run: pip-audit --skip-editable
 
