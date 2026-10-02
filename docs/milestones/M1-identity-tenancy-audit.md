@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M1-P1 active |
+| Status | In progress — M1-P1 done (confirmed 3 Oct 2026); M1-P2 active |
 | Spec | `docs/specs/identity-and-tenancy.md` (Approved 2026-10-02) |
 | Covers | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08, NFR-14 |
 | Issue / branch / PR | #19 · `m1/19-identity-tenancy-audit` · one draft PR for the whole milestone (ADR-0011) |
@@ -32,7 +32,7 @@
 | Phase | Builds | Key decisions |
 |---|---|---|
 | P1 | Domain model, migration `0002`, tenancy-scoped repository base, unit of work, coverage gate | Below |
-| P2 | Argon2id hashing, sign-in, refresh rotation with reuse detection, sign-out, lockout | Adds `password_hash`, lockout columns and `refresh_tokens` (migration `0003`); new settings for token secrets; designed at the start of P2 |
+| P2 | Argon2id hashing, sign-in, refresh rotation with reuse detection, sign-out, lockout | Below (M1-P2 section) |
 | P3 | Auth middleware → `RequestContext`; role + membership check on every route; permission matrix tests | R6, R7, R8, R10 |
 | P4 | Append-only `audit_events` written through the unit of work; DB role with `INSERT, SELECT` only; `v_clinic_activity` | R11, AC5, AC6 |
 | P5 | Ops API: create clinic → doctors → owner invite; onboarding checklist timestamps | R9, R12, FR-OPS-01/04 |
@@ -41,6 +41,111 @@
 Each phase starts with its design (`/plan-phase`), is approved, implemented, verified by the
 developer and confirmed before the next phase starts. All phases are committed to the milestone
 branch and appear in the one milestone PR.
+
+---
+
+## M1-P2 — Sign-in, refresh rotation, sign-out, lockout
+
+Approved by the developer on 3 Oct 2026. Covers FR-AUTH-01, FR-AUTH-02, FR-AUTH-04; spec R1–R5,
+AC1, AC2.
+
+### Concepts
+
+1. **Argon2id.** A memory-hard password hash: each guess costs 64 MiB and ~50 ms, so a stolen
+   table cannot be brute-forced cheaply. The hash string carries its own salt and parameters, so
+   parameters can be raised later and old hashes are upgraded at the next sign-in.
+2. **Access token vs refresh token.** The access token is a short-lived (15 min) signed JWT that
+   P3 checks on every request without a database lookup. The refresh token is a long-lived
+   (14 days) random value, stored only as a SHA-256 hash, used for one thing: getting a new pair.
+3. **Rotation with reuse detection.** Every refresh replaces the token. A token family is the chain
+   that starts at one sign-in. If an already-replaced token is presented, someone holds a copy
+   (theft or replay), so the whole family is revoked and both holders must sign in again (R5).
+4. **Cookies, not JavaScript storage (ADR-0006).** Tokens live in `HttpOnly` cookies the page's
+   scripts cannot read. `SameSite=Lax` stops other sites' forms sending them; a double-submit CSRF
+   token (`me_csrf` cookie echoed in `X-CSRF-Token`) protects state-changing requests that carry
+   session cookies. Sign-in only accepts JSON, which a cross-site form cannot send.
+5. **Constant-time failure (R2).** An unknown identifier still runs one Argon2 verification against
+   a dummy hash, so response time does not reveal whether an account exists.
+
+### Request flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant A as api (auth blueprint)
+    participant U as SignIn / RefreshSession
+    participant D as PostgreSQL
+    B->>A: POST /api/v1/auth/sign-in {identifier, password}
+    A->>U: SignInCommand
+    U->>D: SELECT user … FOR UPDATE (by email or E.164 phone)
+    U->>U: locked? → AUTH_LOCKED · verify Argon2id
+    alt wrong password
+        U->>D: failed_login_count + 1 (5th → locked_until = now + 15 min); COMMIT
+        A-->>B: 401 AUTH_INVALID_CREDENTIALS
+    else correct
+        U->>D: reset counter, last_login_at, INSERT refresh_tokens (new family); COMMIT
+        A-->>B: 200 user + memberships; Set-Cookie me_access, me_refresh, me_csrf
+    end
+    B->>A: POST /api/v1/auth/refresh (me_refresh, X-CSRF-Token)
+    A->>U: refresh token
+    U->>D: SELECT refresh_tokens WHERE token_hash … FOR UPDATE
+    alt already rotated (reuse)
+        U->>D: revoke whole family; COMMIT
+        A-->>B: 401 AUTH_REFRESH_REUSED, cookies cleared
+    else active
+        U->>D: mark replaced, INSERT successor; COMMIT
+        A-->>B: 200 + new cookies
+    end
+```
+
+### Decisions
+
+| Decision | Reason |
+|---|---|
+| `users.password_hash` is nullable | An invited user has no password until onboarding sets one (P5); a null hash can never sign in and takes the same dummy-hash path |
+| Lockout: 5 consecutive failures → `locked_until = now + 15 min`, counter reset to 0; attempts while locked return `AUTH_LOCKED` without checking the password | Spec R3/AC1; after the lock expires the user has five fresh attempts |
+| The 5th failure itself returns `AUTH_INVALID_CREDENTIALS`; the 6th returns `AUTH_LOCKED` | Exactly AC1 |
+| Disabled user with the right password, or a non-ops user with no `ACTIVE` membership → `AUTH_ACCOUNT_DISABLED` (403); with a wrong password → `AUTH_INVALID_CREDENTIALS` | Never confirms a password for an account that cannot be used; never reveals status to someone without the password |
+| User row locked (`FOR UPDATE`) during sign-in; refresh row locked during refresh | Parallel attempts cannot undercount failures or rotate one token twice |
+| Strict reuse detection: no grace window for parallel refreshes | Spec R5. The web client (P6) must serialise refreshes |
+| Sliding refresh expiry: each rotation gets a fresh 14 days | Spec R4; an absolute family lifetime can be added with an ADR if needed |
+| Access JWT: HS256, `iss=mediease-api`, `aud=mediease`, `sub`, `sid` (family), `jti`, `iat`, `exp`; verified with 30 s leeway | Spec §8 clock skew; `sid` lets P3 and sign-out tie an access token to its session |
+| Cookies: `me_access` path `/api`, `me_refresh` path `/api/v1/auth`, `me_csrf` path `/` (readable by scripts); all `SameSite=Lax`, `Secure=COOKIE_SECURE` | The refresh token is only ever sent to the auth endpoints |
+| CSRF enforced by one `before_request` hook on every unsafe `/api/*` request that carries a session cookie, except sign-in | P3 routes are protected without per-route code |
+| `JWT_SIGNING_KEY` ≥ 32 characters in every environment; `change-me` placeholder only in `local` | Fail fast; HS256 needs a key at least as long as its output |
+| Per-IP rate limiting is **not** in P2 | Needs shared state across gunicorn workers; covered by the reverse proxy limits in M6-P1 (ARCHITECTURE §11). Account lockout is the P2 control |
+| Audit rows for `auth.signed_in` / `auth.sign_in_failed` arrive with the audit log in P4 | P2 emits the log events; P4 adds rows in the same transaction |
+| Cross-clinic "which clinics can this user use" read goes through a platform `ClinicAccessRepository` (memberships joined to clinic name), not a tenant repository | ADR-0003 platform repositories; returns IDs, names and roles only |
+| `make seed` loads synthetic demo data (one clinic, owner, doctor, front desk, ops user) and refuses to run unless `APP_ENV=local` | Needed to try sign-in by hand; AGENTS.md lists it for M1 |
+
+### Files
+
+| Layer | Files |
+|---|---|
+| Domain | `identity/user.py` (credentials, lockout), `identity/session.py` (`RefreshToken` states), `identity/access.py` (`ClinicAccess` read model) |
+| Application | `auth/errors.py`, `auth/views.py`, `auth/sign_in.py`, `auth/refresh_session.py`, `auth/sign_out.py`, `auth/_session.py` |
+| Ports | `clock.py`, `security.py` (`PasswordHasher`, `AccessTokenIssuer`, `RefreshTokenSecrets`), repository + unit-of-work additions |
+| Adapters | `clock/system.py`, `security/argon2_hasher.py`, `security/jwt_tokens.py`, `security/refresh_secrets.py`, `db/models/identity.py`, `db/repositories.py`, migration `0003` |
+| Delivery | `http/auth.py`, `http/session_cookies.py`, `http/csrf.py`, `http/validation.py`, `errors.py` (domain error → status), `cli/seed.py` |
+| Config | `JWT_SIGNING_KEY`, `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_SECONDS` |
+| Contract | `/api/v1/auth/sign-in`, `/refresh`, `/sign-out` in `contracts/openapi.yaml`; regenerated web types |
+
+New dependencies: `argon2-cffi` (Argon2id, the reference binding) and `PyJWT` (JWT encode and
+verify with algorithm pinning).
+
+### Verify
+
+```bash
+make up && make seed
+curl -si -c /tmp/jar -H 'Content-Type: application/json' \
+  -d '{"identifier":"owner@sample-clinic.example","password":"<demo password>"}' \
+  localhost:8000/api/v1/auth/sign-in        # 200, three Set-Cookie headers, no token in body
+```
+
+Failure paths: wrong password five times then the right one → 423 `AUTH_LOCKED`; replaying an
+old `me_refresh` → 401 `AUTH_REFRESH_REUSED` and the newer one stops working; refresh without
+`X-CSRF-Token` → 403 `AUTH_CSRF_INVALID`.
 
 ---
 
