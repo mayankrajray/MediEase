@@ -4,13 +4,16 @@ A user is identified by an email address, a phone number or both (spec R1:
 either can be the sign-in identifier). Platform ops staff are users with
 ``is_platform_ops`` and, by default, no clinic membership (R10).
 
-Credentials and lockout state arrive with sign-in in M1-P2.
+Credentials and lockout (FR-AUTH-01, FR-AUTH-04, spec R3): the domain stores
+an opaque password hash (produced by the ``PasswordHasher`` port) and counts
+consecutive failed sign-ins. The fifth failure locks the account for 15
+minutes; a successful sign-in resets the count.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from enum import StrEnum
 from uuid import UUID
 
@@ -19,6 +22,9 @@ from mediease_api.domain.shared.errors import InvalidTransition, InvalidValue
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.shared.text import required_text
 from mediease_api.domain.shared.time import require_utc
+
+MAX_FAILED_SIGN_INS = 5
+LOCKOUT_DURATION = timedelta(minutes=15)
 
 
 class UserStatus(StrEnum):
@@ -38,6 +44,12 @@ class User:
     status: UserStatus
     created_at: datetime
     updated_at: datetime
+    # None until a password is set (an invited user cannot sign in yet).
+    # Excluded from repr so a hash never reaches a log line or a traceback.
+    password_hash: str | None = field(default=None, repr=False)
+    failed_sign_in_count: int = 0
+    locked_until: datetime | None = None
+    last_signed_in_at: datetime | None = None
 
     @classmethod
     def create(
@@ -49,6 +61,7 @@ class User:
         email: EmailAddress | None = None,
         phone: PhoneNumber | None = None,
         is_platform_ops: bool = False,
+        password_hash: str | None = None,
     ) -> User:
         if email is None and phone is None:
             raise InvalidValue("email", "an email address or a phone number is required")
@@ -62,7 +75,12 @@ class User:
             status=UserStatus.ACTIVE,
             created_at=now,
             updated_at=now,
+            password_hash=password_hash,
         )
+
+    @property
+    def is_active(self) -> bool:
+        return self.status is UserStatus.ACTIVE
 
     def disable(self, *, now: datetime) -> None:
         """Rejected from the next request on (R7)."""
@@ -76,3 +94,39 @@ class User:
             raise InvalidTransition("user", self.status, "enable")
         self.updated_at = require_utc(now, "now")
         self.status = UserStatus.ACTIVE
+
+    # --- credentials and lockout ---------------------------------------------------------
+
+    def set_password_hash(self, password_hash: str, *, now: datetime) -> None:
+        """Store a new hash (first password, or a re-hash with stronger parameters)."""
+        if not password_hash:
+            raise InvalidValue("password_hash", "must not be empty")
+        self.updated_at = require_utc(now, "now")
+        self.password_hash = password_hash
+
+    def is_locked(self, now: datetime) -> bool:
+        """True while a lockout from too many failed sign-ins is in force (R3)."""
+        now = require_utc(now, "now")
+        return self.locked_until is not None and now < self.locked_until
+
+    def record_failed_sign_in(self, *, now: datetime) -> bool:
+        """Count a wrong password. Returns True when this failure locked the account.
+
+        The count resets when the lock starts, so after the 15 minutes the user
+        has a fresh set of attempts.
+        """
+        self.updated_at = require_utc(now, "now")
+        self.failed_sign_in_count += 1
+        if self.failed_sign_in_count < MAX_FAILED_SIGN_INS:
+            return False
+        self.failed_sign_in_count = 0
+        self.locked_until = self.updated_at + LOCKOUT_DURATION
+        return True
+
+    def record_successful_sign_in(self, *, now: datetime) -> None:
+        """A correct password resets the failure count and clears an expired lock (R3)."""
+        now = require_utc(now, "now")
+        self.updated_at = now
+        self.last_signed_in_at = now
+        self.failed_sign_in_count = 0
+        self.locked_until = None
