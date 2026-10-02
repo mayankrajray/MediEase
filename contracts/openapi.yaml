@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -19,6 +19,16 @@ tags:
       Sign-in, refresh rotation and sign-out (M1-P2, ADR-0006). Tokens travel only in
       HttpOnly cookies (me_access, me_refresh) and never in a body. Unsafe requests that
       carry a session cookie must send X-CSRF-Token equal to the me_csrf cookie.
+  - name: identity
+    description: |
+      Who the caller is and what they may do (M1-P3, FR-AUTH-03). Every request is
+      re-checked: the session must still be live and the user still active, so signing out
+      or deactivating a member takes effect on their next request.
+  - name: clinic
+    description: |
+      Read-only clinic settings, doctors and staff (M1-P3). The clinic is never a parameter:
+      it is the caller's only membership, or the one named in X-Clinic-ID. Another clinic's
+      resource is 404, never 403 (NFR-08). Staff and doctor changes arrive in M1-P5.
 paths:
   /api/v1/auth/sign-in:
     post:
@@ -97,6 +107,158 @@ paths:
               $ref: '#/components/headers/RequestId'
         '403':
           $ref: '#/components/responses/AuthError'
+  /api/v1/me:
+    get:
+      tags: [identity]
+      operationId: getMe
+      summary: The signed-in user, their clinics and their permissions
+      description: |
+        FR-AUTH-03. Needs a session but no clinic: the response lists every active
+        membership with the clinic's status, the role and the permissions that role holds
+        (PRD §8.1), which is what the web app needs to render a clinic switcher and a
+        role's screens. Cache-Control: no-store.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The current user and their memberships
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Identity'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+  /api/v1/clinic:
+    get:
+      tags: [clinic]
+      operationId: getClinic
+      summary: The clinic this request is for
+      description: 'Permission: CLINIC_VIEW (every role).'
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+      responses:
+        '200':
+          description: The clinic
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Clinic'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/clinic/doctors:
+    get:
+      tags: [clinic]
+      operationId: listDoctors
+      summary: The clinic's doctors
+      description: |
+        Permission: DOCTORS_VIEW (every role). Unpaginated: a clinic has one to four
+        doctors (PRD §2). Adding a doctor arrives in M1-P5.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+      responses:
+        '200':
+          description: Doctors of this clinic, oldest first
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoctorList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/clinic/doctors/{doctor_id}:
+    get:
+      tags: [clinic]
+      operationId: getDoctor
+      summary: One doctor of this clinic
+      description: |
+        Permission: DOCTORS_VIEW. A doctor of another clinic returns 404 REQ_NOT_FOUND,
+        so the resource's existence is never confirmed (NFR-08, spec R8).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - name: doctor_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The doctor
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Doctor'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/clinic/staff:
+    get:
+      tags: [clinic]
+      operationId: listStaff
+      summary: The clinic's members with their roles
+      description: |
+        Permission: STAFF_MANAGE (owners only; FR-ORG-03). Includes invited and
+        deactivated memberships so an owner can see the whole team. Unpaginated.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+      responses:
+        '200':
+          description: Memberships of this clinic, by member name
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
   /health:
     get:
       tags: [platform]
@@ -143,6 +305,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: me_access
+      description: |
+        Access token set by sign-in and refresh (HttpOnly, path /api). Checked on every
+        request together with the session's liveness, the user's status and their
+        membership, so nothing is cached beyond the request (spec R7).
   parameters:
     RequestId:
       name: X-Request-ID
@@ -159,6 +330,17 @@ components:
       description: Copy of the me_csrf cookie; required when session cookies are sent.
       schema:
         type: string
+    ClinicId:
+      name: X-Clinic-ID
+      in: header
+      required: false
+      description: |
+        Which clinic the request is for. Optional for a user with a single membership;
+        required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+        value that is not one of the caller's clinics gets the same 400, never a 404.
+      schema:
+        type: string
+        format: uuid
   responses:
     SessionStarted:
       description: Session started or renewed; me_access, me_refresh and me_csrf are set
@@ -174,6 +356,18 @@ components:
         AUTH_INVALID_CREDENTIALS, AUTH_SESSION_EXPIRED, AUTH_REFRESH_REUSED (401);
         AUTH_ACCOUNT_DISABLED, AUTH_CSRF_INVALID (403); REQ_UNSUPPORTED_MEDIA_TYPE (415);
         REQ_VALIDATION_FAILED (422)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    PermissionError:
+      description: |
+        PERM_CLINIC_REQUIRED (400, choose a clinic); PERM_DENIED (403, the role lacks the
+        permission, or an ops user on a clinic route); CLN_SUSPENDED (403); REQ_NOT_FOUND
+        (404, unknown id — or another clinic's resource, which is never distinguishable)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -251,6 +445,17 @@ components:
             refresh_expires_at:
               type: string
               format: date-time
+    Identity:
+      type: object
+      required: [user, memberships]
+      properties:
+        user:
+          $ref: '#/components/schemas/SessionUser'
+        memberships:
+          type: array
+          description: Active clinic memberships, ordered by clinic name
+          items:
+            $ref: '#/components/schemas/Membership'
     SessionUser:
       type: object
       required: [id, full_name, email, phone_e164, is_platform_ops]
@@ -268,7 +473,7 @@ components:
           type: boolean
     Membership:
       type: object
-      required: [membership_id, clinic_id, clinic_name, role]
+      required: [membership_id, clinic_id, clinic_name, clinic_status, role, permissions]
       properties:
         membership_id:
           type: string
@@ -278,9 +483,145 @@ components:
           format: uuid
         clinic_name:
           type: string
+        clinic_status:
+          $ref: '#/components/schemas/ClinicStatus'
         role:
+          $ref: '#/components/schemas/Role'
+        permissions:
+          type: array
+          description: What this role may do at this clinic (PRD §8.1), sorted
+          items:
+            $ref: '#/components/schemas/Permission'
+    Role:
+      type: string
+      enum: [OWNER, DOCTOR, FRONT_DESK]
+    ClinicStatus:
+      type: string
+      enum: [ONBOARDING, ACTIVE, SUSPENDED]
+    MembershipStatus:
+      type: string
+      enum: [INVITED, ACTIVE, DEACTIVATED]
+    Permission:
+      type: string
+      enum:
+        - CLINIC_VIEW
+        - CLINIC_MANAGE
+        - DOCTORS_VIEW
+        - STAFF_MANAGE
+        - PATIENTS_MANAGE
+        - APPOINTMENTS_MANAGE
+        - QUEUE_MOVE
+        - REMINDERS_SCHEDULE
+        - CLINICAL_VIEW
+        - CLINICAL_WRITE
+        - USAGE_METRICS_VIEW
+    Clinic:
+      type: object
+      required:
+        - id
+        - name
+        - slug
+        - timezone
+        - status
+        - phone_e164
+        - address_line
+        - city
+        - state
+        - pincode
+        - specialties
+      properties:
+        id:
           type: string
-          enum: [OWNER, DOCTOR, FRONT_DESK]
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+          description: Lower-case URL segment, used in public links from M7
+        timezone:
+          type: string
+          description: IANA time zone name, e.g. Asia/Kolkata
+        status:
+          $ref: '#/components/schemas/ClinicStatus'
+        phone_e164:
+          type: [string, 'null']
+        address_line:
+          type: [string, 'null']
+        city:
+          type: [string, 'null']
+        state:
+          type: [string, 'null']
+        pincode:
+          type: [string, 'null']
+        specialties:
+          type: array
+          items:
+            type: string
+    DoctorList:
+      type: object
+      required: [items]
+      description: Unpaginated by design; a clinic has one to four doctors
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Doctor'
+    Doctor:
+      type: object
+      required:
+        - id
+        - user_id
+        - display_name
+        - qualification
+        - registration_number
+        - registration_council
+        - specialty
+        - is_active
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: [string, 'null']
+          description: The staff account that signs in as this doctor, if any
+        display_name:
+          type: string
+        qualification:
+          type: string
+        registration_number:
+          type: string
+          description: Printed on every prescription (FR-RX-04)
+        registration_council:
+          type: string
+        specialty:
+          type: [string, 'null']
+        is_active:
+          type: boolean
+    StaffList:
+      type: object
+      required: [items]
+      description: Unpaginated by design; a clinic has a handful of staff
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffMember'
+    StaffMember:
+      type: object
+      required: [membership_id, user_id, full_name, role, status]
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        full_name:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        status:
+          $ref: '#/components/schemas/MembershipStatus'
     Error:
       type: object
       required: [code, message, request_id]

@@ -12,6 +12,7 @@ import os
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -31,10 +32,12 @@ from mediease_api.adapters.security.argon2_hasher import Argon2PasswordHasher
 from mediease_api.bootstrap import create_app
 from mediease_api.config.logging import configure_logging
 from mediease_api.config.settings import AppEnv, AppSettings
+from mediease_api.domain.clinics.clinic import Clinic
+from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.identity.user import User
 from mediease_api.ports.readiness import ReadinessError
-from tests.builders import a_clinic, a_membership, a_user
+from tests.builders import LATER, NOW, a_clinic, a_doctor, a_membership, a_user
 
 SetEnv = Callable[[dict[str, str]], None]
 
@@ -264,3 +267,125 @@ def seed_staff(
         uow.tenant(clinic.id).memberships.add(a_membership(clinic.id, user.id, role))
         uow.commit()
     return user
+
+
+# --- Two clinics with all three roles (M1-P3 authorisation and tenancy tests) ---------------
+
+
+@dataclass(frozen=True)
+class Tenant:
+    """One ACTIVE clinic with an owner, a doctor and a front desk, plus a doctor profile."""
+
+    clinic: Clinic
+    owner: User
+    doctor_user: User
+    desk: User
+    doctor: Doctor
+
+    def user_for(self, role: Role) -> User:
+        return {Role.OWNER: self.owner, Role.DOCTOR: self.doctor_user, Role.FRONT_DESK: self.desk}[
+            role
+        ]
+
+
+@dataclass(frozen=True)
+class World:
+    """Clinics A and B, a user who works in both, an ops user and a suspended clinic.
+
+    One app for all of them; every ``client_for`` call gets its own cookie jar,
+    so several users can act in the same test without sharing a session.
+    """
+
+    app: Flask
+    a: Tenant
+    b: Tenant
+    multi: User  # FRONT_DESK in clinic A, OWNER in clinic B
+    ops: User
+    suspended_clinic: Clinic
+    suspended_owner: User
+
+    def anonymous(self) -> FlaskClient:
+        return self.app.test_client()
+
+    def client_for(self, user: User) -> FlaskClient:
+        """A client that has signed ``user`` in (cookies set as a browser would hold them)."""
+        client = self.app.test_client()
+        assert user.email is not None
+        resp = client.post(
+            "/api/v1/auth/sign-in",
+            json={"identifier": user.email.value, "password": DEMO_PASSWORD},
+        )
+        assert resp.status_code == 200, resp.get_json()
+        return client
+
+
+def _seed_tenant(uow: SqlAlchemyUnitOfWork, label: str) -> Tenant:
+    clinic = a_clinic(name=f"{label} Sample Clinic")
+    uow.clinics.add(clinic)
+    staff = uow.tenant(clinic.id)
+    users = {
+        role: a_user(
+            full_name=f"{label} {role.value.title()}",
+            password_hash=CHEAP_HASHER.hash(DEMO_PASSWORD),
+        )
+        for role in (Role.OWNER, Role.DOCTOR, Role.FRONT_DESK)
+    }
+    for role, user in users.items():
+        uow.users.add(user)
+        staff.memberships.add(a_membership(clinic.id, user.id, role))
+    doctor = a_doctor(clinic.id, user_id=users[Role.DOCTOR].id, display_name=f"Dr. {label} Sample")
+    staff.doctors.add(doctor)
+    clinic.activate(active_owner_count=1, now=NOW)
+    uow.clinics.update(clinic)
+    return Tenant(
+        clinic=clinic,
+        owner=users[Role.OWNER],
+        doctor_user=users[Role.DOCTOR],
+        desk=users[Role.FRONT_DESK],
+        doctor=doctor,
+    )
+
+
+@pytest.fixture
+def world(migrated_database_url: str, uow_factory: UowFactory) -> World:
+    with uow_factory() as uow:
+        a = _seed_tenant(uow, "Alpha")
+        b = _seed_tenant(uow, "Beta")
+
+        multi = a_user(full_name="Multi Clinic", password_hash=CHEAP_HASHER.hash(DEMO_PASSWORD))
+        uow.users.add(multi)
+        uow.tenant(a.clinic.id).memberships.add(
+            a_membership(a.clinic.id, multi.id, Role.FRONT_DESK)
+        )
+        uow.tenant(b.clinic.id).memberships.add(a_membership(b.clinic.id, multi.id, Role.OWNER))
+
+        ops = a_user(
+            full_name="Platform Ops",
+            is_platform_ops=True,
+            password_hash=CHEAP_HASHER.hash(DEMO_PASSWORD),
+        )
+        uow.users.add(ops)
+
+        suspended = a_clinic(name="Suspended Sample Clinic")
+        suspended_owner = a_user(
+            full_name="Suspended Owner", password_hash=CHEAP_HASHER.hash(DEMO_PASSWORD)
+        )
+        uow.clinics.add(suspended)
+        uow.users.add(suspended_owner)
+        uow.tenant(suspended.id).memberships.add(
+            a_membership(suspended.id, suspended_owner.id, Role.OWNER)
+        )
+        suspended.activate(active_owner_count=1, now=NOW)
+        suspended.suspend(now=LATER)
+        uow.clinics.update(suspended)
+        uow.commit()
+
+    return World(
+        app=make_db_app(migrated_database_url),
+        a=a,
+        b=b,
+        multi=multi,
+        ops=ops,
+        suspended_clinic=suspended,
+        suspended_owner=suspended_owner,
+    )

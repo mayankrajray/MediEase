@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from flask import Blueprint, Response, jsonify
 
+from mediease_api.delivery.http.access import public
 from mediease_api.ports.readiness import DatabaseCheck
 
 
@@ -19,11 +20,13 @@ def create_platform_blueprint(database_check: DatabaseCheck) -> Blueprint:
     bp = Blueprint("platform", __name__)
 
     @bp.get("/health")
+    @public
     def health() -> Response:
         """Liveness probe. Always 200 while the process can serve requests."""
         return jsonify({"status": "ok"})
 
     @bp.get("/ready")
+    @public
     def ready() -> Response:
         """Readiness probe. 200 when the database answers; otherwise the check
         raises a ReadinessError, which delivery/errors.py turns into a 503."""

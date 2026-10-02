@@ -8,12 +8,14 @@ import pytest
 from flask import Flask
 
 from mediease_api.application.auth.errors import AccountLocked
+from mediease_api.delivery.http.access import public
 from mediease_api.domain.identity.membership import LastOwnerError
 from mediease_api.domain.shared.errors import DomainError, InvalidValue
 
 
 def _add_failing_route(app: Flask) -> None:
     @app.get("/boom")
+    @public
     def _boom() -> str:
         raise RuntimeError("internal detail that must not reach the client")
 
@@ -65,6 +67,7 @@ def test_nfr_12_wrong_method_returns_req_method_not_allowed_with_allow_header(ap
 
 
 def _raise_on(app: Flask, path: str, exc: Exception) -> None:
+    @public
     def _view() -> str:
         raise exc
 
