@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Accepted |
+| Status | Accepted — one issue/branch/PR per phase and the branch name superseded by [ADR-0011](0011-one-branch-and-pr-per-milestone.md) |
 | Date | 2026-10-01 |
 | Deciders | Developer (project owner) |
 | Related | ADR-0001 (superseded in part), CLAUDE.md "Git Workflow" and "Commit Standards", CONTRIBUTING.md, NEXT_STEPS_PLAN.md §3 |

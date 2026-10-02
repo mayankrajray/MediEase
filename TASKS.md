@@ -15,7 +15,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Active phase | **M1-P1 — ⏸ blocked:** `docs/specs/identity-and-tenancy.md` is `Draft` and must be `Approved` before any M1 code (CLAUDE.md "Spec before code") |
 | Design notes | `docs/milestones/M0-foundation.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (tasks 0–6, workflow prerequisites W-1..W-7, progress log) |
-| Workflow | Issue → branch → logical commits → PR → CODEOWNERS review → maintainer merge (ADR-0010) |
+| Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §9). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
 | Last updated | 2 Oct 2026 |
 
