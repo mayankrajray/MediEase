@@ -117,9 +117,17 @@ Settings are validated once in `config/settings.py`. The error lists each invali
 Do not add defaults to make it pass — fix `.env` and, if the variable is new, `.env.example`.
 
 ### 5.2 Readiness failing
-`/ready` runs `SELECT 1` with a 2-second timeout and reports `READY_DB_UNAVAILABLE` or
-`READY_DB_TIMEOUT`. Check `make ps`, then `docker compose logs db`. Inside containers the host is
-`db`; from your laptop it is `localhost`.
+`/ready` runs `SELECT 1` with a 2-second budget (connect, pool wait and query) and reports
+`READY_DB_UNAVAILABLE` or `READY_DB_TIMEOUT`. Check `make ps`, then `docker compose logs db`.
+Inside containers the host is `db`; from your laptop it is `localhost`.
+
+- The API logs `ready.check_failed` (WARNING) with `code`, `cause` (the exception type, e.g.
+  `OperationalError`, `ConnectionTimeout`, `QueryCanceled`) and `request_id`. Filter
+  `docker compose logs api` by that event.
+- `api` shows `(unhealthy)` in `make ps` while `/ready` fails: its healthcheck is `/ready`. It is
+  not restarted for that; it turns healthy again once the database answers.
+- `migrate` exited non-zero → `api` never starts: `docker compose logs migrate` (RUNBOOK
+  "Migration failed").
 
 ### 5.3 Auth cookies not sticking
 - The browser must call `http://localhost:3000/api/...` (web origin), which rewrites to the API.

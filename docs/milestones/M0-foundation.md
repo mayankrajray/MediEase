@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Active — Phase 2 (M0-P1 closed in #6) |
+| Status | Active — Phase 4 (M0-P1 #6, M0-P2 #8, M0-P3 #10 closed) |
 | Covers | NFR-12 (observability), NFR-15 (portability), groundwork for NFR-05/06/14 |
 | Exit criterion | `make up` on a fresh clone → `GET /health` 200, `GET /ready` 200 (503 when db is down); CI green |
 
@@ -53,7 +53,7 @@ make down
 Failure path: set `POSTGRES_PASSWORD=` (empty) in `.env` → `make up` refuses to start with
 "set POSTGRES_PASSWORD in .env" (Compose's required-variable check), before any container runs.
 
-### M0-P2 — API process, settings, logging, `/health`
+### M0-P2 — API process, settings, logging, `/health` (done, #8)
 
 Planned files (`apps/api/`):
 ```
@@ -79,7 +79,7 @@ Verify: `curl -i localhost:8000/health` → `200`, body `{"status":"ok"}`, heade
 Sending `X-Request-ID: test-123` echoes `test-123`. Removing `DATABASE_URL` → process exits with
 `config.invalid` naming the field.
 
-### M0-P3 — Database readiness and migrations
+### M0-P3 — Database readiness and migrations (done, #10)
 
 Planned files: `adapters/db/engine.py`, `delivery/http/platform.py` (`/ready`), `alembic.ini`,
 `migrations/env.py` (reads settings, not env vars), empty baseline revision, a **minimal

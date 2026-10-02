@@ -96,7 +96,9 @@ Compose rules:
   needed in compose. The only persistent volume is `pgdata` (database).
 - Object storage volume is not added until M4 needs it (CLAUDE.md "Each running service must have
   a current purpose").
-- **Risk to verify in P3:** `docker compose up --wait` must exit 0 when `migrate` has exited 0.
+- **Risk to verify in P3 — closed (2 Oct 2026, #10):** Compose v5.5.0 `up -d --wait` waits for
+  `migrate` to exit 0 and `api` to be healthy, then exits 0; no fallback form was needed.
+  Original note: `docker compose up --wait` must exit 0 when `migrate` has exited 0.
   If the installed Compose version reports a one-off container exit as failure, `make up` will
   wait on the long-running services explicitly (`docker compose up -d --wait db api web`, which
   still starts `migrate` through `depends_on`). The chosen form is recorded in `AGENTS.md` §4.
@@ -188,6 +190,9 @@ Each task = one issue, one branch, one PR, with one or more logical commits. Eac
 - **Demo:** `make up` alone brings up db → migrate (exits 0) → api (healthy);
   `docker compose ps -a` shows `migrate` exited 0; `alembic current` shows the baseline;
   `docker compose stop db` → `/ready` 503 in ~2 s while `/health` stays 200.
+- **Status:** issue #10, branch `m0/p3-10-db-readiness-migrations`. Implemented as planned, plus
+  `DATABASE_URL` scheme validation, gunicorn `--preload` (invalid config stops the container
+  instead of a worker restart loop) and `dns_opt` on `api` (stopped-`db` lookups took 4 s).
 
 ### Task 5 — M0-P4: web shell and generated client
 
@@ -246,4 +251,5 @@ and L-06 (pilot bookings) before M6. Details in `TASKS.md`.
 | 1 Oct 2026 | W-5 branch protection on `main` | — | **Open:** not configured; private repo on GitHub Free cannot enforce protection or rulesets (HTTP 403). Needs GitHub Pro/Team or a public repo, and admin access |
 | 1 Oct 2026 | Task 0 | #4 / PR #5 | Merged |
 | 1 Oct 2026 | Task 1 — M0-P1 verified; `.gitattributes`, `CODEOWNERS` (4 owners; `@akhtarjamal10` needs write access) | #6 | Committed on `m0/p1-6-close-db-stack`; PR opened |
-| 1–2 Oct 2026 | Tasks 2+3 — M0-P2 implemented: API package, typed settings (fail-fast, field-named errors), structlog JSON logging, `X-Request-ID` middleware, error envelope, `/health`; 31 tests; `make lint typecheck test` green; gunicorn verified (200 + `X-Request-ID`, `test-123` echoed, 405 `REQ_METHOD_NOT_ALLOWED` with `Allow`, JSON logs carry `request_id`, missing `DATABASE_URL` → exit 1 with `CFG_INVALID`) | #8 | PR opened from `m0/p2-8-api-settings-logging-health`; awaiting review and maintainer merge |
+| 1–2 Oct 2026 | Tasks 2+3 — M0-P2 implemented: API package, typed settings (fail-fast, field-named errors), structlog JSON logging, `X-Request-ID` middleware, error envelope, `/health`; 31 tests; `make lint typecheck test` green; gunicorn verified (200 + `X-Request-ID`, `test-123` echoed, 405 `REQ_METHOD_NOT_ALLOWED` with `Allow`, JSON logs carry `request_id`, missing `DATABASE_URL` → exit 1 with `CFG_INVALID`) | #8 / PR #9 | Merged 2 Oct 2026 (rebase and merge) |
+| 2 Oct 2026 | Task 4 — M0-P3: engine + `DatabaseCheck` port, `/ready` (200 / 503 `READY_DB_*`), Alembic empty baseline `0001`, minimal non-root Dockerfile, compose `migrate` + `api`; 55 tests incl. real-PostgreSQL and contract tests. Verified: `make up` → db healthy, migrate exited 0, api healthy (Compose v5.5.0 `--wait` handles the one-off service — §5 risk closed, no fallback needed); db stopped → 503 `READY_DB_UNAVAILABLE` in 2.0 s with `/health` 200 (after `dns_opt`, see DEBUG_JOURNAL); `make migrate` exit 0, `alembic current` = `0001 (head)` | #10 | PR opened from `m0/p3-10-db-readiness-migrations`; awaiting review and maintainer merge |

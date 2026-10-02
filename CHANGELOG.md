@@ -23,12 +23,23 @@ first production release.
   `REQ_METHOD_NOT_ALLOWED` and `SYS_UNEXPECTED`; `GET /health`; Flask app factory (`create_app`)
   and gunicorn `wsgi` entrypoint; 31 unit and integration tests.
 - `Makefile` targets `install-api`, `test`, `test-api`, `lint`, `typecheck` (M0-P2).
+- Database readiness (M0-P3): SQLAlchemy 2 engine (psycopg 3) behind a `DatabaseCheck` port;
+  `GET /ready` runs `SELECT 1` within a 2-second budget and returns 200 or 503
+  `READY_DB_UNAVAILABLE` / `READY_DB_TIMEOUT`; `ready.check_failed` warning log.
+- Alembic with an empty baseline revision `0001`; `migrations/env.py` reads the settings (M0-P3).
+- Minimal non-root API `Dockerfile` (`python:3.12.15-slim-trixie`, gunicorn `--preload`) (M0-P3).
+- Compose `migrate` (one-off `alembic upgrade head`) and `api` (healthcheck `/ready`) services;
+  `make up` builds and starts db → migrate → api; `make migrate` (M0-P3).
+- Contract tests validating `/health` and `/ready` against `contracts/openapi.yaml`; real-PostgreSQL
+  integration tests for readiness and migrations; 55 tests in total (M0-P3).
 
 ### Verified
 - M0-P1 closed: `db` starts healthy, `select 1` returns 1 in UTC, `down` keeps `pgdata`, and an
   empty `POSTGRES_PASSWORD` is refused before any container starts (#6).
 
 ### Changed
+- `DATABASE_URL` must use the `postgresql+psycopg://` scheme; anything else fails start-up with
+  `CFG_INVALID` (M0-P3).
 - `CLAUDE.md`: new "Commit Standards"; "Git Workflow" now issue → branch → PR with no direct pushes
   to `main`, pushes only with permission and merges only by authorised maintainers; Docker start-up
   order declared with `depends_on` (`api` waits for `migrate`).
