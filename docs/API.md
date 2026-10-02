@@ -51,11 +51,14 @@ change that implements it.
 | POST | `/api/v1/auth/sign-in` | Email/phone + password | FR-AUTH-01, 04 | Implemented (M1-P2) |
 | POST | `/api/v1/auth/refresh` | Rotate refresh token | FR-AUTH-02 | Implemented (M1-P2) |
 | POST | `/api/v1/auth/sign-out` | Revoke token family | FR-AUTH-02 | Implemented (M1-P2) |
-| GET | `/api/v1/me` | Current user, memberships, permissions | FR-AUTH-03 | M1-P3 |
+| GET | `/api/v1/me` | Current user, memberships, permissions | FR-AUTH-03 | Implemented (M1-P3) |
 
 **Sign-in** `{"identifier": "<email or phone>", "password": "…"}` → `200` with
 `{user, memberships[], session: {access_expires_at, refresh_expires_at}}` and three cookies.
-Refresh returns the same body. No token ever appears in a body.
+Refresh returns the same body; `/me` returns the same `{user, memberships}` without the session
+block. No token ever appears in a body. Each membership carries `clinic_status`, `role` and the
+`permissions` that role holds there (PRD §8.1), so the web app needs no second call to decide
+what to render.
 
 | Cookie | Path | HttpOnly | Lifetime | Purpose |
 |---|---|---|---|---|
@@ -68,16 +71,46 @@ request that carries a session cookie needs `X-CSRF-Token` = `me_csrf` (sign-in 
 Auth responses are `Cache-Control: no-store`. The web client must not refresh twice in parallel:
 the second refresh presents a rotated token and ends the session (`AUTH_REFRESH_REUSED`).
 
+### Authorisation (M1-P3)
+
+Every route declares one access policy, enforced before it runs; the API refuses to start with an
+undeclared route (default deny).
+
+| Policy | Who | Failure |
+|---|---|---|
+| public | anyone (`/health`, `/ready`, `/api/v1/auth/*`) | — |
+| authenticated | any signed-in user (`/api/v1/me`) | `401 AUTH_SESSION_EXPIRED` |
+| clinic + permission | a member of the request's clinic holding that permission | `403 PERM_DENIED` |
+| ops | `is_platform_ops` users (`/api/v1/ops/*`, M1-P5) | `403 PERM_DENIED` |
+
+The session, the user's status and the membership are re-read on every request (spec R7): nothing
+is cached, so signing out ends access immediately (`401`) and deactivating a member or disabling a
+user takes effect on their next request (`403 AUTH_ACCOUNT_DISABLED`).
+
+Clinic context (R6): the clinic is the caller's only active membership, or the one named in
+`X-Clinic-ID`. A missing choice, a malformed value and a clinic the caller has no membership in
+all return `400 PERM_CLINIC_REQUIRED` — identical answers, so the API never confirms that a clinic
+exists. A `SUSPENDED` clinic returns `403 CLN_SUSPENDED`, and `/me` still lists it with its status.
+Any tenant resource outside the request's clinic returns `404 REQ_NOT_FOUND` (R8).
+
 ### Clinic administration (M1)
 
-| Method | Path | Purpose | Role |
-|---|---|---|---|
-| GET/PATCH | `/api/v1/clinic` | Clinic settings | OWNER |
-| GET/POST | `/api/v1/clinic/doctors` | List / add doctors | OWNER |
-| PATCH | `/api/v1/clinic/doctors/{doctor_id}` | Edit doctor | OWNER |
-| GET/POST | `/api/v1/clinic/staff` | List / invite staff | OWNER |
-| PATCH | `/api/v1/clinic/staff/{membership_id}` | Change role / deactivate | OWNER |
-| GET | `/api/v1/clinic/audit-events` | Audit log (P1) | OWNER |
+| Method | Path | Purpose | Role | Status |
+|---|---|---|---|---|
+| GET | `/api/v1/clinic` | Clinic settings | every role (`CLINIC_VIEW`) | Implemented (M1-P3) |
+| GET | `/api/v1/clinic/doctors` | List doctors | every role (`DOCTORS_VIEW`) | Implemented (M1-P3) |
+| GET | `/api/v1/clinic/doctors/{doctor_id}` | One doctor | every role (`DOCTORS_VIEW`) | Implemented (M1-P3) |
+| GET | `/api/v1/clinic/staff` | List staff with roles | OWNER (`STAFF_MANAGE`) | Implemented (M1-P3) |
+| PATCH | `/api/v1/clinic` | Edit clinic settings | OWNER | M1-P5 |
+| POST | `/api/v1/clinic/doctors` | Add a doctor | OWNER | M1-P5 |
+| PATCH | `/api/v1/clinic/doctors/{doctor_id}` | Edit doctor | OWNER | M1-P5 |
+| POST | `/api/v1/clinic/staff` | Invite staff | OWNER | M1-P5 |
+| PATCH | `/api/v1/clinic/staff/{membership_id}` | Change role / deactivate | OWNER | M1-P5 |
+| GET | `/api/v1/clinic/audit-events` | Audit log | OWNER | M1-P4 |
+
+The doctor and staff lists return `{"items": [...]}` with no cursor: a clinic has one to four
+doctors and a handful of staff, so the paginated envelope above starts with the first list that
+can grow (patients, M2).
 
 ### Ops console (M1, M2, M6)
 

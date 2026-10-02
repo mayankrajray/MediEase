@@ -39,6 +39,27 @@ first production release.
 - M1-P2: settings `JWT_SIGNING_KEY` (≥ 32 characters, required), `ACCESS_TOKEN_TTL_SECONDS`,
   `REFRESH_TOKEN_TTL_SECONDS`; `make seed` with synthetic local demo users; RUNBOOK §17
   (locked-out account).
+- M1-P3 (#19): authorisation on every route (FR-AUTH-03). Each route declares an access policy
+  (`@public`, `@authenticated`, `@clinic(Permission.X)`, `@ops`) and one `before_request` hook
+  enforces it; `create_app` refuses to start if any route has none, and an undeclared route is
+  refused rather than served (default deny).
+- M1-P3: the PRD §8.1 permission matrix as domain data (`Permission`, `ROLE_PERMISSIONS`,
+  `permissions_for`); an owner with a linked doctor profile also gets `CLINICAL_WRITE`.
+- M1-P3: every request re-reads the session, the user and the membership (R7), so sign-out ends
+  access at once (`AUTH_SESSION_EXPIRED`) and a deactivated member or disabled user is refused on
+  their next request (`AUTH_ACCOUNT_DISABLED`, AC4). New reads
+  `RefreshTokenRepository.is_family_live` and `MembershipRepository.list_staff`.
+- M1-P3: clinic resolution (R6) from the single membership or `X-Clinic-ID`; ambiguous, malformed
+  and foreign values all answer `PERM_CLINIC_REQUIRED` (400). New codes `PERM_DENIED` (403),
+  `PERM_CLINIC_REQUIRED` (400) and `CLN_SUSPENDED` (403); ops users are refused on clinic routes
+  and clinic staff on ops routes (R10).
+- M1-P3: `GET /api/v1/me` (user, memberships with clinic status, role and permissions) and
+  read-only `GET /api/v1/clinic`, `/clinic/doctors`, `/clinic/doctors/{doctor_id}`,
+  `/clinic/staff` in `contracts/openapi.yaml` 0.3.0 with the `X-Clinic-ID` parameter and a
+  `me_access` cookie security scheme; sign-in and refresh bodies now carry the same membership
+  shape. Lists return `{"items": [...]}` and are unpaginated by design at this size.
+- M1-P3: HTTP tenancy suite (`tests/tenancy/test_http_isolation.py`) proving AC3 end to end, with
+  a guard that fails when a new clinic route taking a resource ID has no cross-clinic case.
 
 ### Upgrade notes
 - M1-P2: existing local `.env` files need `JWT_SIGNING_KEY` of at least 32 characters (copy the
