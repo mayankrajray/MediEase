@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* Base text and focus styles for every surface. Focus stays visible for
+   keyboard users (WCAG 2.1 AA, apps/web/CLAUDE.md). */
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-white text-slate-900 antialiased;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-blue-700;
+  }
+}
