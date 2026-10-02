@@ -13,5 +13,6 @@ export default defineConfig([
       "@typescript-eslint/consistent-type-imports": "error",
     },
   },
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+  // schema.d.ts is generated from contracts/openapi.yaml (npm run gen:api); never edited by hand.
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "src/lib/api/schema.d.ts"]),
 ]);
