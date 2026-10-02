@@ -1,0 +1,19 @@
+# Keep the build context to what the image needs (Dockerfile COPY lines).
+# Local environments, caches and tests never enter the image; .env files are
+# excluded so secrets cannot be copied in by accident.
+.venv/
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+tests/
+.env
+.env.*
+Dockerfile
+.dockerignore
+*.md
+!migrations/README.md
