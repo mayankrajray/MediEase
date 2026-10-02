@@ -2,6 +2,8 @@
 
 Messages are safe to show to clinic staff and deliberately vague: none says
 whether the account exists or which part of the credentials was wrong (R2).
+The ``PERM_*`` errors answer "not for you, here" without describing what you
+asked for (R6, R8, R10).
 """
 
 from __future__ import annotations
@@ -54,3 +56,40 @@ class RefreshTokenReused(DomainError):
 
     def __init__(self) -> None:
         super().__init__("For your safety this session was ended. Please sign in again.")
+
+
+class PermissionDenied(DomainError):
+    """The caller is authenticated but may not do this here (FR-AUTH-03, R10).
+
+    ``details`` names the permission the endpoint needed and the caller's own
+    role — facts they already know — never anything about the resource.
+    """
+
+    code = "PERM_DENIED"
+
+    def __init__(self, *, permission: str | None = None, role: str | None = None) -> None:
+        details = {k: v for k, v in (("permission", permission), ("role", role)) if v}
+        super().__init__("You do not have access to this action.", **details)
+
+
+class ClinicRequired(DomainError):
+    """R6: the request did not identify exactly one clinic the user may work in.
+
+    The same answer whether ``X-Clinic-ID`` was missing, malformed, or named a
+    clinic this user has no membership in, so it never reveals that a clinic
+    exists.
+    """
+
+    code = "PERM_CLINIC_REQUIRED"
+
+    def __init__(self) -> None:
+        super().__init__("Choose which clinic this request is for.")
+
+
+class ClinicSuspended(DomainError):
+    """The resolved clinic is ``SUSPENDED``: nobody works in it until it is reactivated."""
+
+    code = "CLN_SUSPENDED"
+
+    def __init__(self) -> None:
+        super().__init__("This clinic is suspended. Contact MediEase support.")

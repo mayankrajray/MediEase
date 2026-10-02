@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import timedelta
 
 import pytest
 
-from mediease_api.application.auth._session import SessionIssuer
 from mediease_api.application.auth.errors import (
     AccountDisabled,
     AccountLocked,
@@ -15,91 +13,11 @@ from mediease_api.application.auth.errors import (
     RefreshTokenReused,
     SessionExpired,
 )
-from mediease_api.application.auth.refresh_session import RefreshSession
-from mediease_api.application.auth.sign_in import SignIn, SignInCommand
-from mediease_api.application.auth.sign_out import SignOut
-from mediease_api.domain.clinics.clinic import ClinicStatus
-from mediease_api.domain.identity.access import ClinicAccess
-from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.identity.session import RefreshTokenState
 from mediease_api.domain.identity.user import User
-from tests.builders import a_user, new_id
 from tests.conftest import LogReader
-from tests.fakes import (
-    FakeAccessTokens,
-    FakeClock,
-    FakeHasher,
-    FakeIds,
-    FakeRefreshSecrets,
-    InMemoryUnitOfWork,
-)
-
-PASSWORD = "correct horse battery"
-REFRESH_TTL = timedelta(days=14)
-
-
-@dataclass
-class Auth:
-    uow: InMemoryUnitOfWork
-    clock: FakeClock
-    hasher: FakeHasher
-    secrets: FakeRefreshSecrets
-    sign_in: SignIn
-    refresh: RefreshSession
-    sign_out: SignOut
-
-    def add_user(self, *, clinics: int = 1, **overrides: object) -> User:
-        user = a_user(password_hash=self.hasher.hash(PASSWORD), **overrides)
-        self.uow.committed.users[user.id] = user
-        self.uow.committed.access[user.id] = [
-            ClinicAccess(
-                membership_id=new_id(),
-                clinic_id=new_id(),
-                clinic_name=f"Sample Clinic {i}",
-                clinic_status=ClinicStatus.ACTIVE,
-                role=Role.OWNER,
-            )
-            for i in range(clinics)
-        ]
-        return user
-
-    def stored(self, user: User) -> User:
-        return self.uow.committed.users[user.id]
-
-
-@pytest.fixture
-def auth() -> Auth:
-    uow, clock, hasher, secrets = (
-        InMemoryUnitOfWork(),
-        FakeClock(),
-        FakeHasher(),
-        FakeRefreshSecrets(),
-    )
-    ids = FakeIds()
-    sessions = SessionIssuer(
-        ids=ids, secrets=secrets, access_tokens=FakeAccessTokens(), refresh_ttl=REFRESH_TTL
-    )
-    return Auth(
-        uow=uow,
-        clock=clock,
-        hasher=hasher,
-        secrets=secrets,
-        sign_in=SignIn(
-            uow=uow,
-            clock=clock,
-            ids=ids,
-            hasher=hasher,
-            sessions=sessions,
-            dummy_password_hash=hasher.hash("dummy-password-never-used"),
-        ),
-        refresh=RefreshSession(uow=uow, clock=clock, secrets=secrets, sessions=sessions),
-        sign_out=SignOut(uow=uow, clock=clock, secrets=secrets),
-    )
-
-
-def _cmd(identifier: str, password: str = PASSWORD) -> SignInCommand:
-    return SignInCommand(identifier=identifier, password=password)
-
+from tests.unit.application.harness import PASSWORD, REFRESH_TTL, Auth
+from tests.unit.application.harness import cmd as _cmd
 
 # --- Sign-in ---------------------------------------------------------------------------------
 
