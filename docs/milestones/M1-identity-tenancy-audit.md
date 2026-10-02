@@ -46,8 +46,8 @@ branch and appear in the one milestone PR.
 
 ## M1-P4 — Append-only audit log
 
-**Status: proposed, awaiting the developer's approval.** Covers FR-AUD-01, FR-AUD-02, FR-OPS-04
-(support view); spec R11; AC5, AC6.
+**Status: approved 3 Oct 2026 (option B below chosen); in implementation.** Covers FR-AUD-01,
+FR-AUD-02, FR-OPS-04 (support view); spec R11; AC5, AC6.
 
 ### Concepts
 
@@ -135,6 +135,8 @@ patient record. The ops console reads it in M6-P4; P4 creates and tests it.
 
 ### Open choice for approval — how AC5 is proved
 
+**Decision (developer, 3 Oct 2026): option B.**
+
 **AC5** requires that a staff role change writes exactly one `staff.role_changed` event with
 actor, target and `request_id`. P3 deliberately left every mutation to P5 so that mutations land
 after the audit log, which leaves P4 with no role change to audit.
@@ -142,7 +144,7 @@ after the audit log, which leaves P4 with no role change to audit.
 - **Option A — keep P4 mechanism-only.** P4 audits the auth events, proves R11 and AC6, and AC5 is
   proved in P5 when `PATCH /api/v1/clinic/staff/{membership_id}` is built. Smallest P4; AC5 stays
   open one phase longer.
-- **Option B (recommended) — pull the role change into P4.** Add one use case
+- **Option B (chosen) — pull the role change into P4.** Add one use case
   (`ChangeStaffRole`, using the existing R9 last-owner rule) and one endpoint
   (`PATCH /api/v1/clinic/staff/{membership_id}` under `STAFF_MANAGE`). AC5 is then proved end to
   end in the phase that builds the audit log, and R11 is proved against a real clinic mutation
