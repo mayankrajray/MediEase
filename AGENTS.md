@@ -109,7 +109,7 @@ do not exist.
 | `make install-web` | `npm ci` in `apps/web` (Node from `apps/web/.nvmrc`, installed in WSL on Windows) | now |
 | `make dev-web` | Next.js dev server on :3000 proxying to the API on localhost (`make up` first) | now |
 | `make contract` / `make contract-check` | Regenerate web types from `contracts/openapi.yaml` / fail if the committed types are stale | now |
-| `make seed` | Load generated (never real) demo data | M1 |
+| `make seed` | Load synthetic demo data: one clinic, owner, doctor, front desk, ops user (`APP_ENV=local` only; RUNBOOK §1) | now |
 | `make worker` | Run the job worker in the foreground | M5 |
 
 Verification before declaring a phase done: `make lint typecheck test` must pass. API tests include

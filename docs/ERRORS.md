@@ -26,9 +26,10 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | `CFG_INVALID` | — (process exits) | Settings failed validation | Missing/invalid env var | Start-up log `config.invalid` naming the field(s), `.env.example` (M0-P2) |
 | `READY_DB_UNAVAILABLE` | 503 | Database not reachable | db down, wrong host (`db` inside compose, `localhost` outside), wrong credentials | `ready.check_failed` (WARNING) with `cause`; `make ps`, db logs, DEBUGGING §5.2 (M0-P3) |
 | `READY_DB_TIMEOUT` | 503 | Database check exceeded 2 s | Connect, pool wait or `SELECT 1` took over 2 s: db overloaded, network, pool exhausted | `ready.check_failed` with `cause` (`ConnectionTimeout`, `QueryCanceled`, `TimeoutError`); db metrics, slow queries (M0-P3) |
-| `REQ_VALIDATION_FAILED` | 422 | Request body/query invalid | Client sent wrong shape, or a value failed a domain rule (M1-P1: `InvalidValue`) | `details.field` and `details.reason`; the value itself is never echoed *(HTTP mapping planned, M1-P3)* |
+| `REQ_VALIDATION_FAILED` | 422 | Request body/query invalid | Client sent wrong shape (Pydantic, M1-P2), or a value failed a domain rule (`InvalidValue`) | `details.fields[]` lists each `field` and `reason`; the value itself is never echoed (M1-P2) |
 | `REQ_NOT_FOUND` | 404 | Resource not found | Unknown route (M0-P2); wrong ID **or other clinic's resource** (M1+; repositories raise `NotFound` from M1-P1) | Access log `route` is null for unknown routes; tenancy context for resources — expected for cross-clinic access |
 | `REQ_METHOD_NOT_ALLOWED` | 405 | Method not allowed on this URL | Client used the wrong HTTP method | `Allow` response header lists valid methods (M0-P2) |
+| `REQ_UNSUPPORTED_MEDIA_TYPE` | 415 | Wrong body format | JSON endpoint called without `Content-Type: application/json` (e.g. an HTML form) | Client request headers (M1-P2) |
 | `REQ_CONFLICT_IDEMPOTENCY` | 409 | Same `Idempotency-Key` with a different body | Client retry bug | Client code *(planned, M1)* |
 | `REQ_RATE_LIMITED` | 429 | Too many requests | Abuse or client loop | `Retry-After` header; rate-limit logs *(planned, M1)* |
 | `SYS_UNEXPECTED` | 500 | Something went wrong | Unhandled exception | API log `level=ERROR` (`app.unexpected_error`) with same `request_id`, stack trace (M0-P2) |
@@ -52,12 +53,12 @@ absent there, the request never reached the API.
 
 | Code | HTTP | Meaning | Likely cause | Where to look |
 |---|---|---|---|---|
-| `AUTH_INVALID_CREDENTIALS` | 401 | Wrong login details | Typo; never reveals which field | `auth.sign_in_failed` |
-| `AUTH_LOCKED` | 423 | Account temporarily locked | 5 failed attempts (FR-AUTH-04) | `users.locked_until` |
-| `AUTH_SESSION_EXPIRED` | 401 | Please sign in again | Access token expired and refresh failed | Refresh flow, cookie jar |
-| `AUTH_REFRESH_REUSED` | 401 | Session ended for safety | Rotated refresh token replayed → family revoked | `refresh_tokens.family_id`; possible token theft |
-| `AUTH_CSRF_INVALID` | 403 | Request could not be verified | Missing/mismatched `X-CSRF-Token` | Web client, DEBUGGING §5.3 |
-| `AUTH_ACCOUNT_DISABLED` | 403 | Account disabled | User or membership deactivated | `users.status`, `clinic_memberships.status` |
+| `AUTH_INVALID_CREDENTIALS` | 401 | Wrong login details | Typo, unknown email/phone, or no password set yet; never reveals which | `auth.sign_in_failed` with `reason` (`unknown_identifier`, `no_password`, `wrong_password`) and `user_id` when known (M1-P2) |
+| `AUTH_LOCKED` | 423 | Account temporarily locked | 5 consecutive wrong passwords (FR-AUTH-04); `Retry-After` and `details.retry_after_seconds` give the remaining time | `auth.locked` (WARNING); `users.locked_until`. Waiting 15 min unlocks; ops can clear `locked_until` (RUNBOOK §17) (M1-P2) |
+| `AUTH_SESSION_EXPIRED` | 401 | Please sign in again | Refresh token missing, unknown, expired or revoked (signed out); from M1-P3 also an invalid or expired access token | `auth.refresh_failed` with `reason`; cookie jar; `refresh_tokens` row (M1-P2) |
+| `AUTH_REFRESH_REUSED` | 401 | Session ended for safety | A rotated refresh token was presented again → whole family revoked. Possible token theft, or two tabs refreshing at once | `auth.refresh_reused` (WARNING) with `user_id`, `session_id` (= `refresh_tokens.family_id`) (M1-P2) |
+| `AUTH_CSRF_INVALID` | 403 | Request could not be verified | Unsafe `/api/*` request with session cookies but missing/mismatched `X-CSRF-Token` (must equal the `me_csrf` cookie) | Web client; DEBUGGING §5.3 (M1-P2) |
+| `AUTH_ACCOUNT_DISABLED` | 403 | Account disabled | Right password, but user disabled or no `ACTIVE` membership (and not ops); on refresh it also revokes the session | `auth.sign_in_failed` / `auth.refresh_failed` with `reason`; `users.status`, `clinic_memberships.status` (M1-P2) |
 | `PERM_DENIED` | 403 | You don't have access to this action | Role lacks permission (same clinic) | PRD permission matrix |
 | `PERM_CLINIC_REQUIRED` | 400 | Choose a clinic | Multi-clinic user without `X-Clinic-ID` | Clinic switcher |
 | `CLN_SLUG_TAKEN` | 409 | That clinic URL is taken | Duplicate slug | Ops form |
@@ -66,9 +67,11 @@ absent there, the request never reached the API.
 | `CLN_INVALID_TRANSITION` | 409 | That status change isn't allowed | e.g. deactivating a deactivated membership, suspending an onboarding clinic; `details`: `entity`, `state`, `action` | State machines in `domain/clinics`, `domain/identity` (domain, M1-P1) |
 
 Domain codes marked *(domain, M1-P1)* are raised by the domain today; they reach HTTP clients
-through the error envelope once endpoints use them (M1-P3/P5). Input that fails a domain value
+through the error envelope once endpoints use them (M1-P3/P5). Every domain or application code
+has its HTTP status in `delivery/errors.py::DOMAIN_ERROR_STATUS`; a code missing there is logged
+as `app.unmapped_domain_error` and answered as `SYS_UNEXPECTED`. Input that fails a domain value
 rule (phone, email, slug, PIN code, time zone, required text) raises `REQ_VALIDATION_FAILED` with
-`details.field` and `details.reason` — never the rejected value. A repository given another
+`details.fields` — never the rejected value. A repository given another
 clinic's entity raises `TenancyViolation`, a programming error that surfaces as `SYS_UNEXPECTED`
 (see "Platform"), not as a user-facing code.
 

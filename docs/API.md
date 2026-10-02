@@ -46,12 +46,27 @@ change that implements it.
 
 ### Auth and session (M1)
 
-| Method | Path | Purpose | Req |
-|---|---|---|---|
-| POST | `/api/v1/auth/sign-in` | Email/phone + password | FR-AUTH-01 |
-| POST | `/api/v1/auth/refresh` | Rotate refresh token | FR-AUTH-02 |
-| POST | `/api/v1/auth/sign-out` | Revoke token family | FR-AUTH-02 |
-| GET | `/api/v1/me` | Current user, memberships, permissions | FR-AUTH-03 |
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| POST | `/api/v1/auth/sign-in` | Email/phone + password | FR-AUTH-01, 04 | Implemented (M1-P2) |
+| POST | `/api/v1/auth/refresh` | Rotate refresh token | FR-AUTH-02 | Implemented (M1-P2) |
+| POST | `/api/v1/auth/sign-out` | Revoke token family | FR-AUTH-02 | Implemented (M1-P2) |
+| GET | `/api/v1/me` | Current user, memberships, permissions | FR-AUTH-03 | M1-P3 |
+
+**Sign-in** `{"identifier": "<email or phone>", "password": "…"}` → `200` with
+`{user, memberships[], session: {access_expires_at, refresh_expires_at}}` and three cookies.
+Refresh returns the same body. No token ever appears in a body.
+
+| Cookie | Path | HttpOnly | Lifetime | Purpose |
+|---|---|---|---|---|
+| `me_access` | `/api` | yes | `ACCESS_TOKEN_TTL_SECONDS` (15 min) | JWT checked on every request from M1-P3 |
+| `me_refresh` | `/api/v1/auth` | yes | `REFRESH_TOKEN_TTL_SECONDS` (14 days, renewed on refresh) | Opaque; rotated on every refresh |
+| `me_csrf` | `/` | no | as `me_refresh` | Copied by the web app into `X-CSRF-Token` |
+
+All cookies are `SameSite=Lax` and `Secure` when `COOKIE_SECURE=true`. Every unsafe `/api/*`
+request that carries a session cookie needs `X-CSRF-Token` = `me_csrf` (sign-in is exempt).
+Auth responses are `Cache-Control: no-store`. The web client must not refresh twice in parallel:
+the second refresh presents a rotated token and ends the session (`AUTH_REFRESH_REUSED`).
 
 ### Clinic administration (M1)
 

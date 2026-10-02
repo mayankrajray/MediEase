@@ -25,6 +25,24 @@ first production release.
   `TenantScopedRepository`, repositories and unit of work; permanent tenancy suite in
   `tests/tenancy/`; models-vs-migrations drift test.
 - M1-P1: coverage gate ≥ 80% on `domain/` + `application/` in `make test-api` and CI (NFR-14).
+- M1-P2 (#19): sign-in by email or phone (FR-AUTH-01) with Argon2id hashing (argon2-cffi 25.1.0),
+  constant-time handling of unknown accounts, and lockout for 15 minutes after 5 consecutive
+  failures (FR-AUTH-04, `AUTH_LOCKED` 423 with `Retry-After`).
+- M1-P2: sessions (FR-AUTH-02): 15-minute HS256 access JWT (PyJWT 2.15.1) and 14-day rotating
+  refresh token stored as SHA-256; replaying a rotated token revokes the whole family
+  (`AUTH_REFRESH_REUSED`); sign-out revokes the family. `POST /api/v1/auth/sign-in`, `/refresh`,
+  `/sign-out` in `contracts/openapi.yaml` 0.2.0.
+- M1-P2: `HttpOnly` path-scoped cookies `me_access`, `me_refresh` and a `me_csrf` double-submit
+  token checked on every unsafe `/api/*` request with session cookies (`AUTH_CSRF_INVALID`).
+- M1-P2: migration `0003` (users credentials and lockout; `refresh_tokens`); clock port; request
+  validation with `REQ_VALIDATION_FAILED` / `details.fields`; domain error → HTTP status mapping.
+- M1-P2: settings `JWT_SIGNING_KEY` (≥ 32 characters, required), `ACCESS_TOKEN_TTL_SECONDS`,
+  `REFRESH_TOKEN_TTL_SECONDS`; `make seed` with synthetic local demo users; RUNBOOK §17
+  (locked-out account).
+
+### Upgrade notes
+- M1-P2: existing local `.env` files need `JWT_SIGNING_KEY` of at least 32 characters (copy the
+  line from `.env.example`); otherwise `make up` stops with `CFG_INVALID`.
 - `.github/CODEOWNERS`: default owners for every path (M0-P1, W-6).
 - API package `mediease_api` (M0-P2): `pyproject.toml` with pinned runtime and dev dependencies;
   typed `AppSettings` + `load_settings()` that fail fast on invalid config (`CFG_INVALID`, naming
