@@ -37,9 +37,15 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000
 
+# Debian security fixes published after the pinned base image was built (the
+# base stays pinned; only packages it already contains are upgraded, and the CI
+# image scan fails on any fixed HIGH/CRITICAL vulnerability still present).
 # Package managers are not needed to run the server; removing them shrinks the
 # attack surface of the running container.
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+RUN apt-get update \
+ && apt-get upgrade --yes --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
            /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
            /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 
