@@ -35,6 +35,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/opt/venv/bin:$PATH
 
+# Debian security fixes published after the pinned base image was built. The
+# base stays pinned; this only upgrades packages it already contains, and the CI
+# image scan fails if a fixed HIGH/CRITICAL vulnerability is still present.
+RUN apt-get update \
+ && apt-get upgrade --yes --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
+
 # Unprivileged runtime user (CLAUDE.md "Least privilege"). No home, no shell.
 # The base image's pip is removed: nothing installs packages at runtime.
 RUN groupadd --system app \
