@@ -27,6 +27,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 14. Key rotation (patient-link signing key)
 15. Suspected data breach
 16. Break-glass production database access
+17. Locked-out staff account
 
 ---
 
@@ -35,9 +36,23 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 ```bash
 make down
 docker volume rm mediease_pgdata   # destroys LOCAL data only
-make up && make migrate && make seed
+make up && make seed
 ```
-**Confirm:** `/ready` returns 200; seed clinic can sign in.
+**Confirm:** `/ready` returns 200; a seeded user can sign in:
+```bash
+curl -si -H 'Content-Type: application/json' \
+  -d '{"identifier":"owner@sample-clinic.example","password":"MediEase-demo-2026"}' \
+  localhost:8000/api/v1/auth/sign-in        # 200 + Set-Cookie me_access, me_refresh, me_csrf
+```
+`make seed` (M1-P2) creates the synthetic clinic `sample-clinic` with `owner@`, `doctor@`,
+`desk@sample-clinic.example` and the ops user `ops@mediease.example`, all with the demo password
+above (local only; `--password` overrides it). It refuses to run unless `APP_ENV=local` and does
+nothing if the clinic exists.
+
+**`make up` fails with `CFG_INVALID ... JWT_SIGNING_KEY`** (or Compose says
+`set JWT_SIGNING_KEY in .env`): `.env` was created before M1-P2. Set `JWT_SIGNING_KEY` in `.env`
+to at least 32 characters, e.g. the value from `.env.example` or
+`python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
 ### 2. Deploy a release (M6)
 1. Confirm CI is green on the commit and `CHANGELOG.md` is updated.
@@ -147,3 +162,16 @@ existing links fail with `LINK_INVALID`; clinics resend links from the visit scr
 Only for SEV1/SEV2 when no application path exists. Requires the founder's approval, a named
 engineer, a time limit, read-only credentials unless a write is essential, and a written record of
 every query run. Never export clinical data to a laptop.
+
+### 17. Locked-out staff account (M1-P2)
+**When:** a staff member reports "Too many attempts" (`AUTH_LOCKED`).
+1. The lock ends by itself 15 minutes after the fifth wrong password (`Retry-After` says how
+   long). Advise waiting first.
+2. If the user is sure nobody else was guessing, and cannot wait, ops clears the lock (audited
+   once M1-P4 lands):
+   `UPDATE users SET locked_until = NULL, failed_login_count = 0, updated_at = now() WHERE id = '<user id>';`
+3. Repeated lockouts across several accounts in a short time are an attack signal: check
+   `auth.sign_in_failed` / `auth.locked` rates and go to procedure 15 if warranted.
+4. A sudden `auth.refresh_reused` warning for one user means a refresh token was replayed: the
+   session has already been ended; ask the user to sign in again and check the device.
+**Confirm:** the user signs in; `users.failed_login_count` is 0.

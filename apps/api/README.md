@@ -11,7 +11,11 @@ services (see `docs/milestones/M0-foundation.md`).
 
 M1-P1: domain model (clinics, doctors, users, memberships), ID / repository / unit-of-work ports,
 UUIDv7 IDs, migration `0002`, tenancy-scoped SQLAlchemy repositories and unit of work (see
-`docs/milestones/M1-identity-tenancy-audit.md`). No endpoint uses them yet.
+`docs/milestones/M1-identity-tenancy-audit.md`).
+
+M1-P2: sign-in, refresh rotation with reuse detection, sign-out and lockout
+(`/api/v1/auth/*`), Argon2id and JWT adapters, CSRF double submit, migration `0003`, and
+`make seed` (synthetic demo users, local only).
 
 ## Layout
 

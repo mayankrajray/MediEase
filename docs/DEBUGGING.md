@@ -138,6 +138,12 @@ Inside containers the host is `db`; from your laptop it is `localhost`.
   Calling `:8000` directly makes cookies cross-site.
 - In local development `COOKIE_SECURE=false`; in any HTTPS environment it must be `true`.
 - Check the `Set-Cookie` response header in dev tools, then the cookie jar for path and expiry.
+- Paths are deliberate (M1-P2): `me_refresh` is only sent to `/api/v1/auth/*` and `me_access` to
+  `/api/*`, so neither appears on page requests. `me_csrf` (path `/`) is the only cookie scripts
+  can read; send it back as `X-CSRF-Token` on every POST/PUT/PATCH/DELETE, or the API answers
+  `AUTH_CSRF_INVALID`. After sign-in and refresh `me_csrf` changes: read it again.
+- `AUTH_REFRESH_REUSED` right after a refresh usually means two refreshes ran in parallel (two
+  tabs, a retry): the second presented the already-rotated token. Serialise refreshes.
 
 ### 5.4 Timezone errors
 - Database columns are `timestamptz`; Python datetimes must be timezone-aware (`datetime.now(UTC)`
