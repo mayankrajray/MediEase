@@ -17,6 +17,11 @@ dependencies = [
     "sqlalchemy==2.1.2",
     "psycopg[binary]==3.3.6",
     "alembic==1.20.0",
+    # M1-P2 (issue #19). Argon2id password hashing through the reference C
+    # implementation (FR-AUTH-01), and JWT access tokens with algorithm pinning
+    # (FR-AUTH-02). Both ship binary wheels / pure Python: no compiler needed.
+    "argon2-cffi==25.1.0",
+    "pyjwt==2.15.1",
 ]
 
 [project.optional-dependencies]
@@ -101,7 +106,7 @@ forbidden_modules = [
     "mediease_api.application", "mediease_api.ports", "mediease_api.adapters",
     "mediease_api.delivery", "mediease_api.config", "mediease_api.bootstrap", "mediease_api.wsgi",
     "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
-    "structlog", "gunicorn", "ulid",
+    "structlog", "gunicorn", "ulid", "argon2", "jwt",
 ]
 
 [[tool.importlinter.contracts]]
@@ -112,7 +117,7 @@ forbidden_modules = [
     "mediease_api.adapters", "mediease_api.delivery", "mediease_api.config",
     "mediease_api.bootstrap", "mediease_api.wsgi",
     "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
-    "gunicorn",
+    "gunicorn", "argon2", "jwt",
 ]
 
 [[tool.importlinter.contracts]]
@@ -123,7 +128,7 @@ forbidden_modules = [
     "mediease_api.application", "mediease_api.adapters", "mediease_api.delivery",
     "mediease_api.config", "mediease_api.bootstrap", "mediease_api.wsgi",
     "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
-    "gunicorn",
+    "gunicorn", "argon2", "jwt",
 ]
 
 [[tool.importlinter.contracts]]
