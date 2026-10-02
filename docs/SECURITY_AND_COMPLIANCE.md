@@ -60,8 +60,8 @@ Use this list in the M6 security review. Each row names where it is implemented.
 - [ ] File uploads: type allow-list, size limit, stored outside web root, served via signed URL (P1)
 - [x] Security headers: CSP, X-Content-Type-Options, Referrer-Policy, frame-ancestors none (M0-P4: nonce-based CSP per request in `apps/web/src/proxy.ts`, `script-src` without `'unsafe-inline'`; `Referrer-Policy: no-referrer`; `X-Frame-Options: DENY`; `Permissions-Policy`. HSTS joins with TLS in M6)
 - [ ] Webhook signature verification on raw body; replay-safe processing (M5)
-- [ ] Dependency and container image scanning in CI (M0-P5)
-- [ ] Secrets scanning in CI (M0-P5)
+- [x] Dependency and container image scanning in CI (M0-P5: `pip-audit`, `npm audit --audit-level=high`, Trivy on both images failing on fixed HIGH/CRITICAL; Dependabot for pip, npm, Docker and Actions)
+- [x] Secrets scanning in CI (M0-P5: gitleaks over the full git history, pinned image, redacted output)
 
 ### Audit and monitoring
 - [ ] Append-only audit events for FR-AUD-01 actions, written in the same transaction (M1)
