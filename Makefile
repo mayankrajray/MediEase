@@ -26,7 +26,7 @@ export TEST_DATABASE_URL
 # in pyproject.toml. CI runs the same command (.github/workflows/ci.yml).
 CORE_COVERAGE := --include='*/mediease_api/domain/*,*/mediease_api/application/*' --fail-under=80
 
-.PHONY: help env-check up down ps logs psql migrate smoke install-api install-web api-venv-check \
+.PHONY: help env-check up down ps logs psql migrate seed smoke install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
 	typecheck-web dev-web contract contract-check audit
 
@@ -48,6 +48,9 @@ down: ## Stop the local stack (data volume is kept)
 
 migrate: env-check ## Re-run database migrations (make up already runs them)
 	$(COMPOSE) run --rm --build migrate
+
+seed: env-check ## Load synthetic demo data (APP_ENV=local only; make up first)
+	$(COMPOSE) run --rm --no-deps api python -m mediease_api.delivery.cli.seed
 
 ps: ## Show service status and health
 	$(COMPOSE) ps
