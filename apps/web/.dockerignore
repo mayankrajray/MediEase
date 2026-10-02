@@ -1,0 +1,15 @@
+# Keep the build context to sources and manifests. Local installs and builds
+# never enter the image; .env files are excluded so secrets cannot be copied in.
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+.env
+.env.*
+Dockerfile
+.dockerignore
+*.md
+e2e/
