@@ -11,7 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from mediease_api.config.settings import CFG_INVALID, AppEnv, AppSettings, load_settings
-from tests.conftest import TEST_SIGNING_KEY, SetEnv
+from tests.conftest import TEST_IP_SALT, TEST_SIGNING_KEY, SetEnv
 
 
 def _invalid_fields(env: dict[str, str], set_env: SetEnv) -> set[str]:
@@ -36,6 +36,7 @@ def test_nfr_12_defaults_apply_when_optional_vars_absent(set_env: SetEnv) -> Non
         {
             "DATABASE_URL": "postgresql+psycopg://u:p@localhost:5432/db",
             "JWT_SIGNING_KEY": TEST_SIGNING_KEY,
+            "AUDIT_IP_SALT": TEST_IP_SALT,
         }
     )
     settings = load_settings()
@@ -173,6 +174,37 @@ def test_fr_auth_02_signing_key_never_appears_in_repr_or_errors(
         load_settings()
     captured = capsys.readouterr()
     assert "SECRET" not in captured.out + captured.err
+
+
+# --- Audit settings (M1-P4) ------------------------------------------------------------
+
+
+def test_fr_aud_01_ip_salt_is_required_and_must_be_strong(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    missing = {k: v for k, v in valid_env.items() if k != "AUDIT_IP_SALT"}
+    assert _invalid_fields(missing, set_env) == {"AUDIT_IP_SALT"}
+    assert _invalid_fields({**valid_env, "AUDIT_IP_SALT": "change-me"}, set_env) == {
+        "AUDIT_IP_SALT"
+    }
+
+
+def test_fr_aud_01_placeholder_ip_salt_only_in_local(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    placeholder = "change-me-local-only-audit-ip-salt-000"
+    set_env({**valid_env, "APP_ENV": "local", "AUDIT_IP_SALT": placeholder})
+    assert load_settings().AUDIT_IP_SALT.get_secret_value() == placeholder
+
+    env = {**valid_env, "APP_ENV": "production", "COOKIE_SECURE": "true"}
+    assert _invalid_fields({**env, "AUDIT_IP_SALT": placeholder}, set_env) == {"AUDIT_IP_SALT"}
+
+
+def test_fr_aud_01_ip_salt_never_appears_in_repr(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    set_env(valid_env)
+    assert TEST_IP_SALT not in repr(load_settings())
 
 
 @pytest.mark.parametrize(

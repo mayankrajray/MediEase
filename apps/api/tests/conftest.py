@@ -51,12 +51,14 @@ _MANAGED_VARS = (
     "DATABASE_URL",
     "COOKIE_SECURE",
     "JWT_SIGNING_KEY",
+    "AUDIT_IP_SALT",
     "ACCESS_TOKEN_TTL_SECONDS",
     "REFRESH_TOKEN_TTL_SECONDS",
 )
 
-# Synthetic, test-only signing key (>= 32 characters).
+# Synthetic, test-only secrets (>= 32 characters each).
 TEST_SIGNING_KEY = "test-only-signing-key-0123456789abcdef"
+TEST_IP_SALT = "test-only-audit-ip-salt-0123456789abcdef"
 
 _VALID_TEST_ENV = {
     "APP_ENV": "test",
@@ -65,6 +67,7 @@ _VALID_TEST_ENV = {
     "DATABASE_URL": "postgresql+psycopg://mediease:test-password@localhost:5432/mediease_test",
     "COOKIE_SECURE": "false",
     "JWT_SIGNING_KEY": TEST_SIGNING_KEY,
+    "AUDIT_IP_SALT": TEST_IP_SALT,
 }
 
 
@@ -86,6 +89,7 @@ def _json_log_settings() -> AppSettings:
         APP_ENV=AppEnv.TEST,
         DATABASE_URL=_VALID_TEST_ENV["DATABASE_URL"],
         JWT_SIGNING_KEY=SecretStr(TEST_SIGNING_KEY),
+        AUDIT_IP_SALT=SecretStr(TEST_IP_SALT),
     )
 
 
@@ -194,6 +198,7 @@ def upgrade_to_head(url: str, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "local")
     monkeypatch.setenv("DATABASE_URL", url)
     monkeypatch.setenv("JWT_SIGNING_KEY", TEST_SIGNING_KEY)
+    monkeypatch.setenv("AUDIT_IP_SALT", TEST_IP_SALT)
     command.upgrade(Config(str(ALEMBIC_INI)), "head")
 
 
@@ -222,7 +227,13 @@ def uow_factory(session_factory: sessionmaker[Session]) -> Iterator[UowFactory]:
     yield lambda: SqlAlchemyUnitOfWork(session_factory)
     tables = ", ".join(table.name for table in Base.metadata.sorted_tables)
     with session_factory() as session:
+        # audit_events refuses TRUNCATE in the database (FR-AUD-02). Tests must
+        # still be able to reset, so this is the one place that lifts the guard
+        # — the same deliberate, visible step operations would have to take
+        # (docs/RUNBOOK.md). Production never truncates it.
+        session.execute(text("ALTER TABLE audit_events DISABLE TRIGGER USER"))
         session.execute(text(f"TRUNCATE {tables}"))
+        session.execute(text("ALTER TABLE audit_events ENABLE TRIGGER USER"))
         session.commit()
 
 
@@ -240,6 +251,7 @@ def make_db_app(database_url: str, *, cookie_secure: bool = False) -> Flask:
         DATABASE_URL=database_url,
         COOKIE_SECURE=cookie_secure,
         JWT_SIGNING_KEY=SecretStr(TEST_SIGNING_KEY),
+        AUDIT_IP_SALT=SecretStr(TEST_IP_SALT),
     )
     return create_app(settings, password_hasher=CHEAP_HASHER)
 

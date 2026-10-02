@@ -17,6 +17,7 @@ from uuid import UUID
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from mediease_api.adapters.db.audit import SqlAlchemyAuditWriter
 from mediease_api.adapters.db.repositories import (
     SqlAlchemyClinicAccessRepository,
     SqlAlchemyClinicRepository,
@@ -67,6 +68,8 @@ class _OpenUnit:
         self.users = SqlAlchemyUserRepository(session)
         self.refresh_tokens = SqlAlchemyRefreshTokenRepository(session)
         self.clinic_access = SqlAlchemyClinicAccessRepository(session)
+        # Shares the session, so an audit row commits with the change (R11).
+        self.audit = SqlAlchemyAuditWriter(session)
 
 
 class SqlAlchemyUnitOfWork:
@@ -111,6 +114,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def clinic_access(self) -> SqlAlchemyClinicAccessRepository:
         return self._require_open().clinic_access
+
+    @property
+    def audit(self) -> SqlAlchemyAuditWriter:
+        return self._require_open().audit
 
     def tenant(self, clinic_id: UUID) -> SqlAlchemyTenantRepositories:
         return SqlAlchemyTenantRepositories(self._require_open().session, clinic_id)

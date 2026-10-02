@@ -89,6 +89,10 @@ class AppSettings(BaseSettings):
     COOKIE_SECURE: bool = False
     # HS256 key for access tokens (M1-P2). Never logged: SecretStr hides it from repr.
     JWT_SIGNING_KEY: SecretStr
+    # HMAC key for the IP fingerprints in audit events (M1-P4). Separate from the
+    # JWT key so either can be rotated alone; rotating it makes older
+    # fingerprints incomparable, which is the accepted trade-off.
+    AUDIT_IP_SALT: SecretStr
     # Access token lifetime: 15 min by default (spec R4); 1-60 minutes allowed.
     ACCESS_TOKEN_TTL_SECONDS: int = Field(default=900, ge=60, le=3600)
     # Refresh token lifetime: 14 days by default (spec R4); 1 hour to 30 days allowed.
@@ -151,6 +155,12 @@ class AppSettings(BaseSettings):
                 f"contains a '{_PLACEHOLDER}' placeholder; set a real value for APP_ENV={env.value}"
             )
         return value
+
+    @field_validator("AUDIT_IP_SALT")
+    @classmethod
+    def _strong_audit_salt(cls, value: SecretStr, info: ValidationInfo) -> SecretStr:
+        # Same strength rules as the signing key: it keys an HMAC-SHA256.
+        return cls._strong_signing_key(value, info)
 
 
 def load_settings() -> AppSettings:
