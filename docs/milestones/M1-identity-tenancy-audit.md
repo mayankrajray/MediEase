@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M1-P1 done (confirmed 3 Oct 2026); M1-P2 implemented, awaiting confirmation |
+| Status | In progress — M1-P1 and M1-P2 done (confirmed 3 Oct 2026); M1-P3 design proposed |
 | Spec | `docs/specs/identity-and-tenancy.md` (Approved 2026-10-02) |
 | Covers | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08, NFR-14 |
 | Issue / branch / PR | #19 · `m1/19-identity-tenancy-audit` · one draft PR for the whole milestone (ADR-0011) |
@@ -33,14 +33,159 @@
 |---|---|---|
 | P1 | Domain model, migration `0002`, tenancy-scoped repository base, unit of work, coverage gate | Below |
 | P2 | Argon2id hashing, sign-in, refresh rotation with reuse detection, sign-out, lockout | Below (M1-P2 section) |
-| P3 | Auth middleware → `RequestContext`; role + membership check on every route; permission matrix tests | R6, R7, R8, R10 |
+| P3 | Auth middleware → `RequestContext`; role + membership check on every route; permission matrix tests; `GET /api/v1/me` and read-only clinic endpoints | Below (M1-P3 section) |
 | P4 | Append-only `audit_events` written through the unit of work; DB role with `INSERT, SELECT` only; `v_clinic_activity` | R11, AC5, AC6 |
-| P5 | Ops API: create clinic → doctors → owner invite; onboarding checklist timestamps | R9, R12, FR-OPS-01/04 |
+| P5 | Ops API: create clinic → doctors → owner invite; onboarding checklist timestamps; owner staff and doctor management (invite, role change, deactivate) | R9, R12, FR-OPS-01/04, FR-ORG-04 |
 | P6 | Web: sign-in, clinic switcher, empty dashboard shell | Spec §6 |
 
 Each phase starts with its design (`/plan-phase`), is approved, implemented, verified by the
 developer and confirmed before the next phase starts. All phases are committed to the milestone
 branch and appear in the one milestone PR.
+
+---
+
+## M1-P3 — Authorisation on every route
+
+**Status: proposed, awaiting the developer's approval.** Covers FR-AUTH-03, FR-ORG-04 ("effective
+on the next request"), NFR-08; spec R6, R7, R8, R10; AC3, AC4.
+
+### Concepts
+
+1. **Authentication vs authorisation.** P2 proved *who* you are once and gave you a token. P3
+   decides, on every request, *whether you may do this here*: is the session still live, is the
+   user still active, which clinic is this request for, and does your role there allow the action.
+2. **Default deny.** Every route must declare an access policy (`public`, `authenticated`,
+   `clinic(permission)`, `ops`). `create_app` refuses to start if any route has none, so a new
+   endpoint cannot ship unprotected by accident.
+3. **Stateless token, stateful checks.** The access JWT is checked without the database, but R7
+   ("no cached permissions") means the user, the session and the membership are re-read on every
+   request. That is what makes deactivation and sign-out take effect on the next request.
+4. **Request context.** The result of those checks is a `RequestContext` (request, user, session,
+   clinic, membership, role) passed explicitly into use cases — never read from Flask globals in
+   application code (apps/api/CLAUDE.md).
+5. **404, not 403, across clinics (R8).** A tenant lookup goes through repositories bound to the
+   request's clinic; another clinic's row is "not found", so its existence is never confirmed.
+
+### Request flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant H as before_request (access policy)
+    participant A as AuthenticateRequest
+    participant D as PostgreSQL
+    participant R as Route → use case
+    B->>H: GET /api/v1/clinic/doctors/{id} (me_access, X-Clinic-ID?)
+    H->>H: policy of this endpoint? public → skip
+    H->>A: access token, X-Clinic-ID
+    A->>A: verify JWT (signature, exp ± 30 s) → user_id, session_id
+    A->>D: user (ACTIVE?) · session family live? · active memberships + clinics
+    A-->>H: RequestContext (or AUTH_SESSION_EXPIRED / AUTH_ACCOUNT_DISABLED / PERM_CLINIC_REQUIRED)
+    H->>H: role has permission? else 403 PERM_DENIED
+    H->>R: ctx (clinic_id bound into logs)
+    R->>D: uow.tenant(ctx.clinic_id).doctors.get(id)
+    alt other clinic's doctor
+        R-->>B: 404 REQ_NOT_FOUND
+    else own clinic
+        R-->>B: 200 doctor
+    end
+```
+
+### Rules
+
+| Check | Outcome |
+|---|---|
+| No / invalid / expired `me_access` (30 s skew) | 401 `AUTH_SESSION_EXPIRED` (the web app refreshes, then retries once — P6) |
+| Session family revoked (signed out, or reuse detected) | 401 `AUTH_SESSION_EXPIRED` — sign-out now ends access immediately, not after 15 min |
+| User `DISABLED` | 403 `AUTH_ACCOUNT_DISABLED` (R7, AC4) |
+| Non-ops user with no `ACTIVE` membership left | 403 `AUTH_ACCOUNT_DISABLED` (R7, AC4: a deactivated front desk is rejected on the next request) |
+| Clinic route, one active membership, no header | that clinic (R6) |
+| Clinic route, `X-Clinic-ID` names one of the user's active memberships | that clinic (R6) |
+| Clinic route, several memberships and no header, or a header that is not a UUID or not one of the user's clinics | 400 `PERM_CLINIC_REQUIRED` — the same answer whether or not that clinic exists |
+| Clinic route, resolved clinic is `SUSPENDED` | 403 `CLN_SUSPENDED` (new code) |
+| Clinic route, role lacks the permission | 403 `PERM_DENIED`, log `perm.denied` with permission and role |
+| Ops user (`is_platform_ops`) on a clinic route | 403 `PERM_DENIED` (R10) |
+| Non-ops user on an ops route | 403 `PERM_DENIED` (R10) |
+| Tenant resource not in the request's clinic | 404 `REQ_NOT_FOUND`, log `tenancy.not_found` (R8, AC3) |
+
+### Permission matrix (domain data, PRD §8.1 is normative)
+
+`domain/identity/permissions.py` encodes every P0 row as a `Permission` enum and a role → set
+mapping, so later milestones add endpoints, not policy. P3 uses `CLINIC_VIEW`, `DOCTORS_VIEW`
+and `STAFF_MANAGE`; the rest are tested as a table now and attached to routes in M2–M5.
+
+| Permission | OWNER | DOCTOR | FRONT_DESK |
+|---|---|---|---|
+| `CLINIC_VIEW` (name, timezone, address) | ✅ | ✅ | ✅ |
+| `DOCTORS_VIEW` | ✅ | ✅ | ✅ |
+| `CLINIC_MANAGE`, `STAFF_MANAGE` | ✅ | — | — |
+| `PATIENTS_MANAGE`, `APPOINTMENTS_MANAGE`, `QUEUE_MOVE`, `REMINDERS_SCHEDULE` | ✅ | ✅ | ✅ |
+| `CLINICAL_VIEW` | ✅ | ✅ | — (only the "prescription issued" flag) |
+| `CLINICAL_WRITE` | ✅ only with a linked doctor profile | ✅ | — |
+| `USAGE_METRICS_VIEW` | ✅ | ✅ | — |
+
+Ops permissions are not role-based: ops routes require `is_platform_ops` (P5 adds the first ones).
+
+### Endpoints in P3
+
+| Method | Path | Policy | Returns |
+|---|---|---|---|
+| GET | `/api/v1/me` | `authenticated` (no clinic needed) | user, `is_platform_ops`, active memberships with clinic status, role and permissions |
+| GET | `/api/v1/clinic` | `clinic(CLINIC_VIEW)` | the request's clinic |
+| GET | `/api/v1/clinic/doctors` | `clinic(DOCTORS_VIEW)` | the clinic's doctors |
+| GET | `/api/v1/clinic/doctors/{doctor_id}` | `clinic(DOCTORS_VIEW)` | one doctor, 404 across clinics |
+| GET | `/api/v1/clinic/staff` | `clinic(STAFF_MANAGE)` | memberships with each user's name, role and status |
+
+Existing routes get explicit policies: `/health`, `/ready` and `/api/v1/auth/*` are `public`.
+
+### Decisions
+
+| Decision | Reason |
+|---|---|
+| P3 adds **read-only** clinic endpoints; staff and doctor changes (invite, role change, deactivate) move to P5 | Every mutation then lands after the audit log (P4), so AC5 holds from the first write. P3 still has real tenant endpoints to prove AC3 against |
+| Session liveness is checked per request (one indexed query on `refresh_tokens.family_id`) | Sign-out and reuse revocation end access at once instead of up to 15 minutes later |
+| Three queries per authenticated request (user, session, memberships) | R7 forbids caching permissions; fine at pilot scale, revisit with measurements |
+| Unknown or foreign `X-Clinic-ID` → `PERM_CLINIC_REQUIRED`, never 404/403 | Does not reveal whether a clinic exists |
+| `SUSPENDED` clinic → 403 `CLN_SUSPENDED` on clinic routes; `/me` still lists it with its status | The web app can explain why, instead of a generic denial |
+| Ops users are refused on clinic routes even if they hold a membership | R10; support access to a clinic is the post-pilot owner-granted flow (FR-OPS-05). Use a separate account for clinic work |
+| Default-deny registry check at start-up, plus a test that lists every route with its policy | "Every route" holds by construction, not by review |
+| `tests/tenancy/` gains an HTTP suite and a guard: every clinic route with an ID in its path must have a cross-clinic case | Future endpoints cannot skip the tenancy suite (CLAUDE.md "Tenancy isolation is a permanent test suite") |
+| No migration | Uses existing tables and indexes |
+
+### Files
+
+| Layer | Files |
+|---|---|
+| Domain | `identity/permissions.py` (`Permission`, `ROLE_PERMISSIONS`, `permissions_for(role, has_doctor_profile)`) |
+| Application | `context.py` (`RequestContext`), `auth/authenticate.py` (`AuthenticateRequest`, clinic resolution), `auth/errors.py` (+ `PermissionDenied`, `ClinicRequired`, `ClinicSuspended`), `identity/get_me.py`, `clinics/queries.py` (`GetClinic`, `ListDoctors`, `GetDoctor`, `ListStaff`) |
+| Ports | `repositories.py`: `RefreshTokenRepository.is_family_live`, `StaffDirectory` (tenant: memberships joined to user names) |
+| Adapters | `db/repositories.py` (the two additions) |
+| Delivery | `http/access.py` (policies, `before_request` hook, registry check), `http/me.py`, `http/clinic.py`, `errors.py` (new codes), `bootstrap.py` |
+| Contract / docs | `openapi.yaml` (5 endpoints, `X-Clinic-ID`), `API.md`, `ERRORS.md` (`CLN_SUSPENDED`, `PERM_*`), `ARCHITECTURE.md` §9, `DEBUGGING.md` |
+
+### Tests
+
+- Domain: the full permission matrix as one table test; owner-without-doctor-profile cannot
+  `CLINICAL_WRITE`.
+- Application (fakes): token missing/expired/revoked session; disabled user; deactivated last
+  membership (AC4); clinic resolution (single, header, missing header with two clinics, foreign or
+  malformed header, suspended); ops vs clinic routes.
+- HTTP on PostgreSQL: matrix of {owner, doctor, front desk, ops, signed out} × every P3 endpoint →
+  expected status; AC4 end to end (deactivate the membership, same access token → 403); sign-out
+  then the old access token → 401; `X-Clinic-ID` for a two-clinic user.
+- Tenancy (HTTP, AC3): users of clinics A and B; A asks for B's doctor → 404; A's lists contain
+  no B rows; the guard test above.
+- Start-up: an app with an undeclared route fails to build; contract tests for every new response.
+
+### Verify
+
+```bash
+make up && make seed
+# sign in as desk@ → GET /api/v1/me 200; GET /api/v1/clinic/staff 403 PERM_DENIED
+# sign in as owner@ → GET /api/v1/clinic/staff 200
+# sign out → the old me_access on GET /api/v1/me → 401 AUTH_SESSION_EXPIRED
+```
 
 ---
 
