@@ -4,7 +4,8 @@ Every API error returns:
 
     { "error": { "code", "message", "request_id", "details" } }
 
-Codes are catalogued in ``docs/ERRORS.md``. Unhandled exceptions become a single
+Codes are catalogued in ``docs/ERRORS.md``. Readiness failures become a 503 with
+their ``READY_*`` code. Unhandled exceptions become a single
 ``SYS_UNEXPECTED`` 500 with no stack trace in the body; the trace is logged
 server-side with the same ``request_id``, so the failure is traceable without
 leaking internals to the client.
@@ -20,11 +21,18 @@ from flask import Flask, Response, jsonify
 from werkzeug.exceptions import HTTPException
 
 from mediease_api.delivery.middleware import get_request_id
+from mediease_api.ports.readiness import DatabaseTimeout, DatabaseUnavailable, ReadinessError
 
 logger = structlog.get_logger(__name__)
 
 SYS_UNEXPECTED = "SYS_UNEXPECTED"
 _SYS_UNEXPECTED_MESSAGE = "An unexpected error occurred."
+
+# Safe to show to staff and to monitoring; details live in the server log.
+_READINESS_MESSAGES = {
+    DatabaseUnavailable.code: "The database is not reachable.",
+    DatabaseTimeout.code: "The database did not respond in time.",
+}
 
 # Framework HTTP errors with a catalogued code. Any other 4xx becomes
 # REQ_<WERKZEUG_NAME> (e.g. REQ_UNSUPPORTED_MEDIA_TYPE); see docs/ERRORS.md.
@@ -64,7 +72,20 @@ def _http_error_code(exc: HTTPException) -> str:
 
 
 def register_error_handlers(app: Flask) -> None:
-    """Attach the HTTP-exception and catch-all handlers to the app."""
+    """Attach the readiness, HTTP-exception and catch-all handlers to the app."""
+
+    @app.errorhandler(ReadinessError)
+    def _handle_readiness_error(exc: ReadinessError) -> tuple[Response, int]:
+        # Degraded but handled (WARNING): the instance reports not-ready and the
+        # orchestrator stops routing to it. The cause's type is logged for
+        # diagnosis; its message is not (driver messages name hosts and users).
+        cause = exc.__cause__
+        logger.warning(
+            "ready.check_failed",
+            code=exc.code,
+            cause=type(cause).__name__ if cause else None,
+        )
+        return error_response(exc.code, _READINESS_MESSAGES[exc.code], 503)
 
     @app.errorhandler(HTTPException)
     def _handle_http_exception(exc: HTTPException) -> tuple[Response, int]:
