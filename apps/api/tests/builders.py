@@ -1,14 +1,15 @@
 """Builders for domain objects with synthetic data (docs/TESTING.md "builders, not fixtures").
 
-Names, slugs and ``+9190000000xx`` numbers are invented. IDs are random
-UUIDs; tests that need time ordering use the UUIDv7 adapter explicitly.
+Names, slugs and ``+9190000000xx`` numbers are invented. IDs are UUIDv7s from
+the production generator, so creation order is ID order.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
+from mediease_api.adapters.ids.uuid7 import Uuid7Generator
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
@@ -18,6 +19,13 @@ from mediease_api.domain.shared.phone import PhoneNumber
 
 NOW = datetime(2026, 10, 2, 4, 30, tzinfo=UTC)
 LATER = datetime(2026, 10, 2, 5, 0, tzinfo=UTC)
+
+_ids = Uuid7Generator()
+
+
+def new_id() -> UUID:
+    return _ids.new_id()
+
 
 _counter = iter(range(10, 10_000))
 
@@ -29,7 +37,7 @@ def _n() -> int:
 def a_clinic(*, slug: str | None = None, **overrides: object) -> Clinic:
     n = _n()
     fields: dict[str, object] = {
-        "id": uuid4(),
+        "id": new_id(),
         "name": f"Sample Clinic {n}",
         "slug": slug or f"sample-clinic-{n}",
         "now": NOW,
@@ -45,7 +53,7 @@ def a_clinic(*, slug: str | None = None, **overrides: object) -> Clinic:
 def a_user(**overrides: object) -> User:
     n = _n()
     fields: dict[str, object] = {
-        "id": uuid4(),
+        "id": new_id(),
         "full_name": f"Sample User {n}",
         "now": NOW,
         "email": EmailAddress.parse(f"user{n}@example.test"),
@@ -58,7 +66,7 @@ def a_user(**overrides: object) -> User:
 def a_doctor(clinic_id: UUID, **overrides: object) -> Doctor:
     n = _n()
     fields: dict[str, object] = {
-        "id": uuid4(),
+        "id": new_id(),
         "clinic_id": clinic_id,
         "display_name": f"Dr. Sample {n}",
         "qualification": "MBBS",
@@ -74,7 +82,7 @@ def a_membership(
     clinic_id: UUID, user_id: UUID, role: Role = Role.FRONT_DESK, *, active: bool = True
 ) -> ClinicMembership:
     membership = ClinicMembership.invite(
-        id=uuid4(), clinic_id=clinic_id, user_id=user_id, role=role, now=NOW
+        id=new_id(), clinic_id=clinic_id, user_id=user_id, role=role, now=NOW
     )
     if active:
         membership.activate(now=NOW)

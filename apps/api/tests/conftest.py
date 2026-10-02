@@ -8,17 +8,29 @@ outside production).
 from __future__ import annotations
 
 import os
+import uuid
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from flask import Flask
 from flask.testing import FlaskClient
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import Session, sessionmaker
 
+from mediease_api.adapters.db.models import Base
+from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork, build_session_factory
 from mediease_api.bootstrap import create_app
 from mediease_api.config.settings import AppSettings
 from mediease_api.ports.readiness import ReadinessError
 
 SetEnv = Callable[[dict[str, str]], None]
+
+ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 
 # Every variable AppSettings reads. Cleared before each test that uses set_env.
 _MANAGED_VARS = ("APP_ENV", "LOG_LEVEL", "DB_ECHO_PARAMS", "DATABASE_URL", "COOKIE_SECURE")
@@ -97,3 +109,60 @@ def database_url() -> str:
             "(start the database first with `make up`), or export it yourself."
         )
     return url
+
+
+@contextmanager
+def scratch_database(database_url: str, prefix: str) -> Iterator[str]:
+    """Create an empty, uniquely named database; drop it on exit.
+
+    Tests that migrate or write data never touch the developer's database.
+    """
+    name = f"{prefix}_{uuid.uuid4().hex[:12]}"
+    admin = create_engine(database_url, isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        conn.execute(text(f'CREATE DATABASE "{name}"'))
+    try:
+        yield make_url(database_url).set(database=name).render_as_string(hide_password=False)
+    finally:
+        with admin.connect() as conn:
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+        admin.dispose()
+
+
+def upgrade_to_head(url: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run `alembic upgrade head` on ``url`` exactly as the migrate container does."""
+    # env.py calls load_settings(), so the target is chosen through DATABASE_URL.
+    for var in _MANAGED_VARS:
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("APP_ENV", "local")
+    monkeypatch.setenv("DATABASE_URL", url)
+    command.upgrade(Config(str(ALEMBIC_INI)), "head")
+
+
+@pytest.fixture(scope="session")
+def migrated_database_url(database_url: str) -> Iterator[str]:
+    """One database per test session with every migration applied."""
+    with scratch_database(database_url, "mediease_it") as url:
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            upgrade_to_head(url, monkeypatch)
+        yield url
+
+
+@pytest.fixture(scope="session")
+def session_factory(migrated_database_url: str) -> Iterator[sessionmaker[Session]]:
+    engine = create_engine(migrated_database_url, hide_parameters=True)
+    yield build_session_factory(engine)
+    engine.dispose()
+
+
+UowFactory = Callable[[], SqlAlchemyUnitOfWork]
+
+
+@pytest.fixture
+def uow_factory(session_factory: sessionmaker[Session]) -> Iterator[UowFactory]:
+    """New units of work on the migrated database; every table is emptied afterwards."""
+    yield lambda: SqlAlchemyUnitOfWork(session_factory)
+    tables = ", ".join(table.name for table in Base.metadata.sorted_tables)
+    with session_factory() as session:
+        session.execute(text(f"TRUNCATE {tables}"))
+        session.commit()
