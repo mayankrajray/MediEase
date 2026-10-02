@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import Select, func, select, update
+from sqlalchemy import Select, exists, func, select, update
 from sqlalchemy.orm import Session
 
 from mediease_api.adapters.db.models import (
@@ -29,7 +29,7 @@ from mediease_api.adapters.db.models import (
 from mediease_api.adapters.db.tenancy import TenantScopedRepository
 from mediease_api.domain.clinics.clinic import Clinic, ClinicStatus
 from mediease_api.domain.clinics.doctor import Doctor
-from mediease_api.domain.identity.access import ClinicAccess
+from mediease_api.domain.identity.access import ClinicAccess, StaffMember
 from mediease_api.domain.identity.membership import ClinicMembership, MembershipStatus, Role
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User, UserStatus
@@ -239,6 +239,16 @@ class SqlAlchemyRefreshTokenRepository:
         )
         return int(result.rowcount)  # type: ignore[attr-defined]
 
+    def is_family_live(self, family_id: UUID, *, now: datetime) -> bool:
+        query = select(
+            exists().where(
+                RefreshTokenRow.family_id == family_id,
+                RefreshTokenRow.revoked_at.is_(None),
+                RefreshTokenRow.expires_at > now,
+            )
+        )
+        return bool(self._session.scalar(query))
+
 
 # --- Clinic access (platform, cross-clinic by user) ---------------------------------------------
 
@@ -255,8 +265,15 @@ class SqlAlchemyClinicAccessRepository:
 
     def list_active_for_user(self, user_id: UUID) -> Sequence[ClinicAccess]:
         query = (
-            select(ClinicMembershipRow, ClinicRow)
+            select(ClinicMembershipRow, ClinicRow, DoctorRow.id)
             .join(ClinicRow, ClinicRow.id == ClinicMembershipRow.clinic_id)
+            # The user's doctor profile at the same clinic, if any (owner who is a doctor).
+            .outerjoin(
+                DoctorRow,
+                (DoctorRow.clinic_id == ClinicMembershipRow.clinic_id)
+                & (DoctorRow.user_id == ClinicMembershipRow.user_id)
+                & DoctorRow.is_active,
+            )
             .where(
                 ClinicMembershipRow.user_id == user_id,
                 ClinicMembershipRow.status == MembershipStatus.ACTIVE.value,
@@ -270,8 +287,9 @@ class SqlAlchemyClinicAccessRepository:
                 clinic_name=clinic.name,
                 clinic_status=ClinicStatus(clinic.status),
                 role=Role(membership.role),
+                has_doctor_profile=doctor_id is not None,
             )
-            for membership, clinic in self._session.execute(query)
+            for membership, clinic, doctor_id in self._session.execute(query)
         ]
 
 
@@ -385,6 +403,26 @@ class SqlAlchemyMembershipRepository(TenantScopedRepository[ClinicMembershipRow]
             ClinicMembershipRow.status == MembershipStatus.ACTIVE.value,
         )
         return self._session.scalar(select(func.count()).select_from(owners.subquery())) or 0
+
+    def list_staff(self) -> Sequence[StaffMember]:
+        # Scoped like every other query here; the join only adds the member's
+        # name, which lives on the platform `users` table.
+        query = (
+            self._scoped_select()
+            .add_columns(UserRow.full_name)
+            .join(UserRow, UserRow.id == ClinicMembershipRow.user_id)
+            .order_by(UserRow.full_name, ClinicMembershipRow.id)
+        )
+        return [
+            StaffMember(
+                membership_id=row.id,
+                user_id=row.user_id,
+                full_name=full_name,
+                role=Role(row.role),
+                status=MembershipStatus(row.status),
+            )
+            for row, full_name in self._session.execute(query)
+        ]
 
     def update(self, membership: ClinicMembership) -> None:
         # clinic_id and user_id never change; only the role and the lifecycle do.
