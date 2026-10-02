@@ -11,7 +11,8 @@
 | [0007](0007-messaging-port-whatsapp-first.md) | WhatsApp-first messaging behind a provider-agnostic port | Accepted |
 | [0008](0008-contract-first-openapi.md) | Contract-first API with OpenAPI and generated web types | Accepted |
 | [0009](0009-deployment-and-environments.md) | Docker everywhere; single India region for the pilot | Accepted |
-| [0010](0010-issue-driven-workflow-and-logical-commits.md) | Issue-driven workflow with logical commits and rebase merges | Accepted |
+| [0010](0010-issue-driven-workflow-and-logical-commits.md) | Issue-driven workflow with logical commits and rebase merges | Accepted; per-phase issue/branch/PR superseded by ADR-0011 |
+| [0011](0011-one-branch-and-pr-per-milestone.md) | One branch and one pull request per milestone | Accepted |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, and add a row here.
 Accepted ADRs are never edited; supersede them with a new ADR.

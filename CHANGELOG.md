@@ -61,6 +61,10 @@ first production release.
   `make smoke` passes; CI is green on the PR.
 
 ### Changed
+- Workflow (ADR-0011): one issue, one branch (`m<milestone>/<issue#>-<slug>`) and one PR per
+  milestone; every phase is committed to the milestone branch and the PR stays a draft until the
+  milestone is done. Supersedes ADR-0010's per-phase issue, branch and PR. `CLAUDE.md`,
+  `AGENTS.md`, `CONTRIBUTING.md`, the PR template and `/close-phase` updated.
 - `DATABASE_URL` must use the `postgresql+psycopg://` scheme; anything else fails start-up with
   `CFG_INVALID` (M0-P3).
 - `CLAUDE.md`: new "Commit Standards"; "Git Workflow" now issue → branch → PR with no direct pushes

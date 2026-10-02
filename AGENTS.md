@@ -32,7 +32,7 @@ disagree, `CLAUDE.md` wins and this file must be corrected.
 | Messaging | WhatsApp Business Platform (Cloud API) + SMS behind a `MessagingPort` | ADR-0007 |
 | Contract | OpenAPI 3.1 in `contracts/openapi.yaml`; web types generated from it | ADR-0008 |
 | Runtime | Docker + Docker Compose locally; single-region India deployment for pilot | ADR-0009 |
-| Version control | Git, GitHub, trunk-based with short-lived branches, GitHub Actions CI | ADR-0001 |
+| Version control | Git, GitHub, trunk-based; one branch and one PR per milestone; GitHub Actions CI | ADR-0001, ADR-0011 |
 
 Exact library versions are pinned in `apps/api/pyproject.toml` and `apps/web/package.json`
 (created in Milestone 0). Do not add a dependency without stating why in the change description.
@@ -153,7 +153,8 @@ healthy, and exits 0.
 - **Errors:** raise domain/application errors with a stable `code`; the HTTP layer maps them.
 - **Tests:** name the requirement, e.g. `test_fr_apt_04_concurrent_booking_one_wins`.
 - **Commits:** one commit per logical change; Conventional Commits subject in imperative mood with
-  requirement IDs, plus a body explaining what and why, and `Refs #<issue>` (CLAUDE.md "Commit Standards").
+  requirement IDs, plus a body explaining what and why, and `Refs #<milestone issue>` (CLAUDE.md
+  "Commit Standards").
 
 ---
 
@@ -166,8 +167,9 @@ healthy, and exits 0.
 - Never generate medical advice, drug suggestions or dosage logic.
 - Never run migrations inside application start-up.
 - Never push to `origin/main`, never merge a PR, and never force-push or rewrite pushed history.
-- Push only to the task's own branch, and only after the developer explicitly permits it for that task.
-- Never combine unrelated tasks in one branch, commit or PR (CLAUDE.md "Git Workflow").
+- Push only to the active milestone's branch, and only after the developer explicitly permits it.
+- Never combine work from different milestones, or unrelated logic, in one branch, commit or PR
+  (CLAUDE.md "Git Workflow", ADR-0011).
 - Never start work on a milestone other than the active one in `TASKS.md`.
 - Never disable, skip or loosen a test to make a build pass.
 
@@ -182,4 +184,5 @@ End each phase with:
 3. **How to verify** — exact commands and expected output, including one failure path.
 4. **Docs updated** — which of the files in CLAUDE.md's documentation table were touched.
 5. **Commits and PR** — the list of logical commits (subject + body, per CLAUDE.md "Commit
-   Standards"), the issue number, the branch name, and the PR link once pushed with permission.
+   Standards"), the milestone issue, the milestone branch, and the milestone PR link once pushed
+   with permission.

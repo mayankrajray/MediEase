@@ -162,8 +162,8 @@ same failure may already be explained.
   a future milestone.
 - **Phased rollout within a milestone.** Large milestones are split into small logical phases
   (see `TASKS.md`). Each phase is explained, implemented and tested before the next begins.
-- **One issue per logical task.** Every task is tracked by a repository issue before work starts;
-  the issue links the phase, requirement IDs and acceptance criteria.
+- **One issue per milestone.** Every milestone is tracked by a repository issue before work
+  starts; the issue lists its phases, requirement IDs and exit criteria (ADR-0011).
 - **Spec before code.** A phase that adds behaviour has a spec in `docs/specs/` (format in
   `SPECS.md`) with acceptance criteria tied to requirement IDs.
 - **Explain before implementing.** Every phase starts with the design: what is being built, why,
@@ -230,22 +230,28 @@ same failure may already be explained.
 
 ## Git Workflow
 
-Every task follows the same path (ADR-0010):
+Every milestone follows the same path (ADR-0010, ADR-0011):
 
 ```
-Issue → task branch → implementation → logical commits → push (with permission) → PR
-      → CI green → review + CODEOWNERS approval → merge by an authorised maintainer
+Milestone issue → milestone branch → per phase: design → approval → implementation
+      → logical commits → developer confirms → push (with permission) to the same branch
+      → one PR per milestone (draft until every phase is done) → CI green
+      → review + CODEOWNERS approval → merge by an authorised maintainer
 ```
 
-- **One issue per logical task.** Each issue has exactly one branch and one PR. Unrelated tasks or
-  logic are never combined in the same branch or PR.
-- **Short-lived branches** named `m<milestone>/p<phase>-<issue#>-<slug>`, e.g.
-  `m3/p2-41-token-queue`, created from the latest `origin/main`.
+- **One milestone, one issue, one branch, one PR.** The milestone issue lists every phase; all of
+  the milestone's phases land on its branch and in its PR. Work from another milestone, or
+  unrelated logic, is never combined in that branch or PR.
+- **Milestone branches** are named `m<milestone>/<issue#>-<slug>`, e.g.
+  `m1/19-identity-tenancy-audit`, created from the latest `origin/main` when the milestone starts.
+  Only one milestone branch is open at a time.
+- **The PR is a draft** from the first phase push until every phase is done and the milestone exit
+  criteria are met; then it is marked ready for review.
 - **Never push to `origin/main`**, directly or by any other route. Work reaches `main` only through
   a reviewed PR.
 - **Push only with permission.** Agents may create issues, branches and local commits for the
-  active task. They push to the task branch and open the PR only after the developer explicitly
-  permits it for that task.
+  active milestone. They push to the milestone branch and open or update its PR only after the
+  developer explicitly permits it.
 - **Never merge.** Merging is done by an authorised maintainer after green CI and the required
   reviews, including CODEOWNERS approval where the repository enforces it. Merge method:
   **rebase and merge**, so logical commits are preserved with a linear history.
@@ -267,8 +273,8 @@ Issue → task branch → implementation → logical commits → push (with perm
   period, requirement ID where one applies.
 - **Blank line, then a body** wrapped at 72 characters explaining *what* changed and *why* — the
   problem, the approach, trade-offs or follow-ups. The diff shows *how*.
-- **Footer:** `Refs #<issue>` on every commit; `Closes #<issue>` on the final commit of the PR.
-  Add `BREAKING CHANGE:` when applicable.
+- **Footer:** `Refs #<issue>` on every commit (the milestone issue); `Closes #<issue>` on the final
+  commit of the milestone. Add `BREAKING CHANGE:` when applicable.
 - **Types:** `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`, `security`, `build`, `ci`.
 
 Example:
@@ -338,7 +344,7 @@ exception, or disabling a test.
 
 A milestone (or phase) is complete only when:
 
-- An issue tracks the task, and its branch and PR contain only that task's changes.
+- An issue tracks the milestone, and its branch and PR contain only that milestone's changes.
 - Architecture has been explained.
 - A spec exists with acceptance criteria linked to requirement IDs.
 - Code has been generated, and only required files were modified.
@@ -348,6 +354,6 @@ A milestone (or phase) is complete only when:
 - The developer has successfully tested the phase.
 - `TASKS.md`, `CHANGELOG.md` and `NEXT_STEPS_PLAN.md` reflect the new state.
 - Each logical change is its own commit following "Commit Standards".
-- The branch is pushed (with permission), the PR is green, reviewed and CODEOWNERS-approved, and an
-  authorised maintainer has merged it.
+- The phase's commits are pushed (with permission) to the milestone branch; for a milestone, the
+  PR is green, reviewed and CODEOWNERS-approved, and an authorised maintainer has merged it.
 - Approval is received before the next milestone begins.
