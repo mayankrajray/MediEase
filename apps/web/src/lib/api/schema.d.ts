@@ -4,6 +4,70 @@
  */
 
 export interface paths {
+    readonly "/api/v1/auth/sign-in": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Sign in with an email or phone number and a password
+         * @description FR-AUTH-01, FR-AUTH-04. Phone numbers are normalised to E.164 (Indian 10-digit input
+         *     accepted). Five consecutive wrong passwords lock the account for 15 minutes.
+         *     Sets me_access, me_refresh and me_csrf. Exempt from the CSRF header.
+         */
+        readonly post: operations["signIn"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/auth/refresh": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Rotate the refresh token and issue a new access token
+         * @description FR-AUTH-02. Reads me_refresh. Presenting an already-rotated token revokes the whole
+         *     session (AUTH_REFRESH_REUSED). On any 401/403 from the session itself the cookies are
+         *     cleared.
+         */
+        readonly post: operations["refreshSession"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/auth/sign-out": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * End the session (revokes its refresh-token family)
+         * @description Idempotent. Always clears the session cookies.
+         */
+        readonly post: operations["signOut"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/health": {
         readonly parameters: {
             readonly query?: never;
@@ -63,6 +127,44 @@ export interface components {
         readonly ErrorEnvelope: {
             readonly error: components["schemas"]["Error"];
         };
+        readonly SignInRequest: {
+            /**
+             * @description Email address or phone number
+             * @example owner@sample-clinic.example
+             * @example 9000000001
+             */
+            readonly identifier: string;
+            /** Format: password */
+            readonly password: string;
+        };
+        readonly Session: {
+            readonly user: components["schemas"]["SessionUser"];
+            /** @description Active clinic memberships, ordered by clinic name */
+            readonly memberships: readonly components["schemas"]["Membership"][];
+            readonly session: {
+                /** Format: date-time */
+                readonly access_expires_at: string;
+                /** Format: date-time */
+                readonly refresh_expires_at: string;
+            };
+        };
+        readonly SessionUser: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly full_name: string;
+            readonly email: string | null;
+            readonly phone_e164: string | null;
+            readonly is_platform_ops: boolean;
+        };
+        readonly Membership: {
+            /** Format: uuid */
+            readonly membership_id: string;
+            /** Format: uuid */
+            readonly clinic_id: string;
+            readonly clinic_name: string;
+            /** @enum {string} */
+            readonly role: "OWNER" | "DOCTOR" | "FRONT_DESK";
+        };
         readonly Error: {
             /**
              * @description Stable error code from docs/ERRORS.md
@@ -78,10 +180,37 @@ export interface components {
             };
         };
     };
-    responses: never;
+    responses: {
+        /** @description Session started or renewed; me_access, me_refresh and me_csrf are set */
+        readonly SessionStarted: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["Session"];
+            };
+        };
+        /**
+         * @description AUTH_INVALID_CREDENTIALS, AUTH_SESSION_EXPIRED, AUTH_REFRESH_REUSED (401);
+         *     AUTH_ACCOUNT_DISABLED, AUTH_CSRF_INVALID (403); REQ_UNSUPPORTED_MEDIA_TYPE (415);
+         *     REQ_VALIDATION_FAILED (422)
+         */
+        readonly AuthError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+    };
     parameters: {
         /** @description Correlation ID. Generated by the API when absent and always echoed back. */
         readonly RequestId: string;
+        /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+        readonly CsrfToken: string;
     };
     requestBodies: never;
     headers: {
@@ -92,6 +221,85 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    readonly signIn: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["SignInRequest"];
+            };
+        };
+        readonly responses: {
+            readonly 200: components["responses"]["SessionStarted"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["AuthError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+            /** @description Account locked (AUTH_LOCKED) */
+            readonly 423: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    /** @description Seconds until the lock ends */
+                    readonly "Retry-After"?: string;
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    readonly refreshSession: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            readonly 200: components["responses"]["SessionStarted"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["AuthError"];
+        };
+    };
+    readonly signOut: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Signed out */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 403: components["responses"]["AuthError"];
+        };
+    };
     readonly getHealth: {
         readonly parameters: {
             readonly query?: never;
