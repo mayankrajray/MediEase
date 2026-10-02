@@ -4,8 +4,8 @@
 |---|---|
 | Requirements | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08 |
 | Milestone / phases | M1 / P1–P6 |
-| Status | Draft |
-| Last updated | 2026-09-15 |
+| Status | Approved (developer sign-off 2026-10-02) |
+| Last updated | 2026-10-02 |
 
 ## 1. Context
 Clinics must trust that only their own staff can see their patients, and that each staff member
@@ -95,4 +95,6 @@ Events: `auth.sign_in_failed` (with `reason` enum), `auth.locked`, `auth.refresh
 OTP sign-in, password reset by message, support-access grants, SSO.
 
 ## 12. Open questions
-- Do clinics want the front desk to see prescription *existence* on the queue? (Current: yes, flag only.)
+None blocking. Resolved at approval (2026-10-02):
+- Do clinics want the front desk to see prescription *existence* on the queue? **Yes, a flag
+  only** (PRD §8.1 permission matrix); revisit with pilot feedback in M4.

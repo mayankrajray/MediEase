@@ -11,10 +11,10 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M1 — Identity, tenancy and audit** (not started) |
-| Active phase | **M1-P1 — ⏸ blocked:** `docs/specs/identity-and-tenancy.md` is `Draft` and must be `Approved` before any M1 code (CLAUDE.md "Spec before code") |
-| Design notes | `docs/milestones/M0-foundation.md` |
-| Approved plan | `NEXT_STEPS_PLAN.md` (tasks 0–6, workflow prerequisites W-1..W-7, progress log) |
+| Active milestone | **M1 — Identity, tenancy and audit** (issue #19, branch `m1/19-identity-tenancy-audit`, one PR for the milestone) |
+| Active phase | **M1-P1 — ▶ ACTIVE:** domain model, migration `0002`, tenancy-scoped repositories, coverage gate |
+| Design notes | `docs/milestones/M1-identity-tenancy-audit.md` |
+| Approved plan | `NEXT_STEPS_PLAN.md` (M1 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §9). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
 | Last updated | 2 Oct 2026 |
@@ -56,15 +56,17 @@ database up and 503 with it down; CI green on a PR.
 
 ---
 
-## M1 — Identity, tenancy and audit  `⏸ blocked: spec approval`
+## M1 — Identity, tenancy and audit  `▶ ACTIVE`
 
 **Covers:** FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04.
+**Spec:** `docs/specs/identity-and-tenancy.md` (Approved 2 Oct 2026). **Issue:** #19, one branch
+and one PR for all phases (ADR-0011).
 **Exit:** an ops user onboards a clinic with an owner, doctor and front desk; each signs in and sees
 only their clinic; the tenancy test suite proves isolation.
 
 | Phase | Scope | Status |
 |---|---|---|
-| M1-P1 | Domain: Clinic, Doctor, StaffMembership, Role; tables + migration; tenancy-scoped repository base; add the ≥ 80% coverage gate on `domain/` + `application/` (NFR-14) | ⏸ spec `Draft` |
+| M1-P1 | Domain: Clinic, User, ClinicMembership, Doctor, Role; tables + migration `0002`; tenancy-scoped repository base + unit of work; add the ≥ 80% coverage gate on `domain/` + `application/` (NFR-14) | ▶ |
 | M1-P2 | Password hashing, sign-in, refresh rotation, sign-out, lockout (FR-AUTH-01..04) | ☐ |
 | M1-P3 | Authorisation: role + clinic membership check on every route; permission matrix tests | ☐ |
 | M1-P4 | Audit log (append-only) written in the same transaction as the change; non-clinical support views (`v_clinic_activity`) | ☐ |
