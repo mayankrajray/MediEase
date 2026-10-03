@@ -14,7 +14,7 @@ wrong, update the spec first, then the code.
 | Spec | Requirements | Milestone | Status |
 |---|---|---|---|
 | [identity-and-tenancy.md](docs/specs/identity-and-tenancy.md) | FR-ORG, FR-AUTH, FR-AUD | M1 | Approved |
-| [patients.md](docs/specs/patients.md) | FR-PAT | M2 | Draft |
+| [patients.md](docs/specs/patients.md) | FR-PAT | M2 | Approved |
 | [appointments-and-queue.md](docs/specs/appointments-and-queue.md) | FR-APT, FR-QUE | M3 | Draft |
 | [prescriptions.md](docs/specs/prescriptions.md) | FR-VIS, FR-RX | M4 | Draft |
 | [reminders-and-messaging.md](docs/specs/reminders-and-messaging.md) | FR-REM, FR-MSG | M5 | Draft |
