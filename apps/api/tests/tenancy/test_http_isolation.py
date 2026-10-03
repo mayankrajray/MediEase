@@ -24,12 +24,16 @@ from tests.conftest import World
 CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/clinic/doctors/<uuid:doctor_id>": lambda w: f"/api/v1/clinic/doctors/{w.b.doctor.id}",
     "/api/v1/clinic/staff/<uuid:membership_id>": lambda w: _staff_url(w),
+    "/api/v1/patients/<uuid:patient_id>": lambda w: _patient_url(w),
 }
 
 # Methods a cross-tenant case must use (default GET), with the body to send.
 CROSS_TENANT_WRITES: dict[str, tuple[str, dict[str, str]]] = {
     "/api/v1/clinic/staff/<uuid:membership_id>": ("PATCH", {"role": "DOCTOR"}),
 }
+
+# Patients have their own read and write cross-clinic cases in integration/test_patients_http.py;
+# this suite reads one by ID so the "every route with an ID" guard below stays complete.
 
 
 def _staff_url(world: World) -> str:
@@ -38,6 +42,25 @@ def _staff_url(world: World) -> str:
     staff = owner_of_b.get("/api/v1/clinic/staff").get_json()["items"]
     membership_id = next(m["membership_id"] for m in staff if m["full_name"] == "Beta Front_Desk")
     return f"/api/v1/clinic/staff/{membership_id}"
+
+
+def _patient_url(world: World) -> str:
+    """A patient of clinic B, registered by B's owner, which clinic A must not be able to reach."""
+    owner_of_b = world.client_for(world.b.owner)
+    csrf = owner_of_b.get_cookie("me_csrf", path="/")
+    assert csrf is not None
+    created = owner_of_b.post(
+        "/api/v1/patients",
+        json={
+            "full_name": "Beta Patient",
+            "phone": "9000000042",
+            "sex": "UNDISCLOSED",
+            "date_of_birth": "1990-05-17",
+        },
+        headers={"X-CSRF-Token": csrf.value},
+    )
+    assert created.status_code == 201, created.get_json()
+    return f"/api/v1/patients/{created.get_json()['id']}"
 
 
 def _clinic_rules_with_an_id(world: World) -> set[str]:

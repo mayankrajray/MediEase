@@ -59,6 +59,7 @@ class CreateClinicCommand:
     state: str | None = None
     pincode: str | None = None
     specialties: tuple[str, ...] = ()
+    patient_code_prefix: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +112,7 @@ class CreateClinic:
                 state=cmd.state,
                 pincode=cmd.pincode,
                 specialties=cmd.specialties,
+                patient_code_prefix=cmd.patient_code_prefix,
             )
             uow.clinics.add(clinic)
 

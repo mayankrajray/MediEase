@@ -23,6 +23,7 @@ from mediease_api.domain.patients.lookup import QueryKind, classify_query
 from mediease_api.domain.patients.patient import GuardianRequired, Language, Patient, Sex
 from mediease_api.domain.shared.errors import InvalidTransition, InvalidValue
 from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.domain.shared.time import local_date
 from tests.builders import LATER, NOW, a_clinic, a_patient, new_id
 
 TODAY = date(2026, 10, 2)
@@ -412,3 +413,27 @@ def test_timestamps_must_be_utc() -> None:
     with pytest.raises(InvalidValue):
         _patient(now=naive)
     assert naive.replace(tzinfo=UTC) == NOW
+
+
+# --- The clinic's own "today" (DEBUGGING §5.4) ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("instant", "zone", "local"),
+    [
+        (datetime(2026, 10, 2, 23, 30, tzinfo=UTC), "Asia/Kolkata", date(2026, 10, 3)),  # +5:30
+        (datetime(2026, 10, 2, 18, 29, tzinfo=UTC), "Asia/Kolkata", date(2026, 10, 2)),
+        (datetime(2026, 10, 2, 18, 30, tzinfo=UTC), "Asia/Kolkata", date(2026, 10, 3)),
+        (datetime(2026, 10, 2, 1, 0, tzinfo=UTC), "America/New_York", date(2026, 10, 1)),  # -4
+        (datetime(2026, 10, 2, 1, 0, tzinfo=UTC), "UTC", date(2026, 10, 2)),
+    ],
+)
+def test_the_clinics_today_depends_on_its_zone_not_the_servers(
+    instant: datetime, zone: str, local: date
+) -> None:
+    assert local_date(instant, zone) == local
+
+
+def test_the_clinics_today_refuses_a_naive_time() -> None:
+    with pytest.raises(InvalidValue):
+        local_date(datetime(2026, 10, 2, 23, 30), "Asia/Kolkata")  # naive

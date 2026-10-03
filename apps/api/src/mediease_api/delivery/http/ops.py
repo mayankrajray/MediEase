@@ -78,6 +78,8 @@ class NewClinicRequest(BaseModel):
     state: str | None = Field(default=None, max_length=100)
     pincode: str | None = Field(default=None, max_length=6)
     specialties: list[str] = Field(default_factory=list, max_length=20)
+    # 2-4 upper-case letters for patient codes (ME-0142); derived from the name when omitted.
+    patient_code_prefix: str | None = Field(default=None, max_length=4)
 
 
 class NewDoctorRequest(BaseModel):
@@ -124,6 +126,7 @@ def create_ops_blueprint(use_cases: OpsUseCases, *, public_base_url: str) -> Blu
                 state=body.state,
                 pincode=body.pincode,
                 specialties=tuple(body.specialties),
+                patient_code_prefix=body.patient_code_prefix,
             ),
         )
         return jsonify(clinic_body(clinic)), 201

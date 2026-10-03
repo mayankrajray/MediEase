@@ -22,6 +22,8 @@ from flask import Flask, Response, jsonify
 from werkzeug.exceptions import HTTPException
 
 from mediease_api.application.auth.errors import AccountLocked
+from mediease_api.application.patients.errors import PhoneExists
+from mediease_api.delivery.http.bodies import candidate_body
 from mediease_api.delivery.http.validation import RequestValidationFailed
 from mediease_api.delivery.middleware import get_request_id
 from mediease_api.domain.shared.errors import DomainError, InvalidValue
@@ -71,6 +73,8 @@ DOMAIN_ERROR_STATUS = {
     "CLN_INVITE_EXPIRED": 410,
     "CLN_INVITE_USED": 410,
     "PAT_GUARDIAN_REQUIRED": 422,
+    "PAT_PHONE_INVALID": 422,
+    "PAT_PHONE_EXISTS": 409,
 }
 
 
@@ -86,6 +90,9 @@ def domain_error_response(exc: DomainError) -> tuple[Response, int]:
         details = {"fields": exc.fields}
     elif isinstance(exc, InvalidValue):
         details = {"fields": [{"field": exc.field, "reason": exc.reason}]}
+    elif isinstance(exc, PhoneExists):
+        # For the signed-in staff member who asked (spec R2); never logged.
+        details = {"candidates": [candidate_body(c) for c in exc.candidates]}
     response, _ = error_response(exc.code, exc.message, status, details)
     if isinstance(exc, AccountLocked):
         response.headers["Retry-After"] = str(exc.retry_after_seconds)

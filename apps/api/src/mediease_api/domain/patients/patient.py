@@ -46,6 +46,23 @@ class Language(StrEnum):
     HI = "hi"
 
 
+class PhoneInvalid(InvalidValue):
+    """R1: the text is not a phone number. The value is never echoed (it is personal data)."""
+
+    code = "PAT_PHONE_INVALID"
+
+    def __init__(self, field: str = "phone") -> None:
+        super().__init__(field, "is not a valid phone number")
+
+
+def parse_phone(raw: str, field: str = "phone") -> PhoneNumber:
+    """Normalise a typed phone number to E.164 (R1), or raise ``PhoneInvalid``."""
+    try:
+        return PhoneNumber.parse(raw, field=field)
+    except InvalidValue:
+        raise PhoneInvalid(field) from None
+
+
 class GuardianRequired(DomainError):
     """I2 / R3: a patient under 18 needs a parent's or guardian's name."""
 
