@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M1-P1 to M1-P5 implemented (P1 and P2 confirmed 3 Oct 2026; P3, P4 and P5 awaiting confirmation) |
+| Status | In progress — M1-P1 to M1-P5 implemented (P1 and P2 confirmed 3 Oct 2026; P3, P4 and P5 awaiting confirmation); M1-P6 design proposed 3 Oct 2026, awaiting approval |
 | Spec | `docs/specs/identity-and-tenancy.md` (Approved 2026-10-02) |
 | Covers | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08, NFR-14 |
 | Issue / branch / PR | #19 · `m1/19-identity-tenancy-audit` · one draft PR for the whole milestone (ADR-0011) |
@@ -36,13 +36,243 @@
 | P3 | Auth middleware → `RequestContext`; role + membership check on every route; permission matrix tests; `GET /api/v1/me` and read-only clinic endpoints | Below (M1-P3 section) |
 | P4 | Append-only `audit_events` written through the unit of work; database-enforced immutability; `v_clinic_activity`; the audited staff role change | Below (M1-P4 section) |
 | P5 | Ops onboarding API (clinic → doctors → owner invite), single-use staff invites and acceptance, owner staff and doctor management, onboarding checklist | Below (M1-P5 section) |
-| P6 | Web: sign-in, clinic switcher, empty dashboard shell | Spec §6 |
+| P6 | Web: sign-in, clinic switcher, empty dashboard shell | Below (M1-P6 section) |
 
 Each phase starts with its design (`/plan-phase`), is approved, implemented, verified by the
 developer and confirmed before the next phase starts. All phases are committed to the milestone
 branch and appear in the one milestone PR.
 
 ---
+
+## M1-P6 — Web sign-in, clinic switcher and the empty dashboard shell
+
+**Status: proposed 3 Oct 2026, awaiting the developer's approval.** Covers FR-AUTH-01, FR-AUTH-02
+(the browser half), FR-AUTH-03 and spec R4, R5, R6, R7, R10 and §6 (UI notes). Web only: no API,
+migration or contract change (the one exception is a seed addition, see Files).
+
+### Concepts
+
+1. **The browser never holds a token.** `me_access` and `me_refresh` are HttpOnly, so the UI cannot
+   read them and cannot tell "signed in" from JavaScript. It finds out by asking the API
+   (`GET /api/v1/me`). The only cookie scripts can read is `me_csrf`, which is the double-submit
+   key for unsafe requests (`X-CSRF-Token`).
+2. **Cookie paths decide where auth can happen.** `me_access` has path `/api`, so the browser sends
+   it on `/api/*` requests and **not** on page navigations such as `/queue`. A Server Component or
+   the proxy therefore cannot see who the user is. Authentication state lives in the browser and is
+   established by API calls. Widening the cookie to `/` would send the access token on every page
+   request, including the public patient pages from M4, and undo ADR-0006's path scoping. We
+   do not do that.
+3. **A UI gate is a convenience, not a control.** Hiding a nav item or redirecting a signed-out
+   visitor only saves a round trip. The API re-checks session, user, membership, clinic and role on
+   every request (R6, R7, P3). Nothing in P6 is a security boundary, and no test should treat it as
+   one.
+4. **Refresh tokens are single-use, with no grace window.** Presenting an already-rotated token
+   revokes the whole session family (R5, `AUTH_REFRESH_REUSED`). So two requests that both get a
+   401 must not both call refresh. The web client serialises refresh: one in-flight call shared by
+   every waiter in the tab, and a Web Lock across tabs (below). Getting this wrong signs the user
+   out at random, which looks like a flaky login.
+5. **The active clinic is a request header, not a session property.** A user with several
+   memberships sends `X-Clinic-ID` on each clinic request (R6); a user with one sends nothing. The
+   choice is per tab (in memory), with the last choice remembered in `localStorage` so a new tab
+   starts where the user left off. An ID in `localStorage` is not a secret and not an authority:
+   the API rejects a clinic the caller does not belong to.
+
+### Request flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant W as Web (browser)
+    participant P as Next proxy
+    participant A as API
+    U->>P: GET /queue (no me_csrf cookie)
+    P-->>U: 307 /sign-in?next=/queue  (hint only)
+    U->>W: submit identifier + password
+    W->>A: POST /api/v1/auth/sign-in
+    A-->>W: 200 {user, memberships} + me_access, me_refresh, me_csrf
+    W->>W: resolve landing: ops → /ops · 0 → no access · 1 → /queue · n → stored? /queue : /select-clinic
+    W->>A: GET /api/v1/me (+ GET /api/v1/clinic with X-Clinic-ID)
+    A-->>W: identity · clinic (name, timezone, status)
+    Note over W,A: later, access token expired
+    W->>A: GET /api/v1/clinic
+    A-->>W: 401 AUTH_SESSION_EXPIRED
+    W->>A: POST /api/v1/auth/refresh (one call, shared by all waiters; Web Lock across tabs)
+    A-->>W: 200 + new cookies
+    W->>A: retry the original request once
+```
+
+### Routes
+
+| Route | Group | Access | What it shows |
+|---|---|---|---|
+| `/sign-in` | `(auth)` | public | Identifier + password form. `?next=` (same-origin paths only) and `?reason=` (allow-listed: `session_ended`, `account_disabled`) |
+| `/invite/[token]` | `(auth)` | public | Describes the invitation, asks for a password, accepts and signs in (see open choice 1) |
+| `/select-clinic` | `(clinic)` | signed in | Chooser for users with several clinics and no valid remembered choice |
+| `/queue` | `(clinic)/(workspace)` | signed in + an active clinic | The empty dashboard: "Today's queue will appear here" (M3) with the clinic name, role and status |
+| `/ops` | `(ops)` | `is_platform_ops` | Placeholder shell for platform staff (see open choice 2) |
+| `/` | — | — | Server redirect to `/queue` (replaces today's redirect to `/status`) |
+| `/status`, `/livez` | — | public | Unchanged |
+
+After sign-in the landing is decided by one pure function, used by the sign-in form, the guard and
+the chooser so the three can never disagree:
+
+| Identity | Landing |
+|---|---|
+| `is_platform_ops` | `/ops` (R10: no clinic routes) |
+| no active membership | an in-shell "You don't have access to a clinic yet" state with Sign out |
+| exactly one membership | `/queue`, no `X-Clinic-ID` |
+| several, remembered ID is still one of them | `/queue`, header sent |
+| several, nothing valid remembered | `/select-clinic` |
+
+### Session states and error handling
+
+The session provider (client component) is a small state machine:
+`loading → ready(identity) | signed_out | failed(error)`. No new data-fetching library: a `useEffect`
+plus the typed client is enough for two calls, and `AGENTS.md` asks us to justify dependencies.
+
+| Signal | Behaviour |
+|---|---|
+| `/me` 401 `AUTH_SESSION_EXPIRED` | One refresh (shared), retry once; if refresh fails → `/sign-in?next=…&reason=session_ended` |
+| `AUTH_REFRESH_REUSED` | Same destination, same `session_ended` reason; the message says the session was ended for safety |
+| 403 `AUTH_ACCOUNT_DISABLED` | `/sign-in?reason=account_disabled` (R7, AC4): "This account has been deactivated. Contact your clinic owner." |
+| 400 `PERM_CLINIC_REQUIRED` | Forget the remembered clinic and go to `/select-clinic` (a stale ID; never shown as an error) |
+| 403 `CLN_SUSPENDED` | In-shell "This clinic is suspended" screen with the API message and Ref; switcher still works for other clinics |
+| `membership.clinic_status = ONBOARDING` | Banner: setup is still in progress; the shell works |
+| sign-in 423 `AUTH_LOCKED` | "Too many attempts. Try again in N minutes" from `Retry-After`; the submit button is disabled until then |
+| sign-in 401 `AUTH_INVALID_CREDENTIALS` | The API message, password field cleared and focused, identifier kept |
+| 422 / 415 / network (`WEB_API_UNREACHABLE`) | The message with "Ref: <request_id>" and a Try again button; never a blank page |
+| 5xx | The API message (safe by contract) with Ref |
+
+Every error shows `message` and `Ref: <request_id>` (`apps/web/CLAUDE.md`).
+
+### Decisions
+
+| Decision | Reason |
+|---|---|
+| Client-side session guard; the `(clinic)` and `(ops)` layouts are thin Server Components that render a client `SessionProvider` | Concept 2: the server cannot see `me_access`. This is the "interactivity needed" exception to "Server Components by default", kept to one small provider so pages stay server-rendered shells |
+| The proxy redirects a visitor with **no `me_csrf` cookie** away from non-public routes to `/sign-in?next=` | Avoids flashing a dashboard to someone who was never signed in. It is a hint only: a stale or forged cookie just lands on the client guard, which asks the API. The redirect response carries the CSP like any other |
+| One `apiRequest` in `src/lib/api/` for GET and unsafe methods; `apiGet` stays as a thin wrapper | `apps/web/CLAUDE.md`: all calls go through `lib/api`. Adds JSON bodies, `X-CSRF-Token` from the `me_csrf` cookie on unsafe methods, optional `clinicId` → `X-Clinic-ID`, 204 handling (sign-out) and `Retry-After` on `ApiError` |
+| Refresh is single-flight in the tab and guarded by `navigator.locks` across tabs | Concept 4. After taking the lock the client retries the original request once before refreshing, because another tab may already have rotated the token. Where Web Locks are missing it falls back to tab-level single-flight |
+| Clinic choice: per-tab memory, last choice in `localStorage` (`mediease.clinic_id`), validated against `/me` on every load | Concept 5. A tab shows and sends one clinic consistently, so switching in one tab never changes what another tab is about to send |
+| The shell reads the clinic from `GET /api/v1/clinic` (with the header), not only from `/me` | It exercises the real multi-clinic path end to end, surfaces `CLN_SUSPENDED`, and provides the clinic **timezone**. `apps/web/CLAUDE.md` says the timezone comes from `/me`, but `/me` does not carry it; the rule is updated to say `GET /clinic` |
+| `?next=` accepts only paths that start with a single `/` and contain no scheme, `//`, backslash or control characters; otherwise `/` | Blocks open redirects after sign-in |
+| Nav items come from the membership's `permissions` list | UI hint only (concept 3). P6 has one item (Queue); Settings/Staff appear with the pages that exist |
+| No phone number or email is displayed in the shell, only the full name and role | `apps/web/CLAUDE.md`: phones are masked unless staff must dial them |
+| Sign-out calls the API, then clears the remembered clinic and goes to `/sign-in`, even if the call fails | Signing out must always work locally. The API clears cookies and is idempotent |
+| No tests with Playwright in P6; the manual browser journey is the verification | `e2e/` starts at M3 per `docs/TESTING.md`. Adding Playwright is a new dependency and a CI job, which deserves its own decision |
+| No `@testing-library/user-event`; tests use `fireEvent` | Not installed, and `fireEvent` is enough for forms and buttons here |
+| English copy inline in components | Staff UI is English at MVP (NFR-11); i18n modules are for patient pages |
+
+### Accessibility and layout
+
+Designed for 1366×768 and keyboard use (`apps/web/CLAUDE.md`). Sign-in: visible `<label>`s,
+`autocomplete="username"` and `"current-password"`, a show-password toggle with an accessible name,
+errors in a `role="alert"` region that receives focus, the invalid field marked
+`aria-invalid` and described by the error, no colour-only state. Switcher: a native `<select>`
+(keyboard and screen-reader friendly, nothing to build) inside a labelled region. The shell has a
+skip link, a `<nav>` landmark and a `<main>` landmark. Every screen has loading, empty and error
+states.
+
+### Open choices for approval
+
+1. **Invitation acceptance page.** The API from P5 already has `GET`/`POST
+   /api/v1/auth/invites/{token}`. Without a page, a newly invited owner or front desk cannot
+   finish onboarding in a browser, which is what the M1 exit criterion describes.
+   - **A (recommended)** — include `/invite/[token]` in P6 as its own commit: a small form that
+     reuses the sign-in error components and the same landing logic.
+   - **B** — leave it out; invitees are accepted through the API (as in RUNBOOK §10) until a later
+     phase.
+2. **Ops console UI.** Spec §6 describes a 3-step "Create clinic" wizard, but the TASKS row for P6
+   lists sign-in, switcher and the dashboard shell only. The ops API is complete.
+   - **A (recommended)** — `/ops` is a placeholder (signed-in ops user, name, Sign out, "The ops
+     console arrives later"), and the wizard is planned explicitly instead of growing P6.
+   - **B** — build the wizard in P6. It roughly doubles the phase (three forms, elapsed timer,
+     checklist view) and needs its own design.
+   - **C** — add a P7 to M1 for the wizard (a plan change: `TASKS.md`, `NEXT_STEPS_PLAN.md`).
+3. **Second seeded clinic.** `make seed` creates one clinic, so the switcher cannot be seen.
+   - **A (recommended)** — extend the seed with a second synthetic clinic, `sample-clinic-two`,
+     where `doctor@sample-clinic.example` also has a DOCTOR membership. The seed becomes
+     idempotent per clinic, so existing local databases pick up the second clinic.
+   - **B** — no seed change; create the second clinic by hand through the ops API for each check.
+
+### Files
+
+| Area | Files |
+|---|---|
+| API client | `lib/api/client.ts` (`apiRequest`, CSRF, `clinicId`, 204, `Retry-After`; `apiGet` kept), `lib/api/csrf.ts`, `lib/auth/refresh.ts` (single-flight + Web Lock), `lib/auth/safe-next.ts` |
+| Features | `features/auth/` (`SessionProvider`, `useSession`, `SignInForm`, `AcceptInviteForm` if 1A, `landing.ts`, `clinic-selection.ts`, `messages.ts`), `features/shell/` (`AppShell`, `ClinicSwitcher`, `UserMenu`, `nav.ts`, `SuspendedNotice`, `NoAccess`) |
+| Routes | `app/(auth)/sign-in/page.tsx`, `app/(auth)/invite/[token]/page.tsx`, `app/(clinic)/layout.tsx`, `app/(clinic)/select-clinic/page.tsx`, `app/(clinic)/(workspace)/layout.tsx`, `app/(clinic)/(workspace)/queue/page.tsx`, `app/(ops)/ops/{layout,page}.tsx`, `app/page.tsx` (redirect to `/queue`) |
+| Proxy | `proxy.ts` (public-path list, no-cookie redirect) and its test |
+| Seed (if 3A) | `apps/api/src/mediease_api/delivery/cli/seed.py` and its test; `docs/RUNBOOK.md` §1 |
+| Smoke | `scripts/smoke.sh`: `/sign-in` returns 200 with the form and a nonce CSP; `/queue` redirects to `/sign-in` without a cookie |
+| Docs | `TASKS.md`, `NEXT_STEPS_PLAN.md`, this file, `CHANGELOG.md`, `apps/web/CLAUDE.md` (timezone source), `apps/web/README.md`, `docs/SECURITY_AND_COMPLIANCE.md` (browser session handling), `docs/DEBUGGING.md` (sign-in loop, refresh reuse, cookie path), `docs/ERRORS.md` (web-only codes, if any are added) |
+
+No dependency is added.
+
+### Tests
+
+Vitest + Testing Library, named after requirement IDs.
+
+- **Client** — `test_fr_auth_01_unsafe_request_sends_csrf_header`; 204 sign-out resolves;
+  `Retry-After` reaches `ApiError`; `X-Clinic-ID` sent only when a clinic is given.
+- **Refresh** — `test_fr_auth_02_concurrent_401s_refresh_once` (five parallel 401s → one refresh
+  call, five retries); the lock path retries the original request before refreshing; without
+  `navigator.locks` it still refreshes once; a failed refresh does not loop and ends in
+  `signed_out`.
+- **Landing and clinic choice** — table-driven tests for every row above, including a remembered ID
+  that is no longer a membership and an ops user.
+- **`safe-next`** — accepts `/queue?x=1`; rejects `//evil.example`, `https://evil.example`,
+  `/\evil`, `javascript:` and control characters.
+- **Sign-in form** — success routes by landing; `AUTH_INVALID_CREDENTIALS` keeps the identifier,
+  clears the password and focuses the alert; `AUTH_LOCKED` shows the wait and disables submit;
+  network failure shows Ref and Try again; double submit sends one request.
+- **Shell** — `test_fr_auth_03_switcher_only_for_multiple_memberships`; switching changes the
+  header on the next request and the title; nav is filtered by permissions; `CLN_SUSPENDED` and
+  `ONBOARDING` states; sign-out clears the remembered clinic even when the call fails;
+  `AUTH_ACCOUNT_DISABLED` lands on sign-in with the reason (AC4, browser half).
+- **Proxy** — no `me_csrf` on `/queue` → redirect with `next`; cookie present → passes with CSP;
+  `/sign-in`, `/invite/x`, `/status`, `/livez` never redirect; the redirect also carries the CSP.
+- **Not proved by P6 tests:** that the API refuses what the UI hides. That is the permission matrix
+  and tenancy suite from P3, which stay authoritative.
+
+### Verify
+
+```bash
+make up && make seed            # stack + synthetic users (and clinic two, if 3A)
+make lint typecheck test        # web and API suites green
+make smoke                      # includes the new /sign-in and /queue checks
+make dev-web                    # or http://localhost:3000 from the compose stack
+```
+
+In the browser (demo password in RUNBOOK §1):
+
+1. Open `/queue` signed out → lands on `/sign-in?next=/queue`. Sign in as `owner@…` → `/queue`,
+   header shows the clinic and "Owner"; no switcher.
+2. Sign in as `doctor@…` and `desk@…` → their role in the header. The desk user sees no
+   owner-only items.
+3. `doctor@…` (two clinics, if 3A) → `/select-clinic`; pick one; the switcher appears; switch and
+   watch `X-Clinic-ID` change in the Network tab; open a second tab and confirm it starts on the
+   remembered clinic.
+4. Sign in as `ops@mediease.example` → `/ops`; type `/queue` → sent back to `/ops` (R10).
+5. **Failure paths:** wrong password → message and Ref, password cleared; five wrong passwords →
+   locked message with the wait; deactivate a member through the API while they are signed in →
+   their next click lands on sign-in with the deactivated message (AC4); delete the `me_access`
+   cookie in dev tools → the next page action refreshes silently; delete `me_refresh` as well →
+   lands on sign-in with "session ended".
+6. Devtools Application tab: `me_access` and `me_refresh` are HttpOnly; nothing in `localStorage`
+   except `mediease.clinic_id`; no token in any response body.
+
+### Risks
+
+| Risk | Mitigation |
+|---|---|
+| Refresh race signs users out (concept 4) | Single-flight + Web Lock + a test that fires parallel 401s |
+| First paint shows a loading state rather than the dashboard (auth is client-side) | The shell renders immediately with a skeleton; the proxy hint keeps signed-out visitors from seeing it at all |
+| The cookie-path constraint also applies to every later clinic page | Recorded as a decision here; later milestones reuse `SessionProvider`. If server-side rendering of clinic data is ever needed, that is an ADR amendment for a session cookie on `/` or a BFF route, not a quiet change |
+| `localStorage` clinic ID is tampered with | It is only a preference: the API rejects a clinic the caller is not in, and the UI handles that as a stale choice |
+
+---
+
 
 ## M1-P5 — Ops onboarding and staff management
 
