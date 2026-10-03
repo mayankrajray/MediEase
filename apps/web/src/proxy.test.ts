@@ -3,16 +3,80 @@ import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
 import nextConfig, { apiInternalUrl } from "../next.config";
-import { CSP_HEADER, config, proxy } from "./proxy";
+import { CSP_HEADER, config, isPublicPath, proxy } from "./proxy";
 
 function nonceOf(csp: string | null): string | undefined {
   return csp?.match(/'nonce-([^']+)'/)?.[1];
 }
 
+/** A page request carrying the readable session hint cookie. */
+function signedIn(url: string, value = "csrf-token"): NextRequest {
+  return new NextRequest(url, { headers: { cookie: `me_csrf=${value}` } });
+}
+
+const signedOut = (url: string) => new NextRequest(url);
+
+describe("proxy (sign-in hint)", () => {
+  it("FR-AUTH-01: sends a visitor with no session cookie to sign in, remembering the page and query", () => {
+    const response = proxy(signedOut("http://localhost:3000/queue?day=today"));
+
+    expect(response.status).toBe(307);
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.origin).toBe("http://localhost:3000");
+    expect(location.pathname).toBe("/sign-in");
+    expect(location.searchParams.get("next")).toBe("/queue?day=today");
+  });
+
+  it("does not remember the home page", () => {
+    const response = proxy(signedOut("http://localhost:3000/"));
+
+    expect(response.headers.get("location")).toBe("http://localhost:3000/sign-in");
+  });
+
+  it("puts the CSP, with its own nonce, on the redirect too", () => {
+    const response = proxy(signedOut("http://localhost:3000/queue"));
+
+    expect(nonceOf(response.headers.get(CSP_HEADER))).toBeTruthy();
+  });
+
+  it("lets a visitor with the session cookie through to the page", () => {
+    const response = proxy(signedIn("http://localhost:3000/queue"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    expect(nonceOf(response.headers.get(CSP_HEADER))).toBeTruthy();
+  });
+
+  it("treats an empty cookie as no cookie", () => {
+    const response = proxy(signedIn("http://localhost:3000/queue", ""));
+
+    expect(response.status).toBe(307);
+  });
+
+  it.each(["/sign-in", "/invite/abc123", "/status", "/livez"])("never redirects the public page %s", (path) => {
+    const response = proxy(signedOut(`http://localhost:3000${path}`));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it.each(["/invite", "/invitex/abc", "/sign-in/extra", "/statuses", "/ops", "/select-clinic"])(
+    "still guards %s",
+    (path) => {
+      expect(proxy(signedOut(`http://localhost:3000${path}`)).status).toBe(307);
+    },
+  );
+
+  it("isPublicPath names exactly the public pages", () => {
+    expect(["/sign-in", "/status", "/livez", "/invite/x"].every(isPublicPath)).toBe(true);
+    expect(["/", "/queue", "/ops", "/invite"].some(isPublicPath)).toBe(false);
+  });
+});
+
 describe("proxy (per-request CSP)", () => {
   it("sets a CSP with a fresh nonce on every page response", () => {
-    const first = proxy(new NextRequest("http://localhost:3000/status"));
-    const second = proxy(new NextRequest("http://localhost:3000/status"));
+    const first = proxy(signedIn("http://localhost:3000/status"));
+    const second = proxy(signedIn("http://localhost:3000/status"));
 
     const a = nonceOf(first.headers.get(CSP_HEADER));
     const b = nonceOf(second.headers.get(CSP_HEADER));

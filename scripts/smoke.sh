@@ -44,6 +44,18 @@ grep -q 'API: healthy · DB: ready · Ref: ' <<<"$page" \
 page_headers=$(headers "$WEB/status")
 grep -qi "^content-security-policy:.*'nonce-" <<<"$page_headers" \
   && pass "/status sends a nonce CSP" || fail "CSP header"
+signin=$(text "$WEB/sign-in")
+grep -q 'Sign in to MediEase' <<<"$signin" && grep -q 'Email or phone number' <<<"$signin" \
+  && pass "/sign-in renders the sign-in form" || fail "/sign-in form"
+signin_headers=$(headers "$WEB/sign-in")
+grep -qi "^content-security-policy:.*'nonce-" <<<"$signin_headers" \
+  && pass "/sign-in sends a nonce CSP" || fail "/sign-in CSP header"
+# Without a session cookie a clinic page redirects to sign in (curl -f would fail on a 307).
+redirect=$(curl -sS -m 15 -D - -o /dev/null "$WEB/queue")
+grep -qE '^HTTP/[0-9.]+ 307' <<<"$redirect" && grep -qi '^location: .*/sign-in?next=%2Fqueue' <<<"$redirect" \
+  && pass "/queue without a session redirects to /sign-in?next=/queue" || fail "/queue redirect: $redirect"
+grep -qi "^content-security-policy:.*'nonce-" <<<"$redirect" \
+  && pass "the redirect also sends a CSP" || fail "redirect CSP header"
 
 echo "Least privilege"
 for svc in api web; do
