@@ -159,6 +159,11 @@ first production release.
   that is still being set up. Web only; the API is unchanged.
 
 ### Fixed
+- CI (#21): the secrets scan failed on `main` after the M1 merge and on PR #22. The reviewed
+  gitleaks false positive (the synthetic test password) was fingerprinted by its M1-branch commit,
+  and rebase-merging gave that commit a new SHA on `main`. `.gitleaksignore` now names the commit`s
+  SHA on `main` (and keeps the old one for clones that still have the branch), with a note on why
+  fingerprints must be re-pointed after a rebase merge.
 - Security (spec R13, contract 0.5.1): accepting a staff invitation for an account that already has a
   password used to overwrite that password and sign the caller in, so an owner who invited another
   clinic's user could take over the account. It now requires the account's current password,
