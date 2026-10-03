@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.5.1
+  version: 0.6.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -34,6 +34,12 @@ tags:
       The internal ops console (M1-P5, FR-OPS-01/04). Platform staff only: clinic staff are
       refused even as owners (spec R10). Ops users have no membership, so the clinic is named
       in the path. No clinical content is ever returned here.
+  - name: patients
+    description: |
+      Register, look up, read and correct patients (M2-P2, FR-PAT-01..04). Every role in a clinic
+      holds PATIENTS_MANAGE; ops users are refused (spec identity-and-tenancy R10). The clinic is the
+      request's (X-Clinic-ID when the user has several), and another clinic's patient is 404 (NFR-08).
+      Responses carry personal data and are never cached.
   - name: invites
     description: |
       Accepting a staff invitation (M1-P5). Public, because the invitee has no session yet: the
@@ -513,6 +519,179 @@ paths:
           $ref: '#/components/responses/AuthError'
         '422':
           $ref: '#/components/responses/AuthError'
+  /api/v1/patients:
+    post:
+      tags: [patients]
+      operationId: registerPatient
+      summary: Register a patient
+      description: |
+        FR-PAT-01, 02, 03, 06; spec patients R1-R4, R9, R10. Permission: PATIENTS_MANAGE.
+        `phone` is the contact of record: for a patient under 18 it is the guardian's, and
+        `guardian_name` is then required (422 PAT_GUARDIAN_REQUIRED). Give a
+        date of birth or an age, not both. If the clinic already has patients on that number
+        the answer is 409 PAT_PHONE_EXISTS with up to 10 candidates (families share phones);
+        send `confirm_new: true` to register another person on it. A refusal takes no code.
+        Registration is serialised per clinic, so two simultaneous registrations of one new
+        number have exactly one winner. Records patient.created and the checklist's first
+        patient. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewPatient'
+      responses:
+        '201':
+          description: The new patient
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/PhoneExistsError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+    get:
+      tags: [patients]
+      operationId: lookupPatients
+      summary: Look patients up by phone, code or name
+      description: |
+        FR-PAT-04; spec patients R5. Permission: PATIENTS_MANAGE. `q` is read in order as a phone
+        number (7 or more digits, any usual formatting), then a patient code (`ME-0142`, any case,
+        hyphen optional), otherwise the start of a name (case-insensitive). At most 20 results,
+        ordered by name. Blank text, or phone-shaped text that is not a number, returns an empty
+        list. The text is never logged.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: Matching patients
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+  /api/v1/patients/{patient_id}:
+    get:
+      tags: [patients]
+      operationId: getPatient
+      summary: One patient of this clinic
+      description: |
+        Permission: PATIENTS_MANAGE. A patient of another clinic returns 404 REQ_NOT_FOUND, so
+        its existence is never confirmed (NFR-08, AC7).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+      responses:
+        '200':
+          description: The patient
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+    patch:
+      tags: [patients]
+      operationId: updatePatient
+      summary: Correct a patient's demographics
+      description: |
+        FR-PAT-01; spec patients R3, R7. Permission: PATIENTS_MANAGE. Only the fields sent change;
+        send at least one. The code never changes. A date of birth or an age replaces the whole
+        age fact. A blank `guardian_name` clears it (refused for a minor). Changing the phone
+        does not run the duplicate check. Records one patient.updated listing the changed field
+        *names* (never values); an edit that changes nothing records nothing. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientUpdate'
+      responses:
+        '200':
+          description: The patient after the edit
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
   /api/v1/auth/invites/{token}:
     get:
       tags: [invites]
@@ -860,6 +1039,14 @@ components:
       schema:
         type: string
         format: uuid
+    PatientPath:
+      name: patient_id
+      in: path
+      required: true
+      description: A patient of the request's clinic.
+      schema:
+        type: string
+        format: uuid
     ClinicPath:
       name: clinic_id
       in: path
@@ -924,6 +1111,18 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    PhoneExistsError:
+      description: |
+        PAT_PHONE_EXISTS (409): the clinic already has patients on this phone number.
+        details.candidates lists up to 10 of them (id, code, name, age) for the signed-in staff member;
+        send confirm_new: true to register another person on the number.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PhoneExistsEnvelope'
     InviteError:
       description: |
         CLN_INVITE_INVALID (404, unknown or malformed secret); CLN_INVITE_EXPIRED,
@@ -1104,6 +1303,7 @@ components:
         - state
         - pincode
         - specialties
+        - patient_code_prefix
       properties:
         id:
           type: string
@@ -1132,6 +1332,196 @@ components:
           type: array
           items:
             type: string
+        patient_code_prefix:
+          type: string
+          pattern: '^[A-Z]{2,4}$'
+          description: Prefix of this clinic's patient codes, e.g. ME for ME-0142
+    Sex:
+      type: string
+      enum: [FEMALE, MALE, OTHER, UNDISCLOSED]
+    Language:
+      type: string
+      enum: [en, hi]
+      description: Language of messages to the patient (English and Hindi at MVP)
+    Patient:
+      type: object
+      description: |
+        A patient as staff see them. Personal data: never cached, never logged. The phone is the
+        contact of record (the guardian's for a patient under 18).
+      required:
+        - id
+        - code
+        - full_name
+        - phone_e164
+        - sex
+        - date_of_birth
+        - age_years
+        - age_is_estimated
+        - is_minor
+        - guardian_name
+        - language
+        - whatsapp_consent
+        - sms_consent
+        - opted_out
+        - consent_recorded_at
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          pattern: '^[A-Z]{2,4}-[0-9]{4,}$'
+          description: Clinic-scoped, human-readable, never reused or edited
+        full_name:
+          type: string
+        phone_e164:
+          type: string
+        sex:
+          $ref: '#/components/schemas/Sex'
+        date_of_birth:
+          type: [string, 'null']
+          format: date
+        age_years:
+          type: integer
+          description: Whole years on the clinic's today (its own time zone)
+        age_is_estimated:
+          type: boolean
+          description: True when only an age was recorded, not a date of birth
+        is_minor:
+          type: boolean
+        guardian_name:
+          type: [string, 'null']
+        language:
+          $ref: '#/components/schemas/Language'
+        whatsapp_consent:
+          type: boolean
+        sms_consent:
+          type: boolean
+        opted_out:
+          type: boolean
+          description: An opt-out overrides consent until an explicit opt-in (written in M2-P3)
+        consent_recorded_at:
+          type: [string, 'null']
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    NewPatient:
+      type: object
+      additionalProperties: false
+      required: [full_name, phone, sex]
+      description: Give exactly one of date_of_birth and age_years (I1).
+      properties:
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 20
+          description: Any usual Indian format; normalised to E.164. The guardian's for a minor.
+        sex:
+          $ref: '#/components/schemas/Sex'
+        date_of_birth:
+          type: [string, 'null']
+          format: date
+        age_years:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 120
+        guardian_name:
+          type: [string, 'null']
+          maxLength: 200
+          description: Required when the patient is under 18
+        language:
+          $ref: '#/components/schemas/Language'
+        confirm_new:
+          type: boolean
+          default: false
+          description: Register another person on a phone number the clinic already has
+    PatientUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Only the fields sent are changed. The code is not editable.
+      properties:
+        full_name:
+          type: [string, 'null']
+          maxLength: 200
+        phone:
+          type: [string, 'null']
+          maxLength: 20
+        sex:
+          oneOf:
+            - $ref: '#/components/schemas/Sex'
+            - type: 'null'
+        date_of_birth:
+          type: [string, 'null']
+          format: date
+        age_years:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 120
+        guardian_name:
+          type: [string, 'null']
+          maxLength: 200
+          description: Blank clears it (refused for a minor)
+        language:
+          oneOf:
+            - $ref: '#/components/schemas/Language'
+            - type: 'null'
+    PatientList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Patient'
+    PatientCandidate:
+      type: object
+      required: [id, code, full_name, age_years]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        full_name:
+          type: string
+        age_years:
+          type: integer
+    PhoneExistsEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id, details]
+          properties:
+            code:
+              type: string
+              const: PAT_PHONE_EXISTS
+            message:
+              type: string
+            request_id:
+              type: string
+            details:
+              type: object
+              required: [candidates]
+              properties:
+                candidates:
+                  type: array
+                  maxItems: 10
+                  items:
+                    $ref: '#/components/schemas/PatientCandidate'
     DoctorList:
       type: object
       required: [items]
@@ -1306,6 +1696,10 @@ components:
           maxItems: 20
           items:
             type: string
+        patient_code_prefix:
+          type: [string, 'null']
+          maxLength: 4
+          description: 2-4 upper-case letters for patient codes (ME-0142); derived from the name when omitted. Fixed once the clinic has patients.
     ClinicUpdate:
       type: object
       additionalProperties: false

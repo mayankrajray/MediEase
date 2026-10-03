@@ -230,6 +230,71 @@ export interface paths {
         readonly patch: operations["changeStaffMembership"];
         readonly trace?: never;
     };
+    readonly "/api/v1/patients": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Look patients up by phone, code or name
+         * @description FR-PAT-04; spec patients R5. Permission: PATIENTS_MANAGE. `q` is read in order as a phone
+         *     number (7 or more digits, any usual formatting), then a patient code (`ME-0142`, any case,
+         *     hyphen optional), otherwise the start of a name (case-insensitive). At most 20 results,
+         *     ordered by name. Blank text, or phone-shaped text that is not a number, returns an empty
+         *     list. The text is never logged.
+         */
+        readonly get: operations["lookupPatients"];
+        readonly put?: never;
+        /**
+         * Register a patient
+         * @description FR-PAT-01, 02, 03, 06; spec patients R1-R4, R9, R10. Permission: PATIENTS_MANAGE.
+         *     `phone` is the contact of record: for a patient under 18 it is the guardian's, and
+         *     `guardian_name` is then required (422 PAT_GUARDIAN_REQUIRED). Give a
+         *     date of birth or an age, not both. If the clinic already has patients on that number
+         *     the answer is 409 PAT_PHONE_EXISTS with up to 10 candidates (families share phones);
+         *     send `confirm_new: true` to register another person on it. A refusal takes no code.
+         *     Registration is serialised per clinic, so two simultaneous registrations of one new
+         *     number have exactly one winner. Records patient.created and the checklist's first
+         *     patient. Needs X-CSRF-Token.
+         */
+        readonly post: operations["registerPatient"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/patients/{patient_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * One patient of this clinic
+         * @description Permission: PATIENTS_MANAGE. A patient of another clinic returns 404 REQ_NOT_FOUND, so
+         *     its existence is never confirmed (NFR-08, AC7).
+         */
+        readonly get: operations["getPatient"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        /**
+         * Correct a patient's demographics
+         * @description FR-PAT-01; spec patients R3, R7. Permission: PATIENTS_MANAGE. Only the fields sent change;
+         *     send at least one. The code never changes. A date of birth or an age replaces the whole
+         *     age fact. A blank `guardian_name` clears it (refused for a minor). Changing the phone
+         *     does not run the duplicate check. Records one patient.updated listing the changed field
+         *     *names* (never values); an edit that changes nothing records nothing. Needs X-CSRF-Token.
+         */
+        readonly patch: operations["updatePatient"];
+        readonly trace?: never;
+    };
     readonly "/api/v1/auth/invites/{token}": {
         readonly parameters: {
             readonly query?: never;
@@ -506,6 +571,98 @@ export interface components {
             readonly state: string | null;
             readonly pincode: string | null;
             readonly specialties: readonly string[];
+            /** @description Prefix of this clinic's patient codes, e.g. ME for ME-0142 */
+            readonly patient_code_prefix: string;
+        };
+        /** @enum {string} */
+        readonly Sex: "FEMALE" | "MALE" | "OTHER" | "UNDISCLOSED";
+        /**
+         * @description Language of messages to the patient (English and Hindi at MVP)
+         * @enum {string}
+         */
+        readonly Language: "en" | "hi";
+        /**
+         * @description A patient as staff see them. Personal data: never cached, never logged. The phone is the
+         *     contact of record (the guardian's for a patient under 18).
+         */
+        readonly Patient: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description Clinic-scoped, human-readable, never reused or edited */
+            readonly code: string;
+            readonly full_name: string;
+            readonly phone_e164: string;
+            readonly sex: components["schemas"]["Sex"];
+            /** Format: date */
+            readonly date_of_birth: string | null;
+            /** @description Whole years on the clinic's today (its own time zone) */
+            readonly age_years: number;
+            /** @description True when only an age was recorded, not a date of birth */
+            readonly age_is_estimated: boolean;
+            readonly is_minor: boolean;
+            readonly guardian_name: string | null;
+            readonly language: components["schemas"]["Language"];
+            readonly whatsapp_consent: boolean;
+            readonly sms_consent: boolean;
+            /** @description An opt-out overrides consent until an explicit opt-in (written in M2-P3) */
+            readonly opted_out: boolean;
+            /** Format: date-time */
+            readonly consent_recorded_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description Give exactly one of date_of_birth and age_years (I1). */
+        readonly NewPatient: {
+            readonly full_name: string;
+            /** @description Any usual Indian format; normalised to E.164. The guardian's for a minor. */
+            readonly phone: string;
+            readonly sex: components["schemas"]["Sex"];
+            /** Format: date */
+            readonly date_of_birth?: string | null;
+            readonly age_years?: number | null;
+            /** @description Required when the patient is under 18 */
+            readonly guardian_name?: string | null;
+            readonly language?: components["schemas"]["Language"];
+            /**
+             * @description Register another person on a phone number the clinic already has
+             * @default false
+             */
+            readonly confirm_new: boolean;
+        };
+        /** @description Only the fields sent are changed. The code is not editable. */
+        readonly PatientUpdate: {
+            readonly full_name?: string | null;
+            readonly phone?: string | null;
+            readonly sex?: components["schemas"]["Sex"] | null;
+            /** Format: date */
+            readonly date_of_birth?: string | null;
+            readonly age_years?: number | null;
+            /** @description Blank clears it (refused for a minor) */
+            readonly guardian_name?: string | null;
+            readonly language?: components["schemas"]["Language"] | null;
+        };
+        readonly PatientList: {
+            readonly items: readonly components["schemas"]["Patient"][];
+        };
+        readonly PatientCandidate: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly code: string;
+            readonly full_name: string;
+            readonly age_years: number;
+        };
+        readonly PhoneExistsEnvelope: {
+            readonly error: {
+                /** @constant */
+                readonly code: "PAT_PHONE_EXISTS";
+                readonly message: string;
+                readonly request_id: string;
+                readonly details: {
+                    readonly candidates: readonly components["schemas"]["PatientCandidate"][];
+                };
+            };
         };
         /** @description Unpaginated by design; a clinic has one to four doctors */
         readonly DoctorList: {
@@ -589,6 +746,8 @@ export interface components {
             readonly state?: string | null;
             readonly pincode?: string | null;
             readonly specialties?: readonly string[];
+            /** @description 2-4 upper-case letters for patient codes (ME-0142); derived from the name when omitted. Fixed once the clinic has patients. */
+            readonly patient_code_prefix?: string | null;
         };
         /** @description Only the fields sent are changed. The slug and status are not editable here. */
         readonly ClinicUpdate: {
@@ -732,6 +891,20 @@ export interface components {
             };
         };
         /**
+         * @description PAT_PHONE_EXISTS (409): the clinic already has patients on this phone number.
+         *     details.candidates lists up to 10 of them (id, code, name, age) for the signed-in staff member;
+         *     send confirm_new: true to register another person on the number.
+         */
+        readonly PhoneExistsError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["PhoneExistsEnvelope"];
+            };
+        };
+        /**
          * @description CLN_INVITE_INVALID (404, unknown or malformed secret); CLN_INVITE_EXPIRED,
          *     CLN_INVITE_USED (410 — ask the clinic for a new invitation, or sign in)
          */
@@ -767,6 +940,8 @@ export interface components {
          *     value that is not one of the caller's clinics gets the same 400, never a 404.
          */
         readonly ClinicId: string;
+        /** @description A patient of the request's clinic. */
+        readonly PatientPath: string;
         /** @description The clinic an ops request is about (ops users have no membership to infer). */
         readonly ClinicPath: string;
         /** @description The single-use invitation secret from the acceptance link. */
@@ -1234,6 +1409,170 @@ export interface operations {
             readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["PermissionError"];
             readonly 409: components["responses"]["ConflictError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly lookupPatients: {
+        readonly parameters: {
+            readonly query: {
+                readonly q: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Matching patients */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly registerPatient: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewPatient"];
+            };
+        };
+        readonly responses: {
+            /** @description The new patient */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Patient"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["PhoneExistsError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly getPatient: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description A patient of the request's clinic. */
+                readonly patient_id: components["parameters"]["PatientPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The patient */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Patient"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly updatePatient: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A patient of the request's clinic. */
+                readonly patient_id: components["parameters"]["PatientPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PatientUpdate"];
+            };
+        };
+        readonly responses: {
+            /** @description The patient after the edit */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Patient"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["AuthError"];
         };

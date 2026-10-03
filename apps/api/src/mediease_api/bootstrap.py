@@ -42,6 +42,9 @@ from mediease_api.application.clinics.onboard_clinic import (
 from mediease_api.application.clinics.queries import GetClinic, GetDoctor, ListDoctors, ListStaff
 from mediease_api.application.identity.accept_invite import AcceptInvite, DescribeInvite
 from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics
+from mediease_api.application.patients.queries import GetPatient, LookupPatients
+from mediease_api.application.patients.register_patient import RegisterPatient
+from mediease_api.application.patients.update_patient import UpdatePatient
 from mediease_api.config.logging import configure_logging
 from mediease_api.config.settings import AppSettings
 from mediease_api.delivery.errors import register_error_handlers
@@ -52,6 +55,7 @@ from mediease_api.delivery.http.csrf import register_csrf_protection
 from mediease_api.delivery.http.invites import create_invite_blueprint
 from mediease_api.delivery.http.me import create_me_blueprint
 from mediease_api.delivery.http.ops import create_ops_blueprint
+from mediease_api.delivery.http.patients import create_patients_blueprint
 from mediease_api.delivery.http.platform import create_platform_blueprint
 from mediease_api.delivery.http.request_info import register_request_info
 from mediease_api.delivery.middleware import register_request_middleware
@@ -162,6 +166,18 @@ class _UseCases:
     def create_clinic(self) -> CreateClinic:
         return CreateClinic(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    def register_patient(self) -> RegisterPatient:
+        return RegisterPatient(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def update_patient(self) -> UpdatePatient:
+        return UpdatePatient(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def get_patient(self) -> GetPatient:
+        return GetPatient(uow=self._uow(), clock=self.clock)
+
+    def lookup_patients(self) -> LookupPatients:
+        return LookupPatients(uow=self._uow(), clock=self.clock)
+
     def list_clinics(self) -> ListClinics:
         return ListClinics(uow=self._uow())
 
@@ -268,6 +284,7 @@ def create_app(
     app.register_blueprint(
         create_ops_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
     )
+    app.register_blueprint(create_patients_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

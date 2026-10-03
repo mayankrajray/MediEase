@@ -33,3 +33,6 @@ class AuditAction(StrEnum):
     STAFF_ACCEPTED = "staff.accepted"
     STAFF_ROLE_CHANGED = "staff.role_changed"
     STAFF_DEACTIVATED = "staff.deactivated"
+    # M2-P2: patients. Metadata holds the code and field names, never a name or a phone number.
+    PATIENT_CREATED = "patient.created"
+    PATIENT_UPDATED = "patient.updated"

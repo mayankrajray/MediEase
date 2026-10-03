@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from mediease_api.application.patients.views import CandidateView, PatientView
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
@@ -34,6 +35,7 @@ def clinic_body(clinic: Clinic) -> dict[str, Any]:
         "state": clinic.state,
         "pincode": clinic.pincode,
         "specialties": list(clinic.specialties),
+        "patient_code_prefix": clinic.patient_code_prefix,
     }
 
 
@@ -69,3 +71,37 @@ def checklist_body(checklist: OnboardingChecklist | None) -> dict[str, Any] | No
         recorded = checklist.at(step)
         body[step.value] = recorded.isoformat() if recorded else None
     return body
+
+
+def patient_body(patient: PatientView) -> dict[str, Any]:
+    """A patient as staff see them. Phone numbers are shown in full: staff must dial them."""
+    return {
+        "id": str(patient.id),
+        "code": patient.code,
+        "full_name": patient.full_name,
+        "phone_e164": patient.phone_e164,
+        "sex": patient.sex.value,
+        "date_of_birth": patient.date_of_birth.isoformat() if patient.date_of_birth else None,
+        "age_years": patient.age_years,
+        "age_is_estimated": patient.age_is_estimated,
+        "is_minor": patient.is_minor,
+        "guardian_name": patient.guardian_name,
+        "language": patient.language.value,
+        "whatsapp_consent": patient.whatsapp_consent,
+        "sms_consent": patient.sms_consent,
+        "opted_out": patient.opted_out,
+        "consent_recorded_at": (
+            patient.consent_recorded_at.isoformat() if patient.consent_recorded_at else None
+        ),
+        "created_at": patient.created_at.isoformat(),
+        "updated_at": patient.updated_at.isoformat(),
+    }
+
+
+def candidate_body(candidate: CandidateView) -> dict[str, Any]:
+    return {
+        "id": str(candidate.id),
+        "code": candidate.code,
+        "full_name": candidate.full_name,
+        "age_years": candidate.age_years,
+    }

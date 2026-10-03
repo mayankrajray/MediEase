@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from mediease_api.domain.shared.errors import InvalidValue
 
@@ -18,3 +19,13 @@ def require_utc(value: datetime, field: str) -> datetime:
     if value.utcoffset() != timedelta(0):
         raise InvalidValue(field, "must be in UTC")
     return value.astimezone(UTC)
+
+
+def local_date(instant: datetime, timezone: str) -> date:
+    """The calendar date at ``instant`` in an IANA time zone (a clinic's own "today").
+
+    Ages, birthdays and the under-18 rule are questions about a date, and the date
+    depends on where the clinic is: 23:30 UTC on 2 October is already 3 October in
+    Asia/Kolkata. The caller passes the clinic's zone; the server's is never used.
+    """
+    return require_utc(instant, "instant").astimezone(ZoneInfo(timezone)).date()

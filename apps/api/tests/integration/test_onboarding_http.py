@@ -529,3 +529,38 @@ def test_an_unknown_clinic_is_404_for_ops(world: World) -> None:
     resp = _invite(ops, unknown, Role.OWNER, "nowhere@example.test")
     assert resp.status_code == 404
     assert resp.get_json()["error"]["code"] == "REQ_NOT_FOUND"
+
+
+def test_r4_a_clinic_gets_a_patient_code_prefix_derived_from_its_name_or_chosen_by_ops(
+    world: World,
+) -> None:
+    ops = world.client_for(world.ops)
+
+    derived = _post(ops, OPS_CLINICS, {"name": "Aarogya Family Clinic", "slug": "aarogya-family"})
+    chosen = _post(
+        ops,
+        OPS_CLINICS,
+        {"name": "Aarogya Two", "slug": "aarogya-two", "patient_code_prefix": "AR"},
+    )
+
+    assert derived.get_json()["patient_code_prefix"] == "AFC"
+    assert chosen.get_json()["patient_code_prefix"] == "AR"
+    assert world.client_for(world.a.owner).get(CLINIC).get_json()["patient_code_prefix"] == (
+        world.a.clinic.patient_code_prefix
+    )
+
+
+@pytest.mark.parametrize("prefix", ["a", "abc", "ABCDE", "A1", "A B"])
+def test_r4_a_bad_patient_code_prefix_is_refused(world: World, prefix: str) -> None:
+    ops = world.client_for(world.ops)
+
+    resp = _post(
+        ops,
+        OPS_CLINICS,
+        {"name": "Prefix Test", "slug": "prefix-test", "patient_code_prefix": prefix},
+    )
+
+    assert resp.status_code == 422
+    assert "patient_code_prefix" in {
+        f["field"] for f in resp.get_json()["error"]["details"]["fields"]
+    }
