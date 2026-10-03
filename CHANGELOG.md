@@ -14,6 +14,19 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M2-P3 (#21): consent, opt-out and opt-in (FR-PAT-05, FR-PAT-06, FR-MSG-05). `PUT /api/v1/patients/{id}/consent`
+  records whether the patient may be messaged on WhatsApp and SMS, with who and when (the guardian's
+  answer for a minor); "asked and declined" is told apart from "never asked". `POST .../opt-out` stops all
+  messages and is idempotent; `POST .../opt-in` is the explicit way back and takes the new consent, so
+  re-submitting a form cannot undo an opt-out (AC5). Editing consent while opted out is `409 PAT_OPTED_OUT`.
+  The patient body gains `whatsapp_allowed`, `sms_allowed`, `opted_out_at` and `consent_recorded_by`.
+  Each change is an audit row (`patient.consent_changed`, `patient.opted_out`, `patient.opted_in`) with the
+  flags and `given_by`, never a name. The patient row is read `FOR UPDATE` so an opt-out and a consent edit
+  cannot interleave. Contract 0.7.0.
+- Tests and CI can no longer hang: `pytest-timeout` (pinned, dev only) fails any API test that runs longer
+  than 120 s with every thread's stack, and every CI job has a `timeout-minutes` limit. Added after a
+  deadlocked test (a thread barrier whose second thread was never started) stalled a run for half an hour.
+
 - M2-P2 (#21): patients over HTTP (FR-PAT-01..04). `POST /api/v1/patients` registers (phone normalised
   to E.164, the guardian rule for under-18s, a clinic code like `SC-0001`); `GET /api/v1/patients?q=`
   looks up by phone, code or name prefix (at most 20); `GET` and `PATCH /api/v1/patients/{id}` read and
