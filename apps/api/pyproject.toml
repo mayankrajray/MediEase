@@ -36,6 +36,9 @@ dev = [
     # Layer boundaries (apps/api/CLAUDE.md) and the coverage gate (NFR-14).
     "import-linter==2.15",
     "pytest-cov==7.1.0",
+    # A test that waits forever (a deadlock, a thread barrier nobody reaches) fails after
+    # `timeout` seconds with every thread's stack, instead of hanging the run and CI.
+    "pytest-timeout==2.4.0",
 ]
 
 [build-system]
@@ -78,6 +81,10 @@ strict = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+# No single test may run longer than this (the slowest, 10,000 patients, takes a few seconds).
+# "thread" also works when the hang is inside a worker thread, and dumps all stacks on failure.
+timeout = 120
+timeout_method = "thread"
 
 # --- Coverage gate (NFR-14) -------------------------------------------------------
 # make test-api and CI run `pytest --cov`; below the threshold the run fails.
