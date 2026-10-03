@@ -45,10 +45,19 @@ curl -si -H 'Content-Type: application/json' \
   -d '{"identifier":"owner@sample-clinic.example","password":"MediEase-demo-2026"}' \
   localhost:8000/api/v1/auth/sign-in        # 200 + Set-Cookie me_access, me_refresh, me_csrf
 ```
-`make seed` (M1-P2) creates the synthetic clinic `sample-clinic` with `owner@`, `doctor@`,
-`desk@sample-clinic.example` and the ops user `ops@mediease.example`, all with the demo password
-above (local only; `--password` overrides it). It refuses to run unless `APP_ENV=local` and does
-nothing if the clinic exists.
+`make seed` (M1-P2, extended in M1-P6) creates two synthetic clinics and the ops user, all with the
+demo password above (local only; `--password` overrides it):
+
+| Clinic | People |
+|---|---|
+| `sample-clinic` | `owner@`, `doctor@`, `desk@sample-clinic.example` |
+| `sample-clinic-two` | `owner@sample-clinic-two.example`, and `doctor@sample-clinic.example` again as a second membership |
+| (no clinic) | `ops@mediease.example` |
+
+`doctor@sample-clinic.example` therefore belongs to two clinics: signing in as them shows the clinic
+chooser and switcher in the web app. The seed refuses to run unless `APP_ENV=local` and is
+idempotent **per clinic**: a clinic that exists is left alone, so a database seeded before
+`sample-clinic-two` existed only gains the new clinic.
 
 **`make up` fails with `CFG_INVALID ... JWT_SIGNING_KEY`** (or Compose says
 `set JWT_SIGNING_KEY in .env`): `.env` was created before M1-P2. Set `JWT_SIGNING_KEY` in `.env`
