@@ -1,6 +1,14 @@
 # Reviewed gitleaks false positives, one fingerprint per line (commit:file:rule:line).
 # Add an entry only after confirming the value is synthetic, with the reason above it.
 # Real secrets are never "ignored": rotate them (docs/RUNBOOK.md §13).
+#
+# Fingerprints name a commit SHA. Rebase-merging a PR gives its commits new SHAs on main, so an
+# entry written on a branch stops matching once that branch is merged: re-point it at the commit
+# as it exists on main (`git log --format=%h -S'<text>' -- <file>`) in the next change.
 
 # Synthetic test-only password used to seed users in the test database (M1-P2, #19).
+# 1324cff is that commit on main after the M1 rebase merge; 244905a is the same change on the old
+# M1 branch, kept for clones that still have it locally. Later versions of the line carry an inline
+# `gitleaks:allow`.
+1324cffb4328c9f8f494de213b86f4a85e0ecb89:apps/api/tests/conftest.py:generic-api-key:230
 244905a3bdc594811b035b2d17cc39c6a892775e:apps/api/tests/conftest.py:generic-api-key:230
