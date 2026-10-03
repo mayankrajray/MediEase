@@ -132,13 +132,19 @@ CLN_MEMBER_EXISTS`; a still-pending invitation is re-issued, which retires the p
 | Method | Path | Purpose | Status |
 |---|---|---|---|
 | GET | `/api/v1/auth/invites/{token}` | What this invitation is for | Implemented (M1-P5) |
-| POST | `/api/v1/auth/invites/{token}/accept` | Set a password, join, sign in | Implemented (M1-P5) |
+| POST | `/api/v1/auth/invites/{token}/accept` | Join and sign in: sets a new password, or proves the existing one | Implemented (M1-P5; existing accounts M1-P5 amendment, spec R13) |
 
 No session is involved: the authority is the single-use secret in the URL, which is why these
 paths need no `X-CSRF-Token`. The secret is 32 random bytes, stored only as a SHA-256 digest,
 valid for 7 days, and shown exactly once — in the response that created the invitation. Accepting
-sets a password (at least 12 characters), activates the membership, activates an `ONBOARDING`
+activates the membership, activates an `ONBOARDING`
 clinic when the new member is its owner (I1), and returns the sign-in body with cookies set.
+What `password` means depends on the account (spec R13): for a **new** account (`has_password:
+false`) it is the password being chosen (at least 12 characters); for an **existing** account
+(`has_password: true`) it is that account's current password, verified and never changed, because
+the link alone must not be able to take an account over (the inviting owner receives the link).
+A wrong one is `401 AUTH_INVALID_CREDENTIALS` and counts towards the sign-in lockout (`423
+AUTH_LOCKED`); the invitation stays pending.
 Unknown secrets are `404 CLN_INVITE_INVALID`; expired and already-used ones say which (`410`), so
 the person holding the link knows whether to ask for a new one.
 

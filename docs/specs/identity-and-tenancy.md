@@ -5,7 +5,7 @@
 | Requirements | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08 |
 | Milestone / phases | M1 / P1–P6 |
 | Status | Approved (developer sign-off 2026-10-02) |
-| Last updated | 2026-10-03 (§7 and §8: the M1-P4 and M1-P5 audit actions and the invitation flow recorded; §10: the `auth.rejected` event. No change to behaviour) |
+| Last updated | 2026-10-03 (§4 R13 and §8: accepting an invitation for an existing account now needs that account's current password and never changes it — a security amendment, approved by the developer 2026-10-03; earlier the same day: §7, §8 and §10 recorded the M1-P4 and M1-P5 audit actions, invitation flow and `auth.rejected` event) |
 
 ## 1. Context
 Clinics must trust that only their own staff can see their patients, and that each staff member
@@ -49,6 +49,10 @@ Invariants:
   fails, the change fails.
 - **R12** The onboarding checklist records the first time each milestone step happens; later
   repeats do not overwrite timestamps.
+- **R13** Holding an invitation link does not prove owning the account it is for (the inviting
+  owner receives it). Accepting for a **new** account sets its password; accepting for an account
+  that **already has a password** requires that account's current password, never changes it, and
+  counts wrong attempts towards the R3 lockout (`AUTH_INVALID_CREDENTIALS`, `AUTH_LOCKED`).
 
 ## 5. API surface
 See API.md "Auth and session", "Clinic administration", "Ops console".
@@ -74,6 +78,8 @@ See API.md "Auth and session", "Clinic administration", "Ops console".
 | Owner is also a doctor | Owner membership + linked Doctor profile; doctor permissions apply to clinical actions |
 | An invited member never accepts | The invitation expires after 7 days; the clinic invites them again, which retires the old link (M1-P5) |
 | An invitation link is used twice | The second attempt is refused as already used; they sign in instead (M1-P5) |
+| An invitation is for an email or phone that already has an account | The page asks for that account's current password instead of a new one (R13); a wrong one is refused and counted, and the invitation stays pending |
+| A person with a password but no active membership is invited again | They can still accept, by entering their password: sign-in refuses them (`AUTH_ACCOUNT_DISABLED`), so acceptance is how they come back |
 | Password reset requested (P1) | Not available in M1; ops resets manually with audit |
 | Clock skew between api replicas | Token validation allows 30 s leeway |
 

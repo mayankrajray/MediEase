@@ -4,7 +4,16 @@ Two public use cases, for a person who has no session yet:
 
 - ``DescribeInvite`` — what this link is for, so the page can say "Join Sample
   Clinic as the front desk" before asking for a password.
-- ``AcceptInvite`` — set a password, activate the membership, and sign in.
+- ``AcceptInvite`` — activate the membership and sign in. What the ``password``
+  means depends on the account (spec R13):
+
+  * a **new** account (no password yet) *sets* it, subject to the password policy;
+  * an account that **already has** a password must *prove* it by presenting the
+    current one, and it is never changed. Whoever holds the link is not
+    necessarily the account holder (an owner who invites an existing user's
+    email receives the link), so the link alone must not be able to take the
+    account over. Wrong attempts count towards the same lockout as sign-in.
+
   Accepting an owner's invitation also activates an ``ONBOARDING`` clinic:
   invariant I1 (an active clinic has an active owner) becomes satisfiable at
   exactly that moment, and it saves ops a step in the 60-minute onboarding.
@@ -27,7 +36,7 @@ import structlog
 
 from mediease_api.application.audit import record_event
 from mediease_api.application.auth._session import SessionIssuer, session_result
-from mediease_api.application.auth.errors import AccountDisabled
+from mediease_api.application.auth.errors import AccountDisabled, AccountLocked, InvalidCredentials
 from mediease_api.application.auth.views import SessionResult
 from mediease_api.application.clinics.errors import InviteExpired, InviteInvalid, InviteUsed
 from mediease_api.application.context import Actor, RequestInfo
@@ -96,14 +105,20 @@ class AcceptInvite:
 
     def execute(self, token: str, password: str, info: RequestInfo | None = None) -> SessionResult:
         info = info or RequestInfo()
-        validate_password(password)
         digest = self._secrets.digest(token)
         with self._uow as uow:
             now = self._clock.now()
-            membership, clinic, user = _load(uow, digest, now)
+            # The user row is locked: wrong passwords on an existing account are counted one by one.
+            membership, clinic, user = _load(uow, digest, now, lock_user=True)
             actor = Actor.for_user(user, info)
 
-            user.set_password_hash(self._hasher.hash(password), now=now)
+            if user.password_hash is None:
+                validate_password(password)
+                user.set_password_hash(self._hasher.hash(password), now=now)
+                account = "new"
+            else:
+                self._prove_current_password(uow, user, password, info, now)
+                account = "existing"
             user.record_successful_sign_in(now=now)
             uow.users.update(user)
 
@@ -120,7 +135,7 @@ class AcceptInvite:
                 clinic_id=clinic.id,
                 entity_type=ENTITY_TYPE,
                 entity_id=membership.id,
-                metadata={"role": membership.role.value},
+                metadata={"role": membership.role.value, "account": account},
             )
             if membership.role is Role.OWNER and clinic.status is ClinicStatus.ONBOARDING:
                 # I1 is satisfiable now: the clinic has its first active owner.
@@ -158,8 +173,49 @@ class AcceptInvite:
         )
         return session_result(user, access, tokens)
 
+    def _prove_current_password(
+        self, uow: UnitOfWork, user: User, password: str, info: RequestInfo, now: datetime
+    ) -> None:
+        """Existing account: the caller must know its password (R13). Never changes it.
 
-def _load(uow: UnitOfWork, digest: str, now: datetime) -> tuple[ClinicMembership, Clinic, User]:
+        The same rules as sign-in: a locked account is refused without checking, and a
+        wrong password is counted (the fifth locks) and audited before the error, so
+        this endpoint is not a way around the lockout.
+        """
+        assert user.password_hash is not None
+        if user.is_locked(now):
+            assert user.locked_until is not None
+            logger.info("staff.invite_rejected", reason="locked", user_id=str(user.id))
+            raise AccountLocked(max(1, int((user.locked_until - now).total_seconds())))
+
+        if not self._hasher.verify(user.password_hash, password):
+            locked_now = user.record_failed_sign_in(now=now)
+            uow.users.update(user)
+            record_event(
+                uow,
+                event_id=self._ids.new_id(),
+                action=AuditAction.AUTH_SIGN_IN_FAILED,
+                actor=Actor.for_user(user, info),
+                now=now,
+                metadata={
+                    "reason": "wrong_password",
+                    "locked": str(locked_now).lower(),
+                    "via": "invite",
+                },
+            )
+            uow.commit()
+            logger.info("staff.invite_rejected", reason="wrong_password", user_id=str(user.id))
+            if locked_now:
+                logger.warning("auth.locked", user_id=str(user.id))
+            raise InvalidCredentials()
+
+        if self._hasher.needs_rehash(user.password_hash):
+            user.set_password_hash(self._hasher.hash(password), now=now)
+
+
+def _load(
+    uow: UnitOfWork, digest: str, now: datetime, *, lock_user: bool = False
+) -> tuple[ClinicMembership, Clinic, User]:
     """The membership this secret belongs to, with its clinic and user, or an error."""
     membership = uow.staff_invites.get_by_invite_digest(digest)
     if membership is None:
@@ -177,7 +233,7 @@ def _load(uow: UnitOfWork, digest: str, now: datetime) -> tuple[ClinicMembership
         raise InviteInvalid()
 
     clinic = uow.clinics.get(membership.clinic_id)
-    user = uow.users.get(membership.user_id)
+    user = uow.users.get(membership.user_id, for_update=lock_user)
     if clinic is None or user is None:  # pragma: no cover - foreign keys prevent this
         raise InviteInvalid()
     if not user.is_active:

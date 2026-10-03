@@ -18,7 +18,7 @@ from openapi_core.contrib.werkzeug import WerkzeugOpenAPIRequest, WerkzeugOpenAP
 from werkzeug.test import EnvironBuilder, TestResponse
 from werkzeug.wrappers import Request
 
-from tests.conftest import World
+from tests.conftest import DEMO_PASSWORD, World
 
 _SPEC_PATH = Path(__file__).resolve().parents[4] / "contracts" / "openapi.yaml"
 _BASE_URL = "http://localhost:8000"
@@ -188,3 +188,35 @@ def test_adr_0008_the_owner_management_endpoints_match_contract(
     )
     assert deactivated.status_code == 200
     _check(openapi, deactivated)
+
+
+def test_adr_0008_accepting_for_an_existing_account_matches_contract(
+    openapi: OpenAPI, world: World
+) -> None:
+    """R13: the 401 for a wrong current password and the 423 lock are documented shapes."""
+    ops = world.client_for(world.ops)
+    clinic_id = _clinic(ops, "contract-existing")["id"]
+    assert world.a.doctor_user.email is not None
+    invited = _send(
+        ops,
+        "POST",
+        f"{OPS_CLINICS}/{clinic_id}/staff-invites",
+        {
+            "full_name": "Dr. Existing",
+            "role": "DOCTOR",
+            "email": world.a.doctor_user.email.value,
+        },
+    )
+    assert invited.status_code == 201
+    accept = f"/api/v1/auth/invites/{invited.get_json()['accept_url'].rsplit('/', 1)[1]}/accept"
+    stranger = world.anonymous()
+
+    for _ in range(4):
+        _send(stranger, "POST", accept, {"password": "wrong-guess-password"})
+    wrong = _send(stranger, "POST", accept, {"password": "wrong-guess-password"})
+    assert wrong.status_code == 401
+    _check(openapi, wrong)
+
+    locked = _send(stranger, "POST", accept, {"password": DEMO_PASSWORD})
+    assert locked.status_code == 423
+    _check(openapi, locked)

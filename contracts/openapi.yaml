@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.5.0
+  version: 0.5.1
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -546,13 +546,23 @@ paths:
     post:
       tags: [invites]
       operationId: acceptInvite
-      summary: Set a password, join the clinic and sign in
+      summary: Join the clinic and sign in (sets a new password, or proves the existing one)
       description: |
-        FR-ORG-04, FR-AUTH-01. Public: the authority is the secret in the URL, so no
-        X-CSRF-Token is needed (a cross-site request would have to know the secret). The
-        password must be at least 12 characters. Accepting activates the membership, records
-        staff.accepted, activates an ONBOARDING clinic when the new member is its owner (I1),
-        and sets the session cookies — the invitee is signed in.
+        FR-ORG-04, FR-AUTH-01, spec R13. Public: the secret in the URL is needed but is not enough
+        for an account that already exists, so no X-CSRF-Token is needed (a cross-site request
+        would have to know the secret). What password means depends on the invite's
+        has_password (see describeInvite):
+
+        - false, a new account: it is the password being chosen, at least 12 characters.
+        - true, an existing account: it is that account's **current** password, verified and never
+          changed. Whoever holds the link is not necessarily the account holder (the inviting
+          owner receives it), so the link alone cannot take the account over. A wrong password is
+          401 AUTH_INVALID_CREDENTIALS and counts towards the sign-in lockout (423 AUTH_LOCKED
+          with Retry-After); the invitation stays pending.
+
+        Accepting activates the membership, records staff.accepted, activates an ONBOARDING clinic
+        when the new member is its owner (I1), and sets the session cookies — the invitee is
+        signed in.
       parameters:
         - $ref: '#/components/parameters/RequestId'
         - $ref: '#/components/parameters/InviteToken'
@@ -565,6 +575,8 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/SessionStarted'
+        '401':
+          $ref: '#/components/responses/AuthError'
         '403':
           $ref: '#/components/responses/AuthError'
         '404':
@@ -575,6 +587,19 @@ paths:
           $ref: '#/components/responses/AuthError'
         '422':
           $ref: '#/components/responses/AuthError'
+        '423':
+          description: The existing account is locked (AUTH_LOCKED)
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Retry-After:
+              description: Seconds until the lock ends
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /api/v1/ops/clinics:
     post:
       tags: [ops]
@@ -1240,7 +1265,10 @@ components:
           minLength: 1
           maxLength: 1024
           format: password
-          description: At least 12 characters (the domain's policy)
+          description: |
+            For a new account (the invite's has_password is false): the password to set, at least
+            12 characters (the domain's policy). For an existing account (has_password is true):
+            its current password, which is checked and never changed.
     NewClinic:
       type: object
       additionalProperties: false
