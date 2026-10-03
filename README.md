@@ -5,8 +5,8 @@ India: booking, a live daily queue, a searchable patient record, a digital presc
 can re-read, and follow-up reminders that actually arrive.
 
 > **Status:** Milestone 0 (Foundation) complete; Milestone 1 (Identity, tenancy and audit) in
-> progress — domain model, sign-in and authorisation on every route are in, audit log next.
-> See [TASKS.md](TASKS.md).
+> progress — domain model, sign-in, authorisation on every route, the audit log, ops onboarding
+> and the web sign-in with clinic switcher are in; awaiting review. See [TASKS.md](TASKS.md).
 
 ---
 

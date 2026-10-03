@@ -103,6 +103,31 @@ first production release.
   `staff.invited`, `staff.accepted`, `staff.deactivated`. Contract 0.5.0 (17 paths);
   setting `PUBLIC_BASE_URL` is now validated (absolute, https when deployed) and RUNBOOK §10
   carries the real onboarding commands.
+- M1-P6 (#19): web sign-in (FR-AUTH-01, FR-AUTH-04): `/sign-in` with one identifier field and a
+  password, the API's own message with its Ref, a lock that says how long to wait and disables the
+  button, and an allow-listed `?reason=` (session ended, ended for safety, account deactivated).
+  `/invite/[token]` accepts a staff invitation and signs the invitee in; for an invitation to an
+  existing account it offers sign-in and never a set-password form.
+- M1-P6: clinic choice and the dashboard shell (FR-AUTH-03, spec R6, R10). `/select-clinic` for
+  people in several clinics, a header switcher shown only to them (`X-Clinic-ID`, per tab, last
+  choice remembered as `mediease.clinic_id`), navigation filtered by permission, sign-out, a
+  no-access state, a suspended-clinic screen, and an empty `/queue`. `/ops` is a placeholder for
+  platform staff; the Create clinic wizard is planned separately. `/` now redirects to `/queue`.
+- M1-P6: the API client sends POST with `X-CSRF-Token` (from `me_csrf`), `X-Clinic-ID`, path
+  parameters, 204 responses and `Retry-After`; an expired access token is refreshed once, with the
+  refresh shared per tab and serialised across tabs by a Web Lock (refresh tokens are single use).
+- M1-P6: the proxy sends a visitor with no `me_csrf` cookie to `/sign-in?next=…` (a hint, not a
+  security check); `make smoke` checks the sign-in page and that redirect.
+- M1-P6: `make seed` adds a second synthetic clinic, `sample-clinic-two`, with the demo doctor as a
+  member of both, and is now idempotent per clinic (an already-seeded database gains only the new
+  clinic).
+- CI (#19): the web `npm audit` gate blocks on production dependencies (`--omit=dev`); the
+  full-tree audit is non-blocking (see Changed).
+
+### Known issues
+- `POST /api/v1/auth/invites/{token}/accept` sets the password even for an existing account, so an
+  owner who invites an existing user's email could take over that account (SECURITY_AND_COMPLIANCE
+  §3, TASKS.md). Found in M1-P6; the web page avoids it, the API is unchanged.
 
 ### Upgrade notes
 - M1-P2: existing local `.env` files need `JWT_SIGNING_KEY` of at least 32 characters (copy the

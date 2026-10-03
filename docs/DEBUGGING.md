@@ -143,7 +143,25 @@ Inside containers the host is `db`; from your laptop it is `localhost`.
   can read; send it back as `X-CSRF-Token` on every POST/PUT/PATCH/DELETE, or the API answers
   `AUTH_CSRF_INVALID`. After sign-in and refresh `me_csrf` changes: read it again.
 - `AUTH_REFRESH_REUSED` right after a refresh usually means two refreshes ran in parallel (two
-  tabs, a retry): the second presented the already-rotated token. Serialise refreshes.
+  tabs, a retry): the second presented the already-rotated token. Serialise refreshes. The web app
+  does (M1-P6: one shared refresh per tab plus a Web Lock across tabs, `src/lib/auth/refresh.ts`),
+  so if you see it from the web app, look for code calling `/auth/refresh` directly instead of
+  `sessionGet`/`sessionPost`, or a browser without Web Locks with several tabs open.
+
+### 5.3c Web: sent back to sign-in, or a blank "Loading your session…" (M1-P6)
+Page requests carry only `me_csrf`; the session is established by `GET /api/v1/me`, from the
+browser. Check in this order:
+
+| Symptom | Likely cause | Check |
+|---|---|---|
+| `/queue` redirects to `/sign-in?next=%2Fqueue` without ever showing the shell | No `me_csrf` cookie: signed out, cookie expired, or set for another origin (`:8000` instead of `:3000`) | Application tab → Cookies for `localhost:3000`. The redirect is the proxy (`src/proxy.ts`); `make smoke` checks it |
+| Shell flashes, then `/sign-in?reason=session_ended` | `/me` returned 401 and the refresh failed | Network tab: `/api/v1/me` then `/api/v1/auth/refresh`. 401 `AUTH_SESSION_EXPIRED` on refresh = refresh token gone (signed out elsewhere, 14 days, or revoked) |
+| `reason=session_ended_for_safety` | `AUTH_REFRESH_REUSED`: a rotated refresh token was presented again, so the whole session was revoked | See §5.3 last bullet; `auth.refresh_reused` in the API log with the `session_id` |
+| `reason=account_disabled` | 403 `AUTH_ACCOUNT_DISABLED` (R7): the user or their last membership was deactivated | §5.3a |
+| "Loading your session…" never ends | `/api/v1/me` is hanging (API down or slow); the request times out after 5 s and shows an error with Try again | `make ps`; `docker compose logs api` |
+| Sign-in succeeds, then `/select-clinic` every time | The person has several clinics and `mediease.clinic_id` is missing or not one of them (private window, cleared storage, sign-out clears it on purpose) | Application tab → Local storage |
+| "Choose a clinic" loop after switching | `GET /api/v1/clinic` answered 400 `PERM_CLINIC_REQUIRED`: the remembered ID is not one of the user's clinics | `GET /api/v1/me` lists the valid IDs |
+| Buttons do nothing after sign-in on `:8000` | Cross-origin: cookies are not sent and CSRF cannot match | Use `http://localhost:3000` |
 
 ### 5.3a Unexpected 401 or 403 on an API call (M1-P3)
 Read the code before assuming a bug — each one means something different:
@@ -183,7 +201,8 @@ from audit_events where clinic_id = '<clinic id>' order by occurred_at desc limi
   via the clock port — never `datetime.now()` or `utcnow()`).
 - "Clinic-local date" (e.g. today's queue) is computed with the clinic's `timezone`, not the
   server's. A session near midnight IST is the classic trap.
-- The web app formats with the clinic timezone from `/me`, not the browser's.
+- The web app formats with the clinic timezone from `GET /api/v1/clinic` (`/me` does not carry
+  it), not the browser's.
 - Tests freeze time through the clock port; a test that passes only at certain hours is a bug.
 
 ### 5.5 Double booking / capacity exceeded
