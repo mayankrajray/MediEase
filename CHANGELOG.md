@@ -6,6 +6,13 @@ first production release.
 
 ## [Unreleased]
 
+### Changed
+- CI (#19): web `npm audit` now blocks on production dependencies only (`--omit=dev`); the
+  full-tree audit still runs but is non-blocking. Reason: braces advisory GHSA-vfj7-8cjw-p6xm
+  (CVE-2026-93687, braces ≤ 3.0.3) has no patched version and is reachable only through
+  `eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch` (dev-only, not in
+  the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
+
 ### Added
 - Planning pack: PRD, CLAUDE.md, AGENTS.md, TASKS.md, SPECS.md, architecture, data model, API
   design, debugging guide, error catalogue, runbook, security and compliance notes, ADR-0001 to
