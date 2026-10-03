@@ -13,6 +13,7 @@ from mediease_api.delivery.cli import seed
 from mediease_api.domain.clinics.clinic import ClinicStatus
 from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.shared.email import EmailAddress
+from mediease_api.domain.shared.phone import PhoneNumber
 from tests.conftest import TEST_IP_SALT, TEST_SIGNING_KEY, SetEnv, UowFactory
 
 
@@ -115,7 +116,9 @@ def test_seed_refuses_outside_local(
     assert "refused" in capsys.readouterr().err
 
 
-def test_seed_runs_as_a_module_the_way_make_seed_runs_it(seed_env: dict[str, str]) -> None:
+def test_seed_runs_as_a_module_the_way_make_seed_runs_it(
+    seed_env: dict[str, str], uow_factory: UowFactory
+) -> None:
     # `make seed` runs `python -m mediease_api.delivery.cli.seed`; calling main() directly
     # (every other test) would not notice a missing `if __name__ == "__main__"` guard.
     result = subprocess.run(
@@ -130,3 +133,51 @@ def test_seed_runs_as_a_module_the_way_make_seed_runs_it(seed_env: dict[str, str
     assert result.returncode == 0, result.stderr
     assert "created 'sample-clinic'" in result.stdout
     assert "created 'sample-clinic-two'" in result.stdout
+
+
+def test_seed_adds_six_synthetic_patients_to_the_demo_clinic_once(
+    seed_env: dict[str, str], uow_factory: UowFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert seed.main([]) == 0
+    assert "added 6 synthetic patients" in capsys.readouterr().out
+    assert seed.main([]) == 0  # nothing more the second time
+    assert "added" not in capsys.readouterr().out
+
+    with uow_factory() as uow:
+        clinic = uow.clinics.get_by_slug(seed.DEMO_SLUG)
+        assert clinic is not None
+        patients = uow.tenant(clinic.id).patients
+        assert patients.count() == 6
+        prefix = clinic.patient_code_prefix
+        assert clinic.next_patient_seq == 7
+        family = patients.find_by_phone(PhoneNumber.parse("9000000101"), limit=10)
+        assert [p.full_name for p in family] == ["Asha Rao", "Arun Rao", "Meera Rao"]
+        child = family[2]
+        assert child.guardian_name == "Asha Rao" and child.is_minor(child.registered_on)
+        assert child.code == f"{prefix}-0003"
+        by_age = patients.search_by_name_prefix("bina", limit=1)[0]
+        assert by_age.date_of_birth is None and by_age.age_years_at_registration == 47
+        hindi = patients.search_by_name_prefix("chetan", limit=1)[0]
+        assert hindi.language.value == "hi"
+        other = uow.clinics.get_by_slug(seed.SECOND_SLUG)
+        assert other is not None and uow.tenant(other.id).patients.count() == 0
+
+
+def test_seed_gives_patients_to_a_demo_clinic_seeded_before_patients_existed(
+    seed_env: dict[str, str],
+    uow_factory: UowFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    everyone = seed._PATIENTS
+    monkeypatch.setattr(seed, "_PATIENTS", ())
+    assert seed.main([]) == 0
+    monkeypatch.setattr(seed, "_PATIENTS", everyone)
+    capsys.readouterr()
+
+    assert seed.main([]) == 0
+
+    assert "added 6 synthetic patients" in capsys.readouterr().out
+    with uow_factory() as uow:
+        clinic = uow.clinics.get_by_slug(seed.DEMO_SLUG)
+        assert clinic is not None and uow.tenant(clinic.id).patients.count() == 6
