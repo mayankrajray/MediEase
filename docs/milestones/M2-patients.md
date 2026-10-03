@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M2-P1 implemented 3 Oct 2026, awaiting confirmation; P2 next |
+| Status | In progress — M2-P1 confirmed 3 Oct 2026; M2-P2 design proposed, awaiting approval |
 | Spec | `docs/specs/patients.md` (Approved 2026-10-03) |
 | Covers | FR-PAT-01..06, FR-PAT-08, FR-MSG-05 (opt-out state), NFR-08 |
 | Issue / branch / PR | #21 · `m2/21-patients` · one PR for the whole milestone (ADR-0011) |
@@ -13,7 +13,7 @@
 | Phase | Builds | Design |
 |---|---|---|
 | P1 | Patient domain, clinic code allocation, migration `0006`, tenancy-scoped repository, indexes, the 10,000-patient lookup test | Below |
-| P2 | Register / edit / lookup endpoints, the duplicate-phone flow, `patient_code_prefix` on clinic creation | Designed at its start |
+| P2 | Register / edit / lookup endpoints, the duplicate-phone flow, `patient_code_prefix` on clinic creation | Below (M2-P2 section) |
 | P3 | Consent, language preference, opt-out and opt-in | Designed at its start |
 | P4 | Ops CSV import with a dry-run report | Designed at its start |
 | P5 | Web: global search, registration drawer, profile | Designed at its start |
@@ -22,6 +22,134 @@ Each phase is designed, approved, implemented, verified and confirmed before the
 
 ---
 
+## M2-P2 — Register, edit and look up patients
+
+**Status: proposed 3 Oct 2026, awaiting the developer's approval.** Covers FR-PAT-01, 02, 03, 04
+and the staff side of 06; spec patients R1–R3, R5, R7, R9, R10, AC1, AC2, AC3, AC6, AC7. Four
+endpoints, four use cases, two audit actions, contract 0.6.0, and a few synthetic patients in
+`make seed` so the phase can be tried by hand. No web (P5), no consent writes (P3), no import (P4).
+
+### Concepts
+
+1. **Lock first, decide second (R9).** `RegisterPatient` opens one transaction and takes the
+   clinic row `FOR UPDATE` before it looks at anything else. A second registration for the same
+   clinic queues on that lock, and when it gets in, the first one's patient is already committed
+   and visible, so the duplicate check sees it. That is why AC6 ("exactly one of two simultaneous
+   registrations wins") holds without a unique index on phone, which families must be allowed to
+   share.
+2. **Refusals must not spend a number.** The duplicate check runs *before* the code is taken.
+   `PAT_PHONE_EXISTS` is raised with the counter untouched, the transaction rolls back, and no
+   code is wasted. Only a registration that will succeed advances `next_patient_seq`.
+3. **A 409 that carries data.** `PAT_PHONE_EXISTS` is not just "no": it returns up to 10 candidate
+   summaries (id, code, name, age) so the front desk can choose "Use this patient" or "Register
+   new family member". The names are in the response body for the signed-in staff member and
+   nowhere else: not in the log line (`patient.duplicate_phone_offered` records a count), not in
+   the audit trail, not in the exception message.
+4. **PII stays out of everything but the response.** The audit row for an edit lists the
+   *names* of the changed fields, never values. Log lines carry the patient's ID and code.
+5. **"Today" is the clinic's today.** The age shown and the under-18 rule use the clinic-local
+   date (`clock.now()` in the clinic's zone), not the server's. A small domain helper does the
+   conversion once.
+
+### Endpoints (all need `PATIENTS_MANAGE`, which every clinic role holds; ops are refused, R10)
+
+| Method | Path | Behaviour |
+|---|---|---|
+| POST | `/api/v1/patients` | Register. Body: `full_name`, `phone`, `sex`, `date_of_birth` *or* `age_years`, `guardian_name`?, `language`?, `confirm_new`? (default false). `201` with the patient; `409 PAT_PHONE_EXISTS` with `details.candidates` unless `confirm_new`; `422 PAT_PHONE_INVALID`, `PAT_GUARDIAN_REQUIRED` or field errors |
+| GET | `/api/v1/patients?q=` | Lookup (R5): phone, then code, then name prefix; at most 20, ordered by name. Blank `q` returns an empty list; a missing `q` is `422` |
+| GET | `/api/v1/patients/{patient_id}` | One patient; another clinic's ID is `404 REQ_NOT_FOUND` |
+| PATCH | `/api/v1/patients/{patient_id}` | Correct demographics (name, phone, sex, date of birth or age, guardian, language). At least one field; the code never changes. A blank `guardian_name` clears it (refused for a minor). `200` with the patient |
+
+The patient body: `id`, `code`, `full_name`, `phone_e164`, `sex`, `date_of_birth`, `age_years`
+(as of the clinic's today), `age_is_estimated` (true when only an age was recorded), `is_minor`,
+`guardian_name`, `language`, `whatsapp_consent`, `sms_consent`, `opted_out`,
+`consent_recorded_at`, `created_at`, `updated_at`. Consent is shown here and written in P3.
+Phone numbers are shown in full: staff must dial them (`apps/web/CLAUDE.md`).
+
+Clinic creation (ops): `POST /ops/clinics` accepts an optional `patient_code_prefix` (2–4 upper-case
+letters, otherwise derived from the name), and `Clinic` responses show it. The wizard field is P5.
+
+### Use cases (`application/patients/`)
+
+| Use case | Steps, all in one transaction |
+|---|---|
+| `RegisterPatient` | Lock clinic → parse phone (`PAT_PHONE_INVALID`) → find patients on that phone (limit 10) → if any and not `confirm_new`: log a count and raise `PhoneExists(candidates)` → take the next code → `Patient.create` → add → save the clinic counter → `patient.created` audit → record the checklist's `patients_imported_at` the first time → commit |
+| `UpdatePatient` | Load through the clinic scope (`404` otherwise) → `Patient.update_details` → save → if any field changed, one `patient.updated` row listing field names → commit; an edit that changes nothing records nothing |
+| `GetPatient` / `LookupPatients` | Read-only; lookup classifies the text with the P1 function and calls the matching repository method |
+
+`patient.created` and `patient.updated` join the closed audit catalogue; entity type `patient`,
+entity ID the patient, `clinic_id` from the request. Metadata: the code (not PII) and, for an
+edit, the comma-joined field names.
+
+### Decisions
+
+| Decision | Reason |
+|---|---|
+| Reads use `PATIENTS_MANAGE` too | Every clinic role already holds it; a separate view permission would be a second name for the same set until a role differs. The PRD §8.1 matrix stays normative and the permission table test still covers it |
+| Editing a phone does not run the duplicate check | R2 is about creating. A correction that lands on a family's shared number is normal, and blocking it would send staff to re-register |
+| Guardian cleared by a blank string, absent means unchanged, `null` means unchanged | JSON has no third state; this keeps PATCH idempotent and the domain rule (`update_details`) already matches |
+| No `Idempotency-Key` yet | `API.md` plans it for creating POSTs, but nothing in M1 implements it. The phone check already stops an accidental double submit (the second is `PAT_PHONE_EXISTS`), and the drawer in P5 disables its button while submitting. It becomes its own change when a create cannot be made safe by data (bookings in M3) |
+| The candidate list is capped at 10 and ordered oldest first | Spec R2; it is bounded so a shared clinic phone cannot return a thousand patients |
+| `make seed` creates six synthetic patients in `sample-clinic` when it has none | A family sharing a number, a child with a guardian, an age-only adult, so every behaviour in this phase can be tried by hand; idempotent by "clinic has no patients" |
+| The 409 body goes through the existing error envelope | `details.candidates` is a list, so the delivery mapper gains a branch like the one for validation `fields`; the message stays generic |
+
+### Files
+
+| Layer | Files |
+|---|---|
+| Domain | `audit/actions.py` (+2), `shared/time.py` (`local_date`), `patients/patient.py` (`PhoneInvalid`, `PhoneExists`) |
+| Application | `patients/{register_patient,update_patient,queries}.py`, `clinics/onboard_clinic.py` (`patient_code_prefix`) |
+| Delivery | `http/patients.py` (blueprint, four routes, `@clinic(PATIENTS_MANAGE)`), `errors.py` (status + candidates), `http/ops.py` and `bodies.py` (the prefix), `bootstrap.py` |
+| Contract / docs | `openapi.yaml` 0.6.0, `API.md`, `ERRORS.md` (`PAT_PHONE_INVALID`, `PAT_PHONE_EXISTS`), `DATA_MODEL.md` (audit actions), `RUNBOOK.md` §1 (seed patients), spec §7, CHANGELOG |
+| Seed | `delivery/cli/seed.py` |
+
+### Tests
+
+- **Register (HTTP, real PostgreSQL):** 201 with code `SC-0001` and the clinic-local age; the next is
+  `SC-0002`; a minor needs a guardian (AC2) and an adult does not; a bad phone is
+  `PAT_PHONE_INVALID` without echoing the value; `090000 00001` finds the patient on
+  `+919000000001` (AC1) and `confirm_new` registers the second one; the audit row exists in the
+  same transaction and holds the code, no name and no phone; the first registration writes
+  `patients_imported_at` and later ones do not move it.
+- **Race (AC6, AC3):** two threads registering the same new phone: exactly one `201`, one `409`;
+  forty parallel registrations with `confirm_new` get unique, gap-free codes; a refused
+  registration spends no number.
+- **Edit:** changes only what is sent; the audit row lists field names; an edit that changes
+  nothing writes no row; a minor cannot lose the guardian; the code is immutable.
+- **Lookup (R5):** phone, code (any case, with or without hyphen), name prefix, the 20 cap, blank
+  and missing `q`.
+- **Tenancy (AC7):** every new route with an ID joins `CROSS_TENANT_CASES`; another clinic's patient
+  is 404 by ID, absent from lookups by phone, code and name; ops and unauthenticated callers are
+  refused; the permission matrix test covers the four routes.
+- **No PII in logs:** a captured-log test registers and edits a patient and finds neither the name
+  nor the phone in any line.
+- **Contract:** every operation and the 409 candidate shape; `make contract-check` for the regenerated
+  web types.
+
+### Verify
+
+```bash
+make up && make seed            # seed adds six synthetic patients to sample-clinic
+# as desk@sample-clinic.example (RUNBOOK §1):
+#   GET  /api/v1/patients?q=90000          -> matches by phone
+#   POST /api/v1/patients {...existing phone...}             -> 409 with candidates
+#   POST /api/v1/patients {... "confirm_new": true}          -> 201, next code
+#   POST a 6-year-old without guardian_name                  -> 422 PAT_GUARDIAN_REQUIRED
+#   PATCH /api/v1/patients/<id> {"full_name": "..."}         -> 200
+# make psql: select action, metadata from audit_events where action like 'patient.%';
+#            -> codes and field names, no names or phones
+make lint typecheck test
+```
+
+### Risks
+
+| Risk | Mitigation |
+|---|---|
+| A long-held clinic lock slows registrations | The transaction does one indexed read, one insert and two small updates; the concurrency test registers forty in a row and the lock is held for milliseconds |
+| Candidate names leaking into logs or audit through an exception | The error carries candidates as an attribute used only by the response mapper; a test captures every log line and the audit table |
+| The clinic-local date drifting from the API's | One helper, tested across the midnight boundary of `Asia/Kolkata`, as `DEBUGGING.md` §5.4 warns |
+
+---
 ## M2-P1 — Patient domain, table and lookup indexes
 
 **Status: designed 3 Oct 2026 and implemented on the strength of the developer's instruction to start
