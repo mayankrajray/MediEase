@@ -87,6 +87,9 @@ class AppSettings(BaseSettings):
     DATABASE_URL: str = Field(min_length=1)
     # false only for local http; must be true anywhere served over https.
     COOKIE_SECURE: bool = False
+    # Where the web app lives, used to build links we hand to people (staff
+    # invitations from M1-P5, patient links from M4).
+    PUBLIC_BASE_URL: str = "http://localhost:3000"
     # HS256 key for access tokens (M1-P2). Never logged: SecretStr hides it from repr.
     JWT_SIGNING_KEY: SecretStr
     # HMAC key for the IP fingerprints in audit events (M1-P4). Separate from the
@@ -141,6 +144,18 @@ class AppSettings(BaseSettings):
         if env is not None and env.is_deployed and not value:
             raise ValueError(f"must be true when APP_ENV={env.value}")
         return value
+
+    @field_validator("PUBLIC_BASE_URL")
+    @classmethod
+    def _absolute_public_url(cls, value: str, info: ValidationInfo) -> str:
+        # Links built from it are sent to people, so a relative or empty value
+        # would produce a dead link rather than an obvious failure.
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("must be an absolute http(s) URL")
+        env = _app_env(info)
+        if env is not None and env.is_deployed and value.startswith("http://"):
+            raise ValueError(f"must use https when APP_ENV={env.value}")
+        return value.rstrip("/")
 
     @field_validator("JWT_SIGNING_KEY")
     @classmethod

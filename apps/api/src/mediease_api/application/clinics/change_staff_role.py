@@ -25,8 +25,8 @@ from uuid import UUID
 
 import structlog
 
-from mediease_api.application.audit import record_clinic_event
-from mediease_api.application.context import RequestContext
+from mediease_api.application.audit import record_event
+from mediease_api.application.context import Actor, RequestContext
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.identity.access import StaffMember
 from mediease_api.domain.identity.membership import Role
@@ -75,14 +75,15 @@ class ChangeStaffRole:
                 cmd.role, active_owner_count=staff.count_active_owners(), now=now
             )
             staff.update(membership)
-            record_clinic_event(
+            record_event(
                 uow,
                 event_id=self._ids.new_id(),
                 action=AuditAction.STAFF_ROLE_CHANGED,
-                ctx=ctx,
+                actor=Actor.staff(ctx),
+                now=now,
+                clinic_id=ctx.clinic_id,
                 entity_type=ENTITY_TYPE,
                 entity_id=membership.id,
-                now=now,
                 metadata={
                     "target_user_id": str(membership.user_id),
                     "from_role": previous.value,

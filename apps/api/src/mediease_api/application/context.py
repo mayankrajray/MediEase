@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from mediease_api.application.auth.errors import PermissionDenied
+from mediease_api.domain.audit.event import ActorType
 from mediease_api.domain.identity.access import ClinicAccess
 from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.identity.permissions import Permission
@@ -35,6 +36,34 @@ class RequestInfo:
 
     request_id: str | None = None
     ip_hash: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Actor:
+    """Who is acting, for the audit trail (FR-AUD-01).
+
+    Built from the authenticated caller, so a use case cannot attribute a
+    change to anyone else: ops users are recorded as ``OPS``, clinic staff as
+    ``STAFF``, and the request's ID and IP fingerprint travel with them.
+    """
+
+    user_id: UUID
+    actor_type: ActorType
+    info: RequestInfo
+
+    @classmethod
+    def for_user(cls, user: User, info: RequestInfo) -> Actor:
+        """A signed-in user acting on their own behalf (sign-in, ops work)."""
+        return cls(
+            user_id=user.id,
+            actor_type=ActorType.OPS if user.is_platform_ops else ActorType.STAFF,
+            info=info,
+        )
+
+    @classmethod
+    def staff(cls, ctx: RequestContext) -> Actor:
+        """A member acting inside their clinic. Ops users cannot reach clinic routes (R10)."""
+        return cls(user_id=ctx.user_id, actor_type=ActorType.STAFF, info=ctx.info)
 
 
 @dataclass(frozen=True, slots=True)

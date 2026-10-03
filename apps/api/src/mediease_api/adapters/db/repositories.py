@@ -351,6 +351,11 @@ class SqlAlchemyDoctorRepository(TenantScopedRepository[DoctorRow]):
         row = self._get_row(doctor_id)
         return _doctor_from_row(row) if row else None
 
+    def get_for_user(self, user_id: UUID) -> Doctor | None:
+        query = self._scoped_select().where(DoctorRow.user_id == user_id)
+        row = self._session.scalars(query).one_or_none()
+        return _doctor_from_row(row) if row else None
+
     def list(self) -> Sequence[Doctor]:
         query = self._scoped_select().order_by(DoctorRow.created_at, DoctorRow.id)
         return [_doctor_from_row(row) for row in self._session.scalars(query)]

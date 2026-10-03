@@ -50,6 +50,7 @@ _MANAGED_VARS = (
     "DB_ECHO_PARAMS",
     "DATABASE_URL",
     "COOKIE_SECURE",
+    "PUBLIC_BASE_URL",
     "JWT_SIGNING_KEY",
     "AUDIT_IP_SALT",
     "ACCESS_TOKEN_TTL_SECONDS",
@@ -66,6 +67,8 @@ _VALID_TEST_ENV = {
     "DB_ECHO_PARAMS": "false",
     "DATABASE_URL": "postgresql+psycopg://mediease:test-password@localhost:5432/mediease_test",
     "COOKIE_SECURE": "false",
+    # https, so the deployed-environment rules can be tested by changing APP_ENV alone.
+    "PUBLIC_BASE_URL": "https://test.mediease.example",
     "JWT_SIGNING_KEY": TEST_SIGNING_KEY,
     "AUDIT_IP_SALT": TEST_IP_SALT,
 }

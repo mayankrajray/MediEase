@@ -74,6 +74,18 @@ class RefreshTokenSecrets(Protocol):
         ...
 
 
+class InviteSecrets(Protocol):
+    """Single-use staff invitation secrets (M1-P5).
+
+    The same shape as ``RefreshTokenSecrets`` because the requirement is the
+    same — an unguessable value, stored only as a digest — so one adapter
+    serves both (``bootstrap.py``).
+    """
+
+    def generate(self) -> str: ...
+    def digest(self, token: str) -> str: ...
+
+
 class IpHasher(Protocol):
     """Reduces a caller's IP address to a stable, salted fingerprint (M1-P4).
 
