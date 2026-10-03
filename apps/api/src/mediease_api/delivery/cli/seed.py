@@ -4,7 +4,10 @@ Creates two active clinics and a platform ops user, all sharing one demo
 password:
 
 - ``sample-clinic``: an owner, a doctor (with a doctor profile) and a front desk;
-- ``sample-clinic-two``: its own owner, plus the *same* doctor user as a second
+  It also gets six synthetic patients, once (while it has none): a family of three sharing one
+  phone, a child registered with a guardian, an adult known only by age, and a Hindi-speaking
+  patient, so the patient screens can be tried by hand;
+- `sample-clinic-two`: its own owner, plus the *same* doctor user as a second
   membership, so one person belongs to two clinics and the web app's clinic
   switcher can be tried (spec: "Same phone used by a doctor in two clinics").
 
@@ -26,6 +29,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date, timedelta
 
 from mediease_api.bootstrap import SeedDependencies, build_seed_dependencies
 from mediease_api.config.settings import AppEnv, load_settings
@@ -33,8 +37,10 @@ from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
 from mediease_api.domain.identity.user import User
+from mediease_api.domain.patients.patient import Language, Patient, Sex
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.domain.shared.time import local_date
 from mediease_api.ports.unit_of_work import UnitOfWork
 
 DEMO_SLUG = "sample-clinic"
@@ -111,6 +117,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     deps = build_seed_dependencies(settings)
     password_hash = deps.hasher.hash(args.password)
     created: list[_ClinicSpec] = []
+    patients_added = 0
     with deps.uow as uow:
         users: dict[str, User] = {}
         _ensure_user(deps, uow, users, _OPS, password_hash)
@@ -120,11 +127,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 continue
             _create_clinic(deps, uow, users, spec, password_hash)
             created.append(spec)
+        patients_added = _seed_patients(deps, uow, users)
         uow.commit()
 
     for spec in created:
         emails = ", ".join(person.email for person in spec.members)
         print(f"seed: created '{spec.slug}' with users: {emails}")
+    if patients_added:
+        print(f"seed: added {patients_added} synthetic patients to '{DEMO_SLUG}'")
     if created:
         print(f"seed: ops user: {_OPS.email}")
         print("seed: sign in with any of them and the demo password (see docs/RUNBOOK.md §1)")
@@ -202,6 +212,70 @@ def _create_clinic(
 
     clinic.activate(active_owner_count=staff.memberships.count_active_owners(), now=now)
     uow.clinics.update(clinic)
+
+
+@dataclass(frozen=True)
+class _PatientSpec:
+    full_name: str
+    phone: str
+    sex: Sex
+    born: date | None = None
+    years_old: int | None = None  # the age in years when the birth date is unknown
+    child_of_years: int | None = None  # a child this many years old (born relative to today)
+    guardian: str | None = None
+    language: Language = Language.EN
+
+
+_PATIENTS: tuple[_PatientSpec, ...] = (
+    _PatientSpec("Asha Rao", "+919000000101", Sex.FEMALE, born=date(1990, 5, 17)),
+    _PatientSpec("Arun Rao", "+919000000101", Sex.MALE, born=date(1988, 2, 11)),
+    _PatientSpec("Meera Rao", "+919000000101", Sex.FEMALE, child_of_years=6, guardian="Asha Rao"),
+    _PatientSpec("Bina Shah", "+919000000102", Sex.FEMALE, years_old=47),
+    _PatientSpec(
+        "Chetan Verma", "+919000000103", Sex.MALE, born=date(1975, 9, 3), language=Language.HI
+    ),
+    _PatientSpec("Deepa Nair", "+919000000104", Sex.FEMALE, born=date(2001, 12, 25)),
+)
+
+
+def _seed_patients(deps: SeedDependencies, uow: UnitOfWork, users: dict[str, User]) -> int:
+    """Synthetic patients for the demo clinic, once: only while it has none."""
+    clinic = uow.clinics.get_by_slug(DEMO_SLUG)
+    owner = users.get(_CLINICS[0].members[0].email) or uow.users.get_by_email(
+        EmailAddress.parse(_CLINICS[0].members[0].email)
+    )
+    if clinic is None or owner is None:
+        return 0
+    patients = uow.tenant(clinic.id).patients
+    if patients.count() > 0:
+        return 0
+
+    clinic = uow.clinics.get(clinic.id, for_update=True) or clinic  # the counter, under its lock
+    now = deps.clock.now()
+    today = local_date(now, clinic.timezone)
+    for spec in _PATIENTS:
+        born = spec.born
+        if spec.child_of_years is not None:
+            born = today - timedelta(days=spec.child_of_years * 365 + 60)
+        patients.add(
+            Patient.create(
+                id=deps.ids.new_id(),
+                clinic_id=clinic.id,
+                code=clinic.allocate_patient_code(now=now),
+                full_name=spec.full_name,
+                phone=PhoneNumber.parse(spec.phone),
+                sex=spec.sex,
+                registered_on=today,
+                created_by=owner.id,
+                now=now,
+                date_of_birth=born,
+                age_years=spec.years_old,
+                guardian_name=spec.guardian,
+                language=spec.language,
+            )
+        )
+    uow.clinics.update(clinic)
+    return len(_PATIENTS)
 
 
 if __name__ == "__main__":
