@@ -160,7 +160,7 @@ Owned by a user, not a clinic. *P2* = created by migration `0003`.
 | clinic_id | uuid FK `clinics` null | Null for platform-level events (a sign-in belongs to a user) |
 | actor_user_id | uuid FK `users` null | Null for patient/system actors |
 | actor_type | text not null | `STAFF` \| `OPS` \| `PATIENT_LINK` \| `SYSTEM` (CHECK) |
-| action | text not null | `area.past_tense`, from `domain/audit/actions.py`: `auth.signed_in`, `auth.sign_in_failed`, `auth.signed_out`, `auth.refresh_reused`, `staff.role_changed` (M1-P4); more per milestone |
+| action | text not null | `area.past_tense`, from `domain/audit/actions.py`: `auth.signed_in`, `auth.sign_in_failed`, `auth.signed_out`, `auth.refresh_reused`, `staff.role_changed` (M1-P4), `clinic.*`, `doctor.*` and `staff.*` (M1-P5), `patient.created` and `patient.updated` (M2-P2: the code, or the changed field names - never a name or phone); more per milestone |
 | entity_type, entity_id | text, uuid | Given together or not at all |
 | request_id | text | Ties the row to the API log and to the client's "Ref" |
 | ip_hash | text | HMAC-SHA256 of the caller's IP under `AUDIT_IP_SALT`, 32 hex chars; never a raw address |

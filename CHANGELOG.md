@@ -14,6 +14,20 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M2-P2 (#21): patients over HTTP (FR-PAT-01..04). `POST /api/v1/patients` registers (phone normalised
+  to E.164, the guardian rule for under-18s, a clinic code like `SC-0001`); `GET /api/v1/patients?q=`
+  looks up by phone, code or name prefix (at most 20); `GET` and `PATCH /api/v1/patients/{id}` read and
+  correct one. Registering a phone the clinic already has is `409 PAT_PHONE_EXISTS` with up to 10
+  candidates, and `confirm_new` registers another person on it. Registration locks the clinic row
+  first, so two simultaneous registrations of one new number have one winner and codes stay gap-free;
+  a refusal takes no code. Contract 0.6.0.
+- M2-P2: `patient.created` and `patient.updated` audit events (the code, or the changed field names;
+  never a name or a phone number), the onboarding checklist's first-patient time, the clinic-local
+  "today" for ages, and `patient_code_prefix` on clinic creation (ops may choose it; otherwise it is
+  derived from the name) and in `Clinic` responses.
+- M2-P2: `make seed` adds six synthetic patients to `sample-clinic` (a family sharing a phone, a child
+  with a guardian, an adult known only by age, a Hindi-speaking patient), once.
+
 - M2-P1 (#21): the patient model (FR-PAT-01, 03, 05, 06): `Patient` with the guardian rule for
   under-18s (the phone is the guardian's), `Age` computed from a date of birth or a recorded age,
   consent and opt-out state, clinic-scoped codes (`ME-0142`) allocated from a counter on the clinic

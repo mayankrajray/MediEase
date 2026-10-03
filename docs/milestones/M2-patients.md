@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M2-P1 confirmed 3 Oct 2026; M2-P2 design proposed, awaiting approval |
+| Status | In progress — M2-P1 confirmed; M2-P2 approved and implemented 3 Oct 2026, awaiting confirmation; P3 next |
 | Spec | `docs/specs/patients.md` (Approved 2026-10-03) |
 | Covers | FR-PAT-01..06, FR-PAT-08, FR-MSG-05 (opt-out state), NFR-08 |
 | Issue / branch / PR | #21 · `m2/21-patients` · one PR for the whole milestone (ADR-0011) |
@@ -24,7 +24,7 @@ Each phase is designed, approved, implemented, verified and confirmed before the
 
 ## M2-P2 — Register, edit and look up patients
 
-**Status: proposed 3 Oct 2026, awaiting the developer's approval.** Covers FR-PAT-01, 02, 03, 04
+**Status: approved by the developer 3 Oct 2026; implemented the same day, awaiting confirmation.** Covers FR-PAT-01, 02, 03, 04
 and the staff side of 06; spec patients R1–R3, R5, R7, R9, R10, AC1, AC2, AC3, AC6, AC7. Four
 endpoints, four use cases, two audit actions, contract 0.6.0, and a few synthetic patients in
 `make seed` so the phase can be tried by hand. No web (P5), no consent writes (P3), no import (P4).
@@ -150,6 +150,27 @@ make lint typecheck test
 | The clinic-local date drifting from the API's | One helper, tested across the midnight boundary of `Asia/Kolkata`, as `DEBUGGING.md` §5.4 warns |
 
 ---
+### Result (3 Oct 2026)
+
+make lint typecheck test equivalents in WSL: ruff, format, import-linter and mypy clean; 723 API
+tests pass (59 new: HTTP, race, contract, seed, clinic prefix, local date) at 99.0% package
+coverage; web types regenerated, 25 files / 256 tests, tsc and ESLint clean, no web code changed.
+The race test runs six rounds of two threads on one new phone and gets exactly one `201` and one
+`409` each time; thirty parallel registrations on six clients get `SC-0001`..`SC-0030` with no gap;
+a log-capture test registers, duplicates, edits and looks up a patient and finds no name or phone in
+any line. On compose, through the web origin: lookup by phone, by code (`sc-3`) and by name prefix;
+the duplicate 409; `confirm_new` took `SC-0007` (the refusal had taken nothing); a 6-year-old without
+a guardian is `PAT_GUARDIAN_REQUIRED`; ops get 403; the audit rows hold the code and the changed
+field name only.
+
+Taken while implementing: `PhoneInvalid` subclasses `InvalidValue`, so `PAT_PHONE_INVALID` reuses
+the `details.fields` shape and the web can put it beside the phone field; the candidate list
+travels on the exception for the response mapper only, and the view classes hide names and phones
+from `repr`; the seed's module-entry test now cleans up after itself, because leftover clinics made
+later seed tests order-dependent.
+
+---
+
 ## M2-P1 — Patient domain, table and lookup indexes
 
 **Status: designed 3 Oct 2026 and implemented on the strength of the developer's instruction to start
