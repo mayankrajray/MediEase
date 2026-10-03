@@ -127,7 +127,7 @@ class _Users:
     def add(self, user: User) -> None:
         self._store.users[user.id] = copy.deepcopy(user)
 
-    def get(self, user_id: UUID) -> User | None:
+    def get(self, user_id: UUID, *, for_update: bool = False) -> User | None:
         return copy.deepcopy(self._store.users.get(user_id))
 
     def get_by_email(self, email: EmailAddress, *, for_update: bool = False) -> User | None:

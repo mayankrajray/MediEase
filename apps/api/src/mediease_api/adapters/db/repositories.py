@@ -164,7 +164,9 @@ class SqlAlchemyUserRepository:
         self._session.add(row)
         self._session.flush()
 
-    def get(self, user_id: UUID) -> User | None:
+    def get(self, user_id: UUID, *, for_update: bool = False) -> User | None:
+        if for_update:
+            return self._one(select(UserRow).where(UserRow.id == user_id), for_update)
         row = self._session.get(UserRow, user_id)
         return _user_from_row(row) if row else None
 

@@ -263,12 +263,22 @@ export interface paths {
         readonly get?: never;
         readonly put?: never;
         /**
-         * Set a password, join the clinic and sign in
-         * @description FR-ORG-04, FR-AUTH-01. Public: the authority is the secret in the URL, so no
-         *     X-CSRF-Token is needed (a cross-site request would have to know the secret). The
-         *     password must be at least 12 characters. Accepting activates the membership, records
-         *     staff.accepted, activates an ONBOARDING clinic when the new member is its owner (I1),
-         *     and sets the session cookies — the invitee is signed in.
+         * Join the clinic and sign in (sets a new password, or proves the existing one)
+         * @description FR-ORG-04, FR-AUTH-01, spec R13. Public: the secret in the URL is needed but is not enough
+         *     for an account that already exists, so no X-CSRF-Token is needed (a cross-site request
+         *     would have to know the secret). What password means depends on the invite's
+         *     has_password (see describeInvite):
+         *
+         *     - false, a new account: it is the password being chosen, at least 12 characters.
+         *     - true, an existing account: it is that account's **current** password, verified and never
+         *       changed. Whoever holds the link is not necessarily the account holder (the inviting
+         *       owner receives it), so the link alone cannot take the account over. A wrong password is
+         *       401 AUTH_INVALID_CREDENTIALS and counts towards the sign-in lockout (423 AUTH_LOCKED
+         *       with Retry-After); the invitation stays pending.
+         *
+         *     Accepting activates the membership, records staff.accepted, activates an ONBOARDING clinic
+         *     when the new member is its owner (I1), and sets the session cookies — the invitee is
+         *     signed in.
          */
         readonly post: operations["acceptInvite"];
         readonly delete?: never;
@@ -561,7 +571,9 @@ export interface components {
         readonly AcceptInviteRequest: {
             /**
              * Format: password
-             * @description At least 12 characters (the domain's policy)
+             * @description For a new account (the invite's has_password is false): the password to set, at least
+             *     12 characters (the domain's policy). For an existing account (has_password is true):
+             *     its current password, which is checked and never changed.
              */
             readonly password: string;
         };
@@ -1276,11 +1288,24 @@ export interface operations {
         };
         readonly responses: {
             readonly 200: components["responses"]["SessionStarted"];
+            readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["AuthError"];
             readonly 404: components["responses"]["InviteError"];
             readonly 410: components["responses"]["InviteError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["AuthError"];
+            /** @description The existing account is locked (AUTH_LOCKED) */
+            readonly 423: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    /** @description Seconds until the lock ends */
+                    readonly "Retry-After"?: string;
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     readonly listClinics: {

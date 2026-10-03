@@ -145,8 +145,10 @@ curl -s -b jar -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/js
 ```
 
 3. Hand the `accept_url` to the owner **in person or by phone** — it contains a single-use secret,
-   is valid for 7 days, and is shown only in that response. They set a password (12 characters
-   minimum); the clinic becomes `ACTIVE` as soon as they accept. If the link is lost or expires,
+   is valid for 7 days, and is shown only in that response. A new person sets a password (12 characters
+   minimum); a person who already has a MediEase account (invited by a second clinic) enters their
+   **current** password instead, which is never changed (spec R13). The clinic becomes `ACTIVE` as
+   soon as an owner accepts. If the link is lost or expires,
    invite them again: the new link retires the old one.
 4. The owner invites the doctor and front desk themselves
    (`POST /api/v1/clinic/staff`), or ops does it with the same body as above.

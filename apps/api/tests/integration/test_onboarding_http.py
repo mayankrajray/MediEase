@@ -21,7 +21,7 @@ from werkzeug.test import TestResponse
 from mediease_api.adapters.security.refresh_secrets import Sha256RefreshTokenSecrets
 from mediease_api.domain.identity.membership import Role
 from tests.builders import NOW, a_membership, a_user
-from tests.conftest import UowFactory, World
+from tests.conftest import DEMO_PASSWORD, UowFactory, World
 
 OPS_CLINICS = "/api/v1/ops/clinics"
 CLINIC = "/api/v1/clinic"
@@ -78,6 +78,12 @@ def _invite(
 
 def _accept(client: FlaskClient, token: str, password: str = PASSWORD) -> TestResponse:
     return client.post(f"{INVITES}/{token}/accept", json={"password": password})
+
+
+def _sign_in(client: FlaskClient, email: str, password: str) -> int:
+    return client.post(
+        "/api/v1/auth/sign-in", json={"identifier": email, "password": password}
+    ).status_code
 
 
 def _events(session_factory: SessionFactory, action: str) -> list[dict[str, Any]]:
@@ -232,7 +238,9 @@ def test_i2_inviting_an_existing_member_again_is_refused(world: World) -> None:
     assert resp.get_json()["error"]["code"] == "CLN_MEMBER_EXISTS"
 
 
-def test_spec_8_one_user_can_be_invited_by_a_second_clinic(world: World) -> None:
+def test_spec_8_one_user_can_be_invited_by_a_second_clinic(
+    world: World, session_factory: SessionFactory
+) -> None:
     """A doctor who works at two clinics keeps one account and gets two memberships."""
     ops = world.client_for(world.ops)
     clinic = _new_clinic(ops, slug="second-clinic")
@@ -241,13 +249,122 @@ def test_spec_8_one_user_can_be_invited_by_a_second_clinic(world: World) -> None
     invited = _invite(ops, clinic["id"], Role.DOCTOR, world.a.doctor_user.email.value)
     assert invited.status_code == 201
     assert invited.get_json()["user_id"] == str(world.a.doctor_user.id)
-    # They already have a password, so the page can offer "sign in" instead.
+    # They already have a password, so the page asks for it instead of choosing a new one.
     described = world.anonymous().get(f"{INVITES}/{_token_from(invited)}")
     assert described.get_json()["has_password"] is True
 
-    accepted = _accept(world.anonymous(), _token_from(invited))
+    accepted = _accept(world.anonymous(), _token_from(invited), DEMO_PASSWORD)
     assert accepted.status_code == 200
     assert len(accepted.get_json()["memberships"]) == 2
+    assert [e["metadata"]["account"] for e in _events(session_factory, "staff.accepted")] == [
+        "existing"
+    ]
+
+
+def test_r13_the_invite_link_alone_cannot_take_over_an_existing_account(
+    world: World, session_factory: SessionFactory
+) -> None:
+    """The regression for the M1-P5 hole: whoever holds the link must know the password.
+
+    An owner of clinic B invites the email of a doctor who already works at clinic A. The link
+    comes back to the owner, who tries to accept it with a password of their own choosing.
+    """
+    owner_b = world.client_for(world.b.owner)
+    assert world.a.doctor_user.email is not None
+    invited = _post(
+        owner_b,
+        STAFF,
+        {
+            "full_name": "Dr. Target",
+            "role": Role.DOCTOR.value,
+            "email": world.a.doctor_user.email.value,
+        },
+    )
+    assert invited.status_code == 201, invited.get_json()
+    token = _token_from(invited)
+
+    takeover = _accept(world.anonymous(), token, "the-attackers-chosen-password")
+
+    assert takeover.status_code == 401
+    assert takeover.get_json()["error"]["code"] == "AUTH_INVALID_CREDENTIALS"
+    assert "set-cookie" not in {k.lower() for k in dict(takeover.headers)}
+    # Nothing changed for the real user: the old password still works, the new one does not.
+    assert _sign_in(world.anonymous(), world.a.doctor_user.email.value, DEMO_PASSWORD) == 200
+    assert (
+        _sign_in(
+            world.anonymous(), world.a.doctor_user.email.value, "the-attackers-chosen-password"
+        )
+        == 401
+    )
+    # The invitation is still pending, so the real person can accept it later.
+    assert _accept(world.anonymous(), token, DEMO_PASSWORD).status_code == 200
+    failures = _events(session_factory, "auth.sign_in_failed")
+    assert any(e["metadata"].get("via") == "invite" for e in failures)
+
+
+def test_r13_accepting_for_an_existing_account_leaves_its_password_alone(world: World) -> None:
+    ops = world.client_for(world.ops)
+    clinic = _new_clinic(ops, slug="third-clinic")
+    assert world.a.doctor_user.email is not None
+    email = world.a.doctor_user.email.value
+    token = _token_from(_invite(ops, clinic["id"], Role.DOCTOR, email))
+
+    assert _accept(world.anonymous(), token, DEMO_PASSWORD).status_code == 200
+
+    assert _sign_in(world.anonymous(), email, DEMO_PASSWORD) == 200
+
+
+def test_r13_wrong_passwords_on_an_invitation_count_towards_the_lockout(world: World) -> None:
+    ops = world.client_for(world.ops)
+    clinic = _new_clinic(ops, slug="fourth-clinic")
+    assert world.a.doctor_user.email is not None
+    email = world.a.doctor_user.email.value
+    token = _token_from(_invite(ops, clinic["id"], Role.DOCTOR, email))
+
+    statuses = [_accept(world.anonymous(), token, f"wrong-guess-{n}").status_code for n in range(5)]
+
+    assert statuses == [401, 401, 401, 401, 401]
+    locked = _accept(world.anonymous(), token, DEMO_PASSWORD)  # even the right one is refused now
+    assert locked.status_code == 423
+    assert locked.get_json()["error"]["code"] == "AUTH_LOCKED"
+    assert int(locked.headers["Retry-After"]) > 0
+    # The lock is the account's, so sign-in is locked too: this endpoint is not a side door.
+    assert _sign_in(world.anonymous(), email, DEMO_PASSWORD) == 423
+
+
+def test_r13_a_person_with_no_active_membership_can_rejoin_with_their_password(
+    world: World, uow_factory: UowFactory
+) -> None:
+    """Deactivated everywhere, then invited again: sign-in refuses them, so accepting must not."""
+    desk = world.a.desk
+    assert desk.email is not None
+    with uow_factory() as uow:
+        staff = uow.tenant(world.a.clinic.id).memberships
+        membership = staff.get_for_user(desk.id)
+        assert membership is not None
+        membership.deactivate(active_owner_count=staff.count_active_owners(), now=NOW)
+        staff.update(membership)
+        uow.commit()
+    assert _sign_in(world.anonymous(), desk.email.value, DEMO_PASSWORD) == 403
+
+    ops = world.client_for(world.ops)
+    clinic = _new_clinic(ops, slug="rejoin-clinic")
+    token = _token_from(_invite(ops, clinic["id"], Role.FRONT_DESK, desk.email.value))
+
+    accepted = _accept(world.anonymous(), token, DEMO_PASSWORD)
+
+    assert accepted.status_code == 200
+    assert [m["clinic_id"] for m in accepted.get_json()["memberships"]] == [clinic["id"]]
+
+
+def test_a_new_account_still_chooses_its_password_and_the_policy_applies(world: World) -> None:
+    ops = world.client_for(world.ops)
+    clinic = _new_clinic(ops, slug="fifth-clinic")
+    invited = _invite(ops, clinic["id"], Role.OWNER, "brand-new@example.test")
+
+    assert _accept(world.anonymous(), _token_from(invited), "short").status_code == 422
+    assert _accept(world.anonymous(), _token_from(invited), PASSWORD).status_code == 200
+    assert _sign_in(world.anonymous(), "brand-new@example.test", PASSWORD) == 200
 
 
 def test_re_inviting_retires_the_previous_link(world: World) -> None:
