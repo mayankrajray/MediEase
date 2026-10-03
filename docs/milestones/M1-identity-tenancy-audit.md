@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M1-P1 to M1-P5 implemented (P1 and P2 confirmed 3 Oct 2026; P3, P4 and P5 awaiting confirmation); M1-P6 design proposed 3 Oct 2026, awaiting approval |
+| Status | In progress — M1-P1 to M1-P6 implemented (P1 and P2 confirmed 3 Oct 2026; P3 to P6 awaiting confirmation) |
 | Spec | `docs/specs/identity-and-tenancy.md` (Approved 2026-10-02) |
 | Covers | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08, NFR-14 |
 | Issue / branch / PR | #19 · `m1/19-identity-tenancy-audit` · one draft PR for the whole milestone (ADR-0011) |
@@ -46,8 +46,8 @@ branch and appear in the one milestone PR.
 
 ## M1-P6 — Web sign-in, clinic switcher and the empty dashboard shell
 
-**Status: approved 3 Oct 2026 (options 1A, 2A and 3A, as recommended); implementation in
-progress.** Covers FR-AUTH-01, FR-AUTH-02
+**Status: approved 3 Oct 2026 (options 1A, 2A and 3A, as recommended); implemented 3 Oct 2026,
+awaiting the developer's confirmation.** Covers FR-AUTH-01, FR-AUTH-02
 (the browser half), FR-AUTH-03 and spec R4, R5, R6, R7, R10 and §6 (UI notes). Web only: no API,
 migration or contract change (the one exception is a seed addition, see Files).
 
@@ -274,6 +274,29 @@ In the browser (demo password in RUNBOOK §1):
 | First paint shows a loading state rather than the dashboard (auth is client-side) | The shell renders immediately with a skeleton; the proxy hint keeps signed-out visitors from seeing it at all |
 | The cookie-path constraint also applies to every later clinic page | Recorded as a decision here; later milestones reuse `SessionProvider`. If server-side rendering of clinic data is ever needed, that is an ADR amendment for a session cookie on `/` or a BFF route, not a quiet change |
 | `localStorage` clinic ID is tampered with | It is only a preference: the API rejects a clinic the caller is not in, and the UI handles that as a stale choice |
+
+### Decisions taken while implementing (3 Oct 2026)
+
+| Decision | Reason |
+|---|---|
+| A third sign-in reason, `session_ended_for_safety`, for `AUTH_REFRESH_REUSED` | The design mapped reuse onto `session_ended`, but the message should differ: the person should tell their clinic owner if it keeps happening |
+| "Session ended" is only claimed when a `me_csrf` cookie existed before the failing call | A visitor who was never signed in should land on a plain sign-in page, not be told a session ended |
+| Sign-in clears the password only after `AUTH_INVALID_CREDENTIALS` and `AUTH_LOCKED`; unreachable or validation errors keep what was typed | Retyping a password because the network blipped is hostile; Try again resubmits |
+| After a wrong password focus goes to the password field (the alert is its accessible description); for every other error, to the alert | Matches the error table; a screen reader still hears the message either way |
+| The invitation page shows no set-password form when `has_password` is true | **Found while reading `AcceptInvite`:** it always sets the password, so accepting for an existing account overwrites it, and an owner who invited that email holds the link. The web page avoids it; the API needs its own fix (see TASKS "Open decisions") |
+| `make seed` had lost its `if __name__ == "__main__"` guard after the per-clinic rewrite | Found by running the stack, not by the unit tests, which call `main()`; fixed with a test that runs the seed as a module |
+| Web checks run against a Linux `node_modules` | On this Windows machine the Windows `npm` and the WSL Linux toolchain cannot share one `node_modules`; the checks and the CI replica ran in WSL |
+
+### Result
+
+`make lint typecheck test` green (see NEXT_STEPS_PLAN progress log for counts); `make smoke` passes
+with the new sign-in and redirect checks. On the compose stack: `make seed` on a database seeded
+before this phase adds only `sample-clinic-two`; through the web origin `doctor@…` signs in with two
+memberships, `GET /api/v1/clinic` without `X-Clinic-ID` is 400 `PERM_CLINIC_REQUIRED` and with each
+clinic's ID is 200 for that clinic, `owner@…` needs no header, sign-out is 204 and `/me` is then 401,
+and `/queue` without `me_csrf` is a 307 to `/sign-in?next=%2Fqueue` while with it the page is 200.
+Not covered by automated tests: the browser journey (no Playwright until M3), so the Verify steps
+above remain the developer's manual check.
 
 ---
 

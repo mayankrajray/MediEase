@@ -7,9 +7,17 @@ Loaded in addition to the root `CLAUDE.md` when working in this folder.
 - Server Components by default. Add `"use client"` only for interaction, and keep those components small.
 - All API calls go through `src/lib/api/`. Never `fetch` the Flask API directly or hard-code its URL.
 - No business rules in the UI beyond input hints; the API is the authority.
-- Dates and times are formatted in the **clinic** timezone from `/me`, never the browser's.
+- Dates and times are formatted in the **clinic** timezone, never the browser's. `/me` does not
+  carry it: read it from `GET /api/v1/clinic` (`useClinic()` in `features/shell/ClinicGate`).
 - Phone numbers are displayed masked except where staff must dial them.
 - Errors show the API `message` and "Ref: <request_id>" so staff can report problems usefully.
+- Authentication is asked of the API, not inferred: `me_access` is scoped to `/api` and never
+  reaches page requests, so clinic and ops layouts render a client `SessionProvider`. Hiding a link
+  or redirecting a visitor is a convenience; the API is the control. Call the API from the browser
+  with `sessionGet`/`sessionPost` so an expired access token is refreshed once (refresh is single
+  use: never call `/auth/refresh` yourself).
+- `?next=` and `?reason=` are attacker-controllable: validate with `safeNextPath` and
+  `parseSignInReason` before use.
 
 ## Patient pages (`(patient)`)
 - Mobile-first, readable at 360 px, < 200 KB total transfer, no client-side analytics SDKs.
