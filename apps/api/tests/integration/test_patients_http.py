@@ -227,7 +227,7 @@ def test_ac6_r9_two_simultaneous_registrations_of_one_new_phone_have_one_winner(
 
     for round_number in range(6):
         phone = f"91000{round_number:05d}"
-        barrier = threading.Barrier(2)
+        barrier = threading.Barrier(2, timeout=10)
 
         def attempt(index: int, phone: str = phone, barrier: threading.Barrier = barrier) -> int:
             barrier.wait()
