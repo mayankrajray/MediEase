@@ -186,10 +186,12 @@ is a documented `make psql` procedure (RUNBOOK §18), and the owner-facing view 
 | POST | `/api/v1/patients` | Register (returns `409 PAT_PHONE_EXISTS` with candidates unless `confirm_new: true`) | FR-PAT-01/02 | Implemented (M2-P2) |
 | GET | `/api/v1/patients/{patient_id}` | One patient | FR-PAT-01 | Implemented (M2-P2) |
 | PATCH | `/api/v1/patients/{patient_id}` | Correct demographics | FR-PAT-01 | Implemented (M2-P2) |
-| PUT | `/api/v1/patients/{patient_id}/consent` | Consent, language, opt-out | FR-PAT-05 | M2-P3 |
+| PUT | `/api/v1/patients/{patient_id}/consent` | Record consent (`whatsapp`, `sms`, both required) | FR-PAT-05/06 | Implemented (M2-P3) |
+| POST | `/api/v1/patients/{patient_id}/opt-out` | Stop all messages (idempotent) | FR-MSG-05 | Implemented (M2-P3) |
+| POST | `/api/v1/patients/{patient_id}/opt-in` | Undo an opt-out, with the consent given on the way back | FR-PAT-05, FR-MSG-05 | Implemented (M2-P3) |
 | GET | `/api/v1/patients/{patient_id}/timeline` | Appointments, visits, Rx, reminders | FR-VIS-03 | M4 |
 
-Every clinic role holds `PATIENTS_MANAGE`, which guards all four; ops users are refused (R10).
+Every clinic role holds `PATIENTS_MANAGE`, which guards all seven; ops users are refused (R10).
 Responses carry personal data and are `Cache-Control: no-store`. The clinic is the request's
 (`X-Clinic-ID` for people in several), and another clinic's patient is `404 REQ_NOT_FOUND`.
 
@@ -208,6 +210,16 @@ Responses carry personal data and are `Cache-Control: no-store`. The clinic is t
 - **The patient body** adds `age_years` (on the clinic's today), `age_is_estimated`, `is_minor`
   and the read-only consent state (`whatsapp_consent`, `sms_consent`, `opted_out`,
   `consent_recorded_at`); consent is written in M2-P3.
+- **Consent, opt-out, opt-in** (M2-P3). Three separate actions, so re-submitting a form can never
+  undo an opt-out (AC5). `PUT .../consent` records an answer with who and when: both flags are
+  required, booleans only. Both false is "asked and declined", which differs from never asked
+  (`consent_recorded_at` null). For a patient under 18 it is the guardian's answer. While the
+  patient is opted out it is `409 PAT_OPTED_OUT`: use opt-in, which takes the new consent.
+  `POST .../opt-out` keeps the consent record but overrides it, and is idempotent (a second one
+  changes nothing and writes no audit row). `POST .../opt-in` is `409 PAT_NOT_OPTED_OUT` unless there
+  is an opt-out. The patient body carries `whatsapp_allowed` and `sms_allowed` (consent given and not
+  opted out): the one rule the screens and M5's sender use. Each change is a `patient.consent_changed`,
+  `patient.opted_out` or `patient.opted_in` audit row with the flags and `given_by`, never a name.
 - **Clinic creation** (`POST /ops/clinics`) accepts an optional `patient_code_prefix` (2–4
   upper-case letters); `Clinic` responses now include it.
 

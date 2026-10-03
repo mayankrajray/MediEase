@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M2-P1 and P2 confirmed 3 Oct 2026; M2-P3 design proposed, awaiting approval |
+| Status | In progress — M2-P1 and P2 confirmed 3 Oct 2026; M2-P3 approved (option A) and implemented, awaiting confirmation; P4 next |
 | Spec | `docs/specs/patients.md` (Approved 2026-10-03) |
 | Covers | FR-PAT-01..06, FR-PAT-08, FR-MSG-05 (opt-out state), NFR-08 |
 | Issue / branch / PR | #21 · `m2/21-patients` · one PR for the whole milestone (ADR-0011) |
@@ -24,7 +24,7 @@ Each phase is designed, approved, implemented, verified and confirmed before the
 
 ## M2-P3 — Consent, language and opt-out
 
-**Status: proposed 3 Oct 2026, awaiting the developer's approval.** Covers FR-PAT-05, FR-PAT-06 (consent
+**Status: approved by the developer 3 Oct 2026 with option A; implemented the same day, awaiting confirmation.** Covers FR-PAT-05, FR-PAT-06 (consent
 against the guardian), the state side of FR-MSG-05; spec patients R6, AC5, §7. Three endpoints, two
 use cases, three audit actions, contract 0.7.0. No messages are sent in M2: this phase records who
 may be messaged, and M5 reads it. Language is already editable through `PATCH /patients/{id}` (P2);
@@ -81,6 +81,8 @@ The patient body gains `whatsapp_allowed` and `sms_allowed` (consent and not opt
 
 ### Open choice for approval
 
+**Decision (developer, 3 Oct 2026): option A.**
+
 1. **Consent edits while opted out.** The domain from P1 stores the new flags but they have no effect
    until opt-in (AC5 holds either way).
    - **A (recommended)** — refuse with `409 PAT_OPTED_OUT`. A box ticked on a screen that silently
@@ -124,6 +126,23 @@ make up && make seed
 make lint typecheck test
 ```
 
+### Result (3 Oct 2026)
+
+`make lint typecheck test` equivalents in WSL: ruff, format, import-linter and mypy clean; 754 API
+tests pass (31 new: domain, HTTP, race, contract, tenancy guards) at 99.0% package coverage;
+`pip-audit` clean; web types regenerated and `gen:api:check` clean, 25 files / 256 tests, tsc and
+ESLint clean, no web code changed. On compose through the web origin: a new patient is "not asked";
+consent for WhatsApp only makes `whatsapp_allowed` true; opt-out turns both off and keeps the record;
+a second opt-out changes nothing; consent while opted out is `PAT_OPTED_OUT`; opt-in with both
+restores both; a second opt-in is `PAT_NOT_OPTED_OUT`; the 6-year-old's consent is recorded as
+`given_by: guardian`; the audit rows hold flags, `given_by` and `source`, nothing else.
+
+Taken while implementing: `Patient.opt_out` no longer takes `by` (the audit row's actor says who,
+and it used to overwrite who had recorded the consent); the three use cases share one base that
+loads the patient under `FOR UPDATE`; the opt-out race test had a bug (the second thread was never
+started until the first finished, so a barrier waited forever and the run hung for half an hour). It
+is fixed, and `pytest-timeout` (pinned, dev only) now fails any API test over 120 s with every
+thread's stack, plus a `timeout-minutes` limit on every CI job.
 ---
 ## M2-P2 — Register, edit and look up patients
 

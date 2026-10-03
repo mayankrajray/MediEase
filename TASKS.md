@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M2 — Patients** (issue #21, branch `m2/21-patients`, one PR for the milestone) |
-| Active phase | **M2-P3 — design proposed 3 Oct 2026, awaiting approval:** consent, language and opt-out (`docs/milestones/M2-patients.md`). M2-P1 and P2 are confirmed by the developer (3 Oct 2026) and pushed to draft PR #22 |
+| Active phase | **M2-P3 — ✅ implemented 3 Oct 2026, awaiting the developer's confirmation:** consent, opt-out and opt-in (option A), contract 0.7.0, and timeouts for tests and CI jobs. M2-P1 and P2 are confirmed. **Next: M2-P4** (ops CSV import with a dry-run report), to be designed once P3 is confirmed. Draft PR #22 is open |
 | Design notes | `docs/milestones/M2-patients.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M2 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -84,7 +84,7 @@ duplicates surfaced; 10k-patient lookup p95 < 500 ms.
 |---|---|---|
 | M2-P1 | Patient domain (phone normalisation, guardian model, age, consent, clinic-scoped code) + migration `0006` + indexes + tenancy-scoped repository + the 10,000-patient lookup test (AC4) | ✅ |
 | M2-P2 | Register / edit / lookup endpoints; duplicate-phone flow | ✅ |
-| M2-P3 | Consent and language preference; opt-out state | ☐ (design proposed) |
+| M2-P3 | Consent and language preference; opt-out state | ✅ |
 | M2-P4 | Ops CSV import with dry-run report | ☐ |
 | M2-P5 | Web: patient search bar (global), registration drawer, patient profile | ☐ |
 

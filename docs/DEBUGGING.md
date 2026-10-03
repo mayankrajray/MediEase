@@ -209,6 +209,12 @@ from audit_events where clinic_id = '<clinic id>' order by occurred_at desc limi
 - **Lookup returns nothing.** `q` is read as a phone (7+ digits), then a code (`ME-0142`, any case),
   else a name *prefix*: `rao` does not find `Asha Rao`. A phone-shaped text that is not a valid
   number matches nobody. Another clinic's patients never appear (NFR-08): check `X-Clinic-ID`.
+- **"Why is this patient not getting messages?"** `whatsapp_allowed` / `sms_allowed` on the patient
+  are the one rule (consent given *and* not opted out). Check `consent_recorded_at` (null means
+  never asked), the two consent flags, and `opted_out_at`. The audit rows `patient.consent_changed`,
+  `patient.opted_out` and `patient.opted_in` (`select action, metadata, occurred_at from audit_events
+  where entity_id = '<patient id>' order by occurred_at;`) say who changed what and when. An
+  opted-out patient is brought back with `POST /patients/{id}/opt-in`, not by editing consent.
 - **Names and phones are not in the logs on purpose** (spec D5). Find a patient's rows by the
   `patient_id` or `code` in the log line, and read the person from the database with `make psql`.
 

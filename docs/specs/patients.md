@@ -57,8 +57,12 @@ Invariants:
   dashes and `+` are removed) → exact match on the normalised number; matches the code pattern
   (2–4 letters, optional hyphen, digits) → exact code match; otherwise case-insensitive name
   prefix. Maximum 20 results, ordered by name.
-- **R6** Consent defaults to false. Setting consent records who and when. Opt-out sets
-  `opted_out_at` and overrides consent until the patient opts back in through the clinic.
+- **R6** Consent defaults to false and "not asked" (`consent_recorded_at` null) differs from "asked and
+  declined" (recorded, both false). Setting consent records who and when, and for a minor it is the
+  guardian's. Opt-out sets `opted_out_at` and overrides consent until the patient opts back in
+  through the clinic with the explicit opt-in action, which takes the new consent. Consent cannot
+  be edited while opted out (`PAT_OPTED_OUT`, M2-P3 decision A), and opt-in without an opt-out is
+  `PAT_NOT_OPTED_OUT`.
 - **R7** Editing demographics never changes the code. All edits are audited (`patient.updated`
   with changed field names only, not values).
 - **R8** CSV import (ops): columns `name, phone, sex, dob_or_age, guardian_name, language`;
@@ -85,7 +89,7 @@ See API.md "Patients" and "Ops console".
 | Trigger | Audit | Analytics |
 |---|---|---|
 | Create / update / consent change / import | `patient.created` / `patient.updated` / `patient.consent_changed` / `patient.imported` | — |
-| Opt-out | `patient.opted_out` | `patient_opted_out` |
+| Opt-out / opt-in | `patient.opted_out` / `patient.opted_in` | `patient_opted_out` (a log event until M6) |
 
 The first import or registration also writes the onboarding checklist's `patients_imported_at`
 (FR-OPS-04; the first registration sets it when no import happened).
