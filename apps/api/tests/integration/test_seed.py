@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+
 import pytest
 
 from mediease_api.adapters.security.argon2_hasher import Argon2PasswordHasher
@@ -109,3 +113,20 @@ def test_seed_refuses_outside_local(
     set_env({**seed_env, "APP_ENV": "test", "DATABASE_URL": "postgresql+psycopg://u:p@h/db"})
     assert seed.main([]) == 2
     assert "refused" in capsys.readouterr().err
+
+
+def test_seed_runs_as_a_module_the_way_make_seed_runs_it(seed_env: dict[str, str]) -> None:
+    # `make seed` runs `python -m mediease_api.delivery.cli.seed`; calling main() directly
+    # (every other test) would not notice a missing `if __name__ == "__main__"` guard.
+    result = subprocess.run(
+        [sys.executable, "-m", "mediease_api.delivery.cli.seed"],
+        env={**os.environ, **seed_env},
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "created 'sample-clinic'" in result.stdout
+    assert "created 'sample-clinic-two'" in result.stdout
