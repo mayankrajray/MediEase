@@ -116,12 +116,38 @@ to at least 32 characters, e.g. the value from `.env.example` or
 ### 10. Onboard a clinic (pilot) — target < 60 minutes
 1. Before the visit: collect clinic details, doctor registration numbers, schedules, patient list
    (L-07). Validate the CSV with the import dry run.
-2. Ops console → Create clinic → doctors → owner invite. Checklist timestamps start.
-3. Set booking mode (slots/tokens) and schedules with the doctor.
-4. Import patients; resolve duplicates with the front desk.
-5. Book one real appointment; issue one real prescription; confirm the patient link opens.
-6. Record consent practice: the clinic's own patient notice is displayed at the front desk.
-**Confirm:** onboarding checklist shows all steps; total time recorded for goal G4.
+2. Create the clinic, its doctors and the owner's invitation. The ops console UI arrives in a
+   later milestone; until then these are API calls as the ops user (M1-P5):
+
+```bash
+# Sign in as the ops account first (RUNBOOK §1 for the local demo users).
+curl -s -b jar -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+  -d '{"name":"Aarogya Clinic","slug":"aarogya-clinic","city":"Jaipur","pincode":"302001"}' \
+  "$API/api/v1/ops/clinics"                       # 201, status ONBOARDING
+
+curl -s -b jar -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+  -d '{"display_name":"Dr. A. Sharma","qualification":"MBBS","registration_number":"RJ-12345",
+       "registration_council":"Rajasthan Medical Council"}' \
+  "$API/api/v1/ops/clinics/$CLINIC/doctors"       # 201
+
+curl -s -b jar -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+  -d '{"full_name":"A. Sharma","role":"OWNER","phone":"9000000001"}' \
+  "$API/api/v1/ops/clinics/$CLINIC/staff-invites" # 201 with accept_url
+```
+
+3. Hand the `accept_url` to the owner **in person or by phone** — it contains a single-use secret,
+   is valid for 7 days, and is shown only in that response. They set a password (12 characters
+   minimum); the clinic becomes `ACTIVE` as soon as they accept. If the link is lost or expires,
+   invite them again: the new link retires the old one.
+4. The owner invites the doctor and front desk themselves
+   (`POST /api/v1/clinic/staff`), or ops does it with the same body as above.
+5. Set booking mode (slots/tokens) and schedules with the doctor.
+6. Import patients; resolve duplicates with the front desk.
+7. Book one real appointment; issue one real prescription; confirm the patient link opens.
+8. Record consent practice: the clinic's own patient notice is displayed at the front desk.
+**Confirm:** `GET /api/v1/ops/clinics/$CLINIC` shows the checklist with `clinic_created_at`,
+`doctors_added_at` and `staff_invited_at` set; the elapsed time between the first and last
+timestamp is the G4 measurement. Each step is also in `audit_events` (§18).
 
 ### 11. Offboard a clinic / export data
 1. Written request from the clinic owner.

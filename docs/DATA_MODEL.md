@@ -27,6 +27,8 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0001` | Empty baseline. Creates no tables; only `alembic_version` exists after `upgrade head` | M0-P3 |
 | `0002` | `clinics`, `users`, `clinic_memberships`, `doctors` (columns marked *P1* below; the rest arrive with the phase or milestone that uses them) | M1-P1 |
 | `0003` | `users` credentials and lockout columns; `refresh_tokens` (marked *P2*) | M1-P2 |
+| `0004` | `audit_events` with the two triggers that make it append-only; the `v_clinic_activity` support view | M1-P4 |
+| `0005` | `clinic_memberships` invitation columns (marked *P5*); `onboarding_checklists` | M1-P5 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -112,8 +114,17 @@ Not tenant-owned: one user can hold memberships in several clinics.
 | clinic_id | uuid FK not null | *P1* |
 | user_id | uuid FK not null | *P1* index `ix_clinic_memberships_user_id` (a user's clinics) |
 | role | text not null | *P1* `OWNER` \| `DOCTOR` \| `FRONT_DESK` (`ck_clinic_memberships_role`) |
-| status | text not null | *P1* `INVITED` \| `ACTIVE` \| `DEACTIVATED` (`ck_clinic_memberships_status`) |
+| status | text not null | *P1* `INVITED` \| `ACTIVE` \| `DEACTIVATED` (`ck_clinic_memberships_status`); no transition back from `DEACTIVATED` in M1 |
 | | | *P1* `uq_clinic_memberships_clinic_id_user_id` — invariant I2 |
+| invite_token_hash | text null | *P5* SHA-256 of the single-use invitation secret, `uq_clinic_memberships_invite_token_hash`. The secret is never stored; the digest is kept after acceptance so a replay answers "already used" instead of "unknown" |
+| invite_expires_at | timestamptz null | *P5* 7 days after the invitation was issued (`INVITE_TTL`, a domain constant) |
+| invite_accepted_at | timestamptz null | *P5* when the invitee set a password and the membership activated |
+
+An `INVITED` membership **is** the pending invitation: one row, so there is no second state to
+keep in step, invariant I2 keeps duplicates out, and re-inviting replaces the digest — which
+retires the previous link. Deactivating a member clears a pending invitation. The lookup by
+digest is a platform read (`StaffInviteRepository`), because the invitee has no clinic context
+yet: the same sanctioned pattern as refresh tokens (ADR-0003).
 
 ### `doctors`
 | Column | Type | Notes |
@@ -172,8 +183,18 @@ and by whom?" during a support call, with no clinical column and no patient data
 migration `0004`; read by the ops console from M6-P4.
 
 ### `onboarding_checklists`
-`id, clinic_id (unique), started_at, clinic_created_at, doctors_added_at, staff_invited_at,
-patients_imported_at, first_appointment_at, first_prescription_at` — measures goal G4.
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | `uq_onboarding_checklists_clinic_id` — one row per clinic |
+| started_at | timestamptz not null | When the clinic was created, i.e. the clock for goal G4 |
+| clinic_created_at, doctors_added_at, staff_invited_at | timestamptz null | Written by M1-P5 |
+| patients_imported_at, first_appointment_at, first_prescription_at | timestamptz null | Written by M2, M3 and M4 |
+
+Each column records the **first** time that step happened and is never overwritten (spec R12), so
+"clinic created 14:02, owner accepted 14:31" is a fact rather than a recollection. No
+`updated_at`: every column is itself a timestamp. The checklist is tenant-scoped like any other
+clinic-owned table, so ops writes it through the clinic it named in the path.
 
 ---
 

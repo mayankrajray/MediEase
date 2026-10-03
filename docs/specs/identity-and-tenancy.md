@@ -5,7 +5,7 @@
 | Requirements | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08 |
 | Milestone / phases | M1 / P1–P6 |
 | Status | Approved (developer sign-off 2026-10-02) |
-| Last updated | 2026-10-03 (§10: the `auth.rejected` event added by M1-P3; no change to behaviour) |
+| Last updated | 2026-10-03 (§7 and §8: the M1-P4 and M1-P5 audit actions and the invitation flow recorded; §10: the `auth.rejected` event. No change to behaviour) |
 
 ## 1. Context
 Clinics must trust that only their own staff can see their patients, and that each staff member
@@ -62,14 +62,18 @@ See API.md "Auth and session", "Clinic administration", "Ops console".
 | Trigger | Audit action | Analytics |
 |---|---|---|
 | Sign-in success / failure | `auth.signed_in` / `auth.sign_in_failed` | — |
-| Staff invited / role changed / deactivated | `staff.invited` / `staff.role_changed` / `staff.deactivated` | — |
-| Clinic created | `clinic.created` | `clinic_onboarding_step_completed` |
+| Sign-out, refresh token replayed | `auth.signed_out` / `auth.refresh_reused` (M1-P4) | — |
+| Staff invited / accepted / role changed / deactivated | `staff.invited` / `staff.accepted` / `staff.role_changed` / `staff.deactivated` | — |
+| Clinic created / activated / edited | `clinic.created` / `clinic.activated` / `clinic.updated` | `clinic_onboarding_step_completed` |
+| Doctor added / edited | `doctor.added` / `doctor.updated` (M1-P5) | — |
 
 ## 8. Edge cases
 | Case | Expected outcome |
 |---|---|
 | Same phone used by a doctor in two clinics | One user, two memberships; switcher shown |
 | Owner is also a doctor | Owner membership + linked Doctor profile; doctor permissions apply to clinical actions |
+| An invited member never accepts | The invitation expires after 7 days; the clinic invites them again, which retires the old link (M1-P5) |
+| An invitation link is used twice | The second attempt is refused as already used; they sign in instead (M1-P5) |
 | Password reset requested (P1) | Not available in M1; ops resets manually with audit |
 | Clock skew between api replicas | Token validation allows 30 s leeway |
 
