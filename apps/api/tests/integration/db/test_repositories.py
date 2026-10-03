@@ -292,9 +292,20 @@ def test_slug_is_unique(uow_factory: UowFactory) -> None:
             "ck_users_status",
         ),
         (
-            "INSERT INTO clinics (id, name, slug, status, created_at, updated_at) "
-            "VALUES (gen_random_uuid(), 'X', 'x-clinic', 'CLOSED', now(), now())",
+            "INSERT INTO clinics (id, name, slug, status, patient_code_prefix, created_at, "
+            "updated_at) VALUES (gen_random_uuid(), 'X', 'x-clinic', 'CLOSED', 'XX', now(), now())",
             "ck_clinics_status",
+        ),
+        (
+            "INSERT INTO clinics (id, name, slug, status, patient_code_prefix, created_at, "
+            "updated_at) VALUES (gen_random_uuid(), 'X', 'x-clinic', 'ACTIVE', 'x', now(), now())",
+            "ck_clinics_patient_code_prefix_format",
+        ),
+        (
+            "INSERT INTO clinics (id, name, slug, status, patient_code_prefix, next_patient_seq, "
+            "created_at, updated_at) VALUES (gen_random_uuid(), 'X', 'x-clinic', 'ACTIVE', 'XX', "
+            "0, now(), now())",
+            "ck_clinics_next_patient_seq_positive",
         ),
     ],
 )

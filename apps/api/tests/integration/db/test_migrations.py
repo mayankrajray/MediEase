@@ -21,11 +21,12 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0005"
+HEAD = "0006"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
 M1_P5_TABLES = sorted([*M1_P4_TABLES, "onboarding_checklists"])
+M2_P1_TABLES = sorted([*M1_P5_TABLES, "patients"])
 
 
 @pytest.fixture
@@ -163,9 +164,61 @@ def test_0005_adds_staff_invites_and_the_onboarding_checklist(
     assert not invite & _membership_columns(scratch_database_url)
 
 
+def _clinic_columns(url: str) -> set[str]:
+    engine = create_engine(url)
+    try:
+        with engine.connect() as conn:
+            return {c["name"] for c in inspect(conn).get_columns("clinics")}
+    finally:
+        engine.dispose()
+
+
+def test_0006_adds_patients_and_gives_existing_clinics_a_code_prefix(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    command.upgrade(alembic_config, "0005")
+    names = {
+        "Sample Clinic": "SC",
+        "Apollo": "AP",
+        "Dr. Rao's Children & Family Clinic": "DRSC",
+        "123": "CL",
+    }
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.begin() as conn:
+            for n, name in enumerate(names):
+                conn.execute(
+                    text(
+                        "INSERT INTO clinics (id, name, slug, timezone, status, specialties, "
+                        "created_at, updated_at) VALUES (gen_random_uuid(), :name, :slug, "
+                        "'Asia/Kolkata', 'ACTIVE', '{}', now(), now())"
+                    ),
+                    {"name": name, "slug": f"migrated-clinic-{n}"},
+                )
+
+        command.upgrade(alembic_config, "0006")
+
+        assert _tables(scratch_database_url) == M2_P1_TABLES
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT name, patient_code_prefix, next_patient_seq FROM clinics")
+            ).all()
+        assert {name: (prefix, seq) for name, prefix, seq in rows} == {
+            name: (prefix, 1) for name, prefix in names.items()
+        }
+
+        command.downgrade(alembic_config, "0005")
+        assert _tables(scratch_database_url) == M1_P5_TABLES
+        assert not {"patient_code_prefix", "next_patient_seq"} & _clinic_columns(
+            scratch_database_url
+        )
+    finally:
+        engine.dispose()
+
+
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M1_P5_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M2_P1_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:

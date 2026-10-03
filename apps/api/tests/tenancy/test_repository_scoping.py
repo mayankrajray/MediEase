@@ -9,6 +9,7 @@ belongs to B. From M1-P3 the same isolation is proved again at the HTTP level.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from uuid import UUID, uuid4
 
 import pytest
@@ -18,12 +19,15 @@ from mediease_api.adapters.db.repositories import (
     SqlAlchemyChecklistRepository,
     SqlAlchemyDoctorRepository,
     SqlAlchemyMembershipRepository,
+    SqlAlchemyPatientRepository,
 )
 from mediease_api.adapters.db.tenancy import TenancyViolation, TenantScopedRepository
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
+from mediease_api.domain.patients.patient import Patient
 from mediease_api.domain.shared.errors import NotFound
-from tests.builders import LATER, a_clinic, a_doctor, a_membership, a_user
+from mediease_api.domain.shared.phone import PhoneNumber
+from tests.builders import LATER, a_clinic, a_doctor, a_membership, a_patient, a_user
 from tests.conftest import UowFactory
 
 
@@ -32,6 +36,7 @@ class Tenant:
     clinic_id: UUID
     doctor: Doctor
     owner: ClinicMembership
+    patient: Patient
 
 
 # Reviewed exception (M1-P4): audit_events carries clinic_id but is deliberately
@@ -57,7 +62,12 @@ def two_clinics(uow_factory: UowFactory) -> tuple[Tenant, Tenant]:
             membership = a_membership(clinic.id, owner.id, Role.OWNER)
             staff.doctors.add(doctor)
             staff.memberships.add(membership)
-            tenants.append(Tenant(clinic.id, doctor, membership))
+            # Both clinics hold a patient with the same phone and a similar name on purpose.
+            patient = a_patient(
+                clinic.id, owner.id, full_name="Asha Rao", phone=PhoneNumber.parse("9000000001")
+            )
+            staff.patients.add(patient)
+            tenants.append(Tenant(clinic.id, doctor, membership, patient))
         uow.commit()
     return tenants[0], tenants[1]
 
@@ -85,6 +95,22 @@ def test_nfr_08_clinic_a_cannot_read_clinic_b_memberships(
         assert memberships.count_active_owners() == 1
 
 
+def test_nfr_08_ac7_clinic_a_cannot_find_clinic_b_patients_by_any_route(
+    uow_factory: UowFactory, two_clinics: tuple[Tenant, Tenant]
+) -> None:
+    a, b = two_clinics
+    shared_phone = PhoneNumber.parse("9000000001")
+    with uow_factory() as uow:
+        patients = uow.tenant(a.clinic_id).patients
+        assert patients.get(b.patient.id) is None
+        assert patients.get(a.patient.id) == a.patient
+        assert patients.get_by_code(b.patient.code) is None
+        # Same phone and same name in both clinics: only A's patient comes back.
+        assert [p.id for p in patients.find_by_phone(shared_phone, limit=10)] == [a.patient.id]
+        assert [p.id for p in patients.search_by_name_prefix("asha", limit=20)] == [a.patient.id]
+        assert patients.count() == 1
+
+
 def test_nfr_08_identity_map_does_not_leak_across_scopes(
     uow_factory: UowFactory, two_clinics: tuple[Tenant, Tenant]
 ) -> None:
@@ -93,6 +119,8 @@ def test_nfr_08_identity_map_does_not_leak_across_scopes(
     with uow_factory() as uow:
         assert uow.tenant(b.clinic_id).doctors.get(b.doctor.id) is not None
         assert uow.tenant(b.clinic_id).memberships.get(b.owner.id) is not None
+        assert uow.tenant(b.clinic_id).patients.get(b.patient.id) is not None
+        assert uow.tenant(a.clinic_id).patients.get(b.patient.id) is None
         assert uow.tenant(a.clinic_id).doctors.get(b.doctor.id) is None
         assert uow.tenant(a.clinic_id).memberships.get(b.owner.id) is None
 
@@ -113,11 +141,18 @@ def test_r8_clinic_a_cannot_update_clinic_b_rows(
         forged_membership.deactivate(active_owner_count=2, now=LATER)
         with pytest.raises(NotFound):
             staff_a.memberships.update(forged_membership)
+
+        forged_patient = Patient(**{**_fields(b.patient), "clinic_id": a.clinic_id})
+        forged_patient.update_details(today=date(2026, 10, 3), now=LATER, full_name="Hijacked")
+        with pytest.raises(NotFound) as excinfo_patient:
+            staff_a.patients.update(forged_patient)
+        assert excinfo_patient.value.details == {"entity": "patient"}
         uow.commit()
 
     with uow_factory() as uow:
         assert uow.tenant(b.clinic_id).doctors.get(b.doctor.id) == b.doctor
         assert uow.tenant(b.clinic_id).memberships.get(b.owner.id) == b.owner
+        assert uow.tenant(b.clinic_id).patients.get(b.patient.id) == b.patient
 
 
 def test_repositories_refuse_entities_of_another_clinic(
@@ -134,6 +169,10 @@ def test_repositories_refuse_entities_of_another_clinic(
             staff_a.memberships.add(a_membership(b.clinic_id, b.owner.user_id))
         with pytest.raises(TenancyViolation):
             staff_a.memberships.update(b.owner)
+        with pytest.raises(TenancyViolation):
+            staff_a.patients.add(a_patient(b.clinic_id, b.owner.user_id))
+        with pytest.raises(TenancyViolation):
+            staff_a.patients.update(b.patient)
 
 
 def test_unknown_clinic_scope_sees_nothing(
@@ -144,6 +183,8 @@ def test_unknown_clinic_scope_sees_nothing(
         assert staff.doctors.list() == []
         assert staff.memberships.list() == []
         assert staff.memberships.count_active_owners() == 0
+        assert staff.patients.count() == 0
+        assert staff.patients.search_by_name_prefix("a", limit=20) == []
 
 
 def test_every_tenant_table_has_a_scoped_repository() -> None:
@@ -162,6 +203,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "doctors",
             "clinic_memberships",
             "onboarding_checklists",
+            "patients",
             "audit_events",
         }
     )
@@ -169,6 +211,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyChecklistRepository,
         SqlAlchemyDoctorRepository,
         SqlAlchemyMembershipRepository,
+        SqlAlchemyPatientRepository,
     } == set(TenantScopedRepository.__subclasses__())
 
 

@@ -10,6 +10,7 @@ from flask import Flask
 from mediease_api.application.auth.errors import AccountLocked
 from mediease_api.delivery.http.access import public
 from mediease_api.domain.identity.membership import LastOwnerError
+from mediease_api.domain.patients.patient import GuardianRequired
 from mediease_api.domain.shared.errors import DomainError, InvalidValue
 
 
@@ -79,6 +80,13 @@ def test_domain_errors_map_to_their_catalogued_status(app: Flask) -> None:
     resp = app.test_client().get("/last-owner")
     assert resp.status_code == 409
     assert resp.get_json()["error"]["code"] == "CLN_LAST_OWNER"
+
+
+def test_a_minor_without_a_guardian_maps_to_422_pat_guardian_required(app: Flask) -> None:
+    _raise_on(app, "/guardian", GuardianRequired())
+    resp = app.test_client().get("/guardian")
+    assert resp.status_code == 422
+    assert resp.get_json()["error"]["code"] == "PAT_GUARDIAN_REQUIRED"
 
 
 def test_invalid_value_lists_the_field_without_the_value(app: Flask) -> None:

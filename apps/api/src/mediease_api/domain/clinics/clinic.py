@@ -14,6 +14,7 @@ from enum import StrEnum
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from mediease_api.domain.patients.code import derive_code_prefix, format_code, validate_code_prefix
 from mediease_api.domain.shared.errors import DomainError, InvalidTransition, InvalidValue
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.shared.text import optional_text, required_text
@@ -60,6 +61,10 @@ class Clinic:
     specialties: tuple[str, ...]
     created_at: datetime
     updated_at: datetime
+    # Patient codes (M2, spec patients R4): the prefix is fixed once a patient exists, and the
+    # counter only ever moves forward, so a code is never reused.
+    patient_code_prefix: str
+    next_patient_seq: int
 
     @classmethod
     def create(
@@ -76,12 +81,17 @@ class Clinic:
         state: str | None = None,
         pincode: str | None = None,
         specialties: tuple[str, ...] = (),
+        patient_code_prefix: str | None = None,
     ) -> Clinic:
-        """A new clinic in ``ONBOARDING`` (FR-ORG-01)."""
+        """A new clinic in ``ONBOARDING`` (FR-ORG-01).
+
+        The patient code prefix (spec patients R4) is derived from the name unless given.
+        """
         now = require_utc(now, "now")
+        clean_name = required_text(name, "name", max_length=200)
         return cls(
             id=id,
-            name=required_text(name, "name", max_length=200),
+            name=clean_name,
             slug=_validate_slug(slug),
             timezone=_validate_timezone(timezone),
             status=ClinicStatus.ONBOARDING,
@@ -93,7 +103,25 @@ class Clinic:
             specialties=_clean_specialties(specialties),
             created_at=now,
             updated_at=now,
+            patient_code_prefix=(
+                validate_code_prefix(patient_code_prefix)
+                if patient_code_prefix is not None
+                else derive_code_prefix(clean_name)
+            ),
+            next_patient_seq=1,
         )
+
+    def allocate_patient_code(self, *, now: datetime) -> str:
+        """The next patient code for this clinic, advancing the counter (spec patients R4, R9).
+
+        The caller must hold the clinic row locked (``ClinicRepository.get(..., for_update=True)``)
+        and persist the clinic in the same transaction, so two registrations cannot take the same
+        number and a rolled-back one leaves no gap.
+        """
+        code = format_code(self.patient_code_prefix, self.next_patient_seq)
+        self.updated_at = require_utc(now, "now")
+        self.next_patient_seq += 1
+        return code
 
     def activate(self, *, active_owner_count: int, now: datetime) -> None:
         """``ONBOARDING``/``SUSPENDED`` → ``ACTIVE``; requires an active owner (I1)."""

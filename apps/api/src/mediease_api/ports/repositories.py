@@ -29,6 +29,7 @@ from mediease_api.domain.identity.access import ClinicAccess, StaffMember
 from mediease_api.domain.identity.membership import ClinicMembership
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User
+from mediease_api.domain.patients.patient import Patient
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.phone import PhoneNumber
 
@@ -37,7 +38,14 @@ from mediease_api.domain.shared.phone import PhoneNumber
 
 class ClinicRepository(Protocol):
     def add(self, clinic: Clinic) -> None: ...
-    def get(self, clinic_id: UUID) -> Clinic | None: ...
+    def get(self, clinic_id: UUID, *, for_update: bool = False) -> Clinic | None:
+        """``for_update`` locks the clinic row until the unit of work ends.
+
+        Registering a patient takes this lock first, which serialises the duplicate-phone
+        check and the code counter per clinic (spec patients R9).
+        """
+        ...
+
     def get_by_slug(self, slug: str) -> Clinic | None: ...
     def update(self, clinic: Clinic) -> None: ...
     def list_onboarding(self) -> Sequence[tuple[Clinic, OnboardingChecklist | None]]:
@@ -148,3 +156,28 @@ class ChecklistRepository(Protocol):
     def add(self, checklist: OnboardingChecklist) -> None: ...
     def get(self) -> OnboardingChecklist | None: ...
     def update(self, checklist: OnboardingChecklist) -> None: ...
+
+
+class PatientRepository(Protocol):
+    """This clinic's patients (M2). Every query is scoped to the clinic by construction.
+
+    Names and phone numbers are personal data: callers must not log them, and the
+    audit trail records field names only (spec patients D5).
+    """
+
+    def add(self, patient: Patient) -> None: ...
+    def get(self, patient_id: UUID) -> Patient | None: ...
+    def update(self, patient: Patient) -> None: ...
+    def get_by_code(self, code: str) -> Patient | None:
+        """Exact, canonical code (``ME-0142``); codes are unique within the clinic."""
+        ...
+
+    def find_by_phone(self, phone: PhoneNumber, *, limit: int) -> Sequence[Patient]:
+        """Patients on this exact number (family members may share one), oldest first."""
+        ...
+
+    def search_by_name_prefix(self, prefix: str, *, limit: int) -> Sequence[Patient]:
+        """Case-insensitive name prefix, ordered by name then code (spec R5)."""
+        ...
+
+    def count(self) -> int: ...

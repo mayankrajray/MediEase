@@ -6,7 +6,7 @@ the production generator, so creation order is ID order.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
@@ -14,6 +14,7 @@ from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
 from mediease_api.domain.identity.user import User
+from mediease_api.domain.patients.patient import Patient, Sex
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.phone import PhoneNumber
 
@@ -87,3 +88,22 @@ def a_membership(
     if active:
         membership.activate(now=NOW)
     return membership
+
+
+def a_patient(clinic_id: UUID, created_by: UUID, **overrides: object) -> Patient:
+    """An adult patient (born 1990) registered on 2 Oct 2026, with a unique synthetic code."""
+    n = _n()
+    fields: dict[str, object] = {
+        "id": new_id(),
+        "clinic_id": clinic_id,
+        "code": f"TS-{n:04d}",
+        "full_name": f"Sample Patient {n}",
+        "phone": PhoneNumber.parse(f"91000{n:05d}"),
+        "sex": Sex.UNDISCLOSED,
+        "registered_on": date(2026, 10, 2),
+        "created_by": created_by,
+        "now": NOW,
+        "date_of_birth": date(1990, 5, 17),
+    }
+    fields.update(overrides)
+    return Patient.create(**fields)  # type: ignore[arg-type]
