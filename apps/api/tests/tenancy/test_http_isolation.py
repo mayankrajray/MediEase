@@ -25,11 +25,17 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/clinic/doctors/<uuid:doctor_id>": lambda w: f"/api/v1/clinic/doctors/{w.b.doctor.id}",
     "/api/v1/clinic/staff/<uuid:membership_id>": lambda w: _staff_url(w),
     "/api/v1/patients/<uuid:patient_id>": lambda w: _patient_url(w),
+    "/api/v1/patients/<uuid:patient_id>/consent": lambda w: f"{_patient_url(w)}/consent",
+    "/api/v1/patients/<uuid:patient_id>/opt-out": lambda w: f"{_patient_url(w)}/opt-out",
+    "/api/v1/patients/<uuid:patient_id>/opt-in": lambda w: f"{_opted_out_patient_url(w)}/opt-in",
 }
 
 # Methods a cross-tenant case must use (default GET), with the body to send.
-CROSS_TENANT_WRITES: dict[str, tuple[str, dict[str, str]]] = {
+CROSS_TENANT_WRITES: dict[str, tuple[str, dict[str, object]]] = {
     "/api/v1/clinic/staff/<uuid:membership_id>": ("PATCH", {"role": "DOCTOR"}),
+    "/api/v1/patients/<uuid:patient_id>/consent": ("PUT", {"whatsapp": True, "sms": False}),
+    "/api/v1/patients/<uuid:patient_id>/opt-out": ("POST", {}),
+    "/api/v1/patients/<uuid:patient_id>/opt-in": ("POST", {"whatsapp": True, "sms": False}),
 }
 
 # Patients have their own read and write cross-clinic cases in integration/test_patients_http.py;
@@ -63,6 +69,18 @@ def _patient_url(world: World) -> str:
     return f"/api/v1/patients/{created.get_json()['id']}"
 
 
+def _opted_out_patient_url(world: World) -> str:
+    """Clinic B's patient after an opt-out, so opting in is a valid request for clinic B."""
+    url = _patient_url(world)
+    owner_of_b = world.client_for(world.b.owner)
+    csrf = owner_of_b.get_cookie("me_csrf", path="/")
+    assert csrf is not None
+    assert (
+        owner_of_b.post(f"{url}/opt-out", headers={"X-CSRF-Token": csrf.value}).status_code == 200
+    )
+    return url
+
+
 def _clinic_rules_with_an_id(world: World) -> set[str]:
     return {
         rule.rule
@@ -90,7 +108,7 @@ def test_ac3_nfr_08_another_clinics_resource_is_404(world: World, rule: str) -> 
     assert _call(world.client_for(world.b.owner), method, url, body).status_code == 200
 
 
-def _call(client: FlaskClient, method: str, url: str, body: dict[str, str]) -> TestResponse:
+def _call(client: FlaskClient, method: str, url: str, body: dict[str, object]) -> TestResponse:
     if method == "GET":
         return client.get(url)
     csrf = client.get_cookie("me_csrf", path="/")

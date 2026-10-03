@@ -295,6 +295,76 @@ export interface paths {
         readonly patch: operations["updatePatient"];
         readonly trace?: never;
     };
+    readonly "/api/v1/patients/{patient_id}/consent": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * Record whether the patient may be messaged on WhatsApp and SMS
+         * @description FR-PAT-05, FR-PAT-06; spec patients R6. Permission: PATIENTS_MANAGE. Both flags are required:
+         *     this records an answer, with who and when. Both false is "asked and declined", which differs
+         *     from never asked (`consent_recorded_at` null). For a patient under 18 it is the guardian's
+         *     answer. Refused with 409 PAT_OPTED_OUT while the patient is opted out: use opt-in, which
+         *     takes the new consent. Records patient.consent_changed. Needs X-CSRF-Token.
+         */
+        readonly put: operations["recordPatientConsent"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/patients/{patient_id}/opt-out": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Stop all messages to the patient
+         * @description FR-MSG-05; spec patients R6. Permission: PATIENTS_MANAGE. An opt-out overrides consent until
+         *     an explicit opt-in (AC5); the consent record is kept. Idempotent: opting out an opted-out
+         *     patient changes nothing and records nothing. Records patient.opted_out (source staff; M5's
+         *     STOP replies use the same action). No body. Needs X-CSRF-Token.
+         */
+        readonly post: operations["optOutPatient"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/patients/{patient_id}/opt-in": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Undo an opt-out, recording the consent given on the way back
+         * @description FR-PAT-05, FR-MSG-05; spec patients R6, AC5. Permission: PATIENTS_MANAGE. The explicit way
+         *     back from an opt-out: clears it and records consent in one step. 409 PAT_NOT_OPTED_OUT if
+         *     the patient has not opted out (record consent instead). Records patient.opted_in.
+         *     Needs X-CSRF-Token.
+         */
+        readonly post: operations["optInPatient"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/auth/invites/{token}": {
         readonly parameters: {
             readonly query?: never;
@@ -604,10 +674,24 @@ export interface components {
             readonly language: components["schemas"]["Language"];
             readonly whatsapp_consent: boolean;
             readonly sms_consent: boolean;
-            /** @description An opt-out overrides consent until an explicit opt-in (written in M2-P3) */
+            /** @description An opt-out overrides consent until an explicit opt-in */
             readonly opted_out: boolean;
             /** Format: date-time */
+            readonly opted_out_at: string | null;
+            /** @description WhatsApp consent given and not opted out - the one rule every sender uses */
+            readonly whatsapp_allowed: boolean;
+            /** @description SMS consent given and not opted out */
+            readonly sms_allowed: boolean;
+            /**
+             * Format: date-time
+             * @description Null means never asked; set (with both flags false) means asked and declined
+             */
             readonly consent_recorded_at: string | null;
+            /**
+             * Format: uuid
+             * @description The staff member who recorded the current consent
+             */
+            readonly consent_recorded_by: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -642,6 +726,11 @@ export interface components {
             /** @description Blank clears it (refused for a minor) */
             readonly guardian_name?: string | null;
             readonly language?: components["schemas"]["Language"] | null;
+        };
+        /** @description The answer to "may we message you on WhatsApp, on SMS?" (the guardian's for a minor) */
+        readonly PatientConsent: {
+            readonly whatsapp: boolean;
+            readonly sms: boolean;
         };
         readonly PatientList: {
             readonly items: readonly components["schemas"]["Patient"][];
@@ -882,6 +971,30 @@ export interface components {
          *     CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here)
          */
         readonly ConflictError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description The patient after the change */
+        readonly PatientChanged: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly "Cache-Control": components["headers"]["NoStore"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["Patient"];
+            };
+        };
+        /**
+         * @description PAT_OPTED_OUT (the patient asked not to be messaged: opt them back in to record consent);
+         *     PAT_NOT_OPTED_OUT (opt-in needs an opt-out: record consent instead)
+         */
+        readonly ConsentConflict: {
             headers: {
                 readonly "X-Request-ID": components["headers"]["RequestId"];
                 readonly [name: string]: unknown;
@@ -1573,6 +1686,110 @@ export interface operations {
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["PermissionError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly recordPatientConsent: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A patient of the request's clinic. */
+                readonly patient_id: components["parameters"]["PatientPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PatientConsent"];
+            };
+        };
+        readonly responses: {
+            readonly 200: components["responses"]["PatientChanged"];
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConsentConflict"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly optOutPatient: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A patient of the request's clinic. */
+                readonly patient_id: components["parameters"]["PatientPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            readonly 200: components["responses"]["PatientChanged"];
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly optInPatient: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A patient of the request's clinic. */
+                readonly patient_id: components["parameters"]["PatientPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PatientConsent"];
+            };
+        };
+        readonly responses: {
+            readonly 200: components["responses"]["PatientChanged"];
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConsentConflict"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["AuthError"];
         };

@@ -30,7 +30,11 @@ class PatientView:
     whatsapp_consent: bool
     sms_consent: bool
     opted_out: bool
+    opted_out_at: datetime | None
+    whatsapp_allowed: bool
+    sms_allowed: bool
     consent_recorded_at: datetime | None
+    consent_recorded_by: UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -51,7 +55,11 @@ class PatientView:
             whatsapp_consent=patient.whatsapp_consent,
             sms_consent=patient.sms_consent,
             opted_out=patient.is_opted_out,
+            opted_out_at=patient.opted_out_at,
+            whatsapp_allowed=patient.may_receive_whatsapp,
+            sms_allowed=patient.may_receive_sms,
             consent_recorded_at=patient.consent_recorded_at,
+            consent_recorded_by=patient.consent_recorded_by,
             created_at=patient.created_at,
             updated_at=patient.updated_at,
         )

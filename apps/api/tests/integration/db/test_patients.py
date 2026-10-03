@@ -95,7 +95,7 @@ def test_r7_fr_pat_05_edits_and_consent_are_saved(
         assert stored is not None
         stored.update_details(today=date(2026, 10, 3), now=LATER, full_name="Changed Name")
         stored.record_consent(whatsapp=True, sms=False, by=staff_user_id, now=LATER)
-        stored.opt_out(by=staff_user_id, now=LATER)
+        stored.opt_out(now=LATER)
         patients.update(stored)
         uow.commit()
 
