@@ -107,7 +107,7 @@ first production release.
   password, the API's own message with its Ref, a lock that says how long to wait and disables the
   button, and an allow-listed `?reason=` (session ended, ended for safety, account deactivated).
   `/invite/[token]` accepts a staff invitation and signs the invitee in; for an invitation to an
-  existing account it offers sign-in and never a set-password form.
+  existing account it asks for that account's current password (see Fixed).
 - M1-P6: clinic choice and the dashboard shell (FR-AUTH-03, spec R6, R10). `/select-clinic` for
   people in several clinics, a header switcher shown only to them (`X-Clinic-ID`, per tab, last
   choice remembered as `mediease.clinic_id`), navigation filtered by permission, sign-out, a
@@ -124,10 +124,20 @@ first production release.
 - CI (#19): the web `npm audit` gate blocks on production dependencies (`--omit=dev`); the
   full-tree audit is non-blocking (see Changed).
 
-### Known issues
-- `POST /api/v1/auth/invites/{token}/accept` sets the password even for an existing account, so an
-  owner who invites an existing user's email could take over that account (SECURITY_AND_COMPLIANCE
-  §3, TASKS.md). Found in M1-P6; the web page avoids it, the API is unchanged.
+- M1-P7 (#19): the ops console (FR-OPS-01, FR-OPS-04, spec §6). `/ops` lists every clinic with its
+  status, start time in the clinic's own zone, which onboarding steps happened and the time from
+  start to first invitation; `/ops/clinics/new` is the Create clinic wizard (clinic → doctors →
+  owner invitation) with the elapsed onboarding time from the checklist, field errors beside their
+  fields, and the acceptance link shown once with a Copy button. `?clinic=<id>` continues a clinic
+  that is still being set up. Web only; the API is unchanged.
+
+### Fixed
+- Security (spec R13, contract 0.5.1): accepting a staff invitation for an account that already has a
+  password used to overwrite that password and sign the caller in, so an owner who invited another
+  clinic's user could take over the account. It now requires the account's current password,
+  never changes it, shares the sign-in lockout (`401 AUTH_INVALID_CREDENTIALS`, `423 AUTH_LOCKED`)
+  and records `account: new | existing` on `staff.accepted`. The web invitation page asks for the
+  current password accordingly.
 
 ### Upgrade notes
 - M1-P2: existing local `.env` files need `JWT_SIGNING_KEY` of at least 32 characters (copy the

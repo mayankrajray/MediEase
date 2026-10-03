@@ -53,6 +53,7 @@ absent there, the request never reached the API.
 
 | Code | HTTP | Meaning | Likely cause | Where to look |
 |---|---|---|---|---|
+| `WEB_CLINIC_NOT_ONBOARDING` | 409 (web) | <clinic> is already set up, so it cannot be continued here | The ops wizard was opened with `?clinic=<id>` for a clinic that is no longer `ONBOARDING` | Clinic status in `/ops`; raised by the web app, never by the API |
 | `AUTH_INVALID_CREDENTIALS` | 401 | Wrong login details | Typo, unknown email/phone, or no password set yet; never reveals which. Also a wrong current password when accepting an invitation for an existing account (R13; the audit row carries `via: invite`) | `auth.sign_in_failed` with `reason` (`unknown_identifier`, `no_password`, `wrong_password`) and `user_id` when known (M1-P2) |
 | `AUTH_LOCKED` | 423 | Account temporarily locked | 5 consecutive wrong passwords (FR-AUTH-04), counted across sign-in and invitation acceptance for an existing account (R13); `Retry-After` and `details.retry_after_seconds` give the remaining time | `auth.locked` (WARNING); `users.locked_until`. Waiting 15 min unlocks; ops can clear `locked_until` (RUNBOOK §17) (M1-P2) |
 | `AUTH_SESSION_EXPIRED` | 401 | Please sign in again | Refresh token missing, unknown, expired or revoked (signed out); from M1-P3 also a missing, invalid or expired `me_access` token, or a session whose refresh-token family is no longer live (sign-out and reuse revocation end access at once) | `auth.refresh_failed` / `auth.rejected` with `reason`; cookie jar; `refresh_tokens` row (M1-P2, M1-P3) |
