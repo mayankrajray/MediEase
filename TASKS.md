@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M1 — Identity, tenancy and audit** (issue #19, branch `m1/19-identity-tenancy-audit`, one PR for the milestone) |
-| Active phase | **M1-P5 — ☐ todo (design not started):** ops API (create clinic → doctors → owner invite), owner staff and doctor management, onboarding checklist (M1-P4 ✅ implemented 3 Oct 2026, awaiting the developer's confirmation; M1-P3 ✅ pushed to PR #20) |
+| Active phase | **M1-P5 — ▶ ACTIVE (design proposed, awaiting approval):** ops onboarding API (clinic → doctors → owner invite), single-use staff invites and acceptance, owner staff and doctor management, onboarding checklist (M1-P4 ✅ implemented 3 Oct 2026, pushed to PR #20; M1-P3 ✅ pushed; both awaiting the developer's confirmation) |
 | Design notes | `docs/milestones/M1-identity-tenancy-audit.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M1 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -70,7 +70,7 @@ only their clinic; the tenancy test suite proves isolation.
 | M1-P2 | Password hashing, sign-in, refresh rotation, sign-out, lockout (FR-AUTH-01..04) | ✅ |
 | M1-P3 | Authorisation: role + clinic membership check on every route; permission matrix tests | ✅ |
 | M1-P4 | Audit log (append-only) written in the same transaction as the change; non-clinical support views (`v_clinic_activity`); audited staff role change | ✅ |
-| M1-P5 | Ops console: create clinic → doctors → owner invite; onboarding checklist timestamps; staff invite and deactivate | ▶ |
+| M1-P5 | Ops console: create clinic → doctors → owner invite; single-use staff invites and acceptance; onboarding checklist timestamps; staff invite and deactivate | ▶ |
 | M1-P6 | Web: sign-in, clinic switcher (for multi-clinic users), empty dashboard shell | ☐ |
 
 ## M2 — Patients  `☐`
