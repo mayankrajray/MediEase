@@ -125,17 +125,63 @@ describe("AcceptInviteForm", () => {
     expect(await screen.findByRole("heading", { name: "Join Alpha Clinic" })).toBeInTheDocument();
   });
 
-  it("an invitation for an existing account offers sign-in and never a set-password form", async () => {
-    const api = mockApi({ [DESCRIBE]: () => invite({ has_password: true }), [ACCEPT]: () => joined() });
-
+  it("R13: an invitation for an existing account asks for its current password, not a new one", async () => {
+    const api = mockApi({
+      [DESCRIBE]: () => invite({ has_password: true }),
+      [ACCEPT]: () => joined(),
+    });
     render(<AcceptInviteForm token="tok-123" />);
 
-    expect(await screen.findByText(/already exists/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Go to sign in" })).toHaveAttribute("href", "/sign-in");
+    const field = await screen.findByLabelText("Your MediEase password");
+    expect(field).toHaveAttribute("autocomplete", "current-password");
+    expect(screen.getByText(/you keep your password/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Choose a password")).not.toBeInTheDocument();
-    expect(api.count(ACCEPT)).toBe(0);
+    expect(screen.queryByLabelText("Type it again")).not.toBeInTheDocument();
+
+    fireEvent.change(field, { target: { value: PASSWORD } });
+    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/queue"));
+    expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ password: PASSWORD });
   });
 
+  it("R13: a wrong current password shows the API's message, clears the field and refocuses it", async () => {
+    mockApi({
+      [DESCRIBE]: () => invite({ has_password: true }),
+      [ACCEPT]: () =>
+        apiError(401, "AUTH_INVALID_CREDENTIALS", "Wrong login details. Check them and try again."),
+    });
+    render(<AcceptInviteForm token="tok-123" />);
+    const field = await screen.findByLabelText("Your MediEase password");
+
+    fireEvent.change(field, { target: { value: "not-my-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Wrong login details");
+    expect(alert).toHaveTextContent("Ref: test-ref");
+    expect(field).toHaveValue("");
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("R13, FR-AUTH-04: a locked account says how long to wait", async () => {
+    mockApi({
+      [DESCRIBE]: () => invite({ has_password: true }),
+      [ACCEPT]: () =>
+        apiError(423, "AUTH_LOCKED", "Account temporarily locked", { "Retry-After": "840" }),
+    });
+    render(<AcceptInviteForm token="tok-123" />);
+    const field = await screen.findByLabelText("Your MediEase password");
+
+    fireEvent.change(field, { target: { value: PASSWORD } });
+    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Too many attempts. Try again in 14 minutes.",
+    );
+  });
   it("URL-encodes the token it was given", async () => {
     const api = mockApi({ "GET /api/v1/auth/invites/a%2Fb": () => invite() });
 

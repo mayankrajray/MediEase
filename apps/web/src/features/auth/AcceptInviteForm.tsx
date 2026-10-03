@@ -10,7 +10,12 @@ import { readRememberedClinic } from "./clinic-selection";
 import { ErrorNotice } from "./ErrorNotice";
 import { ROLE_LABELS } from "./labels";
 import { QUEUE_PATH, postSignInPath } from "./landing";
-import { isRetryable } from "./messages";
+import {
+  AUTH_INVALID_CREDENTIALS,
+  AUTH_LOCKED,
+  formatWait,
+  isRetryable,
+} from "./messages";
 
 type Invite = GetResponse<"/api/v1/auth/invites/{token}">;
 
@@ -24,7 +29,9 @@ const MIN_LENGTH = 12;
 /**
  * Accepting a staff invitation (FR-ORG-04): describe the invite, ask for a
  * password, accept, and land signed in. The page is public; the secret in the URL
- * is the authority. The 12-character minimum is only a hint, the API decides.
+ * is needed but, for an account that already exists, not enough: that person
+ * enters their current password, which is checked and never changed (spec R13).
+ * The 12-character minimum for a new password is only a hint, the API decides.
  */
 export function AcceptInviteForm({ token }: { token: string }) {
   const router = useRouter();
@@ -37,6 +44,8 @@ export function AcceptInviteForm({ token }: { token: string }) {
   const [mismatch, setMismatch] = useState(false);
   const submittingRef = useRef(false);
   const alertRef = useRef<HTMLDivElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const existing = load.status === "ready" && load.invite.has_password;
 
   useEffect(() => {
     let cancelled = false;
@@ -54,7 +63,9 @@ export function AcceptInviteForm({ token }: { token: string }) {
   }, [token, attempt]);
 
   useEffect(() => {
-    if (error !== null) alertRef.current?.focus();
+    if (error === null) return;
+    const wrongPassword = error instanceof ApiError && error.code === AUTH_INVALID_CREDENTIALS;
+    (wrongPassword ? passwordRef.current : alertRef.current)?.focus();
   }, [error]);
 
   function retryLoad() {
@@ -64,7 +75,7 @@ export function AcceptInviteForm({ token }: { token: string }) {
 
   async function submit() {
     if (submittingRef.current) return;
-    if (password !== confirmation) {
+    if (!existing && password !== confirmation) {
       setMismatch(true);
       return;
     }
@@ -80,6 +91,12 @@ export function AcceptInviteForm({ token }: { token: string }) {
       );
       router.replace(postSignInPath(data, readRememberedClinic(), QUEUE_PATH));
     } catch (failure) {
+      if (
+        failure instanceof ApiError &&
+        (failure.code === AUTH_INVALID_CREDENTIALS || failure.code === AUTH_LOCKED)
+      ) {
+        setPassword("");
+      }
       setError(failure);
       submittingRef.current = false;
       setSubmitting(false);
@@ -120,6 +137,11 @@ export function AcceptInviteForm({ token }: { token: string }) {
   }
 
   const { invite } = load;
+  const wrongPassword = error instanceof ApiError && error.code === AUTH_INVALID_CREDENTIALS;
+  const lockedMessage =
+    error instanceof ApiError && error.code === AUTH_LOCKED && error.retryAfterSeconds !== undefined
+      ? `Too many attempts. Try again in ${formatWait(error.retryAfterSeconds)}.`
+      : undefined;
   return (
     <section aria-labelledby="invite-heading" className="mx-auto w-full max-w-sm space-y-5 p-6">
       <h1 id="invite-heading" className="text-2xl font-bold">
@@ -129,25 +151,42 @@ export function AcceptInviteForm({ token }: { token: string }) {
         {invite.full_name}, you have been invited as <strong>{ROLE_LABELS[invite.role]}</strong>.
       </p>
 
-      {invite.has_password ? (
-        // Accepting sets the account's password, which must never overwrite an existing
-        // account's (M1-P6 design, known issue): existing accounts sign in instead.
-        <div className="space-y-3 rounded border border-slate-400 bg-slate-50 p-4">
-          <p>
-            This invitation is for a MediEase account that already exists. Sign in with that account. If{" "}
-            {invite.clinic_name} does not appear afterwards, contact MediEase support.
-          </p>
-          <Link
-            href="/sign-in"
-            className="inline-block rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900"
-          >
-            Go to sign in
-          </Link>
-        </div>
-      ) : (
-        <>
-          {error !== null && <ErrorNotice id="invite-error" ref={alertRef} error={error} />}
-          <form onSubmit={onSubmit} className="space-y-4">
+      {error !== null && (
+        <ErrorNotice
+          id="invite-error"
+          ref={alertRef}
+          error={error}
+          {...(lockedMessage === undefined ? {} : { message: lockedMessage })}
+        />
+      )}
+
+      <form onSubmit={onSubmit} className="space-y-4">
+        {invite.has_password ? (
+          // An account that already exists keeps its password (spec R13): the person proves
+          // it is theirs by entering it, and nothing is set or changed.
+          <div className="space-y-1">
+            <p id="existing-hint" className="text-sm text-slate-700">
+              You already have a MediEase account, so you keep your password. Enter it to join{" "}
+              {invite.clinic_name}.
+            </p>
+            <label htmlFor="current-password" className="block font-medium">
+              Your MediEase password
+            </label>
+            <input
+              id="current-password"
+              ref={passwordRef}
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              aria-invalid={wrongPassword ? true : undefined}
+              aria-describedby={error !== null ? "invite-error" : "existing-hint"}
+              className="w-full rounded border border-slate-500 px-3 py-2"
+            />
+          </div>
+        ) : (
+          <>
             <div className="space-y-1">
               <label htmlFor="new-password" className="block font-medium">
                 Choose a password
@@ -191,16 +230,16 @@ export function AcceptInviteForm({ token }: { token: string }) {
                 </p>
               )}
             </div>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-slate-500"
-            >
-              {submitting ? "Joining…" : "Set password and join"}
-            </button>
-          </form>
-        </>
-      )}
+          </>
+        )}
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-slate-500"
+        >
+          {submitting ? "Joining…" : invite.has_password ? "Join" : "Set password and join"}
+        </button>
+      </form>
     </section>
   );
 }
