@@ -32,6 +32,7 @@ Use this list in the M6 security review. Each row names where it is implemented.
 
 ### Identity and access
 - [x] Argon2id password hashing with per-hash salt (M1-P2: argon2-cffi, RFC 9106 low-memory profile t=3/64 MiB/p=4; hashes upgraded on sign-in when parameters rise)
+- [x] Passwords are chosen, never issued: a staff invitation carries a single-use secret (32 random bytes, stored only as a SHA-256 digest, 7-day expiry, shown once) and the invitee sets a password of at least 12 characters (M1-P5). No password is ever transmitted to a new member, and the digest is useless to anyone who steals the database
 - [x] Access token 15 min, refresh 14 days, rotation with reuse detection (M1-P2: HS256 JWT with pinned algorithm and required claims; refresh tokens stored as SHA-256; a rotated token revokes its family)
 - [x] Cookies `HttpOnly`, `Secure` (non-local), `SameSite=Lax`; CSRF double-submit (M1-P2: path-scoped cookies; one hook guards every unsafe `/api/*` request with session cookies)
 - [ ] Lockout after 5 failed sign-ins; rate limit per IP and per account (M1-P2: per-account lockout done, constant-time unknown-account path; per-IP rate limiting at the reverse proxy in M6-P1)

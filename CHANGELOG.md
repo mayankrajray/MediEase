@@ -77,6 +77,25 @@ first production release.
   7/30-day event counts, with no clinical column.
 - M1-P4: setting `AUDIT_IP_SALT` (≥ 32 characters, required) and `IpHasher`; RUNBOOK §18
   (reading the audit log), DEBUGGING §5.3b ("who changed this?").
+- M1-P5 (#19): ops onboarding (FR-OPS-01): `POST/GET /api/v1/ops/clinics`,
+  `GET /api/v1/ops/clinics/{id}`, `POST /ops/clinics/{id}/doctors` and
+  `POST /ops/clinics/{id}/staff-invites`. Ops only (R10); the clinic is named in the path.
+- M1-P5: single-use staff invitations (FR-ORG-04). An `INVITED` membership carries the digest of
+  a 32-byte secret with a 7-day expiry; the acceptance URL is returned once.
+  Public `GET /api/v1/auth/invites/{token}` and `POST .../accept` let the invitee set a password
+  (≥ 12 characters, a domain rule) and are signed in; accepting an owner's invitation activates
+  an `ONBOARDING` clinic (I1). New codes `CLN_MEMBER_EXISTS` (409), `CLN_SLUG_TAKEN` (409),
+  `CLN_INVITE_INVALID` (404), `CLN_INVITE_EXPIRED` and `CLN_INVITE_USED` (410).
+- M1-P5: owner management (FR-ORG-01/02/04): `PATCH /api/v1/clinic`, `POST /clinic/doctors`,
+  `PATCH /clinic/doctors/{id}`, `POST /clinic/staff`, and `PATCH /clinic/staff/{id}` now takes a
+  role, a status (`DEACTIVATED` only), or both. A doctor profile links only to an active member
+  without one already.
+- M1-P5: `onboarding_checklists` (migration `0005`) records the first time each step happens and
+  never overwrites it (FR-OPS-04, spec R12), which is the G4 measurement; new audit actions
+  `clinic.created`, `clinic.activated`, `clinic.updated`, `doctor.added`, `doctor.updated`,
+  `staff.invited`, `staff.accepted`, `staff.deactivated`. Contract 0.5.0 (17 paths);
+  setting `PUBLIC_BASE_URL` is now validated (absolute, https when deployed) and RUNBOOK §10
+  carries the real onboarding commands.
 
 ### Upgrade notes
 - M1-P2: existing local `.env` files need `JWT_SIGNING_KEY` of at least 32 characters (copy the

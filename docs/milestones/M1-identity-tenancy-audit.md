@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M1-P1 to M1-P4 implemented (P1 and P2 confirmed 3 Oct 2026; P3 and P4 awaiting confirmation); M1-P5 design proposed |
+| Status | In progress — M1-P1 to M1-P5 implemented (P1 and P2 confirmed 3 Oct 2026; P3, P4 and P5 awaiting confirmation) |
 | Spec | `docs/specs/identity-and-tenancy.md` (Approved 2026-10-02) |
 | Covers | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08, NFR-14 |
 | Issue / branch / PR | #19 · `m1/19-identity-tenancy-audit` · one draft PR for the whole milestone (ADR-0011) |
@@ -46,10 +46,10 @@ branch and appear in the one milestone PR.
 
 ## M1-P5 — Ops onboarding and staff management
 
-**Status: approved 3 Oct 2026 (one phase, five commits; reactivation out of scope); in
-implementation.** Covers FR-OPS-01, FR-OPS-04, FR-ORG-01, FR-ORG-02, FR-ORG-04; spec R9, R12;
-and the M1 exit criterion ("an ops user onboards a clinic with an owner, doctor and front desk;
-each signs in").
+**Status: approved 3 Oct 2026 (one phase, five commits; reactivation out of scope); implemented
+3 Oct 2026, awaiting the developer's confirmation.** Covers FR-OPS-01, FR-OPS-04, FR-ORG-01,
+FR-ORG-02, FR-ORG-04; spec R9, R12; and the M1 exit criterion ("an ops user onboards a clinic
+with an owner, doctor and front desk; each signs in").
 
 ### Concepts
 

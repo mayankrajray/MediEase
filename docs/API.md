@@ -98,27 +98,71 @@ Any tenant resource outside the request's clinic returns `404 REQ_NOT_FOUND` (R8
 | Method | Path | Purpose | Role | Status |
 |---|---|---|---|---|
 | GET | `/api/v1/clinic` | Clinic settings | every role (`CLINIC_VIEW`) | Implemented (M1-P3) |
+| PATCH | `/api/v1/clinic` | Edit clinic settings | OWNER (`CLINIC_MANAGE`) | Implemented (M1-P5) |
 | GET | `/api/v1/clinic/doctors` | List doctors | every role (`DOCTORS_VIEW`) | Implemented (M1-P3) |
+| POST | `/api/v1/clinic/doctors` | Add a doctor | OWNER (`CLINIC_MANAGE`) | Implemented (M1-P5) |
 | GET | `/api/v1/clinic/doctors/{doctor_id}` | One doctor | every role (`DOCTORS_VIEW`) | Implemented (M1-P3) |
+| PATCH | `/api/v1/clinic/doctors/{doctor_id}` | Edit or deactivate a doctor | OWNER (`CLINIC_MANAGE`) | Implemented (M1-P5) |
 | GET | `/api/v1/clinic/staff` | List staff with roles | OWNER (`STAFF_MANAGE`) | Implemented (M1-P3) |
-| PATCH | `/api/v1/clinic/staff/{membership_id}` | Change role | OWNER (`STAFF_MANAGE`) | Implemented (M1-P4) |
-| PATCH | `/api/v1/clinic` | Edit clinic settings | OWNER | M1-P5 |
-| POST | `/api/v1/clinic/doctors` | Add a doctor | OWNER | M1-P5 |
-| PATCH | `/api/v1/clinic/doctors/{doctor_id}` | Edit doctor | OWNER | M1-P5 |
-| POST | `/api/v1/clinic/staff` | Invite staff | OWNER | M1-P5 |
-| PATCH | `/api/v1/clinic/staff/{membership_id}` | Deactivate | OWNER | M1-P5 |
+| POST | `/api/v1/clinic/staff` | Invite staff | OWNER (`STAFF_MANAGE`) | Implemented (M1-P5) |
+| PATCH | `/api/v1/clinic/staff/{membership_id}` | Change role and/or deactivate | OWNER (`STAFF_MANAGE`) | Implemented (M1-P4, M1-P5) |
 | GET | `/api/v1/clinic/audit-events` | Audit log | OWNER | FR-AUD-03 (P1) — backlog; not in the P0 permission matrix |
 
 The doctor and staff lists return `{"items": [...]}` with no cursor: a clinic has one to four
 doctors and a handful of staff, so the paginated envelope above starts with the first list that
 can grow (patients, M2).
 
-**Role change** `PATCH /api/v1/clinic/staff/{membership_id}` `{"role": "DOCTOR"}` → `200` with the
-updated member. The new role and a `staff.role_changed` audit event are written in one
-transaction (FR-AUD-01, spec R11). The last active owner can neither be demoted nor deactivated
-(`409 CLN_LAST_OWNER`). Setting the role a member already holds changes nothing and records
-nothing. The member keeps their session: the new role applies to their next request, because
-every request re-reads the membership (FR-ORG-04).
+**Role change and deactivation** `PATCH /api/v1/clinic/staff/{membership_id}`
+`{"role": "DOCTOR"}`, `{"status": "DEACTIVATED"}` or both → `200` with the updated member. Each
+change writes its own audit event in the same transaction as the change (FR-AUD-01, spec R11).
+The last active owner can neither be demoted nor deactivated (`409 CLN_LAST_OWNER`). Setting the
+role a member already holds changes nothing and records nothing. `status` accepts `DEACTIVATED`
+only: the lifecycle is `INVITED → ACTIVE → DEACTIVATED` with no way back in M1, so somebody
+removed by mistake is invited again. A new role applies from the member's next request, and a
+deactivated member's next request is refused (FR-ORG-04, AC4).
+
+**Staff invitations** `POST /api/v1/clinic/staff` (and the ops equivalent below) →
+`201` with the member and `accept_url`. An email address or phone number is required, because
+that is how they sign in. Somebody who already has a MediEase account keeps it and gains a
+membership ("one user, two memberships"); somebody already in this clinic is `409
+CLN_MEMBER_EXISTS`; a still-pending invitation is re-issued, which retires the previous link.
+
+### Staff invitations — public (M1)
+
+| Method | Path | Purpose | Status |
+|---|---|---|---|
+| GET | `/api/v1/auth/invites/{token}` | What this invitation is for | Implemented (M1-P5) |
+| POST | `/api/v1/auth/invites/{token}/accept` | Set a password, join, sign in | Implemented (M1-P5) |
+
+No session is involved: the authority is the single-use secret in the URL, which is why these
+paths need no `X-CSRF-Token`. The secret is 32 random bytes, stored only as a SHA-256 digest,
+valid for 7 days, and shown exactly once — in the response that created the invitation. Accepting
+sets a password (at least 12 characters), activates the membership, activates an `ONBOARDING`
+clinic when the new member is its owner (I1), and returns the sign-in body with cookies set.
+Unknown secrets are `404 CLN_INVITE_INVALID`; expired and already-used ones say which (`410`), so
+the person holding the link knows whether to ask for a new one.
+
+### Ops console (M1, M2, M6)
+
+| Method | Path | Purpose | Status |
+|---|---|---|---|
+| POST | `/api/v1/ops/clinics` | Create a clinic (FR-ORG-01, FR-OPS-01) | Implemented (M1-P5) |
+| GET | `/api/v1/ops/clinics` | List clinics with their onboarding state | Implemented (M1-P5) |
+| GET | `/api/v1/ops/clinics/{clinic_id}` | Checklist, staff and doctor count | Implemented (M1-P5) |
+| POST | `/api/v1/ops/clinics/{clinic_id}/doctors` | Add a doctor while onboarding | Implemented (M1-P5) |
+| POST | `/api/v1/ops/clinics/{clinic_id}/staff-invites` | Invite the owner (or any role) | Implemented (M1-P5) |
+| GET | `/api/v1/ops/clinics/{clinic_id}/health` | Usage metrics, no clinical data (FR-OPS-03) | M6-P4 |
+| POST | `/api/v1/ops/clinics/{clinic_id}/patient-imports?dry_run=true` | CSV import (FR-PAT-08) | M2-P4 |
+| GET | `/api/v1/ops/jobs?state=dead` | Dead jobs | M5-P1 |
+
+Ops routes are `@ops`: platform staff only, and clinic staff are refused even as owners (R10).
+Ops users have no membership, so the clinic is named in the path; the use cases still reach tenant
+rows only through the clinic-scoped repositories. Nothing here returns clinical content.
+
+The **onboarding checklist** on those responses records the first time each step happened and is
+never overwritten (FR-OPS-04, spec R12), so the elapsed time for goal G4 is a fact in the
+database. `patients_imported_at`, `first_appointment_at` and `first_prescription_at` are written
+by M2, M3 and M4.
 
 ### Audit trail (M1-P4)
 
@@ -127,16 +171,6 @@ committed change always has its record. Rows hold IDs, enums, the `request_id` a
 fingerprint — never names, phone numbers or clinical content. The table refuses `UPDATE`,
 `DELETE` and `TRUNCATE` in the database itself (FR-AUD-02). There is no endpoint yet: reading it
 is a documented `make psql` procedure (RUNBOOK §18), and the owner-facing view is FR-AUD-03.
-
-### Ops console (M1, M2, M6)
-
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/api/v1/ops/clinics` | Create clinic + owner invite (FR-OPS-01) |
-| GET | `/api/v1/ops/clinics` | List with onboarding state |
-| GET | `/api/v1/ops/clinics/{clinic_id}/health` | Usage metrics, no clinical data (FR-OPS-03) |
-| POST | `/api/v1/ops/clinics/{clinic_id}/patient-imports?dry_run=true` | CSV import (FR-PAT-08) |
-| GET | `/api/v1/ops/jobs?state=dead` | Dead jobs |
 
 ### Patients (M2)
 
