@@ -140,3 +140,52 @@ def test_doctor_deactivates_once() -> None:
     assert doctor.updated_at == LATER
     with pytest.raises(InvalidTransition):
         doctor.deactivate(now=LATER)
+
+
+# --- Editing details (M1-P5) -------------------------------------------------------------
+
+
+def test_fr_org_01_clinic_details_are_edited_field_by_field() -> None:
+    clinic = a_clinic(name="Old Name", city="Old City")
+    original_slug = clinic.slug
+
+    clinic.update_details(now=LATER, name="New Name", city="New City", timezone="Asia/Kolkata")
+
+    assert (clinic.name, clinic.city) == ("New Name", "New City")
+    assert clinic.updated_at == LATER
+    # Omitted fields keep their value; the slug is not editable (public links).
+    assert clinic.slug == original_slug
+    assert clinic.pincode == "560001"
+    assert clinic.status is ClinicStatus.ONBOARDING
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("name", " "), ("timezone", "Mars/Olympus"), ("pincode", "0123"), ("city", "x" * 101)],
+)
+def test_an_invalid_clinic_edit_changes_nothing(field: str, value: str) -> None:
+    clinic = a_clinic(name="Keep Me")
+    with pytest.raises(InvalidValue):
+        clinic.update_details(now=LATER, **{field: value})
+    assert clinic.name == "Keep Me"
+    assert clinic.updated_at == NOW
+
+
+def test_fr_org_02_doctor_details_are_edited_field_by_field() -> None:
+    doctor = a_doctor(uuid4())
+    user_id = uuid4()
+
+    doctor.update_details(now=LATER, qualification="MBBS, MD", user_id=user_id, specialty="ENT")
+
+    assert doctor.qualification == "MBBS, MD"
+    assert (doctor.user_id, doctor.specialty) == (user_id, "ENT")
+    assert doctor.registration_number.startswith("REG-")  # untouched
+    assert doctor.updated_at == LATER
+
+
+@pytest.mark.parametrize("field", ["display_name", "qualification", "registration_number"])
+def test_i3_a_doctor_edit_cannot_empty_a_required_field(field: str) -> None:
+    doctor = a_doctor(uuid4())
+    with pytest.raises(InvalidValue):
+        doctor.update_details(now=LATER, **{field: "  "})
+    assert doctor.updated_at == NOW

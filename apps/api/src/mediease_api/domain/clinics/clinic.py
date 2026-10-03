@@ -109,6 +109,44 @@ class Clinic:
             raise InvalidTransition("clinic", self.status, "suspend")
         self._set_status(ClinicStatus.SUSPENDED, now)
 
+    def update_details(
+        self,
+        *,
+        now: datetime,
+        name: str | None = None,
+        timezone: str | None = None,
+        phone: PhoneNumber | None = None,
+        address_line: str | None = None,
+        city: str | None = None,
+        state: str | None = None,
+        pincode: str | None = None,
+        specialties: tuple[str, ...] | None = None,
+    ) -> None:
+        """Change the clinic's own details (FR-ORG-01, M1-P5).
+
+        Only the fields given are touched, so a caller cannot blank a field by
+        omitting it. The slug is not editable: it appears in public links from
+        M7, so changing it would break them; the status has its own
+        transitions. Every value is validated before anything changes.
+        """
+        validated_name = required_text(name, "name", max_length=200) if name is not None else None
+        validated: dict[str, object] = {
+            "timezone": _validate_timezone(timezone) if timezone is not None else None,
+            "address_line": optional_text(address_line, "address_line", max_length=300),
+            "city": optional_text(city, "city", max_length=100),
+            "state": optional_text(state, "state", max_length=100),
+            "pincode": _validate_pincode(pincode),
+            "specialties": _clean_specialties(specialties) if specialties is not None else None,
+        }
+        self.updated_at = require_utc(now, "now")
+        if validated_name is not None:
+            self.name = validated_name
+        if phone is not None:
+            self.phone = phone
+        for attribute, value in validated.items():
+            if value is not None:
+                setattr(self, attribute, value)
+
     def _set_status(self, status: ClinicStatus, now: datetime) -> None:
         self.updated_at = require_utc(now, "now")  # validated first: a bad value changes nothing
         self.status = status

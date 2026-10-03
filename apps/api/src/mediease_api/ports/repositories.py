@@ -24,6 +24,7 @@ from uuid import UUID
 
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
+from mediease_api.domain.clinics.onboarding import OnboardingChecklist
 from mediease_api.domain.identity.access import ClinicAccess, StaffMember
 from mediease_api.domain.identity.membership import ClinicMembership
 from mediease_api.domain.identity.session import RefreshToken
@@ -39,6 +40,13 @@ class ClinicRepository(Protocol):
     def get(self, clinic_id: UUID) -> Clinic | None: ...
     def get_by_slug(self, slug: str) -> Clinic | None: ...
     def update(self, clinic: Clinic) -> None: ...
+    def list_onboarding(self) -> Sequence[tuple[Clinic, OnboardingChecklist | None]]:
+        """Every clinic with its checklist, newest first — the ops console list (FR-OPS-01).
+
+        A deliberate cross-clinic read for platform staff (ADR-0003): clinics
+        are not tenant-owned, and no clinical content is involved.
+        """
+        ...
 
 
 class UserRepository(Protocol):
@@ -79,6 +87,18 @@ class ClinicAccessRepository(Protocol):
         ...
 
 
+class StaffInviteRepository(Protocol):
+    """Finds the membership a pending invitation belongs to (M1-P5).
+
+    Keyed by the digest of a 256-bit secret, like ``RefreshTokenRepository``:
+    the invitee has no session and no clinic context yet, so this read cannot
+    be clinic-scoped (ADR-0003 "platform repositories"). Writes go through the
+    tenant-scoped ``MembershipRepository``.
+    """
+
+    def get_by_invite_digest(self, token_hash: str) -> ClinicMembership | None: ...
+
+
 # --- Tenant repositories (bound to one clinic) ---------------------------------------------
 
 
@@ -112,3 +132,11 @@ class MembershipRepository(Protocol):
         ...
 
     def update(self, membership: ClinicMembership) -> None: ...
+
+
+class ChecklistRepository(Protocol):
+    """This clinic's onboarding checklist (FR-OPS-04, spec R12). One row per clinic."""
+
+    def add(self, checklist: OnboardingChecklist) -> None: ...
+    def get(self) -> OnboardingChecklist | None: ...
+    def update(self, checklist: OnboardingChecklist) -> None: ...

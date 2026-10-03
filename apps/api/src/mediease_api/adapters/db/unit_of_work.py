@@ -19,11 +19,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from mediease_api.adapters.db.audit import SqlAlchemyAuditWriter
 from mediease_api.adapters.db.repositories import (
+    SqlAlchemyChecklistRepository,
     SqlAlchemyClinicAccessRepository,
     SqlAlchemyClinicRepository,
     SqlAlchemyDoctorRepository,
     SqlAlchemyMembershipRepository,
     SqlAlchemyRefreshTokenRepository,
+    SqlAlchemyStaffInviteRepository,
     SqlAlchemyUserRepository,
 )
 
@@ -45,6 +47,7 @@ class SqlAlchemyTenantRepositories:
         self._clinic_id = clinic_id
         self._doctors = SqlAlchemyDoctorRepository(session, clinic_id)
         self._memberships = SqlAlchemyMembershipRepository(session, clinic_id)
+        self._checklist = SqlAlchemyChecklistRepository(session, clinic_id)
 
     @property
     def clinic_id(self) -> UUID:
@@ -58,6 +61,10 @@ class SqlAlchemyTenantRepositories:
     def memberships(self) -> SqlAlchemyMembershipRepository:
         return self._memberships
 
+    @property
+    def checklist(self) -> SqlAlchemyChecklistRepository:
+        return self._checklist
+
 
 class _OpenUnit:
     """The session and platform repositories of one open unit of work."""
@@ -68,6 +75,7 @@ class _OpenUnit:
         self.users = SqlAlchemyUserRepository(session)
         self.refresh_tokens = SqlAlchemyRefreshTokenRepository(session)
         self.clinic_access = SqlAlchemyClinicAccessRepository(session)
+        self.staff_invites = SqlAlchemyStaffInviteRepository(session)
         # Shares the session, so an audit row commits with the change (R11).
         self.audit = SqlAlchemyAuditWriter(session)
 
@@ -114,6 +122,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def clinic_access(self) -> SqlAlchemyClinicAccessRepository:
         return self._require_open().clinic_access
+
+    @property
+    def staff_invites(self) -> SqlAlchemyStaffInviteRepository:
+        return self._require_open().staff_invites
 
     @property
     def audit(self) -> SqlAlchemyAuditWriter:

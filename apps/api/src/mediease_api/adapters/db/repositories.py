@@ -23,12 +23,14 @@ from mediease_api.adapters.db.models import (
     ClinicMembershipRow,
     ClinicRow,
     DoctorRow,
+    OnboardingChecklistRow,
     RefreshTokenRow,
     UserRow,
 )
 from mediease_api.adapters.db.tenancy import TenantScopedRepository
 from mediease_api.domain.clinics.clinic import Clinic, ClinicStatus
 from mediease_api.domain.clinics.doctor import Doctor
+from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
 from mediease_api.domain.identity.access import ClinicAccess, StaffMember
 from mediease_api.domain.identity.membership import ClinicMembership, MembershipStatus, Role
 from mediease_api.domain.identity.session import RefreshToken
@@ -106,6 +108,17 @@ class SqlAlchemyClinicRepository:
             raise NotFound("clinic")
         _write_clinic(row, clinic)
         self._session.flush()
+
+    def list_onboarding(self) -> Sequence[tuple[Clinic, OnboardingChecklist | None]]:
+        query = (
+            select(ClinicRow, OnboardingChecklistRow)
+            .outerjoin(OnboardingChecklistRow, OnboardingChecklistRow.clinic_id == ClinicRow.id)
+            .order_by(ClinicRow.created_at.desc(), ClinicRow.id)
+        )
+        return [
+            (_clinic_from_row(clinic), _checklist_from_row(checklist) if checklist else None)
+            for clinic, checklist in self._session.execute(query)
+        ]
 
 
 # --- Users (platform) ----------------------------------------------------------------------
@@ -361,7 +374,39 @@ def _membership_from_row(row: ClinicMembershipRow) -> ClinicMembership:
         status=MembershipStatus(row.status),
         created_at=_utc(row.created_at),
         updated_at=_utc(row.updated_at),
+        invite_token_hash=row.invite_token_hash,
+        invite_expires_at=_utc_or_none(row.invite_expires_at),
+        invite_accepted_at=_utc_or_none(row.invite_accepted_at),
     )
+
+
+def _write_membership(row: ClinicMembershipRow, membership: ClinicMembership) -> None:
+    # clinic_id and user_id never change; only the role, the lifecycle and the
+    # invitation do.
+    row.role = membership.role.value
+    row.status = membership.status.value
+    row.invite_token_hash = membership.invite_token_hash
+    row.invite_expires_at = membership.invite_expires_at
+    row.invite_accepted_at = membership.invite_accepted_at
+    row.updated_at = membership.updated_at
+
+
+class SqlAlchemyStaffInviteRepository:
+    """Finds a membership by its invitation digest (platform read, M1-P5).
+
+    The invitee has no clinic context yet, so this cannot be clinic-scoped; the
+    key is a 256-bit secret's digest, exactly like refresh tokens (ADR-0003).
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get_by_invite_digest(self, token_hash: str) -> ClinicMembership | None:
+        query = select(ClinicMembershipRow).where(
+            ClinicMembershipRow.invite_token_hash == token_hash
+        )
+        row = self._session.scalars(query).one_or_none()
+        return _membership_from_row(row) if row else None
 
 
 class SqlAlchemyMembershipRepository(TenantScopedRepository[ClinicMembershipRow]):
@@ -374,11 +419,9 @@ class SqlAlchemyMembershipRepository(TenantScopedRepository[ClinicMembershipRow]
             id=membership.id,
             clinic_id=self.clinic_id,
             user_id=membership.user_id,
-            role=membership.role.value,
-            status=membership.status.value,
             created_at=membership.created_at,
-            updated_at=membership.updated_at,
         )
+        _write_membership(row, membership)
         self._session.add(row)
         self._session.flush()
 
@@ -425,10 +468,54 @@ class SqlAlchemyMembershipRepository(TenantScopedRepository[ClinicMembershipRow]
         ]
 
     def update(self, membership: ClinicMembership) -> None:
-        # clinic_id and user_id never change; only the role and the lifecycle do.
         self._check_owned(membership.clinic_id)
         row = self._require_row(membership.id)
-        row.role = membership.role.value
-        row.status = membership.status.value
-        row.updated_at = membership.updated_at
+        _write_membership(row, membership)
+        self._session.flush()
+
+
+# --- Onboarding checklist (tenant) ------------------------------------------------------------
+
+
+def _checklist_from_row(row: OnboardingChecklistRow) -> OnboardingChecklist:
+    steps = {}
+    for step in OnboardingStep:
+        # The step's value is the column name, so the mapping cannot drift.
+        recorded = getattr(row, step.value)
+        if recorded is not None:
+            steps[step] = _utc(recorded)
+    return OnboardingChecklist(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        started_at=_utc(row.started_at),
+        steps=steps,
+    )
+
+
+def _write_checklist(row: OnboardingChecklistRow, checklist: OnboardingChecklist) -> None:
+    for step in OnboardingStep:
+        setattr(row, step.value, checklist.at(step))
+
+
+class SqlAlchemyChecklistRepository(TenantScopedRepository[OnboardingChecklistRow]):
+    model = OnboardingChecklistRow
+    entity_name = "onboarding checklist"
+
+    def add(self, checklist: OnboardingChecklist) -> None:
+        self._check_owned(checklist.clinic_id)
+        row = OnboardingChecklistRow(
+            id=checklist.id, clinic_id=self.clinic_id, started_at=checklist.started_at
+        )
+        _write_checklist(row, checklist)
+        self._session.add(row)
+        self._session.flush()
+
+    def get(self) -> OnboardingChecklist | None:
+        row = self._session.scalars(self._scoped_select()).one_or_none()
+        return _checklist_from_row(row) if row else None
+
+    def update(self, checklist: OnboardingChecklist) -> None:
+        self._check_owned(checklist.clinic_id)
+        row = self._require_row(checklist.id)
+        _write_checklist(row, checklist)
         self._session.flush()

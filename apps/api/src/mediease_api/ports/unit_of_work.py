@@ -23,11 +23,13 @@ from uuid import UUID
 
 from mediease_api.ports.audit import AuditWriter
 from mediease_api.ports.repositories import (
+    ChecklistRepository,
     ClinicAccessRepository,
     ClinicRepository,
     DoctorRepository,
     MembershipRepository,
     RefreshTokenRepository,
+    StaffInviteRepository,
     UserRepository,
 )
 
@@ -41,6 +43,8 @@ class TenantRepositories(Protocol):
     def doctors(self) -> DoctorRepository: ...
     @property
     def memberships(self) -> MembershipRepository: ...
+    @property
+    def checklist(self) -> ChecklistRepository: ...
 
 
 class UnitOfWork(Protocol):
@@ -52,6 +56,8 @@ class UnitOfWork(Protocol):
     def refresh_tokens(self) -> RefreshTokenRepository: ...
     @property
     def clinic_access(self) -> ClinicAccessRepository: ...
+    @property
+    def staff_invites(self) -> StaffInviteRepository: ...
     @property
     def audit(self) -> AuditWriter:
         """Appends audit events in this transaction, so a change is never unaudited (R11)."""
