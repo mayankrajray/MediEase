@@ -11,13 +11,13 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M1 — Identity, tenancy and audit** (issue #19, branch `m1/19-identity-tenancy-audit`, one PR for the milestone) |
-| Active phase | **M1-P7 - ✅ implemented 3 Oct 2026** (ops clinics list and the Create clinic wizard, added to M1 by the developer's decision the same day). M1-P6 is confirmed by the developer's browser walk-through (3 Oct 2026: sign-in, wrong password, 15-minute lockout while other accounts still sign in, two-clinic switch, role routes and ops). All seven M1 phases are implemented; what remains is the milestone review and merge (ADR-0011) |
-| Design notes | `docs/milestones/M1-identity-tenancy-audit.md` |
-| Approved plan | `NEXT_STEPS_PLAN.md` (M1 phases, workflow, progress log) |
+| Active milestone | **M2 — Patients** (issue #21, branch `m2/21-patients`, one PR for the milestone) |
+| Active phase | **M2-P1 — ▶ ACTIVE:** patient domain (phone, guardian, age, consent, clinic-scoped code), migration `0006`, tenancy-scoped repository and the 10,000-patient lookup test |
+| Design notes | `docs/milestones/M2-patients.md` |
+| Approved plan | `NEXT_STEPS_PLAN.md` (M2 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §9). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | None blocking. Found and fixed in M1 (3 Oct 2026): accepting an invitation for an existing account overwrote its password (spec R13, contract 0.5.1) |
+| Open decisions | None. M1 was merged and its phases P1–P7 confirmed by the developer on 3 Oct 2026 |
 | Last updated | 3 Oct 2026 |
 
 
@@ -57,7 +57,7 @@ database up and 503 with it down; CI green on a PR.
 
 ---
 
-## M1 — Identity, tenancy and audit  `▶ ACTIVE`
+## M1 — Identity, tenancy and audit  `✅`
 
 **Covers:** FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04.
 **Spec:** `docs/specs/identity-and-tenancy.md` (Approved 2 Oct 2026). **Issue:** #19, one branch
@@ -75,14 +75,14 @@ only their clinic; the tenancy test suite proves isolation.
 | M1-P6 | Web: sign-in, clinic switcher (for multi-clinic users), empty dashboard shell | ✅ |
 | M1-P7 | Web: ops clinics list and the Create clinic wizard (clinic → doctors → owner invite, elapsed time; spec §6) | ✅ |
 
-## M2 — Patients  `☐`
+## M2 — Patients  `▶ ACTIVE`
 
-**Covers:** FR-PAT-01..06, FR-PAT-08. **Exit:** register, find and update patients; phone
+**Covers:** FR-PAT-01..06, FR-PAT-08. **Spec:** `docs/specs/patients.md` (Approved 3 Oct 2026). **Issue:** #21, one branch and one PR for all phases (ADR-0011). **Exit:** register, find and update patients; phone
 duplicates surfaced; 10k-patient lookup p95 < 500 ms.
 
 | Phase | Scope | Status |
 |---|---|---|
-| M2-P1 | Patient domain (phone normalisation, guardian model, clinic-scoped code) + migration + indexes | ☐ |
+| M2-P1 | Patient domain (phone normalisation, guardian model, age, consent, clinic-scoped code) + migration `0006` + indexes + tenancy-scoped repository + the 10,000-patient lookup test (AC4) | ▶ |
 | M2-P2 | Register / edit / lookup endpoints; duplicate-phone flow | ☐ |
 | M2-P3 | Consent and language preference; opt-out state | ☐ |
 | M2-P4 | Ops CSV import with dry-run report | ☐ |
