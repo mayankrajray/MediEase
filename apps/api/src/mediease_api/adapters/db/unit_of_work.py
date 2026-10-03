@@ -24,6 +24,7 @@ from mediease_api.adapters.db.repositories import (
     SqlAlchemyClinicRepository,
     SqlAlchemyDoctorRepository,
     SqlAlchemyMembershipRepository,
+    SqlAlchemyPatientRepository,
     SqlAlchemyRefreshTokenRepository,
     SqlAlchemyStaffInviteRepository,
     SqlAlchemyUserRepository,
@@ -48,6 +49,7 @@ class SqlAlchemyTenantRepositories:
         self._doctors = SqlAlchemyDoctorRepository(session, clinic_id)
         self._memberships = SqlAlchemyMembershipRepository(session, clinic_id)
         self._checklist = SqlAlchemyChecklistRepository(session, clinic_id)
+        self._patients = SqlAlchemyPatientRepository(session, clinic_id)
 
     @property
     def clinic_id(self) -> UUID:
@@ -64,6 +66,10 @@ class SqlAlchemyTenantRepositories:
     @property
     def checklist(self) -> SqlAlchemyChecklistRepository:
         return self._checklist
+
+    @property
+    def patients(self) -> SqlAlchemyPatientRepository:
+        return self._patients
 
 
 class _OpenUnit:

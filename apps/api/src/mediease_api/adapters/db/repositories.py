@@ -24,6 +24,7 @@ from mediease_api.adapters.db.models import (
     ClinicRow,
     DoctorRow,
     OnboardingChecklistRow,
+    PatientRow,
     RefreshTokenRow,
     UserRow,
 )
@@ -35,6 +36,7 @@ from mediease_api.domain.identity.access import ClinicAccess, StaffMember
 from mediease_api.domain.identity.membership import ClinicMembership, MembershipStatus, Role
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User, UserStatus
+from mediease_api.domain.patients.patient import Language, Patient, Sex
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
@@ -67,6 +69,8 @@ def _clinic_from_row(row: ClinicRow) -> Clinic:
         specialties=tuple(row.specialties),
         created_at=_utc(row.created_at),
         updated_at=_utc(row.updated_at),
+        patient_code_prefix=row.patient_code_prefix,
+        next_patient_seq=row.next_patient_seq,
     )
 
 
@@ -81,6 +85,8 @@ def _write_clinic(row: ClinicRow, clinic: Clinic) -> None:
     row.state = clinic.state
     row.pincode = clinic.pincode
     row.specialties = list(clinic.specialties)
+    row.patient_code_prefix = clinic.patient_code_prefix
+    row.next_patient_seq = clinic.next_patient_seq
     row.updated_at = clinic.updated_at
 
 
@@ -94,8 +100,16 @@ class SqlAlchemyClinicRepository:
         self._session.add(row)
         self._session.flush()
 
-    def get(self, clinic_id: UUID) -> Clinic | None:
-        row = self._session.get(ClinicRow, clinic_id)
+    def get(self, clinic_id: UUID, *, for_update: bool = False) -> Clinic | None:
+        if for_update:
+            # populate_existing: a row already in the session is re-read under the lock, so
+            # the counter seen here is the committed one, not a stale copy.
+            query = select(ClinicRow).where(ClinicRow.id == clinic_id)
+            row = self._session.scalars(
+                query.with_for_update().execution_options(populate_existing=True)
+            ).one_or_none()
+        else:
+            row = self._session.get(ClinicRow, clinic_id)
         return _clinic_from_row(row) if row else None
 
     def get_by_slug(self, slug: str) -> Clinic | None:
@@ -526,3 +540,113 @@ class SqlAlchemyChecklistRepository(TenantScopedRepository[OnboardingChecklistRo
         row = self._require_row(checklist.id)
         _write_checklist(row, checklist)
         self._session.flush()
+
+
+# --- Patients (tenant) ---------------------------------------------------------------------
+
+
+def _patient_from_row(row: PatientRow) -> Patient:
+    return Patient(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        code=row.code,
+        full_name=row.full_name,
+        phone=PhoneNumber(row.phone_e164),
+        sex=Sex(row.sex),
+        date_of_birth=row.date_of_birth,
+        age_years_at_registration=row.age_years_at_registration,
+        registered_on=row.registered_on,
+        guardian_name=row.guardian_name,
+        language=Language(row.language),
+        whatsapp_consent=row.whatsapp_consent,
+        sms_consent=row.sms_consent,
+        consent_recorded_at=_utc_or_none(row.consent_recorded_at),
+        consent_recorded_by=row.consent_recorded_by,
+        opted_out_at=_utc_or_none(row.opted_out_at),
+        created_by=row.created_by,
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+    )
+
+
+def _write_patient(row: PatientRow, patient: Patient) -> None:
+    # The code is fixed at creation (I3), so it is set by ``add`` and never here.
+    row.full_name = patient.full_name
+    row.phone_e164 = patient.phone.e164
+    row.sex = patient.sex.value
+    row.date_of_birth = patient.date_of_birth
+    row.age_years_at_registration = patient.age_years_at_registration
+    row.registered_on = patient.registered_on
+    row.guardian_name = patient.guardian_name
+    row.language = patient.language.value
+    row.whatsapp_consent = patient.whatsapp_consent
+    row.sms_consent = patient.sms_consent
+    row.consent_recorded_at = patient.consent_recorded_at
+    row.consent_recorded_by = patient.consent_recorded_by
+    row.opted_out_at = patient.opted_out_at
+    row.updated_at = patient.updated_at
+
+
+def _like_prefix(prefix: str) -> str:
+    """``prefix`` as a LIKE pattern that matches it literally, then anything."""
+    escaped = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"{escaped}%"
+
+
+class SqlAlchemyPatientRepository(TenantScopedRepository[PatientRow]):
+    model = PatientRow
+    entity_name = "patient"
+
+    def add(self, patient: Patient) -> None:
+        self._check_owned(patient.clinic_id)
+        row = PatientRow(
+            id=patient.id,
+            clinic_id=self.clinic_id,
+            code=patient.code,
+            created_by=patient.created_by,
+            created_at=patient.created_at,
+        )
+        _write_patient(row, patient)
+        self._session.add(row)
+        self._session.flush()
+
+    def get(self, patient_id: UUID) -> Patient | None:
+        row = self._get_row(patient_id)
+        return _patient_from_row(row) if row else None
+
+    def update(self, patient: Patient) -> None:
+        self._check_owned(patient.clinic_id)
+        row = self._require_row(patient.id)
+        _write_patient(row, patient)
+        self._session.flush()
+
+    def get_by_code(self, code: str) -> Patient | None:
+        query = self._scoped_select().where(PatientRow.code == code)
+        row = self._session.scalars(query).one_or_none()
+        return _patient_from_row(row) if row else None
+
+    def find_by_phone(self, phone: PhoneNumber, *, limit: int) -> Sequence[Patient]:
+        query = (
+            self._scoped_select()
+            .where(PatientRow.phone_e164 == phone.e164)
+            .order_by(PatientRow.created_at, PatientRow.id)
+            .limit(limit)
+        )
+        return [_patient_from_row(row) for row in self._session.scalars(query)]
+
+    def search_by_name_prefix(self, prefix: str, *, limit: int) -> Sequence[Patient]:
+        query = (
+            self._scoped_select()
+            .where(func.lower(PatientRow.full_name).like(_like_prefix(prefix.lower()), escape="\\"))
+            .order_by(func.lower(PatientRow.full_name), PatientRow.code)
+            .limit(limit)
+        )
+        return [_patient_from_row(row) for row in self._session.scalars(query)]
+
+    def count(self) -> int:
+        query = (
+            select(func.count())
+            .select_from(PatientRow)
+            .where(PatientRow.clinic_id == self._clinic_id)
+        )
+        return int(self._session.scalar(query) or 0)

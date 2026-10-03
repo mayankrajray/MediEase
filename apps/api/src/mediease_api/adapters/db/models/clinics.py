@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, Text, UniqueConstraint, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -17,7 +17,11 @@ class ClinicRow(Keyed, Timestamps, Base):
     """A clinic — the tenant itself, so it has no ``clinic_id``."""
 
     __tablename__ = "clinics"
-    __table_args__ = (enum_check("status", ClinicStatus),)
+    __table_args__ = (
+        enum_check("status", ClinicStatus),
+        CheckConstraint("patient_code_prefix ~ '^[A-Z]{2,4}$'", name="patient_code_prefix_format"),
+        CheckConstraint("next_patient_seq >= 1", name="next_patient_seq_positive"),
+    )
 
     name: Mapped[str] = mapped_column(Text)
     slug: Mapped[str] = mapped_column(Text, unique=True)
@@ -29,6 +33,9 @@ class ClinicRow(Keyed, Timestamps, Base):
     state: Mapped[str | None] = mapped_column(Text)
     pincode: Mapped[str | None] = mapped_column(Text)
     specialties: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
+    # M2 (migration 0006): patient codes are "<prefix>-<seq>"; the counter is locked to allocate.
+    patient_code_prefix: Mapped[str] = mapped_column(Text)
+    next_patient_seq: Mapped[int] = mapped_column(server_default=text("1"))
 
 
 class DoctorRow(TenantOwned, Timestamps, Base):

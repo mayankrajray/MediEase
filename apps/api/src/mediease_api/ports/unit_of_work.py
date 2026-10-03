@@ -28,6 +28,7 @@ from mediease_api.ports.repositories import (
     ClinicRepository,
     DoctorRepository,
     MembershipRepository,
+    PatientRepository,
     RefreshTokenRepository,
     StaffInviteRepository,
     UserRepository,
@@ -45,6 +46,8 @@ class TenantRepositories(Protocol):
     def memberships(self) -> MembershipRepository: ...
     @property
     def checklist(self) -> ChecklistRepository: ...
+    @property
+    def patients(self) -> PatientRepository: ...
 
 
 class UnitOfWork(Protocol):
