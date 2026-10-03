@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M2-P1 confirmed; M2-P2 approved and implemented 3 Oct 2026, awaiting confirmation; P3 next |
+| Status | In progress — M2-P1 and P2 confirmed 3 Oct 2026; M2-P3 design proposed, awaiting approval |
 | Spec | `docs/specs/patients.md` (Approved 2026-10-03) |
 | Covers | FR-PAT-01..06, FR-PAT-08, FR-MSG-05 (opt-out state), NFR-08 |
 | Issue / branch / PR | #21 · `m2/21-patients` · one PR for the whole milestone (ADR-0011) |
@@ -14,7 +14,7 @@
 |---|---|---|
 | P1 | Patient domain, clinic code allocation, migration `0006`, tenancy-scoped repository, indexes, the 10,000-patient lookup test | Below |
 | P2 | Register / edit / lookup endpoints, the duplicate-phone flow, `patient_code_prefix` on clinic creation | Below (M2-P2 section) |
-| P3 | Consent, language preference, opt-out and opt-in | Designed at its start |
+| P3 | Consent, language preference, opt-out and opt-in | Below (M2-P3 section) |
 | P4 | Ops CSV import with a dry-run report | Designed at its start |
 | P5 | Web: global search, registration drawer, profile | Designed at its start |
 
@@ -22,9 +22,112 @@ Each phase is designed, approved, implemented, verified and confirmed before the
 
 ---
 
+## M2-P3 — Consent, language and opt-out
+
+**Status: proposed 3 Oct 2026, awaiting the developer's approval.** Covers FR-PAT-05, FR-PAT-06 (consent
+against the guardian), the state side of FR-MSG-05; spec patients R6, AC5, §7. Three endpoints, two
+use cases, three audit actions, contract 0.7.0. No messages are sent in M2: this phase records who
+may be messaged, and M5 reads it. Language is already editable through `PATCH /patients/{id}` (P2);
+P3 only shows it next to consent.
+
+### Concepts
+
+1. **"Not asked" is not "said no".** A new patient has both flags false and `consent_recorded_at`
+   null: nobody has asked yet. Recording consent with both flags false sets the timestamp: they were
+   asked and declined. The web app shows the two differently, and M5 treats both as "do not send".
+2. **Opt-out wins.** An opt-out (a STOP reply in M5, or the front desk on the patient's request now)
+   overrides consent until an explicit opt-in (R6, AC5). Opt-in is its own action, not a side effect
+   of ticking a box, so an opt-out can never be undone by accident.
+3. **One question for M5.** Whether a patient may be messaged is a domain answer
+   (`may_receive_whatsapp`, `may_receive_sms`), not a rule each sender re-derives. The patient body
+   carries it, so the screens and M5's sender use the same rule.
+4. **For a minor, the guardian answers.** The phone is the guardian's (decision D1), so consent is
+   the guardian's (FR-PAT-06). The API records it the same way, and the audit row says on whose
+   behalf (`given_by: guardian` or `patient`, from the age on the clinic's today), with no name.
+5. **Consent changes are evidence.** DPDP needs to show who recorded what and when. Every change is an
+   audit row in the same transaction, with the flags as values (booleans, not personal data), the
+   staff member as actor and the request ID.
+
+### Endpoints (all `PATIENTS_MANAGE`, every clinic role; ops refused; another clinic's patient 404)
+
+| Method | Path | Behaviour |
+|---|---|---|
+| PUT | `/api/v1/patients/{id}/consent` | Body `{"whatsapp": bool, "sms": bool}`, both required. Records them with who and when. While the patient is opted out: `409 PAT_OPTED_OUT` and nothing changes (see open choice 1). `200` with the patient |
+| POST | `/api/v1/patients/{id}/opt-out` | No body. Sets `opted_out_at`. Already opted out: `200`, nothing changes, no audit row (idempotent, so a retry or a second STOP is harmless) |
+| POST | `/api/v1/patients/{id}/opt-in` | Body `{"whatsapp": bool, "sms": bool}`: the consent given on the way back. Clears the opt-out and records consent in one step. Not opted out: `409 PAT_NOT_OPTED_OUT` |
+
+The patient body gains `whatsapp_allowed` and `sms_allowed` (consent and not opted out),
+`opted_out_at` and `consent_recorded_by` (a staff user ID). `opted_out` stays.
+
+### Use cases (`application/patients/consent.py`)
+
+| Use case | Steps, one transaction |
+|---|---|
+| `RecordConsent` | Load the patient `FOR UPDATE` (so an opt-out and a consent edit cannot interleave) → refuse if opted out → `Patient.record_consent` → save → `patient.consent_changed` with `whatsapp`, `sms`, `given_by` → commit |
+| `OptOut` | Load `FOR UPDATE` → `Patient.opt_out` → if it changed: save, `patient.opted_out` with `source: staff` → commit. Takes a `source` so M5's STOP handler reuses it with `source: inbound_message` |
+| `OptIn` | Load `FOR UPDATE` → `Patient.opt_in` (refuses if not opted out) → save → `patient.opted_in` with the new flags → commit |
+
+### Decisions
+
+| Decision | Reason |
+|---|---|
+| Separate endpoints for consent, opt-out and opt-in instead of one `PUT` with an `opted_out` flag | AC5 requires opt-in to be an explicit action; a single document would let a form re-submit undo an opt-out |
+| `PUT` consent takes both flags | It records an answer to one question ("may we message you on WhatsApp, on SMS?"); a partial update would leave half an answer with a fresh timestamp |
+| The patient row is read `FOR UPDATE` in all three | Consent and opt-out are a tiny state machine; two staff (or staff and M5's STOP handler) acting at once must not leave consent recorded over an opt-out |
+| Opt-out is idempotent and writes one audit row only when it changes something | Patients send STOP more than once; the audit trail records the fact, not the retries |
+| New error codes `PAT_OPTED_OUT` and `PAT_NOT_OPTED_OUT` (409) instead of reusing `CLN_INVALID_TRANSITION` | The front desk needs the reason in words ("This patient asked not to be messaged; opt them back in first"), and `CLN_` would point an operator at the wrong area |
+| `analytics: patient_opted_out` (spec §7) is a log event only | There is no analytics pipeline yet; the event name is fixed now so M6 can count it |
+| No seed changes | The six seed patients start "not asked", which is the state to try first; consent and opt-out are two API calls |
+
+### Open choice for approval
+
+1. **Consent edits while opted out.** The domain from P1 stores the new flags but they have no effect
+   until opt-in (AC5 holds either way).
+   - **A (recommended)** — refuse with `409 PAT_OPTED_OUT`. A box ticked on a screen that silently
+     does nothing is worse than a clear message, and the opt-in endpoint already takes the consent.
+     The domain method gains the same check.
+   - **B** — accept and store, as P1 does now, and let the body's `whatsapp_allowed: false` explain it.
+
+### Files
+
+| Layer | Files |
+|---|---|
+| Domain | `patients/patient.py` (`PatientOptedOut`, `PatientNotOptedOut`, the refusal in `record_consent`, `consent_given_by(today)`), `audit/actions.py` (+3) |
+| Ports / adapters | `PatientRepository.get(..., for_update)` and its SQLAlchemy and fake versions |
+| Application | `patients/consent.py`, `patients/views.py` (new fields) |
+| Delivery | `http/patients.py` (three routes), `bodies.py`, `errors.py` (two codes), `bootstrap.py` |
+| Contract / docs | `openapi.yaml` 0.7.0 + regenerated web types, `API.md`, `ERRORS.md`, `DATA_MODEL.md` (audit actions), spec §7, `DEBUGGING.md` ("why is this patient not messageable?"), CHANGELOG |
+
+### Tests
+
+- **Domain:** recording consent sets who and when; declined is distinguishable from never asked;
+  consent while opted out is refused and changes nothing; opt-out twice is a no-op; opt-in from not
+  opted out is refused; `given_by` is guardian for a minor and patient for an adult, on the boundary
+  birthday.
+- **HTTP (PostgreSQL):** AC5 end to end (consent → opt-out → consent refused → opt-in with new flags →
+  allowed again); the audit rows (one each, flags and `given_by`, no names or phones); idempotent
+  opt-out writes one row; validation (both flags required, booleans only); every clinic role may
+  record consent; ops 403; another clinic's patient 404 on all three routes (the cross-tenant guard
+  requires it); a race between opt-out and a consent edit leaves the patient opted out.
+- **Contract:** the three operations, the new body fields and both 409s.
+
+### Verify
+
+```bash
+make up && make seed
+# as desk@sample-clinic.example, with Asha Rao's id from GET /api/v1/patients?q=asha:
+#   PUT  /api/v1/patients/<id>/consent {"whatsapp":true,"sms":false}  -> 200, whatsapp_allowed true
+#   POST /api/v1/patients/<id>/opt-out                                 -> 200, whatsapp_allowed false
+#   PUT  /api/v1/patients/<id>/consent {"whatsapp":true,"sms":true}    -> 409 PAT_OPTED_OUT
+#   POST /api/v1/patients/<id>/opt-in  {"whatsapp":true,"sms":true}    -> 200, both allowed
+# make psql: select action, metadata from audit_events where action like 'patient.%' order by occurred_at;
+make lint typecheck test
+```
+
+---
 ## M2-P2 — Register, edit and look up patients
 
-**Status: approved by the developer 3 Oct 2026; implemented the same day, awaiting confirmation.** Covers FR-PAT-01, 02, 03, 04
+**Status: approved, implemented and confirmed by the developer 3 Oct 2026.** Covers FR-PAT-01, 02, 03, 04
 and the staff side of 06; spec patients R1–R3, R5, R7, R9, R10, AC1, AC2, AC3, AC6, AC7. Four
 endpoints, four use cases, two audit actions, contract 0.6.0, and a few synthetic patients in
 `make seed` so the phase can be tried by hand. No web (P5), no consent writes (P3), no import (P4).
