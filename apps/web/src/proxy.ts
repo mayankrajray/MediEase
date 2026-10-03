@@ -1,22 +1,52 @@
 /**
  * Runs before every page request (Next.js 16 "proxy", formerly middleware).
  *
- * Creates a per-request CSP nonce and passes the policy on the *request* so
- * Next.js can read the nonce and stamp it on the scripts it renders, and on the
- * *response* so the browser enforces it. API paths are excluded: they are
- * rewritten to the Flask API and return JSON, not pages.
+ * 1. Creates a per-request CSP nonce and passes the policy on the *request* so
+ *    Next.js can read the nonce and stamp it on the scripts it renders, and on the
+ *    *response* so the browser enforces it. API paths are excluded: they are
+ *    rewritten to the Flask API and return JSON, not pages.
+ * 2. Sends a visitor who has no `me_csrf` cookie to /sign-in. That cookie is the
+ *    only session cookie a page request carries (`me_access` is scoped to /api,
+ *    ADR-0006), so its absence means "never signed in, or signed out". This is a
+ *    convenience that saves a signed-out visitor from seeing the dashboard shell,
+ *    not a security check: a stale or forged cookie just reaches the client-side
+ *    session provider, which asks the API, and the API enforces access on every
+ *    request (M1-P6 design, concepts 2 and 3).
  */
 
 import { type NextRequest, NextResponse } from "next/server";
 
+import { CSRF_COOKIE } from "@/lib/api/csrf";
 import { buildContentSecurityPolicy, newNonce } from "@/lib/security/headers";
 
 export const CSP_HEADER = "Content-Security-Policy";
+
+const SIGN_IN_PATH = "/sign-in";
+const PUBLIC_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, "/status", "/livez"]);
+const PUBLIC_PREFIXES: readonly string[] = ["/invite/"];
+
+/** Pages anyone may open without a session. */
+export function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.has(pathname) || PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
 
 export function proxy(request: NextRequest): NextResponse {
   const csp = buildContentSecurityPolicy(newNonce(), {
     isDev: process.env.NODE_ENV === "development",
   });
+
+  const { pathname, search } = request.nextUrl;
+  const hasSessionHint = Boolean(request.cookies.get(CSRF_COOKIE)?.value);
+
+  if (!hasSessionHint && !isPublicPath(pathname)) {
+    const signIn = new URL(SIGN_IN_PATH, request.url);
+    if (pathname !== "/") {
+      signIn.searchParams.set("next", `${pathname}${search}`);
+    }
+    const redirect = NextResponse.redirect(signIn);
+    redirect.headers.set(CSP_HEADER, csp);
+    return redirect;
+  }
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(CSP_HEADER, csp);
