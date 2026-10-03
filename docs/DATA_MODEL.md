@@ -29,6 +29,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0003` | `users` credentials and lockout columns; `refresh_tokens` (marked *P2*) | M1-P2 |
 | `0004` | `audit_events` with the two triggers that make it append-only; the `v_clinic_activity` support view | M1-P4 |
 | `0005` | `clinic_memberships` invitation columns (marked *P5*); `onboarding_checklists` | M1-P5 |
+| `0006` | `clinics.patient_code_prefix` (backfilled from each clinic's name) and `next_patient_seq`; the `patients` table with its lookup indexes | M2-P1 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -86,8 +87,8 @@ set by the application). *P1* = created by migration `0002`.
 | phone_e164 | text | *P1* |
 | address_line, city, state, pincode | text | *P1* PIN code: 6 digits |
 | specialties | text[] not null default `{}` | *P1* |
-| patient_code_prefix | text not null | M2 — e.g. `ME` → `ME-0142` |
-| next_patient_seq | integer not null default 1 | M2 — incremented under row lock |
+| patient_code_prefix | text not null | *M2-P1* 2–4 upper-case letters (`ck_clinics_patient_code_prefix_format`), e.g. `ME` → `ME-0142`. Derived from the name at creation unless ops sets it; fixed once the clinic has patients |
+| next_patient_seq | integer not null default 1 | *M2-P1* Incremented under a row lock on the clinic (`ck_clinics_next_patient_seq_positive`); a code is never reused |
 | booking_mode | text not null | M3 — `SLOTS` \| `TOKENS` |
 | plan | text not null default `PILOT` | Billing (post-pilot) — `PILOT` \| `STARTER` \| `CLINIC` |
 
@@ -201,27 +202,39 @@ clinic-owned table, so ops writes it through the clinic it named in the path.
 ## M2 — Patients
 
 ### `patients`
+Tenant-owned (`clinic_id`), reached only through `SqlAlchemyPatientRepository`. Migration `0006`.
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
 | clinic_id | uuid FK | |
-| code | text not null | `UNIQUE (clinic_id, code)` |
-| full_name | text not null | |
-| phone_e164 | text not null | Contact number (guardian's for minors) |
-| sex | text | `FEMALE` \| `MALE` \| `OTHER` \| `UNDISCLOSED` |
+| code | text not null | `ME-0142`; `uq_patients_clinic_id_code` (also serves code lookup); never edited |
+| full_name | text not null | 1–200 characters |
+| phone_e164 | text not null | The contact of record; **the guardian's number for a patient under 18** (spec D1). Not unique: families share phones |
+| sex | text not null | `FEMALE` \| `MALE` \| `OTHER` \| `UNDISCLOSED` (`ck_patients_sex`) |
 | date_of_birth | date null | |
-| age_years_at_registration | smallint null | When DOB unknown; `CHECK (date_of_birth IS NOT NULL OR age_years_at_registration IS NOT NULL)` |
-| guardian_name | text null | Required when under 18 (application rule) |
-| language | text not null default `en` | `en` \| `hi` |
+| age_years_at_registration | smallint→integer null | Set when the date of birth is unknown; 0–120 (`ck_patients_age_years_at_registration_range`) |
+| registered_on | date not null | Clinic-local date the age was recorded; the base for computing the age later |
+| guardian_name | text null | Required when under 18 (domain rule, R3) |
+| language | text not null default `en` | `en` \| `hi` (`ck_patients_language`) |
 | whatsapp_consent, sms_consent | boolean not null default false | FR-PAT-05 |
-| consent_recorded_at | timestamptz null | |
-| consent_recorded_by | uuid null | |
-| opted_out_at | timestamptz null | FR-MSG-05 |
-| tags | text[] default '{}' | P1 filters |
+| consent_recorded_at | timestamptz null | `ck_patients_consent_recorded`: a flag can only be true if this is set |
+| consent_recorded_by | uuid null FK users | |
+| opted_out_at | timestamptz null | FR-MSG-05; overrides consent until cleared by an explicit opt-in |
 | created_by | uuid FK users | |
+| created_at, updated_at | timestamptz | |
 
-Indexes: `(clinic_id, phone_e164)`, `(clinic_id, lower(full_name) text_pattern_ops)`,
-`(clinic_id, code)`. Target: FR-PAT-04 p95 < 500 ms at 10k patients per clinic.
+`ck_patients_age_known`: exactly one of `date_of_birth` and `age_years_at_registration` is set.
+
+Indexes: `uq_patients_clinic_id_code`, `ix_patients_clinic_id_phone_e164` (exact phone lookup and
+the duplicate check) and `ix_patients_clinic_id_lower_full_name` on
+`(clinic_id, lower(full_name) text_pattern_ops)` (case-insensitive name prefix). The 10,000-patient
+test (`tests/integration/db/test_patients.py`) times the three lookups and plans the repository's own
+SQL with sequential scans disabled, so a query no index can serve fails the build. Target: FR-PAT-04
+p95 < 500 ms at 10,000 patients per clinic (measured in milliseconds, not hundreds of them).
+
+The `tags` column planned for advanced search (FR-PAT-07, P1) is not created: it joins the table
+when something reads it.
 
 ---
 

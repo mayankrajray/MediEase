@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M2-P1 designed and being implemented |
+| Status | In progress — M2-P1 implemented 3 Oct 2026, awaiting confirmation; P2 next |
 | Spec | `docs/specs/patients.md` (Approved 2026-10-03) |
 | Covers | FR-PAT-01..06, FR-PAT-08, FR-MSG-05 (opt-out state), NFR-08 |
 | Issue / branch / PR | #21 · `m2/21-patients` · one PR for the whole milestone (ADR-0011) |
@@ -136,3 +136,17 @@ make psql                  # \d patients ; select slug, patient_code_prefix, nex
 ```
 
 ---
+
+### Result (3 Oct 2026)
+
+`make lint typecheck test` equivalents in WSL: ruff, format, import-linter and mypy clean; 664 API
+tests pass (65 new: domain, repository, constraints, migration, tenancy, concurrency, lookup) at
+99.1% package coverage. Lookup over 10,000 patients, p95 on a developer laptop: phone 0.8 ms, code
+0.7 ms, name prefix 1.8 ms, against the 500 ms budget; the repository's own SQL for all three plans
+without a sequential scan. Forty registrations on eight threads received codes `PF-0001` to
+`PF-0040` with no gap or repeat. Migration `0006` backfills existing clinics (`Sample Clinic` ->
+`SC`) and round-trips. Not in P1 by design: endpoints, audit events, seed patients (P2 onward).
+
+Known limitation: Alembic cannot compare an expression index that carries an operator class and
+prints a warning for `ix_patients_clinic_id_lower_full_name`; the lookup test guards the index
+instead (it fails if the index stops matching the query).

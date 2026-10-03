@@ -14,6 +14,19 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M2-P1 (#21): the patient model (FR-PAT-01, 03, 05, 06): `Patient` with the guardian rule for
+  under-18s (the phone is the guardian's), `Age` computed from a date of birth or a recorded age,
+  consent and opt-out state, clinic-scoped codes (`ME-0142`) allocated from a counter on the clinic
+  that is locked while a number is taken, and the pure lookup classification (phone, code, name
+  prefix). Migration `0006` adds the `patients` table with its lookup indexes and gives every
+  existing clinic a code prefix derived from its name. `PAT_GUARDIAN_REQUIRED` is mapped to 422.
+- M2-P1: a 10,000-patient lookup test (spec AC4) that times phone, code and name-prefix lookups
+  through the repository and plans their SQL with sequential scans disabled, a 40-registration
+  concurrency test for gap-free codes, and tenancy cases for patients in the permanent suite.
+- Patients spec Approved (3 Oct 2026, decisions D1–D6): the minor's contact of record is the
+  guardian's phone, registration is race-free by locking the clinic row, the age model, the code
+  prefix rules and the lookup rules are specified.
+
 - Planning pack: PRD, CLAUDE.md, AGENTS.md, TASKS.md, SPECS.md, architecture, data model, API
   design, debugging guide, error catalogue, runbook, security and compliance notes, ADR-0001 to
   ADR-0009, feature specs for M1–M5, and the repository skeleton.
