@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import structlog
 
-from mediease_api.application.audit import record_user_event
-from mediease_api.application.context import RequestInfo
+from mediease_api.application.audit import record_event
+from mediease_api.application.context import Actor, RequestInfo
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -44,12 +44,11 @@ class SignOut:
             revoked = uow.refresh_tokens.revoke_family(token.family_id, now=now)
             user = uow.users.get(token.user_id)
             if user is not None:
-                record_user_event(
+                record_event(
                     uow,
                     event_id=self._ids.new_id(),
                     action=AuditAction.AUTH_SIGNED_OUT,
-                    user=user,
-                    info=info,
+                    actor=Actor.for_user(user, info),
                     now=now,
                     metadata={
                         "session_id": str(token.family_id),

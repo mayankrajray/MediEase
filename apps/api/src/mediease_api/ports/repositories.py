@@ -105,6 +105,14 @@ class StaffInviteRepository(Protocol):
 class DoctorRepository(Protocol):
     def add(self, doctor: Doctor) -> None: ...
     def get(self, doctor_id: UUID) -> Doctor | None: ...
+    def get_for_user(self, user_id: UUID) -> Doctor | None:
+        """This clinic's doctor profile for ``user_id``, if the account is linked to one.
+
+        At most one exists: a partial unique index enforces one profile per user
+        per clinic (spec §8 "owner who is also a doctor").
+        """
+        ...
+
     def list(self) -> Sequence[Doctor]:
         """All of this clinic's doctors, oldest first."""
         ...

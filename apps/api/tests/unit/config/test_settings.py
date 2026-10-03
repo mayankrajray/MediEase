@@ -207,6 +207,29 @@ def test_fr_aud_01_ip_salt_never_appears_in_repr(
     assert TEST_IP_SALT not in repr(load_settings())
 
 
+# --- Public base URL (M1-P5: invitation links) ------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["localhost:3000", "", "/invite"])
+def test_fr_org_04_public_base_url_must_be_absolute(
+    set_env: SetEnv, valid_env: dict[str, str], value: str
+) -> None:
+    """Links built from it are handed to people, so a relative value is a dead link."""
+    assert _invalid_fields({**valid_env, "PUBLIC_BASE_URL": value}, set_env) == {"PUBLIC_BASE_URL"}
+
+
+def test_public_base_url_must_be_https_when_deployed(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    env = {**valid_env, "APP_ENV": "production", "COOKIE_SECURE": "true"}
+    assert _invalid_fields({**env, "PUBLIC_BASE_URL": "http://mediease.example"}, set_env) == {
+        "PUBLIC_BASE_URL"
+    }
+    set_env({**env, "PUBLIC_BASE_URL": "https://mediease.example/"})
+    # The trailing slash is dropped, so joined paths never double up.
+    assert load_settings().PUBLIC_BASE_URL == "https://mediease.example"
+
+
 @pytest.mark.parametrize(
     ("name", "value"),
     [

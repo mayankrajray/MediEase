@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import structlog
 
-from mediease_api.application.audit import record_user_event
+from mediease_api.application.audit import record_event
 from mediease_api.application.auth._session import SessionIssuer, may_hold_session, session_result
 from mediease_api.application.auth.errors import (
     AccountDisabled,
@@ -26,7 +26,7 @@ from mediease_api.application.auth.errors import (
     SessionExpired,
 )
 from mediease_api.application.auth.views import SessionResult
-from mediease_api.application.context import RequestInfo
+from mediease_api.application.context import Actor, RequestInfo
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.identity.session import RefreshTokenState
 from mediease_api.ports.clock import ClockPort
@@ -70,12 +70,11 @@ class RefreshSession:
                 if user is not None:
                     # Possible token theft: the audit trail must show it even
                     # though no account state changed (spec R5).
-                    record_user_event(
+                    record_event(
                         uow,
                         event_id=self._ids.new_id(),
                         action=AuditAction.AUTH_REFRESH_REUSED,
-                        user=user,
-                        info=info,
+                        actor=Actor.for_user(user, info),
                         now=now,
                         metadata={
                             "session_id": str(token.family_id),
