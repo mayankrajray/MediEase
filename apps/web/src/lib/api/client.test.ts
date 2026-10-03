@@ -6,8 +6,11 @@ import {
   REQUEST_ID_HEADER,
   WEB_API_BAD_RESPONSE,
   WEB_API_UNREACHABLE,
+  CLINIC_HEADER,
+  CSRF_HEADER,
   apiBaseUrl,
   apiGet,
+  apiPost,
 } from "./client";
 
 const API = "http://api.internal:8000";
@@ -147,5 +150,154 @@ describe("apiBaseUrl", () => {
   it("uses the same origin in the browser, so calls go through the /api rewrite", () => {
     vi.stubGlobal("window", {});
     expect(apiBaseUrl()).toBe("");
+  });
+});
+
+
+describe("apiPost", () => {
+  const SIGN_IN = "/api/v1/auth/sign-in" as const;
+  const REFRESH = "/api/v1/auth/refresh" as const;
+  const credentials = { identifier: "owner@sample-clinic.example", password: "x" };
+
+  it("FR-AUTH-01: sends the JSON body and the CSRF header copied from the me_csrf cookie", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    vi.stubGlobal("document", { cookie: "theme=dark; me_csrf=csrf-abc_123; other=1" });
+    const fetchImpl = fakeFetch(jsonResponse(200, { user: {}, memberships: [], session: {} }, "r-1"));
+
+    const result = await apiPost(SIGN_IN, credentials, { fetchImpl });
+
+    expect(result.status).toBe(200);
+    const [url, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(url).toBe(`${API}${SIGN_IN}`);
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBe(JSON.stringify(credentials));
+    expect(init?.credentials).toBe("same-origin");
+    const headers = new Headers(init?.headers);
+    expect(headers.get(CSRF_HEADER)).toBe("csrf-abc_123");
+    expect(headers.get("Content-Type")).toBe("application/json");
+  });
+
+  it("FR-AUTH-01: sends no CSRF header when there is no me_csrf cookie (signed out)", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    vi.stubGlobal("document", { cookie: "theme=dark" });
+    const fetchImpl = fakeFetch(jsonResponse(200, { user: {}, memberships: [], session: {} }));
+
+    await apiPost(SIGN_IN, credentials, { fetchImpl });
+
+    expect(new Headers(fetchImpl.mock.calls[0]?.[1]?.headers).has(CSRF_HEADER)).toBe(false);
+  });
+
+  it("FR-AUTH-01: a body-less operation sends no body and no Content-Type", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const fetchImpl = fakeFetch(jsonResponse(200, { user: {}, memberships: [], session: {} }));
+
+    await apiPost(REFRESH, undefined, { fetchImpl });
+
+    const init = fetchImpl.mock.calls[0]?.[1];
+    expect(init?.body).toBeUndefined();
+    expect(new Headers(init?.headers).has("Content-Type")).toBe(false);
+  });
+
+  it("FR-AUTH-01: sign-out's 204 resolves with no data instead of a bad-response error", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const fetchImpl = fakeFetch(new Response(null, { status: 204, headers: { [REQUEST_ID_HEADER]: "out-1" } }));
+
+    const result = await apiPost("/api/v1/auth/sign-out", undefined, { fetchImpl });
+
+    expect(result).toEqual({ data: undefined, status: 204, requestId: "out-1" });
+  });
+
+  it("FR-AUTH-04: Retry-After reaches the ApiError on a locked account", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const locked = jsonResponse(423, {
+      error: { code: "AUTH_LOCKED", message: "Account temporarily locked", request_id: "lk-1" },
+    });
+    locked.headers.set("Retry-After", "840");
+
+    const error = await caught(apiPost(SIGN_IN, credentials, { fetchImpl: fakeFetch(locked) }));
+
+    expect(error.code).toBe("AUTH_LOCKED");
+    expect(error.status).toBe(423);
+    expect(error.retryAfterSeconds).toBe(840);
+  });
+
+  it("FR-AUTH-04: falls back to details.retry_after_seconds when the header is missing", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const locked = jsonResponse(423, {
+      error: {
+        code: "AUTH_LOCKED",
+        message: "Account temporarily locked",
+        request_id: "lk-2",
+        details: { retry_after_seconds: 120 },
+      },
+    });
+
+    const error = await caught(apiPost(SIGN_IN, credentials, { fetchImpl: fakeFetch(locked) }));
+
+    expect(error.retryAfterSeconds).toBe(120);
+  });
+
+  it("other errors carry no retry hint", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const wrong = jsonResponse(401, {
+      error: { code: "AUTH_INVALID_CREDENTIALS", message: "Wrong login details", request_id: "w-1" },
+    });
+
+    const error = await caught(apiPost(SIGN_IN, credentials, { fetchImpl: fakeFetch(wrong) }));
+
+    expect(error.retryAfterSeconds).toBeUndefined();
+  });
+
+  it("fills and URL-encodes path parameters", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const fetchImpl = fakeFetch(jsonResponse(200, { user: {}, memberships: [], session: {} }));
+
+    await apiPost(
+      "/api/v1/auth/invites/{token}/accept",
+      { password: "a-long-synthetic-password" },
+      { fetchImpl, pathParams: { token: "ab/c d" } },
+    );
+
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(`${API}/api/v1/auth/invites/ab%2Fc%20d/accept`);
+  });
+
+  it("fails loudly, not as WEB_API_UNREACHABLE, when a path parameter is missing", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const fetchImpl = vi.fn<typeof fetch>();
+
+    const failure = await apiPost(
+      "/api/v1/auth/invites/{token}/accept",
+      { password: "a-long-synthetic-password" },
+      { fetchImpl },
+    ).catch((error: unknown) => error);
+
+    expect(failure).not.toBeInstanceOf(ApiError);
+    expect(String(failure)).toMatch(/Missing path parameter "token"/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("clinic header (spec R6)", () => {
+  it("FR-AUTH-03: X-Clinic-ID is sent only when a clinic is given", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const clinicId = "0192f0a0-0000-7000-8000-000000000001";
+    const withClinic = fakeFetch(jsonResponse(200, { id: clinicId }));
+    const without = fakeFetch(jsonResponse(200, { id: clinicId }));
+
+    await apiGet("/api/v1/clinic", { fetchImpl: withClinic, clinicId });
+    await apiGet("/api/v1/clinic", { fetchImpl: without });
+
+    expect(new Headers(withClinic.mock.calls[0]?.[1]?.headers).get(CLINIC_HEADER)).toBe(clinicId);
+    expect(new Headers(without.mock.calls[0]?.[1]?.headers).has(CLINIC_HEADER)).toBe(false);
+  });
+
+  it("GET requests never carry the CSRF header", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    vi.stubGlobal("document", { cookie: "me_csrf=should-not-be-sent" });
+    const fetchImpl = fakeFetch(jsonResponse(200, { status: "ok" }));
+
+    await apiGet("/health", { fetchImpl });
+
+    expect(new Headers(fetchImpl.mock.calls[0]?.[1]?.headers).has(CSRF_HEADER)).toBe(false);
   });
 });
