@@ -90,8 +90,8 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 
 | Code | HTTP | Meaning | Likely cause | Where to look |
 |---|---|---|---|---|
-| `PAT_PHONE_INVALID` | 422 | Phone number is not valid | Not normalisable to E.164 | Input value (masked in logs) |
-| `PAT_PHONE_EXISTS` | 409 | Patients already use this number | Family member or duplicate; `details.candidates` lists patient IDs | Registration flow (FR-PAT-02) |
+| `PAT_PHONE_INVALID` | 422 | Phone number is not valid | Not normalisable to E.164 (spec patients R1); `details.fields` names `phone`; the value is never echoed | Register and edit (M2-P2); `make psql` on the request ID, not the number |
+| `PAT_PHONE_EXISTS` | 409 | Patients already use this number | The clinic has patients on this phone (families share phones); `details.candidates` lists up to 10 (`id`, `code`, `full_name`, `age_years`) for the signed-in staff member. Resend with `confirm_new: true` to register another person. Also the loser of two simultaneous registrations of one new number (R9, AC6) | Log `patient.duplicate_phone_offered` (a count, never names); registration flow (FR-PAT-02, M2-P2) |
 | `PAT_GUARDIAN_REQUIRED` | 422 | A parent or guardian's name is required for a patient under 18 | Age < 18 on the registration (or edit) date without a `guardian_name`; the phone is the guardian's (spec patients R3, D1). Raised by the domain in M2-P1 | FR-PAT-06; the age is computed for the date asked about, not stored |
 | `PAT_IMPORT_INVALID` | 422 | Import file has errors | Bad columns/rows; report attached | Import dry-run report |
 

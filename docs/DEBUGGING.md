@@ -196,6 +196,22 @@ from audit_events where clinic_id = '<clinic id>' order by occurred_at desc limi
 - Sign-ins have `clinic_id` null (they belong to a user): filter by `actor_user_id`, or use
   `v_clinic_activity` for a per-clinic summary.
 
+### 5.3d Patients: `PAT_PHONE_EXISTS`, code gaps, missing results (M2-P2)
+- **`409 PAT_PHONE_EXISTS` on a number you believe is new.** The clinic has a patient on that exact
+  E.164 number. `GET /api/v1/patients?q=<number>` lists them; the log line
+  `patient.duplicate_phone_offered` (with `candidates=<n>`) carries the request ID. Families share
+  phones on purpose: send `confirm_new: true` to register another person. Two staff registering the
+  same new number at once get one `201` and one `409` by design (registration locks the clinic row
+  first, spec R9).
+- **A gap in patient codes.** A refused registration takes no code, so a gap means a transaction
+  rolled back after taking one (an error after `allocate_patient_code`). Look for
+  `app.unexpected_error` at that request ID. `select next_patient_seq from clinics` is the next number.
+- **Lookup returns nothing.** `q` is read as a phone (7+ digits), then a code (`ME-0142`, any case),
+  else a name *prefix*: `rao` does not find `Asha Rao`. A phone-shaped text that is not a valid
+  number matches nobody. Another clinic's patients never appear (NFR-08): check `X-Clinic-ID`.
+- **Names and phones are not in the logs on purpose** (spec D5). Find a patient's rows by the
+  `patient_id` or `code` in the log line, and read the person from the database with `make psql`.
+
 ### 5.4 Timezone errors
 - Database columns are `timestamptz`; Python datetimes must be timezone-aware (`datetime.now(UTC)`
   via the clock port — never `datetime.now()` or `utcnow()`).

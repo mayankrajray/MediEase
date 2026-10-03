@@ -54,6 +54,12 @@ demo password above (local only; `--password` overrides it):
 | `sample-clinic-two` | `owner@sample-clinic-two.example`, and `doctor@sample-clinic.example` again as a second membership |
 | (no clinic) | `ops@mediease.example` |
 
+`sample-clinic` also gets six synthetic patients, once (while it has none): Asha, Arun and Meera Rao
+share the phone `+919000000101` (Meera is 6 and registered with Asha as guardian), Bina Shah is
+known only by age, Chetan Verma prefers Hindi, and Deepa Nair is an adult on her own number. Try
+`GET /api/v1/patients?q=9000000101` or register a new person on that number to see the duplicate
+flow.
+
 `doctor@sample-clinic.example` therefore belongs to two clinics: signing in as them shows the clinic
 chooser and switcher in the web app. The seed refuses to run unless `APP_ENV=local` and is
 idempotent **per clinic**: a clinic that exists is left alone, so a database seeded before

@@ -180,13 +180,36 @@ is a documented `make psql` procedure (RUNBOOK §18), and the owner-facing view 
 
 ### Patients (M2)
 
-| Method | Path | Purpose | Req |
-|---|---|---|---|
-| GET | `/api/v1/patients?q=` | Lookup by phone, code or name prefix | FR-PAT-04 |
-| POST | `/api/v1/patients` | Register (returns `409 PAT_PHONE_EXISTS` with candidates unless `confirm_new=true`) | FR-PAT-01/02 |
-| GET/PATCH | `/api/v1/patients/{patient_id}` | Profile / edit | FR-PAT-01 |
-| PUT | `/api/v1/patients/{patient_id}/consent` | Consent, language, opt-out | FR-PAT-05 |
-| GET | `/api/v1/patients/{patient_id}/timeline` | Appointments, visits, Rx, reminders | FR-VIS-03 |
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| GET | `/api/v1/patients?q=` | Lookup by phone, code or name prefix (at most 20, ordered by name) | FR-PAT-04 | Implemented (M2-P2) |
+| POST | `/api/v1/patients` | Register (returns `409 PAT_PHONE_EXISTS` with candidates unless `confirm_new: true`) | FR-PAT-01/02 | Implemented (M2-P2) |
+| GET | `/api/v1/patients/{patient_id}` | One patient | FR-PAT-01 | Implemented (M2-P2) |
+| PATCH | `/api/v1/patients/{patient_id}` | Correct demographics | FR-PAT-01 | Implemented (M2-P2) |
+| PUT | `/api/v1/patients/{patient_id}/consent` | Consent, language, opt-out | FR-PAT-05 | M2-P3 |
+| GET | `/api/v1/patients/{patient_id}/timeline` | Appointments, visits, Rx, reminders | FR-VIS-03 | M4 |
+
+Every clinic role holds `PATIENTS_MANAGE`, which guards all four; ops users are refused (R10).
+Responses carry personal data and are `Cache-Control: no-store`. The clinic is the request's
+(`X-Clinic-ID` for people in several), and another clinic's patient is `404 REQ_NOT_FOUND`.
+
+- **Register.** `phone` is the contact of record (the guardian's for a patient under 18, who then
+  needs a `guardian_name`); give a `date_of_birth` *or* an `age_years`. Registration locks the
+  clinic row before it checks the phone, so two simultaneous registrations of one new number have
+  exactly one winner; a refusal takes no code. `409 PAT_PHONE_EXISTS` carries
+  `details.candidates` (up to 10: `id`, `code`, `full_name`, `age_years`), for the signed-in staff
+  member only. `201` returns the patient with its code (`ME-0142`).
+- **Lookup.** `q` is read as a phone number (7+ digits), then a code (any case, hyphen optional),
+  otherwise a name prefix. Blank text returns an empty list; a missing `q` is `422`. The text is
+  never logged.
+- **Edit.** Only the fields sent change; the code never does; a blank `guardian_name` clears it
+  (refused for a minor). The phone is not re-checked for duplicates. The audit row lists field
+  *names* only.
+- **The patient body** adds `age_years` (on the clinic's today), `age_is_estimated`, `is_minor`
+  and the read-only consent state (`whatsapp_consent`, `sms_consent`, `opted_out`,
+  `consent_recorded_at`); consent is written in M2-P3.
+- **Clinic creation** (`POST /ops/clinics`) accepts an optional `patient_code_prefix` (2–4
+  upper-case letters); `Clinic` responses now include it.
 
 ### Schedules, appointments, queue (M3)
 
