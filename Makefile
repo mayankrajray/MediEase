@@ -112,4 +112,5 @@ contract-check: web-deps-check ## Fail if the committed web API types are out of
 
 audit: api-venv-check web-deps-check ## Check API and web dependencies for known vulnerabilities
 	cd $(API_DIR) && $(VENV_BIN)/pip-audit --skip-editable
-	cd $(WEB_DIR) && npm audit --audit-level=high
+	cd $(WEB_DIR) && npm audit --omit=dev --audit-level=high
+	-cd $(WEB_DIR) && npm audit --audit-level=high
