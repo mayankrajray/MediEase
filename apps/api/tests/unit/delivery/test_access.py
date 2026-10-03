@@ -19,7 +19,7 @@ from mediease_api.delivery.http.access import (
 )
 from mediease_api.domain.identity.permissions import Permission
 
-# The whole HTTP surface after M2-P2, and the policy each route carries.
+# The whole HTTP surface after M2-P3, and the policy each route carries.
 EXPECTED_POLICIES = {
     "platform.health": (Access.PUBLIC, None),
     "platform.ready": (Access.PUBLIC, None),
@@ -43,6 +43,9 @@ EXPECTED_POLICIES = {
     "patients.lookup_patients": (Access.CLINIC, Permission.PATIENTS_MANAGE),
     "patients.get_patient": (Access.CLINIC, Permission.PATIENTS_MANAGE),
     "patients.update_patient": (Access.CLINIC, Permission.PATIENTS_MANAGE),
+    "patients.record_consent": (Access.CLINIC, Permission.PATIENTS_MANAGE),
+    "patients.opt_out": (Access.CLINIC, Permission.PATIENTS_MANAGE),
+    "patients.opt_in": (Access.CLINIC, Permission.PATIENTS_MANAGE),
     "ops.create_clinic": (Access.OPS, None),
     "ops.list_clinics": (Access.OPS, None),
     "ops.get_clinic": (Access.OPS, None),

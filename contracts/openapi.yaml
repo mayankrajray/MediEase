@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -692,6 +692,115 @@ paths:
           $ref: '#/components/responses/AuthError'
         '422':
           $ref: '#/components/responses/AuthError'
+  /api/v1/patients/{patient_id}/consent:
+    put:
+      tags: [patients]
+      operationId: recordPatientConsent
+      summary: Record whether the patient may be messaged on WhatsApp and SMS
+      description: |
+        FR-PAT-05, FR-PAT-06; spec patients R6. Permission: PATIENTS_MANAGE. Both flags are required:
+        this records an answer, with who and when. Both false is "asked and declined", which differs
+        from never asked (`consent_recorded_at` null). For a patient under 18 it is the guardian's
+        answer. Refused with 409 PAT_OPTED_OUT while the patient is opted out: use opt-in, which
+        takes the new consent. Records patient.consent_changed. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientConsent'
+      responses:
+        '200':
+          $ref: '#/components/responses/PatientChanged'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConsentConflict'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+  /api/v1/patients/{patient_id}/opt-out:
+    post:
+      tags: [patients]
+      operationId: optOutPatient
+      summary: Stop all messages to the patient
+      description: |
+        FR-MSG-05; spec patients R6. Permission: PATIENTS_MANAGE. An opt-out overrides consent until
+        an explicit opt-in (AC5); the consent record is kept. Idempotent: opting out an opted-out
+        patient changes nothing and records nothing. Records patient.opted_out (source staff; M5's
+        STOP replies use the same action). No body. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          $ref: '#/components/responses/PatientChanged'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/patients/{patient_id}/opt-in:
+    post:
+      tags: [patients]
+      operationId: optInPatient
+      summary: Undo an opt-out, recording the consent given on the way back
+      description: |
+        FR-PAT-05, FR-MSG-05; spec patients R6, AC5. Permission: PATIENTS_MANAGE. The explicit way
+        back from an opt-out: clears it and records consent in one step. 409 PAT_NOT_OPTED_OUT if
+        the patient has not opted out (record consent instead). Records patient.opted_in.
+        Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientConsent'
+      responses:
+        '200':
+          $ref: '#/components/responses/PatientChanged'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConsentConflict'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
   /api/v1/auth/invites/{token}:
     get:
       tags: [invites]
@@ -1111,6 +1220,28 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    PatientChanged:
+      description: The patient after the change
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Patient'
+    ConsentConflict:
+      description: |
+        PAT_OPTED_OUT (the patient asked not to be messaged: opt them back in to record consent);
+        PAT_NOT_OPTED_OUT (opt-in needs an opt-out: record consent instead)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
     PhoneExistsError:
       description: |
         PAT_PHONE_EXISTS (409): the clinic already has patients on this phone number.
@@ -1363,7 +1494,11 @@ components:
         - whatsapp_consent
         - sms_consent
         - opted_out
+        - opted_out_at
+        - whatsapp_allowed
+        - sms_allowed
         - consent_recorded_at
+        - consent_recorded_by
         - created_at
         - updated_at
       properties:
@@ -1401,10 +1536,24 @@ components:
           type: boolean
         opted_out:
           type: boolean
-          description: An opt-out overrides consent until an explicit opt-in (written in M2-P3)
+          description: An opt-out overrides consent until an explicit opt-in
+        opted_out_at:
+          type: [string, 'null']
+          format: date-time
+        whatsapp_allowed:
+          type: boolean
+          description: WhatsApp consent given and not opted out - the one rule every sender uses
+        sms_allowed:
+          type: boolean
+          description: SMS consent given and not opted out
         consent_recorded_at:
           type: [string, 'null']
           format: date-time
+          description: Null means never asked; set (with both flags false) means asked and declined
+        consent_recorded_by:
+          type: [string, 'null']
+          format: uuid
+          description: The staff member who recorded the current consent
         created_at:
           type: string
           format: date-time
@@ -1476,6 +1625,16 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Language'
             - type: 'null'
+    PatientConsent:
+      type: object
+      additionalProperties: false
+      required: [whatsapp, sms]
+      description: The answer to "may we message you on WhatsApp, on SMS?" (the guardian's for a minor)
+      properties:
+        whatsapp:
+          type: boolean
+        sms:
+          type: boolean
     PatientList:
       type: object
       required: [items]

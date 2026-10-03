@@ -26,7 +26,7 @@ from uuid import UUID
 
 from mediease_api.domain.patients.age import Age
 from mediease_api.domain.patients.code import validate_code
-from mediease_api.domain.shared.errors import DomainError, InvalidTransition, InvalidValue
+from mediease_api.domain.shared.errors import DomainError, InvalidValue
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.shared.text import optional_text, required_text
 from mediease_api.domain.shared.time import require_utc
@@ -61,6 +61,33 @@ def parse_phone(raw: str, field: str = "phone") -> PhoneNumber:
         return PhoneNumber.parse(raw, field=field)
     except InvalidValue:
         raise PhoneInvalid(field) from None
+
+
+class PatientOptedOut(DomainError):
+    """R6 / M2-P3 decision A: consent cannot be edited while the patient is opted out."""
+
+    code = "PAT_OPTED_OUT"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This patient asked not to be messaged. Opt them back in to record new consent."
+        )
+
+
+class PatientNotOptedOut(DomainError):
+    """Opt-in is the way back from an opt-out, so it needs one."""
+
+    code = "PAT_NOT_OPTED_OUT"
+
+    def __init__(self) -> None:
+        super().__init__("This patient has not opted out. Record consent instead.")
+
+
+class ConsentGivenBy(StrEnum):
+    """Whose answer a consent is: the guardian's for a minor (FR-PAT-06, decision D1)."""
+
+    PATIENT = "patient"
+    GUARDIAN = "guardian"
 
 
 class GuardianRequired(DomainError):
@@ -235,33 +262,49 @@ class Patient:
     def may_receive_sms(self) -> bool:
         return self.sms_consent and not self.is_opted_out
 
-    def record_consent(self, *, whatsapp: bool, sms: bool, by: UUID, now: datetime) -> None:
-        """Record who agreed to which channel, and when. For a minor it is the guardian's consent.
+    @property
+    def consent_was_asked(self) -> bool:
+        """False until someone records an answer: "not asked" is not "said no" (M2-P3)."""
+        return self.consent_recorded_at is not None
 
-        While the patient is opted out the flags are stored but have no effect
-        (``may_receive_*`` stay false) until ``opt_in``.
+    def consent_given_by(self, on: date) -> ConsentGivenBy:
+        """Whose answer consent recorded on ``on`` is: the guardian's while a minor (FR-PAT-06)."""
+        return ConsentGivenBy.GUARDIAN if self.is_minor(on) else ConsentGivenBy.PATIENT
+
+    def record_consent(self, *, whatsapp: bool, sms: bool, by: UUID, now: datetime) -> None:
+        """Record who agreed to which channel, and when (R6). For a minor it is the guardian's.
+
+        Refused while the patient is opted out (decision A): a consent box that silently does
+        nothing is worse than a clear message, and ``opt_in`` takes the new consent instead.
         """
+        if self.is_opted_out:
+            raise PatientOptedOut()
+        self._set_consent(whatsapp=whatsapp, sms=sms, by=by, now=now)
+
+    def opt_out(self, *, now: datetime) -> bool:
+        """Stop all messages. Returns False (and changes nothing) if already opted out.
+
+        Who asked is the audit row's actor; the consent record is left as it was.
+        """
+        if self.is_opted_out:
+            return False
+        self.updated_at = require_utc(now, "now")
+        self.opted_out_at = self.updated_at
+        return True
+
+    def opt_in(self, *, whatsapp: bool, sms: bool, by: UUID, now: datetime) -> None:
+        """The explicit way back after an opt-out (AC5): clears it and records the new consent."""
+        if not self.is_opted_out:
+            raise PatientNotOptedOut()
+        self._set_consent(whatsapp=whatsapp, sms=sms, by=by, now=now)
+        self.opted_out_at = None
+
+    def _set_consent(self, *, whatsapp: bool, sms: bool, by: UUID, now: datetime) -> None:
         self.updated_at = require_utc(now, "now")
         self.whatsapp_consent = whatsapp
         self.sms_consent = sms
         self.consent_recorded_at = self.updated_at
         self.consent_recorded_by = by
-
-    def opt_out(self, *, by: UUID, now: datetime) -> bool:
-        """Stop all messages. Returns False (and changes nothing) if already opted out."""
-        if self.is_opted_out:
-            return False
-        self.updated_at = require_utc(now, "now")
-        self.opted_out_at = self.updated_at
-        self.consent_recorded_by = by
-        return True
-
-    def opt_in(self, *, whatsapp: bool, sms: bool, by: UUID, now: datetime) -> None:
-        """The explicit way back after an opt-out: clears it and records the new consent."""
-        if not self.is_opted_out:
-            raise InvalidTransition("patient", "NOT_OPTED_OUT", "opt in")
-        self.record_consent(whatsapp=whatsapp, sms=sms, by=by, now=now)
-        self.opted_out_at = None
 
     def __repr__(self) -> str:
         # Code and clinic only: never the name or phone (CLAUDE.md "Never log PII").

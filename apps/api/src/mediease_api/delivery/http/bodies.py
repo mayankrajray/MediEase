@@ -90,8 +90,15 @@ def patient_body(patient: PatientView) -> dict[str, Any]:
         "whatsapp_consent": patient.whatsapp_consent,
         "sms_consent": patient.sms_consent,
         "opted_out": patient.opted_out,
+        "opted_out_at": patient.opted_out_at.isoformat() if patient.opted_out_at else None,
+        # One rule for the screens and M5's sender: consent given and not opted out (R6).
+        "whatsapp_allowed": patient.whatsapp_allowed,
+        "sms_allowed": patient.sms_allowed,
         "consent_recorded_at": (
             patient.consent_recorded_at.isoformat() if patient.consent_recorded_at else None
+        ),
+        "consent_recorded_by": (
+            str(patient.consent_recorded_by) if patient.consent_recorded_by else None
         ),
         "created_at": patient.created_at.isoformat(),
         "updated_at": patient.updated_at.isoformat(),

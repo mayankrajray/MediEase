@@ -142,3 +142,22 @@ def test_adr_0008_an_ops_user_gets_the_documented_403(openapi: OpenAPI, world: W
 
     assert resp.status_code == 403
     _check(openapi, resp)
+
+
+def test_adr_0008_consent_opt_out_and_opt_in_match_the_contract(
+    openapi: OpenAPI, world: World
+) -> None:
+    desk = world.client_for(world.a.desk)
+    patient_id = _send(desk, "POST", PATIENTS, NEW_PATIENT).get_json()["id"]
+    consent = {"whatsapp": True, "sms": False}
+
+    for resp, status in (
+        (_send(desk, "PUT", f"{PATIENTS}/{patient_id}/consent", consent), 200),
+        (_send(desk, "POST", f"{PATIENTS}/{patient_id}/opt-in", consent), 409),  # not opted out
+        (_send(desk, "POST", f"{PATIENTS}/{patient_id}/opt-out"), 200),
+        (_send(desk, "POST", f"{PATIENTS}/{patient_id}/opt-out"), 200),  # idempotent
+        (_send(desk, "PUT", f"{PATIENTS}/{patient_id}/consent", consent), 409),  # opted out
+        (_send(desk, "POST", f"{PATIENTS}/{patient_id}/opt-in", consent), 200),
+    ):
+        assert resp.status_code == status, resp.get_json()
+        _check(openapi, resp)

@@ -610,8 +610,15 @@ class SqlAlchemyPatientRepository(TenantScopedRepository[PatientRow]):
         self._session.add(row)
         self._session.flush()
 
-    def get(self, patient_id: UUID) -> Patient | None:
-        row = self._get_row(patient_id)
+    def get(self, patient_id: UUID, *, for_update: bool = False) -> Patient | None:
+        if not for_update:
+            row = self._get_row(patient_id)
+        else:
+            query = self._scoped_select().where(PatientRow.id == patient_id)
+            # populate_existing: a row already in the session is re-read under the lock.
+            row = self._session.scalars(
+                query.with_for_update().execution_options(populate_existing=True)
+            ).one_or_none()
         return _patient_from_row(row) if row else None
 
     def update(self, patient: Patient) -> None:

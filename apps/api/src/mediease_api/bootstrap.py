@@ -42,6 +42,7 @@ from mediease_api.application.clinics.onboard_clinic import (
 from mediease_api.application.clinics.queries import GetClinic, GetDoctor, ListDoctors, ListStaff
 from mediease_api.application.identity.accept_invite import AcceptInvite, DescribeInvite
 from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics
+from mediease_api.application.patients.consent import OptIn, OptOut, RecordConsent
 from mediease_api.application.patients.queries import GetPatient, LookupPatients
 from mediease_api.application.patients.register_patient import RegisterPatient
 from mediease_api.application.patients.update_patient import UpdatePatient
@@ -177,6 +178,15 @@ class _UseCases:
 
     def lookup_patients(self) -> LookupPatients:
         return LookupPatients(uow=self._uow(), clock=self.clock)
+
+    def record_consent(self) -> RecordConsent:
+        return RecordConsent(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def opt_out(self) -> OptOut:
+        return OptOut(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def opt_in(self) -> OptIn:
+        return OptIn(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def list_clinics(self) -> ListClinics:
         return ListClinics(uow=self._uow())

@@ -24,6 +24,12 @@ from uuid import UUID
 from flask import Blueprint, Response, jsonify, request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from mediease_api.application.patients.consent import (
+    ConsentCommand,
+    OptIn,
+    OptOut,
+    RecordConsent,
+)
 from mediease_api.application.patients.queries import GetPatient, LookupPatients
 from mediease_api.application.patients.register_patient import (
     RegisterPatient,
@@ -46,6 +52,9 @@ class PatientUseCases(Protocol):
     def update_patient(self) -> UpdatePatient: ...
     def get_patient(self) -> GetPatient: ...
     def lookup_patients(self) -> LookupPatients: ...
+    def record_consent(self) -> RecordConsent: ...
+    def opt_out(self) -> OptOut: ...
+    def opt_in(self) -> OptIn: ...
 
 
 class NewPatientRequest(BaseModel):
@@ -80,6 +89,15 @@ class UpdatePatientRequest(BaseModel):
         if all(value is None for value in self.model_dump().values()):
             raise ValueError("send at least one field to change")
         return self
+
+
+class ConsentRequest(BaseModel):
+    """The answer to "may we message you on WhatsApp, on SMS?"; both are required."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    whatsapp: bool
+    sms: bool
 
 
 def create_patients_blueprint(use_cases: PatientUseCases) -> Blueprint:
@@ -145,6 +163,31 @@ def create_patients_blueprint(use_cases: PatientUseCases) -> Blueprint:
                 guardian_name=body.guardian_name,
                 language=body.language,
             ),
+        )
+        return jsonify(patient_body(patient))
+
+    @bp.put("/<uuid:patient_id>/consent")
+    @clinic(Permission.PATIENTS_MANAGE)
+    def record_consent(patient_id: UUID) -> Response:
+        body = parse_json(ConsentRequest)
+        patient = use_cases.record_consent().execute(
+            current_context(),
+            ConsentCommand(patient_id=patient_id, whatsapp=body.whatsapp, sms=body.sms),
+        )
+        return jsonify(patient_body(patient))
+
+    @bp.post("/<uuid:patient_id>/opt-out")
+    @clinic(Permission.PATIENTS_MANAGE)
+    def opt_out(patient_id: UUID) -> Response:
+        return jsonify(patient_body(use_cases.opt_out().execute(current_context(), patient_id)))
+
+    @bp.post("/<uuid:patient_id>/opt-in")
+    @clinic(Permission.PATIENTS_MANAGE)
+    def opt_in(patient_id: UUID) -> Response:
+        body = parse_json(ConsentRequest)
+        patient = use_cases.opt_in().execute(
+            current_context(),
+            ConsentCommand(patient_id=patient_id, whatsapp=body.whatsapp, sms=body.sms),
         )
         return jsonify(patient_body(patient))
 

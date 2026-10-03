@@ -36,3 +36,7 @@ class AuditAction(StrEnum):
     # M2-P2: patients. Metadata holds the code and field names, never a name or a phone number.
     PATIENT_CREATED = "patient.created"
     PATIENT_UPDATED = "patient.updated"
+    # M2-P3: consent is evidence (DPDP). Metadata holds the flags and on whose behalf, no names.
+    PATIENT_CONSENT_CHANGED = "patient.consent_changed"
+    PATIENT_OPTED_OUT = "patient.opted_out"
+    PATIENT_OPTED_IN = "patient.opted_in"

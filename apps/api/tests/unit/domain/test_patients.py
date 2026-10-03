@@ -20,8 +20,16 @@ from mediease_api.domain.patients.code import (
     validate_code_prefix,
 )
 from mediease_api.domain.patients.lookup import QueryKind, classify_query
-from mediease_api.domain.patients.patient import GuardianRequired, Language, Patient, Sex
-from mediease_api.domain.shared.errors import InvalidTransition, InvalidValue
+from mediease_api.domain.patients.patient import (
+    ConsentGivenBy,
+    GuardianRequired,
+    Language,
+    Patient,
+    PatientNotOptedOut,
+    PatientOptedOut,
+    Sex,
+)
+from mediease_api.domain.shared.errors import InvalidValue
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.shared.time import local_date
 from tests.builders import LATER, NOW, a_clinic, a_patient, new_id
@@ -370,11 +378,22 @@ def test_r3_a_minor_turning_18_may_lose_the_guardian() -> None:
 def test_r6_recording_consent_says_who_and_when() -> None:
     patient = _patient()
     staff = uuid4()
+    assert not patient.consent_was_asked
 
     patient.record_consent(whatsapp=True, sms=False, by=staff, now=LATER)
 
     assert patient.may_receive_whatsapp and not patient.may_receive_sms
     assert (patient.consent_recorded_at, patient.consent_recorded_by) == (LATER, staff)
+    assert patient.consent_was_asked
+
+
+def test_p3_declining_is_recorded_and_differs_from_never_asked() -> None:
+    asked, never = _patient(), _patient()
+
+    asked.record_consent(whatsapp=False, sms=False, by=uuid4(), now=LATER)
+
+    assert asked.consent_was_asked and not never.consent_was_asked
+    assert not asked.may_receive_whatsapp and not never.may_receive_whatsapp
 
 
 def test_r6_ac5_an_opt_out_overrides_consent_until_an_explicit_opt_in() -> None:
@@ -382,30 +401,53 @@ def test_r6_ac5_an_opt_out_overrides_consent_until_an_explicit_opt_in() -> None:
     staff = uuid4()
     patient.record_consent(whatsapp=True, sms=True, by=staff, now=NOW)
 
-    assert patient.opt_out(by=staff, now=LATER) is True
+    assert patient.opt_out(now=LATER) is True
     assert not patient.may_receive_whatsapp and not patient.may_receive_sms
-
-    # Editing the flags while opted out stores them but changes nothing in effect.
-    patient.record_consent(whatsapp=True, sms=True, by=staff, now=LATER)
-    assert not patient.may_receive_whatsapp
+    # The opt-out leaves the consent record alone: who recorded what is still known.
+    assert patient.consent_recorded_by == staff and patient.whatsapp_consent
 
     patient.opt_in(whatsapp=True, sms=False, by=staff, now=LATER)
     assert patient.may_receive_whatsapp and not patient.may_receive_sms
     assert patient.opted_out_at is None
 
 
+def test_p3_decision_a_consent_cannot_be_edited_while_opted_out() -> None:
+    patient = _patient()
+    patient.record_consent(whatsapp=False, sms=False, by=uuid4(), now=NOW)
+    patient.opt_out(now=NOW)
+
+    with pytest.raises(PatientOptedOut) as refused:
+        patient.record_consent(whatsapp=True, sms=True, by=uuid4(), now=LATER)
+
+    assert refused.value.code == "PAT_OPTED_OUT"
+    assert (patient.whatsapp_consent, patient.consent_recorded_at) == (False, NOW)
+
+
 def test_r6_opting_out_twice_keeps_the_first_moment() -> None:
     patient = _patient()
-    staff = uuid4()
-    patient.opt_out(by=staff, now=NOW)
+    patient.opt_out(now=NOW)
 
-    assert patient.opt_out(by=staff, now=LATER) is False
+    assert patient.opt_out(now=LATER) is False
     assert patient.opted_out_at == NOW
 
 
 def test_r6_opting_in_is_only_possible_after_an_opt_out() -> None:
-    with pytest.raises(InvalidTransition):
+    with pytest.raises(PatientNotOptedOut) as refused:
         _patient().opt_in(whatsapp=True, sms=True, by=uuid4(), now=LATER)
+    assert refused.value.code == "PAT_NOT_OPTED_OUT"
+
+
+@pytest.mark.parametrize(
+    ("born", "given_by"),
+    [
+        (date(2008, 10, 3), ConsentGivenBy.GUARDIAN),  # 17 on TODAY
+        (date(2008, 10, 2), ConsentGivenBy.PATIENT),  # 18 on TODAY
+    ],
+)
+def test_fr_pat_06_a_minors_consent_is_the_guardians(born: date, given_by: ConsentGivenBy) -> None:
+    patient = _patient(date_of_birth=born, guardian_name="Meera Rao")
+
+    assert patient.consent_given_by(TODAY) is given_by
 
 
 def test_timestamps_must_be_utc() -> None:
