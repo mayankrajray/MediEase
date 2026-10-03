@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M1-P1 to M1-P6 implemented (P1 and P2 confirmed 3 Oct 2026; P3 to P6 awaiting confirmation) |
+| Status | In progress — M1-P1 to M1-P7 implemented (P1, P2 and P6 confirmed 3 Oct 2026; P3, P4, P5 and P7 awaiting confirmation) |
 | Spec | `docs/specs/identity-and-tenancy.md` (Approved 2026-10-02) |
 | Covers | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08, NFR-14 |
 | Issue / branch / PR | #19 · `m1/19-identity-tenancy-audit` · one draft PR for the whole milestone (ADR-0011) |
@@ -37,6 +37,7 @@
 | P4 | Append-only `audit_events` written through the unit of work; database-enforced immutability; `v_clinic_activity`; the audited staff role change | Below (M1-P4 section) |
 | P5 | Ops onboarding API (clinic → doctors → owner invite), single-use staff invites and acceptance, owner staff and doctor management, onboarding checklist | Below (M1-P5 section) |
 | P6 | Web: sign-in, clinic switcher, empty dashboard shell | Below (M1-P6 section) |
+| P7 | Web: ops clinics list and the Create clinic wizard (spec §6) | Below (M1-P7 section) |
 
 Each phase starts with its design (`/plan-phase`), is approved, implemented, verified by the
 developer and confirmed before the next phase starts. All phases are committed to the milestone
@@ -44,10 +45,138 @@ branch and appear in the one milestone PR.
 
 ---
 
+## M1-P7 — Ops console: clinics list and the Create clinic wizard
+
+**Status: approved by the developer 3 Oct 2026 ("complete all the steps with your recommendation":
+the wizard as a P7 inside M1); implemented 3 Oct 2026.** Covers FR-OPS-01, FR-OPS-04, FR-ORG-01,
+FR-ORG-02, FR-ORG-04 (the browser half) and spec §6: "Ops 'Create clinic' is a 3-step wizard:
+clinic → doctors → owner invite; shows elapsed time." Web only: the API (M1-P5) and the console
+frame (M1-P6) exist. Goal G4: a clinic onboarded in under an hour.
+
+### Why a phase of its own
+
+M1-P6 deliberately left `/ops` as a placeholder (option 2A) so the sign-in phase stayed reviewable.
+The M1 exit criterion is "an ops user onboards a clinic"; it is met through the API (RUNBOOK §10),
+but the spec promises a wizard, and ops is the one audience that should not need `curl`.
+
+### Routes
+
+| Route | What it shows |
+|---|---|
+| `/ops` | Every clinic, newest first: status (text, never colour alone), when onboarding started (in the clinic's own time zone), which steps have happened (clinic created, doctors added, staff invited) and the time from start to first invitation; "Create clinic" and, for a clinic still `ONBOARDING`, "Continue setup" |
+| `/ops/clinics/new` | The wizard. `?clinic=<id>` resumes an existing `ONBOARDING` clinic at the doctors step |
+
+### The wizard
+
+| Step | Fields | API | Notes |
+|---|---|---|---|
+| 1 Clinic | name, URL (slug), time zone (default `Asia/Kolkata`), phone, address, city, state, pincode, specialties (comma separated) | `POST /ops/clinics` | The slug is suggested from the name until it is edited by hand; `409 CLN_SLUG_TAKEN` and `422` field errors appear next to the field. Once created the clinic cannot be re-created: going back is read-only |
+| 2 Doctors | display name, qualification, registration number, council, specialty (I3: all four required) | `POST /ops/clinics/{id}/doctors`, repeatable | Lists what was added. May be skipped (an owner can be the doctor, spec §8), with a note that prescriptions need a registered doctor |
+| 3 Invite | full name, email or phone, role (default `OWNER`) | `POST /ops/clinics/{id}/staff-invites`, repeatable | The acceptance link is shown **once** with a Copy button and the RUNBOOK advice (hand it over in person or by phone, valid 7 days). Nothing keeps it after the page is left, by design |
+
+An elapsed timer ("Onboarding time 12 min") runs from the checklist's `started_at`, fetched after
+step 1 (`GET /ops/clinics/{id}`), so it is the server's clock for the start and the browser's only
+for "now". It keeps running until the owner accepts: the API has no accepted timestamp on the
+checklist, so the list shows the clinic turning `ACTIVE` instead. Steps are a labelled list with
+`aria-current="step"`; focus moves to the step heading on each change.
+
+### Decisions
+
+| Decision | Reason |
+|---|---|
+| Time zone is a free text field with the default, validated by the API | A full IANA list is a 400-entry select for one rarely changed field; the API already rejects an unknown name with a field error |
+| Specialties as comma-separated text | The API takes a list of up to 20 strings; a tag input is more UI than the field deserves |
+| Resume through `?clinic=<id>` rather than wizard state in storage | The server is the record of what exists; storage would have to be reconciled with it. The acceptance link is deliberately not recoverable |
+| Times in the list use each clinic's own time zone, labelled | `apps/web/CLAUDE.md`: clinic time, never the browser's. Ops reads many clinics; the label removes doubt |
+| One shared `useOpsCall` style of handling, not a form library | Four small forms; `AGENTS.md` asks for a reason before a dependency |
+| Field errors read `details.fields[]` from `REQ_VALIDATION_FAILED` | That is the contract's shape; unknown fields fall back to the alert with the Ref |
+
+### Files
+
+`lib/format/time.ts` (zone-aware formatting, elapsed minutes), `features/ops/` (`ClinicList`,
+`CreateClinicWizard`, `ClinicStep`, `DoctorsStep`, `InviteStep`, `AcceptLink`, `ElapsedTimer`,
+`Stepper`, `fields.ts` for slugs, specialties and field errors), `app/(ops)/ops/page.tsx`,
+`app/(ops)/ops/clinics/new/page.tsx`, the ops README.
+
+### Tests
+
+Unit: slug suggestion, specialty parsing, field-error mapping, time formatting and elapsed minutes.
+Component (fake API): the whole wizard end to end (clinic → doctor → owner invite → link shown
+once and copyable); slug taken and validation errors land on their fields; the doctors step can be
+skipped; resume at step 2 for an `ONBOARDING` clinic; a non-ops person never reaches it (frame
+test from M1-P6); the list shows empty, loaded and error states and offers "Continue setup" only
+for `ONBOARDING`.
+
+### Verify
+
+```bash
+make up && make seed
+# sign in as ops@mediease.example at http://localhost:3000 -> /ops lists the seeded clinics
+# Create clinic -> fill the three steps -> copy the link, open it in a private window,
+# set a password -> that window lands on /queue; /ops now shows the clinic ACTIVE
+# failure paths: reuse a slug (field error), submit an empty doctor (field errors),
+# unplug the API (message with Ref and Try again)
+```
+
+---
+## M1-P5 amendment — accepting an invitation for an existing account (spec R13)
+
+**Status: security fix, approved by the developer 3 Oct 2026 ("complete all the steps with your
+recommendation"); implemented 3 Oct 2026.** Found while building the M1-P6 invitation page.
+
+### The problem
+
+`AcceptInvite` always set the invited person's password. When the invitation was for an email or
+phone that already had an account (a doctor invited by a second clinic, spec §8), accepting
+*overwrote that account's password and signed the caller in as that user*. The link is returned to
+whoever creates the invitation, so an owner of clinic B could invite a known user's email, accept
+their own link with a password of their choosing, and take over the account, including its
+memberships in other clinics.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A (chosen)** — an existing account must present its **current password**; nothing is set | Proves the account holder consents; no new endpoint or request field; works for a person with no active membership (sign-in refuses them, so a session-based rule would strand them); same lockout as sign-in | One field means two things (choose vs. prove), told apart by `has_password`, which the describe endpoint already returns |
+| B — accepting requires a session for that same account | No password crosses the endpoint | Dead end for someone deactivated everywhere and re-invited (cannot sign in, so cannot accept); needs CSRF and session plumbing in a public route |
+| C — a separate "join" endpoint for existing accounts | Explicit | A second endpoint and more contract for the same act; the old endpoint would still need to refuse |
+
+### Behaviour
+
+- New account (no password): unchanged. The password is validated (12 characters) and set.
+- Existing account: `password` is the account's current password. It is verified, never changed
+  (rehashed only if the hashing parameters have risen). A locked account is refused (`423
+  AUTH_LOCKED`, `Retry-After`) without checking; a wrong password is counted, audited
+  (`auth.sign_in_failed`, `via: invite`) and answered `401 AUTH_INVALID_CREDENTIALS`, so the
+  invitation endpoint is not a way around the sign-in lockout. The invitation stays pending.
+- The user row is read `FOR UPDATE` so concurrent wrong guesses are counted one by one.
+- `staff.accepted` now records `account: new | existing`.
+- Contract 0.5.1: documented 401 and 423, and what `password` means for each case. No new error
+  codes. The web page asks existing accounts for their password instead of a new one.
+
+### Files
+
+`application/identity/accept_invite.py`, `ports/repositories.py` + `adapters/db/repositories.py`
+(`UserRepository.get(..., for_update)`), `contracts/openapi.yaml`, `docs/API.md`, `docs/ERRORS.md`,
+`docs/specs/identity-and-tenancy.md` (R13, §8), `docs/RUNBOOK.md` §10,
+`apps/web/src/features/auth/AcceptInviteForm.tsx`.
+
+### Tests
+
+HTTP (real PostgreSQL): the regression (the inviting owner cannot take over: 401, no cookies, the
+old password still works, the invitation still usable by the real person); accepting with the right
+password leaves it unchanged; five wrong guesses lock the account (423, the right password is then
+refused, sign-in is locked too); a person with no active membership can rejoin; a new account still
+chooses a password under the policy. Contract: the 401 and 423 shapes. Web: the password-only form,
+a wrong password (message, Ref, cleared and refocused field) and a lock (the wait).
+
+---
 ## M1-P6 — Web sign-in, clinic switcher and the empty dashboard shell
 
 **Status: approved 3 Oct 2026 (options 1A, 2A and 3A, as recommended); implemented 3 Oct 2026,
-awaiting the developer's confirmation.** Covers FR-AUTH-01, FR-AUTH-02
+confirmed by the developer's browser walk-through the same day (sign-in, wrong password, the 15-minute
+lockout while other accounts still sign in, the two-clinic switch, every role's routes and ops).**
+Covers FR-AUTH-01, FR-AUTH-02
 (the browser half), FR-AUTH-03 and spec R4, R5, R6, R7, R10 and §6 (UI notes). Web only: no API,
 migration or contract change (the one exception is a seed addition, see Files).
 
@@ -283,7 +412,7 @@ In the browser (demo password in RUNBOOK §1):
 | "Session ended" is only claimed when a `me_csrf` cookie existed before the failing call | A visitor who was never signed in should land on a plain sign-in page, not be told a session ended |
 | Sign-in clears the password only after `AUTH_INVALID_CREDENTIALS` and `AUTH_LOCKED`; unreachable or validation errors keep what was typed | Retyping a password because the network blipped is hostile; Try again resubmits |
 | After a wrong password focus goes to the password field (the alert is its accessible description); for every other error, to the alert | Matches the error table; a screen reader still hears the message either way |
-| The invitation page shows no set-password form when `has_password` is true | **Found while reading `AcceptInvite`:** it always sets the password, so accepting for an existing account overwrites it, and an owner who invited that email holds the link. The web page avoids it; the API needs its own fix (see TASKS "Open decisions") |
+| The invitation page shows no set-password form when `has_password` is true | **Found while reading `AcceptInvite`:** it always sets the password, so accepting for an existing account overwrites it, and an owner who invited that email holds the link. The web page avoided it at first; the API was then fixed in the same branch (see "M1-P5 amendment" above) and the page now asks for the current password |
 | `make seed` had lost its `if __name__ == "__main__"` guard after the per-clinic rewrite | Found by running the stack, not by the unit tests, which call `main()`; fixed with a test that runs the seed as a module |
 | Web checks run against a Linux `node_modules` | On this Windows machine the Windows `npm` and the WSL Linux toolchain cannot share one `node_modules`; the checks and the CI replica ran in WSL |
 

@@ -6,7 +6,7 @@ Next.js (App Router, TypeScript) serving three surfaces:
 |---|---|---|
 | `src/app/(clinic)/` | Clinic dashboard: queue, patients, consultation, follow-ups, settings | Owner, doctor, front desk |
 | `src/app/(patient)/` | Prescription view (`/p/[token]`), public booking page (`/c/[slug]`, M7) | Patients and parents |
-| `src/app/(ops)/` | Ops console (`/ops`; the onboarding screens are planned separately) | MediEase ops |
+| `src/app/(ops)/` | Ops console: `/ops` (every clinic with its onboarding state) and `/ops/clinics/new` (the Create clinic wizard, M1-P7) | MediEase ops |
 | `src/app/(auth)/` | Sign-in (`/sign-in`) and invitation acceptance (`/invite/[token]`) | Staff |
 
 ## Status

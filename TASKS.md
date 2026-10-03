@@ -12,12 +12,12 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M1 — Identity, tenancy and audit** (issue #19, branch `m1/19-identity-tenancy-audit`, one PR for the milestone) |
-| Active phase | **M1-P6 — ✅ implemented 3 Oct 2026** (web sign-in, clinic switcher and the empty dashboard shell; approved options 1A/2A/3A), awaiting the developer's confirmation. P3, P4 and P5 also await confirmation. All M1 phases are now implemented; what remains before the milestone PR leaves draft is the developer's confirmations and the open decisions below |
+| Active phase | **M1-P7 - ✅ implemented 3 Oct 2026** (ops clinics list and the Create clinic wizard, added to M1 by the developer's decision the same day). M1-P6 is confirmed by the developer's browser walk-through (3 Oct 2026: sign-in, wrong password, 15-minute lockout while other accounts still sign in, two-clinic switch, role routes and ops). All seven M1 phases are implemented; what remains is the milestone review and merge (ADR-0011) |
 | Design notes | `docs/milestones/M1-identity-tenancy-audit.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M1 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §9). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | (1) **Security, API:** `POST /auth/invites/{token}/accept` overwrites the password of an existing account, so an owner who invites an existing user's email could take it over (details: `docs/SECURITY_AND_COMPLIANCE.md` §3, "Known issue"). Needs a fix before the pilot and ideally before M1 merges; the fix is an API change (for example: accepting for an existing account requires being signed in as that account and never touches the password). (2) **Scope:** the ops Create clinic wizard (spec §6) is not built; `/ops` is a placeholder and onboarding works through the API (RUNBOOK §10). Decide whether it is a P7 inside M1, the start of M2, or a separate change |
+| Open decisions | None blocking. Found and fixed in M1 (3 Oct 2026): accepting an invitation for an existing account overwrote its password (spec R13, contract 0.5.1) |
 | Last updated | 3 Oct 2026 |
 
 
@@ -73,6 +73,7 @@ only their clinic; the tenancy test suite proves isolation.
 | M1-P4 | Audit log (append-only) written in the same transaction as the change; non-clinical support views (`v_clinic_activity`); audited staff role change | ✅ |
 | M1-P5 | Ops console: create clinic → doctors → owner invite; single-use staff invites and acceptance; onboarding checklist timestamps; staff invite and deactivate | ✅ |
 | M1-P6 | Web: sign-in, clinic switcher (for multi-clinic users), empty dashboard shell | ✅ |
+| M1-P7 | Web: ops clinics list and the Create clinic wizard (clinic → doctors → owner invite, elapsed time; spec §6) | ✅ |
 
 ## M2 — Patients  `☐`
 

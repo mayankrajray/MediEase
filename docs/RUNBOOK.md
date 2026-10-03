@@ -125,8 +125,10 @@ to at least 32 characters, e.g. the value from `.env.example` or
 ### 10. Onboard a clinic (pilot) — target < 60 minutes
 1. Before the visit: collect clinic details, doctor registration numbers, schedules, patient list
    (L-07). Validate the CSV with the import dry run.
-2. Create the clinic, its doctors and the owner's invitation. The ops console UI arrives in a
-   later milestone; until then these are API calls as the ops user (M1-P5):
+2. Create the clinic, its doctors and the owner's invitation. In the browser: sign in as the ops
+   user, open **Clinics → Create clinic** and follow the three steps (M1-P7); the page shows the
+   elapsed time and the invitation link once. A half-finished clinic is continued from the list
+   (**Continue setup**). The same steps as API calls, for scripts and as the fallback (M1-P5):
 
 ```bash
 # Sign in as the ops account first (RUNBOOK §1 for the local demo users).
