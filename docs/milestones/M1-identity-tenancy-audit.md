@@ -46,7 +46,8 @@ branch and appear in the one milestone PR.
 
 ## M1-P6 — Web sign-in, clinic switcher and the empty dashboard shell
 
-**Status: proposed 3 Oct 2026, awaiting the developer's approval.** Covers FR-AUTH-01, FR-AUTH-02
+**Status: approved 3 Oct 2026 (options 1A, 2A and 3A, as recommended); implementation in
+progress.** Covers FR-AUTH-01, FR-AUTH-02
 (the browser half), FR-AUTH-03 and spec R4, R5, R6, R7, R10 and §6 (UI notes). Web only: no API,
 migration or contract change (the one exception is a seed addition, see Files).
 
@@ -174,6 +175,9 @@ skip link, a `<nav>` landmark and a `<main>` landmark. Every screen has loading,
 states.
 
 ### Open choices for approval
+
+**Decisions (developer, 3 Oct 2026): 1A (invitation page in P6), 2A (`/ops` is a placeholder; the
+wizard is planned separately) and 3A (second seeded clinic).**
 
 1. **Invitation acceptance page.** The API from P5 already has `GET`/`POST
    /api/v1/auth/invites/{token}`. Without a page, a newly invited owner or front desk cannot
