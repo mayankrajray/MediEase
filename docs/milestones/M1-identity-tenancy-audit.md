@@ -46,9 +46,10 @@ branch and appear in the one milestone PR.
 
 ## M1-P5 — Ops onboarding and staff management
 
-**Status: proposed, awaiting the developer's approval.** Covers FR-OPS-01, FR-OPS-04, FR-ORG-01,
-FR-ORG-02, FR-ORG-04; spec R9, R12; and the M1 exit criterion ("an ops user onboards a clinic
-with an owner, doctor and front desk; each signs in").
+**Status: approved 3 Oct 2026 (one phase, five commits; reactivation out of scope); in
+implementation.** Covers FR-OPS-01, FR-OPS-04, FR-ORG-01, FR-ORG-02, FR-ORG-04; spec R9, R12;
+and the M1 exit criterion ("an ops user onboards a clinic with an owner, doctor and front desk;
+each signs in").
 
 ### Concepts
 
@@ -159,17 +160,19 @@ request's clinic. Every one is written in the same transaction as its change (R1
 
 ### Open choices for approval
 
+**Decisions (developer, 3 Oct 2026): option A (one phase), and reactivation stays out of M1.**
+
 1. **Size.** P5 is the largest phase in M1: three ops endpoints, two public invite endpoints, five
    owner endpoints, one migration and a checklist. Options:
-   - **A (recommended)** — one phase, implemented in five commits (migration + domain → invite
+   - **A (chosen)** — one phase, implemented in five commits (migration + domain → invite
      and acceptance → ops onboarding → owner management → docs), each green on its own.
    - **B** — split into **P5a** (ops onboarding + invite acceptance, which completes the M1 exit
      criterion) and **P5b** (owner staff and doctor management, clinic settings). P6 (web) then
      starts sooner against a working onboarding flow.
 2. **Reactivation.** Should an owner be able to bring a deactivated member back (`DEACTIVATED →
-   ACTIVE`)? It needs a new domain transition and a spec amendment. My recommendation: **not in
-   M1** — a clinic that deactivates someone by mistake can re-invite them, and the audit trail
-   shows both steps. Say the word if you want it in P5 instead.
+   ACTIVE`)? It needs a new domain transition and a spec amendment. **Not in M1** (chosen) — a
+   clinic that deactivates someone by mistake can re-invite them, and the audit trail shows both
+   steps.
 
 ### Files
 

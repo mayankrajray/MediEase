@@ -21,10 +21,11 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0004"
+HEAD = "0005"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
+M1_P5_TABLES = sorted([*M1_P4_TABLES, "onboarding_checklists"])
 
 
 @pytest.fixture
@@ -140,9 +141,31 @@ def test_0004_adds_audit_events_and_the_activity_view(
     assert _views(scratch_database_url) == []
 
 
+def _membership_columns(url: str) -> set[str]:
+    engine = create_engine(url)
+    try:
+        with engine.connect() as conn:
+            return {c["name"] for c in inspect(conn).get_columns("clinic_memberships")}
+    finally:
+        engine.dispose()
+
+
+def test_0005_adds_staff_invites_and_the_onboarding_checklist(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    invite = {"invite_token_hash", "invite_expires_at", "invite_accepted_at"}
+    command.upgrade(alembic_config, "0005")
+    assert _tables(scratch_database_url) == M1_P5_TABLES
+    assert invite <= _membership_columns(scratch_database_url)
+
+    command.downgrade(alembic_config, "0004")
+    assert _tables(scratch_database_url) == M1_P4_TABLES
+    assert not invite & _membership_columns(scratch_database_url)
+
+
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M1_P4_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M1_P5_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:

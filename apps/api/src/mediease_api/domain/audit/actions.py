@@ -6,8 +6,8 @@ convention ``area.past_tense`` (apps/api/CLAUDE.md), because an audit action
 is always something that already happened.
 
 Actions are added in the phase that first writes them; M1-P4 covers the
-session events and the staff role change. Staff invites, deactivations and
-clinic creation arrive with their use cases in M1-P5.
+session events and the staff role change, M1-P5 the onboarding and staff
+management actions (spec §7).
 """
 
 from __future__ import annotations
@@ -23,4 +23,13 @@ class AuditAction(StrEnum):
     AUTH_SIGNED_OUT = "auth.signed_out"
     # A rotated refresh token was presented again: possible token theft (R5).
     AUTH_REFRESH_REUSED = "auth.refresh_reused"
+    # M1-P5: onboarding and staff management.
+    CLINIC_CREATED = "clinic.created"
+    CLINIC_ACTIVATED = "clinic.activated"
+    CLINIC_UPDATED = "clinic.updated"
+    DOCTOR_ADDED = "doctor.added"
+    DOCTOR_UPDATED = "doctor.updated"
+    STAFF_INVITED = "staff.invited"
+    STAFF_ACCEPTED = "staff.accepted"
     STAFF_ROLE_CHANGED = "staff.role_changed"
+    STAFF_DEACTIVATED = "staff.deactivated"

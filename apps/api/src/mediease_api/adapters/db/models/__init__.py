@@ -6,7 +6,7 @@ entities, so nothing outside ``adapters/db`` ever sees a row object.
 
 from mediease_api.adapters.db.models.audit import AuditEventRow
 from mediease_api.adapters.db.models.base import Base
-from mediease_api.adapters.db.models.clinics import ClinicRow, DoctorRow
+from mediease_api.adapters.db.models.clinics import ClinicRow, DoctorRow, OnboardingChecklistRow
 from mediease_api.adapters.db.models.identity import ClinicMembershipRow, RefreshTokenRow, UserRow
 
 __all__ = [
@@ -15,6 +15,7 @@ __all__ = [
     "ClinicMembershipRow",
     "ClinicRow",
     "DoctorRow",
+    "OnboardingChecklistRow",
     "RefreshTokenRow",
     "UserRow",
 ]

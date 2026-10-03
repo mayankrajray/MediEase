@@ -15,6 +15,7 @@ import pytest
 
 from mediease_api.adapters.db.models import Base
 from mediease_api.adapters.db.repositories import (
+    SqlAlchemyChecklistRepository,
     SqlAlchemyDoctorRepository,
     SqlAlchemyMembershipRepository,
 )
@@ -160,12 +161,15 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         == {
             "doctors",
             "clinic_memberships",
+            "onboarding_checklists",
             "audit_events",
         }
     )
-    assert {SqlAlchemyDoctorRepository, SqlAlchemyMembershipRepository} == set(
-        TenantScopedRepository.__subclasses__()
-    )
+    assert {
+        SqlAlchemyChecklistRepository,
+        SqlAlchemyDoctorRepository,
+        SqlAlchemyMembershipRepository,
+    } == set(TenantScopedRepository.__subclasses__())
 
 
 def _fields(entity: object) -> dict[str, object]:

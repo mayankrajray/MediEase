@@ -1,10 +1,11 @@
-"""Tables for clinics and doctors (migration 0002, docs/DATA_MODEL.md "M1")."""
+"""Tables for clinics, doctors and onboarding (migrations 0002 and 0005, docs/DATA_MODEL.md)."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, Index, Text, text
+from sqlalchemy import DateTime, ForeignKey, Index, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -53,3 +54,22 @@ class DoctorRow(TenantOwned, Timestamps, Base):
     registration_council: Mapped[str] = mapped_column(Text)
     specialty: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(server_default=text("true"))
+
+
+class OnboardingChecklistRow(TenantOwned, Base):
+    """When each onboarding step first happened, one row per clinic (M1-P5, R12).
+
+    No ``updated_at``: every column is itself a timestamp, written once.
+    """
+
+    __tablename__ = "onboarding_checklists"
+    __table_args__ = (UniqueConstraint("clinic_id"),)
+
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    clinic_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    doctors_added_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    staff_invited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Written by M2-M4; the columns exist now so the G4 measurement is not retrofitted.
+    patients_imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    first_appointment_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    first_prescription_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

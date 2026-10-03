@@ -46,12 +46,19 @@ class UserRow(Keyed, Timestamps, Base):
 
 
 class ClinicMembershipRow(TenantOwned, Timestamps, Base):
-    """A user's single role at one clinic."""
+    """A user's single role at one clinic.
+
+    An ``INVITED`` row carries the pending invitation (M1-P5): the digest of a
+    single-use secret, its expiry, and when it was accepted. The secret itself
+    is never stored.
+    """
 
     __tablename__ = "clinic_memberships"
     __table_args__ = (
         # I2: at most one membership per user per clinic; also the clinic_id index.
         UniqueConstraint("clinic_id", "user_id"),
+        # One digest, one invitation.
+        UniqueConstraint("invite_token_hash"),
         # "Which clinics does this user belong to?" (sign-in and clinic switcher, M1-P2/P3).
         Index("ix_clinic_memberships_user_id", "user_id"),
         enum_check("role", Role),
@@ -61,6 +68,9 @@ class ClinicMembershipRow(TenantOwned, Timestamps, Base):
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     role: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text)
+    invite_token_hash: Mapped[str | None] = mapped_column(Text)
+    invite_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    invite_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class RefreshTokenRow(Keyed, Timestamps, Base):
