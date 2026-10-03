@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
@@ -10,8 +11,8 @@ import { SignOutButton } from "./SignOutButton";
 
 /**
  * The ops console frame (platform staff only, spec R10). Clinic staff who land
- * here are sent to their queue. The console's screens (the Create clinic wizard)
- * are planned separately; the API behind them is complete (M1-P5).
+ * here are sent to their queue. The screens are the clinics list and the Create
+ * clinic wizard (M1-P7).
  */
 export function OpsShell({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -41,6 +42,11 @@ export function OpsShell({ children }: { children: ReactNode }) {
             <SignOutButton />
           </div>
         </div>
+        <nav aria-label="Ops" className="mx-auto max-w-6xl px-4">
+          <Link href="/ops" className="inline-block border-b-2 border-transparent py-2 font-semibold">
+            Clinics
+          </Link>
+        </nav>
       </header>
       <main id="main" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 p-4">
         {children}
