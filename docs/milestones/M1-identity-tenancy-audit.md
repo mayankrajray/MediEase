@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M1-P1 to M1-P4 implemented (P1 and P2 confirmed 3 Oct 2026; P3 and P4 awaiting confirmation) |
+| Status | In progress — M1-P1 to M1-P4 implemented (P1 and P2 confirmed 3 Oct 2026; P3 and P4 awaiting confirmation); M1-P5 design proposed |
 | Spec | `docs/specs/identity-and-tenancy.md` (Approved 2026-10-02) |
 | Covers | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08, NFR-14 |
 | Issue / branch / PR | #19 · `m1/19-identity-tenancy-audit` · one draft PR for the whole milestone (ADR-0011) |
@@ -34,13 +34,189 @@
 | P1 | Domain model, migration `0002`, tenancy-scoped repository base, unit of work, coverage gate | Below |
 | P2 | Argon2id hashing, sign-in, refresh rotation with reuse detection, sign-out, lockout | Below (M1-P2 section) |
 | P3 | Auth middleware → `RequestContext`; role + membership check on every route; permission matrix tests; `GET /api/v1/me` and read-only clinic endpoints | Below (M1-P3 section) |
-| P4 | Append-only `audit_events` written through the unit of work; DB role with `INSERT, SELECT` only; `v_clinic_activity` | R11, AC5, AC6 |
-| P5 | Ops API: create clinic → doctors → owner invite; onboarding checklist timestamps; owner staff and doctor management (invite, role change, deactivate) | R9, R12, FR-OPS-01/04, FR-ORG-04 |
+| P4 | Append-only `audit_events` written through the unit of work; database-enforced immutability; `v_clinic_activity`; the audited staff role change | Below (M1-P4 section) |
+| P5 | Ops onboarding API (clinic → doctors → owner invite), single-use staff invites and acceptance, owner staff and doctor management, onboarding checklist | Below (M1-P5 section) |
 | P6 | Web: sign-in, clinic switcher, empty dashboard shell | Spec §6 |
 
 Each phase starts with its design (`/plan-phase`), is approved, implemented, verified by the
 developer and confirmed before the next phase starts. All phases are committed to the milestone
 branch and appear in the one milestone PR.
+
+---
+
+## M1-P5 — Ops onboarding and staff management
+
+**Status: proposed, awaiting the developer's approval.** Covers FR-OPS-01, FR-OPS-04, FR-ORG-01,
+FR-ORG-02, FR-ORG-04; spec R9, R12; and the M1 exit criterion ("an ops user onboards a clinic
+with an owner, doctor and front desk; each signs in").
+
+### Concepts
+
+1. **An invite is a membership, not a message.** P1 already models `ClinicMembership` with an
+   `INVITED → ACTIVE` lifecycle, so an invitation *is* that row plus a single-use secret the
+   invitee presents to activate it. No invite table, no duplicate state: invariant I2 (one
+   membership per user per clinic) already prevents double invites, and re-inviting replaces the
+   secret on the same row.
+2. **The secret is handled like a refresh token.** 32 random bytes, stored only as a SHA-256
+   digest (the adapter from P2), single use, 7-day expiry. The API returns the acceptance URL
+   once, at invite time; whoever invited passes it on. Messaging (WhatsApp/SMS) arrives in M5,
+   and password reset by code is FR-AUTH-05 (P1), so M1 hands the link over by hand — which is
+   what an ops-assisted onboarding does anyway (RUNBOOK §10).
+3. **Accepting is a public endpoint.** The invitee has no session yet: they present the token,
+   set a password, and the API activates the membership and signs them in. That closes M1's
+   exit criterion, which otherwise needs seeded passwords.
+4. **Ops names the clinic; staff never do.** Ops routes take the clinic in the path
+   (`/api/v1/ops/clinics/{clinic_id}/…`) because an ops user has no membership to infer it from
+   (R10). They still reach tenant rows only through `uow.tenant(clinic_id)`, so the scope is
+   explicit and the same code path as clinic routes.
+5. **The checklist measures goal G4, so it is written by the actions themselves.** Each step
+   records the *first* time it happened and never overwrites (R12), so the elapsed time from
+   "clinic created" to "first prescription" is a fact in the database rather than a stopwatch in
+   someone's notes.
+
+### Request flow — onboarding a clinic
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant O as Ops user
+    participant A as api (/ops)
+    participant D as PostgreSQL
+    participant N as New owner
+    O->>A: POST /api/v1/ops/clinics {name, slug, timezone, …}
+    A->>D: INSERT clinics (ONBOARDING) + onboarding_checklists + audit clinic.created
+    A-->>O: 201 clinic
+    O->>A: POST /ops/clinics/{id}/doctors {display_name, qualification, registration_number}
+    A->>D: INSERT doctors + checklist.doctors_added_at + audit doctor.added
+    O->>A: POST /ops/clinics/{id}/staff-invites {full_name, email, role: OWNER}
+    A->>D: user (found or created) + INVITED membership + token digest + checklist + audit staff.invited
+    A-->>O: 201 {membership, accept_url}   (the token appears once)
+    O-->>N: hands over the link
+    N->>A: GET /api/v1/auth/invites/{token}
+    A-->>N: 200 {clinic_name, full_name, role}
+    N->>A: POST /api/v1/auth/invites/{token}/accept {password}
+    A->>D: set password, membership ACTIVE, token used, clinic ACTIVE (I1), audit staff.accepted
+    A-->>N: 200 session (cookies set — they are signed in)
+```
+
+### Endpoints
+
+| Method | Path | Policy | Purpose |
+|---|---|---|---|
+| POST | `/api/v1/ops/clinics` | `ops` | Create a clinic in `ONBOARDING` (FR-ORG-01) |
+| GET | `/api/v1/ops/clinics` | `ops` | List clinics with their onboarding state (FR-OPS-01/04) |
+| GET | `/api/v1/ops/clinics/{clinic_id}` | `ops` | One clinic with its checklist |
+| POST | `/api/v1/ops/clinics/{clinic_id}/doctors` | `ops` | Add a doctor during onboarding (FR-ORG-02) |
+| POST | `/api/v1/ops/clinics/{clinic_id}/staff-invites` | `ops` | Invite the owner (or any role) |
+| GET | `/api/v1/auth/invites/{token}` | `public` | What this invite is for (no session) |
+| POST | `/api/v1/auth/invites/{token}/accept` | `public` | Set a password, activate, sign in |
+| POST | `/api/v1/clinic/staff` | `clinic(STAFF_MANAGE)` | Owner invites staff (FR-ORG-04) |
+| PATCH | `/api/v1/clinic/staff/{membership_id}` | `clinic(STAFF_MANAGE)` | Role change (P4) **+ deactivate** |
+| POST | `/api/v1/clinic/doctors` | `clinic(CLINIC_MANAGE)` | Owner adds a doctor |
+| PATCH | `/api/v1/clinic/doctors/{doctor_id}` | `clinic(CLINIC_MANAGE)` | Edit or deactivate a doctor |
+| PATCH | `/api/v1/clinic` | `clinic(CLINIC_MANAGE)` | Clinic settings (name, timezone, address, specialties) |
+
+### Rules
+
+| Check | Outcome |
+|---|---|
+| Clinic slug already used | 409 `CLN_SLUG_TAKEN` (the one cross-clinic uniqueness ops can hit) |
+| Invite for an email/phone that is already a user | Reuse that user and add a membership — "one user, two memberships" (spec §8) |
+| Invite for someone who already has a membership here | 409 `CLN_MEMBER_EXISTS` (I2), whatever its status |
+| Re-inviting an `INVITED` membership | Allowed: a new token replaces the old digest, which stops working |
+| Unknown invite token | 404 `CLN_INVITE_INVALID` — the same answer for a malformed one |
+| Expired or already accepted token | 410 `CLN_INVITE_EXPIRED` / `CLN_INVITE_USED`, so the invitee knows to ask again |
+| Accepting with a weak password | 422 `REQ_VALIDATION_FAILED` (minimum 12 characters, a domain rule) |
+| Accepting an owner invite for an `ONBOARDING` clinic | The clinic becomes `ACTIVE` (I1 is satisfied at that moment) and `clinic.activated` is audited |
+| Deactivating or demoting the last active owner | 409 `CLN_LAST_OWNER` (R9), nothing recorded |
+| Deactivating a member | Their next request is refused (`AUTH_ACCOUNT_DISABLED`, AC4 — already true from P3) |
+| Reactivating a deactivated member | Not in M1: the domain has no such transition. Re-invite them instead (409 `CLN_MEMBER_EXISTS` is the hint, so the owner deactivates and re-invites with a new identity) — see open choices |
+| A doctor's `user_id` that is not an active member of the clinic | 422 `REQ_VALIDATION_FAILED` |
+| Ops user on `/api/v1/ops/*` | Allowed; clinic staff get 403 `PERM_DENIED` (R10, already enforced) |
+| Unknown `clinic_id` in an ops path | 404 `REQ_NOT_FOUND` |
+| Any checklist step that already has a timestamp | Left untouched (R12) |
+
+### Audit actions added
+
+`clinic.created`, `clinic.activated`, `clinic.updated`, `doctor.added`, `doctor.updated`,
+`staff.invited`, `staff.accepted`, `staff.deactivated`. Ops actions are recorded with
+`actor_type=OPS` and the clinic they touched; staff actions with `actor_type=STAFF` and the
+request's clinic. Every one is written in the same transaction as its change (R11, proved in P4).
+
+### Decisions
+
+| Decision | Reason |
+|---|---|
+| The invite lives on `clinic_memberships` (`invite_token_hash`, `invite_expires_at`, `invite_accepted_at`) instead of a new table | The `INVITED` membership already *is* the pending invitation. One row means no state to reconcile, I2 keeps duplicates out, and re-inviting is a new digest rather than a second record |
+| Token lookup is a platform repository keyed by the digest, like refresh tokens | The invitee has no clinic context yet, so the read cannot be clinic-scoped. It is keyed by a 256-bit secret, which is exactly the sanctioned pattern from P2 (ADR-0003 "platform repositories") |
+| 7-day expiry as a domain constant, not a setting | Nothing operational tunes it; a constant keeps `.env` smaller. It becomes a setting the day someone needs a different value |
+| Accepting an owner invite activates an `ONBOARDING` clinic | I1 only becomes satisfiable at that moment, and it removes a step from the 60-minute onboarding. Ops never has to remember to "turn the clinic on" |
+| `PATCH /clinic/staff/{id}` carries both `role` and `status` | One endpoint for "manage this membership", as `docs/API.md` planned. Each field writes its own audit action; sending neither is a 422 |
+| No reactivation of a deactivated membership in M1 | The domain's lifecycle is `INVITED → ACTIVE → DEACTIVATED` (spec §3). Adding a transition is a spec change, not an implementation detail — see open choices |
+| Ops endpoints return the accept URL built from `PUBLIC_BASE_URL` | The setting already exists for M4 patient links; the API returns a URL rather than a bare token so the console has nothing to assemble |
+| The invite token is shown exactly once, in the response that creates it | Nothing stores it in clear, so a leaked database cannot be used to take over a pending invite |
+| No per-IP rate limit on the public invite endpoints | A guess has to hit a 256-bit secret; the reverse proxy adds request limits in M6-P1 |
+
+### Open choices for approval
+
+1. **Size.** P5 is the largest phase in M1: three ops endpoints, two public invite endpoints, five
+   owner endpoints, one migration and a checklist. Options:
+   - **A (recommended)** — one phase, implemented in five commits (migration + domain → invite
+     and acceptance → ops onboarding → owner management → docs), each green on its own.
+   - **B** — split into **P5a** (ops onboarding + invite acceptance, which completes the M1 exit
+     criterion) and **P5b** (owner staff and doctor management, clinic settings). P6 (web) then
+     starts sooner against a working onboarding flow.
+2. **Reactivation.** Should an owner be able to bring a deactivated member back (`DEACTIVATED →
+   ACTIVE`)? It needs a new domain transition and a spec amendment. My recommendation: **not in
+   M1** — a clinic that deactivates someone by mistake can re-invite them, and the audit trail
+   shows both steps. Say the word if you want it in P5 instead.
+
+### Files
+
+| Layer | Files |
+|---|---|
+| Domain | `identity/membership.py` (invite token fields, `accept`, `revoke_invite`), `identity/password.py` (`validate_password`, minimum length), `clinics/clinic.py` (`update_details`), `clinics/doctor.py` (`update_details`), `clinics/onboarding.py` (`OnboardingChecklist`, `OnboardingStep`, first-time-wins), `audit/actions.py` (+8 actions) |
+| Application | `clinics/onboard_clinic.py` (`CreateClinic`, `AddDoctor`, `InviteStaff`), `clinics/manage_staff.py` (`DeactivateStaff`, extends P4's role change), `clinics/manage_doctors.py` (`UpdateDoctor`), `clinics/update_clinic.py`, `identity/accept_invite.py` (`DescribeInvite`, `AcceptInvite`), `ops/queries.py` (`ListClinics`, `GetClinicOnboarding`) |
+| Ports | `repositories.py`: `MembershipRepository.get_by_invite_digest` (platform `StaffInviteRepository`), `ChecklistRepository` (tenant), `ClinicRepository.list_for_ops` |
+| Adapters | `db/repositories.py` (the three above), migration `0005` (`clinic_memberships` invite columns + `onboarding_checklists`) |
+| Delivery | `http/ops.py` (new blueprint), `http/invites.py` (public), `http/clinic.py` (staff invite/deactivate, doctors, settings), `errors.py` (invite codes), `bootstrap.py` |
+| Contract / docs | `openapi.yaml` (12 operations, 0.5.0), `API.md`, `ERRORS.md`, `DATA_MODEL.md`, `SECURITY_AND_COMPLIANCE.md`, `RUNBOOK.md` §10 (the real commands), `specs/identity-and-tenancy.md` §7 (new actions) |
+
+### Tests
+
+- Domain: invite issue/accept/expiry on `ClinicMembership`; password rule; checklist records the
+  first timestamp and ignores later ones (R12); clinic and doctor detail updates.
+- Application (fakes): invite reuses an existing user, refuses a second membership (I2), a new
+  token invalidates the old one, acceptance sets the password and activates, an owner acceptance
+  activates the clinic (I1), deactivation refuses the last owner (R9).
+- Integration (PostgreSQL): the invite digest is unique and never stored in clear; migration
+  `0005` up and down; checklist row per clinic.
+- HTTP: the full ops onboarding flow in one test (clinic → doctor → owner invite → accept →
+  owner signs in and sees their clinic — the M1 exit criterion); owner invites a front desk who
+  accepts and can read the queue-less clinic endpoints; deactivation then the member's next
+  request is 403 (AC4); clinic staff refused on `/ops/*` and ops refused on clinic routes (R10);
+  every new action appears exactly once in `audit_events`.
+- Tenancy: the new clinic routes with IDs join `CROSS_TENANT_CASES`; an ops request for an
+  unknown clinic is 404; a clinic's checklist and invites are never visible to another clinic.
+- Contract: every new operation and its error shapes.
+
+### Verify
+
+```bash
+make up   # 0005 applied
+# as ops@mediease.example:
+#   POST /api/v1/ops/clinics            → 201, clinic ONBOARDING
+#   POST /ops/clinics/<id>/doctors      → 201
+#   POST /ops/clinics/<id>/staff-invites {role: OWNER} → 201 + accept_url
+# as the invitee (no session):
+#   GET  /api/v1/auth/invites/<token>   → 200 clinic + role
+#   POST /api/v1/auth/invites/<token>/accept {password} → 200 + cookies; clinic now ACTIVE
+# as the new owner:
+#   POST /api/v1/clinic/staff {role: FRONT_DESK} → 201 + accept_url; they accept and sign in
+#   PATCH /api/v1/clinic/staff/<id> {"status":"DEACTIVATED"} → 200; their next request 403
+# make psql: select * from onboarding_checklists;  → first timestamps only, never overwritten
+#            select action, actor_type from audit_events order by occurred_at;
+```
 
 ---
 
