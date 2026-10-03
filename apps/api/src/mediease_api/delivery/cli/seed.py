@@ -202,3 +202,7 @@ def _create_clinic(
 
     clinic.activate(active_owner_count=staff.memberships.count_active_owners(), now=now)
     uow.clinics.update(clinic)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
