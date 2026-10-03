@@ -108,7 +108,13 @@ export interface paths {
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
-        readonly patch?: never;
+        /**
+         * Edit the clinic's details
+         * @description FR-ORG-01. Permission: CLINIC_MANAGE (owners). Only the fields sent are changed; send
+         *     at least one. The slug is not editable (it appears in public links from M7) and the
+         *     status has its own transitions. Records clinic.updated. Needs X-CSRF-Token.
+         */
+        readonly patch: operations["updateClinic"];
         readonly trace?: never;
     };
     readonly "/api/v1/clinic/doctors": {
@@ -121,11 +127,18 @@ export interface paths {
         /**
          * The clinic's doctors
          * @description Permission: DOCTORS_VIEW (every role). Unpaginated: a clinic has one to four
-         *     doctors (PRD §2). Adding a doctor arrives in M1-P5.
+         *     doctors (PRD §2).
          */
         readonly get: operations["listDoctors"];
         readonly put?: never;
-        readonly post?: never;
+        /**
+         * Add a doctor to this clinic
+         * @description FR-ORG-02. Permission: CLINIC_MANAGE (owners). Qualification, registration number and
+         *     council are required because every prescription prints them (I3). An optional user_id
+         *     links a staff account that is an active member and has no doctor profile yet (spec §8
+         *     "owner who is also a doctor"). Records doctor.added and the checklist's first doctor.
+         */
+        readonly post: operations["addDoctor"];
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -150,7 +163,14 @@ export interface paths {
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
-        readonly patch?: never;
+        /**
+         * Correct a doctor's details or deactivate them
+         * @description FR-ORG-02. Permission: CLINIC_MANAGE (owners). Only the fields sent are changed; send
+         *     at least one. The required fields can be corrected but not emptied (I3). Setting
+         *     is_active to false stops offering the doctor for new work; history keeps referring to
+         *     them. Records doctor.updated. Needs X-CSRF-Token.
+         */
+        readonly patch: operations["updateDoctor"];
         readonly trace?: never;
     };
     readonly "/api/v1/clinic/staff": {
@@ -167,7 +187,16 @@ export interface paths {
          */
         readonly get: operations["listStaff"];
         readonly put?: never;
-        readonly post?: never;
+        /**
+         * Invite somebody to join this clinic
+         * @description FR-ORG-04. Permission: STAFF_MANAGE (owners). An email address or a phone number is
+         *     required, because that is how they will sign in (R1). A person who already has a
+         *     MediEase account keeps it and gains a membership; somebody who already belongs to
+         *     this clinic is refused (409 CLN_MEMBER_EXISTS); a still-pending invitation is
+         *     re-issued, which retires the previous link. The response carries accept_url — the one
+         *     place the invitation secret appears. Records staff.invited. Needs X-CSRF-Token.
+         */
+        readonly post: operations["inviteStaff"];
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -188,15 +217,156 @@ export interface paths {
         readonly options?: never;
         readonly head?: never;
         /**
-         * Change a member's role
-         * @description FR-ORG-04, FR-AUD-01. Permission: STAFF_MANAGE (owners only). The new role and a
-         *     staff.role_changed audit event are written in one transaction, so a role change is
-         *     never unrecorded (spec R11). The last active owner can be neither demoted nor
-         *     deactivated (409 CLN_LAST_OWNER). The member keeps their session: the new role
-         *     applies to their next request. Setting the role they already hold changes nothing
-         *     and records nothing. Needs X-CSRF-Token.
+         * Change a member's role, deactivate them, or both
+         * @description FR-ORG-04, FR-AUD-01. Permission: STAFF_MANAGE (owners only). Send a role, a status,
+         *     or both; each change is written with its own audit event in one transaction, so it is
+         *     never unrecorded (spec R11). status accepts DEACTIVATED only: the lifecycle is
+         *     INVITED → ACTIVE → DEACTIVATED with no way back in M1, so somebody removed by mistake
+         *     is invited again. The last active owner can be neither demoted nor deactivated
+         *     (409 CLN_LAST_OWNER). The member keeps their session, but their next request is
+         *     refused once deactivated, and a new role applies from their next request. Setting the
+         *     role they already hold changes nothing and records nothing. Needs X-CSRF-Token.
          */
-        readonly patch: operations["changeStaffRole"];
+        readonly patch: operations["changeStaffMembership"];
+        readonly trace?: never;
+    };
+    readonly "/api/v1/auth/invites/{token}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * What this invitation is for
+         * @description Public (M1-P5): the invitee has no session yet. Returns the clinic, their name and
+         *     the role, so the page can ask for a password with context. Unknown secrets are 404
+         *     CLN_INVITE_INVALID; one that is expired or already used says which, because the
+         *     person holding the link needs to know whether to ask for a new one.
+         */
+        readonly get: operations["describeInvite"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/auth/invites/{token}/accept": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Set a password, join the clinic and sign in
+         * @description FR-ORG-04, FR-AUTH-01. Public: the authority is the secret in the URL, so no
+         *     X-CSRF-Token is needed (a cross-site request would have to know the secret). The
+         *     password must be at least 12 characters. Accepting activates the membership, records
+         *     staff.accepted, activates an ONBOARDING clinic when the new member is its owner (I1),
+         *     and sets the session cookies — the invitee is signed in.
+         */
+        readonly post: operations["acceptInvite"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/clinics": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Every clinic with its onboarding state
+         * @description FR-OPS-01, FR-OPS-04. Ops only. Newest first, each with its checklist timestamps so
+         *     the time from "clinic created" to "owner accepted" is visible (goal G4). Unpaginated
+         *     at pilot scale.
+         */
+        readonly get: operations["listClinics"];
+        readonly put?: never;
+        /**
+         * Create a clinic
+         * @description FR-ORG-01, FR-OPS-01. Ops only. The clinic starts in ONBOARDING and becomes ACTIVE
+         *     when its first owner accepts their invitation (I1). The slug is unique platform-wide
+         *     because it appears in public links from M7 (409 CLN_SLUG_TAKEN). Records
+         *     clinic.created and starts the onboarding checklist. Needs X-CSRF-Token.
+         */
+        readonly post: operations["createClinic"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/clinics/{clinic_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * One clinic with its checklist, staff and doctor count
+         * @description FR-OPS-01/04. Ops only. No clinical content.
+         */
+        readonly get: operations["getOpsClinic"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/clinics/{clinic_id}/doctors": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Add a doctor while onboarding
+         * @description FR-ORG-02, FR-OPS-01. Ops only; the same body and rules as the clinic's own endpoint.
+         *     Records doctor.added and the checklist's first doctor. Needs X-CSRF-Token.
+         */
+        readonly post: operations["addOpsDoctor"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/clinics/{clinic_id}/staff-invites": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Invite the clinic's owner (or any role)
+         * @description FR-OPS-01, FR-ORG-04. Ops only; the same body and rules as the clinic's own endpoint.
+         *     The response carries accept_url — the one place the invitation secret appears. Records
+         *     staff.invited and the checklist's first invite. Needs X-CSRF-Token.
+         */
+        readonly post: operations["inviteOpsStaff"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
         readonly trace?: never;
     };
     readonly "/health": {
@@ -357,9 +527,128 @@ export interface components {
             readonly role: components["schemas"]["Role"];
             readonly status: components["schemas"]["MembershipStatus"];
         };
-        /** @description The only staff field M1-P4 can change; invite and deactivate land in M1-P5 */
-        readonly StaffRoleUpdate: {
+        /** @description Send a role, a status, or both. status accepts DEACTIVATED only (M1). */
+        readonly StaffMembershipUpdate: {
+            readonly role?: components["schemas"]["Role"];
+            /** @constant */
+            readonly status?: "DEACTIVATED";
+        };
+        readonly StaffInvitation: components["schemas"]["StaffMember"] & {
+            /**
+             * Format: uri
+             * @description Where the invitee sets their password. Contains the single-use secret, which
+             *     is never stored in clear and never shown again.
+             */
+            readonly accept_url: string;
+        };
+        /** @description An email address or a phone number is required (it is how they sign in). */
+        readonly NewStaffInvite: {
+            readonly full_name: string;
             readonly role: components["schemas"]["Role"];
+            readonly email?: string | null;
+            /** @description Indian 10-digit input accepted; normalised to E.164 */
+            readonly phone?: string | null;
+        };
+        readonly Invite: {
+            readonly clinic_name: string;
+            readonly full_name: string;
+            readonly role: components["schemas"]["Role"];
+            /** Format: date-time */
+            readonly expires_at: string | null;
+            /** @description True when the person already has an account; the page can offer sign-in */
+            readonly has_password: boolean;
+        };
+        readonly AcceptInviteRequest: {
+            /**
+             * Format: password
+             * @description At least 12 characters (the domain's policy)
+             */
+            readonly password: string;
+        };
+        readonly NewClinic: {
+            readonly name: string;
+            /** @description Lower-case words joined by single hyphens; unique platform-wide */
+            readonly slug: string;
+            /** @description IANA name; defaults to Asia/Kolkata */
+            readonly timezone?: string | null;
+            readonly phone?: string | null;
+            readonly address_line?: string | null;
+            readonly city?: string | null;
+            readonly state?: string | null;
+            readonly pincode?: string | null;
+            readonly specialties?: readonly string[];
+        };
+        /** @description Only the fields sent are changed. The slug and status are not editable here. */
+        readonly ClinicUpdate: {
+            readonly name?: string | null;
+            readonly timezone?: string | null;
+            readonly phone?: string | null;
+            readonly address_line?: string | null;
+            readonly city?: string | null;
+            readonly state?: string | null;
+            readonly pincode?: string | null;
+            readonly specialties?: readonly string[] | null;
+        };
+        /** @description I3 — every prescription prints the qualification and registration details. */
+        readonly NewDoctor: {
+            readonly display_name: string;
+            readonly qualification: string;
+            readonly registration_number: string;
+            readonly registration_council: string;
+            readonly specialty?: string | null;
+            /**
+             * Format: uuid
+             * @description An active member of this clinic who has no doctor profile yet
+             */
+            readonly user_id?: string | null;
+        };
+        /** @description Only the fields sent are changed; the required ones cannot be emptied (I3). */
+        readonly DoctorUpdate: {
+            readonly display_name?: string | null;
+            readonly qualification?: string | null;
+            readonly registration_number?: string | null;
+            readonly registration_council?: string | null;
+            readonly specialty?: string | null;
+            /** Format: uuid */
+            readonly user_id?: string | null;
+            /** @description false deactivates the doctor; history keeps referring to them */
+            readonly is_active?: boolean | null;
+        };
+        /** @description When each onboarding step first happened (FR-OPS-04, R12) */
+        readonly OnboardingChecklist: {
+            /** Format: date-time */
+            readonly started_at: string;
+            /** Format: date-time */
+            readonly clinic_created_at: string | null;
+            /** Format: date-time */
+            readonly doctors_added_at: string | null;
+            /** Format: date-time */
+            readonly staff_invited_at: string | null;
+            /**
+             * Format: date-time
+             * @description Written from M2
+             */
+            readonly patients_imported_at: string | null;
+            /**
+             * Format: date-time
+             * @description Written from M3
+             */
+            readonly first_appointment_at: string | null;
+            /**
+             * Format: date-time
+             * @description Written from M4
+             */
+            readonly first_prescription_at: string | null;
+        };
+        readonly OpsClinicList: {
+            readonly items: readonly (components["schemas"]["Clinic"] & {
+                readonly onboarding: components["schemas"]["OnboardingChecklist"] | null;
+            })[];
+        };
+        readonly OpsClinicDetail: components["schemas"]["Clinic"] & {
+            readonly onboarding: components["schemas"]["OnboardingChecklist"] | null;
+            readonly doctor_count: number;
+            readonly staff: readonly components["schemas"]["StaffMember"][];
         };
         readonly Error: {
             /**
@@ -418,7 +707,8 @@ export interface components {
         };
         /**
          * @description The change conflicts with a clinic rule: CLN_LAST_OWNER (a clinic needs at least one
-         *     active owner), CLN_INVALID_TRANSITION (the entity's state does not allow it)
+         *     active owner), CLN_INVALID_TRANSITION (the entity's state does not allow it),
+         *     CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here)
          */
         readonly ConflictError: {
             headers: {
@@ -427,6 +717,30 @@ export interface components {
             };
             content: {
                 readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description CLN_INVITE_INVALID (404, unknown or malformed secret); CLN_INVITE_EXPIRED,
+         *     CLN_INVITE_USED (410 — ask the clinic for a new invitation, or sign in)
+         */
+        readonly InviteError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description The invited member and the acceptance URL (the secret appears only here) */
+        readonly StaffInvited: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly "Cache-Control": components["headers"]["NoStore"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["StaffInvitation"];
             };
         };
     };
@@ -441,6 +755,10 @@ export interface components {
          *     value that is not one of the caller's clinics gets the same 400, never a 404.
          */
         readonly ClinicId: string;
+        /** @description The clinic an ops request is about (ops users have no membership to infer). */
+        readonly ClinicPath: string;
+        /** @description The single-use invitation secret from the acceptance link. */
+        readonly InviteToken: string;
     };
     requestBodies: never;
     headers: {
@@ -594,6 +912,49 @@ export interface operations {
             readonly 404: components["responses"]["PermissionError"];
         };
     };
+    readonly updateClinic: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["ClinicUpdate"];
+            };
+        };
+        readonly responses: {
+            /** @description The clinic after the change */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Clinic"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
     readonly listDoctors: {
         readonly parameters: {
             readonly query?: never;
@@ -626,6 +987,48 @@ export interface operations {
             readonly 400: components["responses"]["PermissionError"];
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
+        };
+    };
+    readonly addDoctor: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewDoctor"];
+            };
+        };
+        readonly responses: {
+            /** @description The new doctor */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Doctor"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
         };
     };
     readonly getDoctor: {
@@ -665,6 +1068,51 @@ export interface operations {
             readonly 404: components["responses"]["PermissionError"];
         };
     };
+    readonly updateDoctor: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly doctor_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["DoctorUpdate"];
+            };
+        };
+        readonly responses: {
+            /** @description The doctor after the change */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Doctor"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
     readonly listStaff: {
         readonly parameters: {
             readonly query?: never;
@@ -699,7 +1147,40 @@ export interface operations {
             readonly 403: components["responses"]["PermissionError"];
         };
     };
-    readonly changeStaffRole: {
+    readonly inviteStaff: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewStaffInvite"];
+            };
+        };
+        readonly responses: {
+            readonly 201: components["responses"]["StaffInvited"];
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly changeStaffMembership: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: {
@@ -721,7 +1202,7 @@ export interface operations {
         };
         readonly requestBody: {
             readonly content: {
-                readonly "application/json": components["schemas"]["StaffRoleUpdate"];
+                readonly "application/json": components["schemas"]["StaffMembershipUpdate"];
             };
         };
         readonly responses: {
@@ -737,6 +1218,226 @@ export interface operations {
                 };
             };
             readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly describeInvite: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                /** @description The single-use invitation secret from the acceptance link. */
+                readonly token: components["parameters"]["InviteToken"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The pending invitation */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Invite"];
+                };
+            };
+            readonly 404: components["responses"]["InviteError"];
+            readonly 410: components["responses"]["InviteError"];
+        };
+    };
+    readonly acceptInvite: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                /** @description The single-use invitation secret from the acceptance link. */
+                readonly token: components["parameters"]["InviteToken"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["AcceptInviteRequest"];
+            };
+        };
+        readonly responses: {
+            readonly 200: components["responses"]["SessionStarted"];
+            readonly 403: components["responses"]["AuthError"];
+            readonly 404: components["responses"]["InviteError"];
+            readonly 410: components["responses"]["InviteError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly listClinics: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Clinics with their onboarding state */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["OpsClinicList"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+        };
+    };
+    readonly createClinic: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewClinic"];
+            };
+        };
+        readonly responses: {
+            /** @description The new clinic */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Clinic"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly getOpsClinic: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                /** @description The clinic an ops request is about (ops users have no membership to infer). */
+                readonly clinic_id: components["parameters"]["ClinicPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The clinic's onboarding detail */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["OpsClinicDetail"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly addOpsDoctor: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description The clinic an ops request is about (ops users have no membership to infer). */
+                readonly clinic_id: components["parameters"]["ClinicPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewDoctor"];
+            };
+        };
+        readonly responses: {
+            /** @description The new doctor */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Doctor"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly inviteOpsStaff: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description The clinic an ops request is about (ops users have no membership to infer). */
+                readonly clinic_id: components["parameters"]["ClinicPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewStaffInvite"];
+            };
+        };
+        readonly responses: {
+            readonly 201: components["responses"]["StaffInvited"];
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["PermissionError"];

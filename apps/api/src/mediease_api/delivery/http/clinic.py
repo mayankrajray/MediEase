@@ -1,67 +1,157 @@
-"""Clinic endpoints for the staff of one clinic (FR-ORG-02..04, NFR-08).
+"""Clinic endpoints for the staff of one clinic (FR-ORG-01..04, NFR-08).
 
 | Endpoint | Permission |
 |---|---|
 | ``GET /api/v1/clinic`` | ``CLINIC_VIEW`` |
+| ``PATCH /api/v1/clinic`` | ``CLINIC_MANAGE`` |
 | ``GET /api/v1/clinic/doctors`` | ``DOCTORS_VIEW`` |
+| ``POST /api/v1/clinic/doctors`` | ``CLINIC_MANAGE`` |
 | ``GET /api/v1/clinic/doctors/{doctor_id}`` | ``DOCTORS_VIEW`` |
-| ``GET /api/v1/clinic/staff`` | ``STAFF_MANAGE`` (owners) |
-| ``PATCH /api/v1/clinic/staff/{membership_id}`` | ``STAFF_MANAGE`` (owners) |
+| ``PATCH /api/v1/clinic/doctors/{doctor_id}`` | ``CLINIC_MANAGE`` |
+| ``GET /api/v1/clinic/staff`` | ``STAFF_MANAGE`` |
+| ``POST /api/v1/clinic/staff`` | ``STAFF_MANAGE`` |
+| ``PATCH /api/v1/clinic/staff/{membership_id}`` | ``STAFF_MANAGE`` |
 
 The clinic is never a path or query parameter: it comes from the request
 context the access hook resolved (spec R6), and every query runs through
-repositories bound to it, so another clinic's doctor is a 404 (R8, AC3).
+repositories bound to it, so another clinic's doctor or member is a 404
+(R8, AC3).
 
 Lists are unpaginated by design: a clinic has a handful of doctors and staff,
 so they return ``{"items": [...]}`` without a cursor. The paginated envelope
 in docs/API.md arrives with the first list that can grow (patients, M2).
 
-The role change (M1-P4) is the only write here; inviting and deactivating
-staff arrive in M1-P5, as does doctor management.
+``PATCH`` on a membership carries the role, the status, or both: one endpoint
+for "manage this membership", each field with its own audit action. There is
+no way back from ``DEACTIVATED`` in M1 — invite the person again.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any, Protocol
+from typing import Protocol
 from uuid import UUID
 
 from flask import Blueprint, Response, jsonify
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from mediease_api.application.clinics.change_staff_role import (
     ChangeStaffRole,
     ChangeStaffRoleCommand,
 )
+from mediease_api.application.clinics.deactivate_staff import (
+    DeactivateStaff,
+    DeactivateStaffCommand,
+)
+from mediease_api.application.clinics.invite_staff import InviteStaff, InviteStaffCommand
+from mediease_api.application.clinics.onboard_clinic import (
+    AddDoctor,
+    DoctorCommand,
+    UpdateClinic,
+    UpdateClinicCommand,
+    UpdateDoctor,
+)
 from mediease_api.application.clinics.queries import GetClinic, GetDoctor, ListDoctors, ListStaff
+from mediease_api.application.context import Actor
 from mediease_api.delivery.http.access import clinic, current_context
+from mediease_api.delivery.http.bodies import clinic_body, doctor_body, items_body, staff_body
+from mediease_api.delivery.http.ops import invitation_body
 from mediease_api.delivery.http.validation import parse_json
-from mediease_api.domain.clinics.clinic import Clinic
-from mediease_api.domain.clinics.doctor import Doctor
-from mediease_api.domain.identity.access import StaffMember
-from mediease_api.domain.identity.membership import Role
+from mediease_api.domain.identity.membership import MembershipStatus, Role
 from mediease_api.domain.identity.permissions import Permission
+from mediease_api.domain.shared.errors import InvalidValue
 
 
 class ClinicUseCases(Protocol):
     """Fresh use cases for one request, supplied by bootstrap.py."""
 
     def get_clinic(self) -> GetClinic: ...
+    def update_clinic(self) -> UpdateClinic: ...
     def list_doctors(self) -> ListDoctors: ...
     def get_doctor(self) -> GetDoctor: ...
+    def add_doctor(self) -> AddDoctor: ...
+    def update_doctor(self) -> UpdateDoctor: ...
     def list_staff(self) -> ListStaff: ...
+    def invite_staff(self) -> InviteStaff: ...
     def change_staff_role(self) -> ChangeStaffRole: ...
+    def deactivate_staff(self) -> DeactivateStaff: ...
 
 
-class StaffRoleRequest(BaseModel):
-    """The only staff field M1-P4 can change; invite and deactivate land in M1-P5."""
+class StaffMembershipRequest(BaseModel):
+    """Change a member's role, their status, or both."""
 
     model_config = ConfigDict(extra="forbid")
 
+    role: Role | None = None
+    # DEACTIVATED only: the lifecycle has no way back in M1 (spec §3).
+    status: MembershipStatus | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one_change(self) -> StaffMembershipRequest:
+        if self.role is None and self.status is None:
+            raise ValueError("send a role, a status, or both")
+        if self.status is not None and self.status is not MembershipStatus.DEACTIVATED:
+            raise ValueError("status can only be set to DEACTIVATED")
+        return self
+
+
+class NewStaffRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str = Field(min_length=1, max_length=200)
     role: Role
+    email: str | None = Field(default=None, max_length=254)
+    phone: str | None = Field(default=None, max_length=20)
 
 
-def create_clinic_blueprint(queries: ClinicUseCases) -> Blueprint:
+class NewClinicDoctorRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str = Field(min_length=1, max_length=200)
+    qualification: str = Field(min_length=1, max_length=200)
+    registration_number: str = Field(min_length=1, max_length=50)
+    registration_council: str = Field(min_length=1, max_length=200)
+    specialty: str | None = Field(default=None, max_length=100)
+    user_id: UUID | None = None
+
+
+class UpdateDoctorRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = Field(default=None, max_length=200)
+    qualification: str | None = Field(default=None, max_length=200)
+    registration_number: str | None = Field(default=None, max_length=50)
+    registration_council: str | None = Field(default=None, max_length=200)
+    specialty: str | None = Field(default=None, max_length=100)
+    user_id: UUID | None = None
+    is_active: bool | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one_change(self) -> UpdateDoctorRequest:
+        if all(value is None for value in self.model_dump().values()):
+            raise ValueError("send at least one field to change")
+        return self
+
+
+class UpdateClinicRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, max_length=200)
+    timezone: str | None = Field(default=None, max_length=64)
+    phone: str | None = Field(default=None, max_length=20)
+    address_line: str | None = Field(default=None, max_length=300)
+    city: str | None = Field(default=None, max_length=100)
+    state: str | None = Field(default=None, max_length=100)
+    pincode: str | None = Field(default=None, max_length=6)
+    specialties: list[str] | None = Field(default=None, max_length=20)
+
+    @model_validator(mode="after")
+    def _at_least_one_change(self) -> UpdateClinicRequest:
+        if all(value is None for value in self.model_dump().values()):
+            raise ValueError("send at least one field to change")
+        return self
+
+
+def create_clinic_blueprint(queries: ClinicUseCases, *, public_base_url: str) -> Blueprint:
     bp = Blueprint("clinic", __name__, url_prefix="/api/v1/clinic")
 
     @bp.after_request
@@ -73,77 +163,102 @@ def create_clinic_blueprint(queries: ClinicUseCases) -> Blueprint:
     @bp.get("")
     @clinic(Permission.CLINIC_VIEW)
     def get_clinic() -> Response:
-        return jsonify(_clinic_body(queries.get_clinic().execute(current_context())))
+        return jsonify(clinic_body(queries.get_clinic().execute(current_context())))
+
+    @bp.patch("")
+    @clinic(Permission.CLINIC_MANAGE)
+    def update_clinic() -> Response:
+        body = parse_json(UpdateClinicRequest)
+        ctx = current_context()
+        clinic_row = queries.update_clinic().execute(
+            clinic_id=ctx.clinic_id,
+            actor=Actor.staff(ctx),
+            cmd=UpdateClinicCommand(
+                name=body.name,
+                timezone=body.timezone,
+                phone=body.phone,
+                address_line=body.address_line,
+                city=body.city,
+                state=body.state,
+                pincode=body.pincode,
+                specialties=tuple(body.specialties) if body.specialties is not None else None,
+            ),
+        )
+        return jsonify(clinic_body(clinic_row))
 
     @bp.get("/doctors")
     @clinic(Permission.DOCTORS_VIEW)
     def list_doctors() -> Response:
         doctors = queries.list_doctors().execute(current_context())
-        return jsonify(_items(_doctor_body(d) for d in doctors))
+        return jsonify(items_body(doctor_body(d) for d in doctors))
+
+    @bp.post("/doctors")
+    @clinic(Permission.CLINIC_MANAGE)
+    def add_doctor() -> tuple[Response, int]:
+        body = parse_json(NewClinicDoctorRequest)
+        ctx = current_context()
+        doctor = queries.add_doctor().execute(
+            clinic_id=ctx.clinic_id,
+            actor=Actor.staff(ctx),
+            cmd=DoctorCommand(**body.model_dump()),
+        )
+        return jsonify(doctor_body(doctor)), 201
 
     @bp.get("/doctors/<uuid:doctor_id>")
     @clinic(Permission.DOCTORS_VIEW)
     def get_doctor(doctor_id: UUID) -> Response:
         doctor = queries.get_doctor().execute(current_context(), doctor_id)
-        return jsonify(_doctor_body(doctor))
+        return jsonify(doctor_body(doctor))
+
+    @bp.patch("/doctors/<uuid:doctor_id>")
+    @clinic(Permission.CLINIC_MANAGE)
+    def update_doctor(doctor_id: UUID) -> Response:
+        body = parse_json(UpdateDoctorRequest)
+        ctx = current_context()
+        doctor = queries.update_doctor().execute(
+            clinic_id=ctx.clinic_id,
+            actor=Actor.staff(ctx),
+            doctor_id=doctor_id,
+            cmd=DoctorCommand(**body.model_dump()),
+        )
+        return jsonify(doctor_body(doctor))
 
     @bp.get("/staff")
     @clinic(Permission.STAFF_MANAGE)
     def list_staff() -> Response:
         staff = queries.list_staff().execute(current_context())
-        return jsonify(_items(_staff_body(m) for m in staff))
+        return jsonify(items_body(staff_body(m) for m in staff))
+
+    @bp.post("/staff")
+    @clinic(Permission.STAFF_MANAGE)
+    def invite_staff() -> tuple[Response, int]:
+        body = parse_json(NewStaffRequest)
+        ctx = current_context()
+        invitation = queries.invite_staff().execute(
+            clinic_id=ctx.clinic_id,
+            actor=Actor.staff(ctx),
+            cmd=InviteStaffCommand(
+                full_name=body.full_name, role=body.role, email=body.email, phone=body.phone
+            ),
+        )
+        return jsonify(invitation_body(invitation, public_base_url)), 201
 
     @bp.patch("/staff/<uuid:membership_id>")
     @clinic(Permission.STAFF_MANAGE)
-    def change_staff_role(membership_id: UUID) -> Response:
-        body = parse_json(StaffRoleRequest)
-        member = queries.change_staff_role().execute(
-            current_context(),
-            ChangeStaffRoleCommand(membership_id=membership_id, role=body.role),
-        )
-        return jsonify(_staff_body(member))
+    def change_membership(membership_id: UUID) -> Response:
+        body = parse_json(StaffMembershipRequest)
+        ctx = current_context()
+        member = None
+        if body.role is not None:
+            member = queries.change_staff_role().execute(
+                ctx, ChangeStaffRoleCommand(membership_id=membership_id, role=body.role)
+            )
+        if body.status is MembershipStatus.DEACTIVATED:
+            member = queries.deactivate_staff().execute(
+                ctx, DeactivateStaffCommand(membership_id=membership_id)
+            )
+        if member is None:  # pragma: no cover - the request model requires one of the two
+            raise InvalidValue("role", "send a role, a status, or both")
+        return jsonify(staff_body(member))
 
     return bp
-
-
-def _items(bodies: Iterable[dict[str, Any]]) -> dict[str, Any]:
-    return {"items": list(bodies)}
-
-
-def _clinic_body(clinic_row: Clinic) -> dict[str, Any]:
-    return {
-        "id": str(clinic_row.id),
-        "name": clinic_row.name,
-        "slug": clinic_row.slug,
-        "timezone": clinic_row.timezone,
-        "status": clinic_row.status.value,
-        "phone_e164": clinic_row.phone.e164 if clinic_row.phone else None,
-        "address_line": clinic_row.address_line,
-        "city": clinic_row.city,
-        "state": clinic_row.state,
-        "pincode": clinic_row.pincode,
-        "specialties": list(clinic_row.specialties),
-    }
-
-
-def _doctor_body(doctor: Doctor) -> dict[str, Any]:
-    return {
-        "id": str(doctor.id),
-        "user_id": str(doctor.user_id) if doctor.user_id else None,
-        "display_name": doctor.display_name,
-        "qualification": doctor.qualification,
-        "registration_number": doctor.registration_number,
-        "registration_council": doctor.registration_council,
-        "specialty": doctor.specialty,
-        "is_active": doctor.is_active,
-    }
-
-
-def _staff_body(member: StaffMember) -> dict[str, Any]:
-    return {
-        "membership_id": str(member.membership_id),
-        "user_id": str(member.user_id),
-        "full_name": member.full_name,
-        "role": member.role.value,
-        "status": member.status.value,
-    }

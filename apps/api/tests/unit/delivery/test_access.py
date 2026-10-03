@@ -19,19 +19,31 @@ from mediease_api.delivery.http.access import (
 )
 from mediease_api.domain.identity.permissions import Permission
 
-# The whole HTTP surface after M1-P4, and the policy each route carries.
+# The whole HTTP surface after M1-P5, and the policy each route carries.
 EXPECTED_POLICIES = {
     "platform.health": (Access.PUBLIC, None),
     "platform.ready": (Access.PUBLIC, None),
     "auth.sign_in": (Access.PUBLIC, None),
     "auth.refresh": (Access.PUBLIC, None),
     "auth.sign_out": (Access.PUBLIC, None),
+    # The authority is the invitation secret in the URL, not a session.
+    "invites.describe_invite": (Access.PUBLIC, None),
+    "invites.accept_invite": (Access.PUBLIC, None),
     "me.me": (Access.AUTHENTICATED, None),
     "clinic.get_clinic": (Access.CLINIC, Permission.CLINIC_VIEW),
+    "clinic.update_clinic": (Access.CLINIC, Permission.CLINIC_MANAGE),
     "clinic.list_doctors": (Access.CLINIC, Permission.DOCTORS_VIEW),
+    "clinic.add_doctor": (Access.CLINIC, Permission.CLINIC_MANAGE),
     "clinic.get_doctor": (Access.CLINIC, Permission.DOCTORS_VIEW),
+    "clinic.update_doctor": (Access.CLINIC, Permission.CLINIC_MANAGE),
     "clinic.list_staff": (Access.CLINIC, Permission.STAFF_MANAGE),
-    "clinic.change_staff_role": (Access.CLINIC, Permission.STAFF_MANAGE),
+    "clinic.invite_staff": (Access.CLINIC, Permission.STAFF_MANAGE),
+    "clinic.change_membership": (Access.CLINIC, Permission.STAFF_MANAGE),
+    "ops.create_clinic": (Access.OPS, None),
+    "ops.list_clinics": (Access.OPS, None),
+    "ops.get_clinic": (Access.OPS, None),
+    "ops.add_doctor": (Access.OPS, None),
+    "ops.invite_staff": (Access.OPS, None),
 }
 
 
