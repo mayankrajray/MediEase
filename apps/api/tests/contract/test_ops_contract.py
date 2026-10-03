@@ -1,0 +1,190 @@
+"""Contract tests for the ops and invitation endpoints (ADR-0008, M1-P5).
+
+Real responses from the app wired to PostgreSQL are validated against
+contracts/openapi.yaml, including the acceptance flow a browser follows with
+no session at all.
+"""
+
+from __future__ import annotations
+
+from json import dumps
+from pathlib import Path
+from typing import Any
+
+import pytest
+from flask.testing import FlaskClient
+from openapi_core import OpenAPI
+from openapi_core.contrib.werkzeug import WerkzeugOpenAPIRequest, WerkzeugOpenAPIResponse
+from werkzeug.test import EnvironBuilder, TestResponse
+from werkzeug.wrappers import Request
+
+from tests.conftest import World
+
+_SPEC_PATH = Path(__file__).resolve().parents[4] / "contracts" / "openapi.yaml"
+_BASE_URL = "http://localhost:8000"
+OPS_CLINICS = "/api/v1/ops/clinics"
+PASSWORD = "a-new-staff-password"  # gitleaks:allow (synthetic test value)
+
+
+@pytest.fixture(scope="module")
+def openapi() -> OpenAPI:
+    return OpenAPI.from_file_path(str(_SPEC_PATH))
+
+
+def _check(openapi: OpenAPI, resp: TestResponse, *, validate_request: bool = True) -> None:
+    sent = resp.request
+    request = WerkzeugOpenAPIRequest(
+        Request(
+            EnvironBuilder(
+                base_url=_BASE_URL,
+                path=sent.path,
+                method=sent.method,
+                headers=dict(sent.headers),
+                data=getattr(resp, "sent_body", b""),
+            ).get_environ()
+        )
+    )
+    if validate_request:
+        openapi.validate_request(request)
+    openapi.validate_response(request, WerkzeugOpenAPIResponse(resp))
+
+
+def _send(
+    client: FlaskClient, method: str, path: str, body: dict[str, Any] | None = None
+) -> TestResponse:
+    headers = {}
+    csrf = client.get_cookie("me_csrf", domain="localhost", path="/")
+    if csrf is not None:
+        headers["X-CSRF-Token"] = csrf.value
+    resp = client.open(path, method=method, base_url=_BASE_URL, json=body, headers=headers)
+    resp.sent_body = b"" if body is None else dumps(body).encode()  # type: ignore[attr-defined]
+    return resp
+
+
+def _clinic(ops: FlaskClient, slug: str) -> dict[str, Any]:
+    resp = _send(ops, "POST", OPS_CLINICS, {"name": "Contract Clinic", "slug": slug})
+    assert resp.status_code == 201
+    return dict(resp.get_json())
+
+
+def test_adr_0008_the_ops_onboarding_flow_matches_contract(openapi: OpenAPI, world: World) -> None:
+    ops = world.client_for(world.ops)
+
+    created = _send(ops, "POST", OPS_CLINICS, {"name": "Contract Clinic", "slug": "contract-one"})
+    assert created.status_code == 201
+    _check(openapi, created)
+
+    listed = _send(ops, "GET", OPS_CLINICS)
+    assert listed.status_code == 200
+    _check(openapi, listed)
+
+    clinic_id = created.get_json()["id"]
+    detail = _send(ops, "GET", f"{OPS_CLINICS}/{clinic_id}")
+    assert detail.status_code == 200
+    _check(openapi, detail)
+
+    doctor = _send(
+        ops,
+        "POST",
+        f"{OPS_CLINICS}/{clinic_id}/doctors",
+        {
+            "display_name": "Dr. Contract",
+            "qualification": "MBBS",
+            "registration_number": "CON-1",
+            "registration_council": "Sample State Medical Council",
+        },
+    )
+    assert doctor.status_code == 201
+    _check(openapi, doctor)
+
+    invited = _send(
+        ops,
+        "POST",
+        f"{OPS_CLINICS}/{clinic_id}/staff-invites",
+        {"full_name": "Contract Owner", "role": "OWNER", "email": "contract@example.test"},
+    )
+    assert invited.status_code == 201
+    _check(openapi, invited)
+
+    # The invitee has no session: describe, then accept.
+    token = invited.get_json()["accept_url"].rsplit("/", 1)[1]
+    invitee = world.anonymous()
+    described = _send(invitee, "GET", f"/api/v1/auth/invites/{token}")
+    assert described.status_code == 200
+    _check(openapi, described)
+
+    accepted = _send(
+        invitee, "POST", f"/api/v1/auth/invites/{token}/accept", {"password": PASSWORD}
+    )
+    assert accepted.status_code == 200
+    _check(openapi, accepted)
+
+
+def test_adr_0008_an_unknown_invitation_matches_contract(openapi: OpenAPI, world: World) -> None:
+    resp = _send(world.anonymous(), "GET", "/api/v1/auth/invites/not-a-real-token")
+    assert resp.status_code == 404
+    _check(openapi, resp)
+
+
+def test_adr_0008_a_duplicate_slug_matches_contract(openapi: OpenAPI, world: World) -> None:
+    ops = world.client_for(world.ops)
+    _clinic(ops, "contract-two")
+    resp = _send(ops, "POST", OPS_CLINICS, {"name": "Contract Clinic", "slug": "contract-two"})
+    assert resp.status_code == 409
+    _check(openapi, resp)
+
+
+def test_adr_0008_clinic_staff_on_the_ops_api_matches_contract(
+    openapi: OpenAPI, world: World
+) -> None:
+    resp = _send(world.client_for(world.a.owner), "GET", OPS_CLINICS)
+    assert resp.status_code == 403
+    _check(openapi, resp)
+
+
+def test_adr_0008_the_owner_management_endpoints_match_contract(
+    openapi: OpenAPI, world: World
+) -> None:
+    owner = world.client_for(world.a.owner)
+
+    edited = _send(owner, "PATCH", "/api/v1/clinic", {"city": "Contract City"})
+    assert edited.status_code == 200
+    _check(openapi, edited)
+
+    doctor = _send(
+        owner,
+        "POST",
+        "/api/v1/clinic/doctors",
+        {
+            "display_name": "Dr. Owner Added",
+            "qualification": "MBBS",
+            "registration_number": "OWN-1",
+            "registration_council": "Sample State Medical Council",
+        },
+    )
+    assert doctor.status_code == 201
+    _check(openapi, doctor)
+
+    updated = _send(
+        owner, "PATCH", f"/api/v1/clinic/doctors/{doctor.get_json()['id']}", {"is_active": False}
+    )
+    assert updated.status_code == 200
+    _check(openapi, updated)
+
+    invited = _send(
+        owner,
+        "POST",
+        "/api/v1/clinic/staff",
+        {"full_name": "Contract Desk", "role": "FRONT_DESK", "phone": "9000099911"},
+    )
+    assert invited.status_code == 201
+    _check(openapi, invited)
+
+    deactivated = _send(
+        owner,
+        "PATCH",
+        f"/api/v1/clinic/staff/{invited.get_json()['membership_id']}",
+        {"status": "DEACTIVATED"},
+    )
+    assert deactivated.status_code == 200
+    _check(openapi, deactivated)

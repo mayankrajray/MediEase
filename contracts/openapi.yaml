@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -26,10 +26,19 @@ tags:
       or deactivating a member takes effect on their next request.
   - name: clinic
     description: |
-      Clinic settings, doctors and staff (M1-P3 reads, M1-P4 the role change). The clinic is
-      never a parameter: it is the caller's only membership, or the one named in X-Clinic-ID.
-      Another clinic's resource is 404, never 403 (NFR-08). Inviting and deactivating staff,
-      and doctor management, arrive in M1-P5.
+      Clinic settings, doctors and staff (M1-P3 reads, M1-P4 the role change, M1-P5 the rest).
+      The clinic is never a parameter: it is the caller's only membership, or the one named in
+      X-Clinic-ID. Another clinic's resource is 404, never 403 (NFR-08).
+  - name: ops
+    description: |
+      The internal ops console (M1-P5, FR-OPS-01/04). Platform staff only: clinic staff are
+      refused even as owners (spec R10). Ops users have no membership, so the clinic is named
+      in the path. No clinical content is ever returned here.
+  - name: invites
+    description: |
+      Accepting a staff invitation (M1-P5). Public, because the invitee has no session yet: the
+      authority is the single-use secret in the URL, which is also why these paths need no
+      X-CSRF-Token. Accepting sets a password, activates the membership and signs the person in.
 paths:
   /api/v1/auth/sign-in:
     post:
@@ -169,6 +178,50 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '404':
           $ref: '#/components/responses/PermissionError'
+    patch:
+      tags: [clinic]
+      operationId: updateClinic
+      summary: Edit the clinic's details
+      description: |
+        FR-ORG-01. Permission: CLINIC_MANAGE (owners). Only the fields sent are changed; send
+        at least one. The slug is not editable (it appears in public links from M7) and the
+        status has its own transitions. Records clinic.updated. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicUpdate'
+      responses:
+        '200':
+          description: The clinic after the change
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Clinic'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
   /api/v1/clinic/doctors:
     get:
       tags: [clinic]
@@ -176,7 +229,7 @@ paths:
       summary: The clinic's doctors
       description: |
         Permission: DOCTORS_VIEW (every role). Unpaginated: a clinic has one to four
-        doctors (PRD §2). Adding a doctor arrives in M1-P5.
+        doctors (PRD §2).
       security:
         - sessionCookie: []
       parameters:
@@ -200,6 +253,49 @@ paths:
           $ref: '#/components/responses/AuthError'
         '403':
           $ref: '#/components/responses/PermissionError'
+    post:
+      tags: [clinic]
+      operationId: addDoctor
+      summary: Add a doctor to this clinic
+      description: |
+        FR-ORG-02. Permission: CLINIC_MANAGE (owners). Qualification, registration number and
+        council are required because every prescription prints them (I3). An optional user_id
+        links a staff account that is an active member and has no doctor profile yet (spec §8
+        "owner who is also a doctor"). Records doctor.added and the checklist's first doctor.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewDoctor'
+      responses:
+        '201':
+          description: The new doctor
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Doctor'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
   /api/v1/clinic/doctors/{doctor_id}:
     get:
       tags: [clinic]
@@ -239,6 +335,57 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '404':
           $ref: '#/components/responses/PermissionError'
+    patch:
+      tags: [clinic]
+      operationId: updateDoctor
+      summary: Correct a doctor's details or deactivate them
+      description: |
+        FR-ORG-02. Permission: CLINIC_MANAGE (owners). Only the fields sent are changed; send
+        at least one. The required fields can be corrected but not emptied (I3). Setting
+        is_active to false stops offering the doctor for new work; history keeps referring to
+        them. Records doctor.updated. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: doctor_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DoctorUpdate'
+      responses:
+        '200':
+          description: The doctor after the change
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Doctor'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
   /api/v1/clinic/staff:
     get:
       tags: [clinic]
@@ -270,18 +417,58 @@ paths:
           $ref: '#/components/responses/AuthError'
         '403':
           $ref: '#/components/responses/PermissionError'
+    post:
+      tags: [clinic]
+      operationId: inviteStaff
+      summary: Invite somebody to join this clinic
+      description: |
+        FR-ORG-04. Permission: STAFF_MANAGE (owners). An email address or a phone number is
+        required, because that is how they will sign in (R1). A person who already has a
+        MediEase account keeps it and gains a membership; somebody who already belongs to
+        this clinic is refused (409 CLN_MEMBER_EXISTS); a still-pending invitation is
+        re-issued, which retires the previous link. The response carries accept_url — the one
+        place the invitation secret appears. Records staff.invited. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewStaffInvite'
+      responses:
+        '201':
+          $ref: '#/components/responses/StaffInvited'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
   /api/v1/clinic/staff/{membership_id}:
     patch:
       tags: [clinic]
-      operationId: changeStaffRole
-      summary: Change a member's role
+      operationId: changeStaffMembership
+      summary: Change a member's role, deactivate them, or both
       description: |
-        FR-ORG-04, FR-AUD-01. Permission: STAFF_MANAGE (owners only). The new role and a
-        staff.role_changed audit event are written in one transaction, so a role change is
-        never unrecorded (spec R11). The last active owner can be neither demoted nor
-        deactivated (409 CLN_LAST_OWNER). The member keeps their session: the new role
-        applies to their next request. Setting the role they already hold changes nothing
-        and records nothing. Needs X-CSRF-Token.
+        FR-ORG-04, FR-AUD-01. Permission: STAFF_MANAGE (owners only). Send a role, a status,
+        or both; each change is written with its own audit event in one transaction, so it is
+        never unrecorded (spec R11). status accepts DEACTIVATED only: the lifecycle is
+        INVITED → ACTIVE → DEACTIVATED with no way back in M1, so somebody removed by mistake
+        is invited again. The last active owner can be neither demoted nor deactivated
+        (409 CLN_LAST_OWNER). The member keeps their session, but their next request is
+        refused once deactivated, and a new role applies from their next request. Setting the
+        role they already hold changes nothing and records nothing. Needs X-CSRF-Token.
       security:
         - sessionCookie: []
       parameters:
@@ -299,7 +486,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StaffRoleUpdate'
+              $ref: '#/components/schemas/StaffMembershipUpdate'
       responses:
         '200':
           description: The member after the change
@@ -314,6 +501,246 @@ paths:
                 $ref: '#/components/schemas/StaffMember'
         '400':
           $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+  /api/v1/auth/invites/{token}:
+    get:
+      tags: [invites]
+      operationId: describeInvite
+      summary: What this invitation is for
+      description: |
+        Public (M1-P5): the invitee has no session yet. Returns the clinic, their name and
+        the role, so the page can ask for a password with context. Unknown secrets are 404
+        CLN_INVITE_INVALID; one that is expired or already used says which, because the
+        person holding the link needs to know whether to ask for a new one.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/InviteToken'
+      responses:
+        '200':
+          description: The pending invitation
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invite'
+        '404':
+          $ref: '#/components/responses/InviteError'
+        '410':
+          $ref: '#/components/responses/InviteError'
+  /api/v1/auth/invites/{token}/accept:
+    post:
+      tags: [invites]
+      operationId: acceptInvite
+      summary: Set a password, join the clinic and sign in
+      description: |
+        FR-ORG-04, FR-AUTH-01. Public: the authority is the secret in the URL, so no
+        X-CSRF-Token is needed (a cross-site request would have to know the secret). The
+        password must be at least 12 characters. Accepting activates the membership, records
+        staff.accepted, activates an ONBOARDING clinic when the new member is its owner (I1),
+        and sets the session cookies — the invitee is signed in.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/InviteToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptInviteRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/SessionStarted'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/InviteError'
+        '410':
+          $ref: '#/components/responses/InviteError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+  /api/v1/ops/clinics:
+    post:
+      tags: [ops]
+      operationId: createClinic
+      summary: Create a clinic
+      description: |
+        FR-ORG-01, FR-OPS-01. Ops only. The clinic starts in ONBOARDING and becomes ACTIVE
+        when its first owner accepts their invitation (I1). The slug is unique platform-wide
+        because it appears in public links from M7 (409 CLN_SLUG_TAKEN). Records
+        clinic.created and starts the onboarding checklist. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewClinic'
+      responses:
+        '201':
+          description: The new clinic
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Clinic'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+    get:
+      tags: [ops]
+      operationId: listClinics
+      summary: Every clinic with its onboarding state
+      description: |
+        FR-OPS-01, FR-OPS-04. Ops only. Newest first, each with its checklist timestamps so
+        the time from "clinic created" to "owner accepted" is visible (goal G4). Unpaginated
+        at pilot scale.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Clinics with their onboarding state
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsClinicList'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/ops/clinics/{clinic_id}:
+    get:
+      tags: [ops]
+      operationId: getOpsClinic
+      summary: One clinic with its checklist, staff and doctor count
+      description: 'FR-OPS-01/04. Ops only. No clinical content.'
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicPath'
+      responses:
+        '200':
+          description: The clinic's onboarding detail
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsClinicDetail'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/ops/clinics/{clinic_id}/doctors:
+    post:
+      tags: [ops]
+      operationId: addOpsDoctor
+      summary: Add a doctor while onboarding
+      description: |
+        FR-ORG-02, FR-OPS-01. Ops only; the same body and rules as the clinic's own endpoint.
+        Records doctor.added and the checklist's first doctor. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewDoctor'
+      responses:
+        '201':
+          description: The new doctor
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Doctor'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+  /api/v1/ops/clinics/{clinic_id}/staff-invites:
+    post:
+      tags: [ops]
+      operationId: inviteOpsStaff
+      summary: Invite the clinic's owner (or any role)
+      description: |
+        FR-OPS-01, FR-ORG-04. Ops only; the same body and rules as the clinic's own endpoint.
+        The response carries accept_url — the one place the invitation secret appears. Records
+        staff.invited and the checklist's first invite. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewStaffInvite'
+      responses:
+        '201':
+          $ref: '#/components/responses/StaffInvited'
         '401':
           $ref: '#/components/responses/AuthError'
         '403':
@@ -408,6 +835,22 @@ components:
       schema:
         type: string
         format: uuid
+    ClinicPath:
+      name: clinic_id
+      in: path
+      required: true
+      description: The clinic an ops request is about (ops users have no membership to infer).
+      schema:
+        type: string
+        format: uuid
+    InviteToken:
+      name: token
+      in: path
+      required: true
+      description: The single-use invitation secret from the acceptance link.
+      schema:
+        type: string
+        maxLength: 128
   responses:
     SessionStarted:
       description: Session started or renewed; me_access, me_refresh and me_csrf are set
@@ -447,7 +890,8 @@ components:
     ConflictError:
       description: |
         The change conflicts with a clinic rule: CLN_LAST_OWNER (a clinic needs at least one
-        active owner), CLN_INVALID_TRANSITION (the entity's state does not allow it)
+        active owner), CLN_INVALID_TRANSITION (the entity's state does not allow it),
+        CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -455,6 +899,28 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    InviteError:
+      description: |
+        CLN_INVITE_INVALID (404, unknown or malformed secret); CLN_INVITE_EXPIRED,
+        CLN_INVITE_USED (410 — ask the clinic for a new invitation, or sign in)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    StaffInvited:
+      description: The invited member and the acceptance URL (the secret appears only here)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StaffInvitation'
   headers:
     RequestId:
       description: Correlation ID for this request; quote it when reporting a problem.
@@ -706,14 +1172,267 @@ components:
           $ref: '#/components/schemas/Role'
         status:
           $ref: '#/components/schemas/MembershipStatus'
-    StaffRoleUpdate:
+    StaffMembershipUpdate:
       type: object
       additionalProperties: false
-      required: [role]
-      description: The only staff field M1-P4 can change; invite and deactivate land in M1-P5
+      minProperties: 1
+      description: Send a role, a status, or both. status accepts DEACTIVATED only (M1).
       properties:
         role:
           $ref: '#/components/schemas/Role'
+        status:
+          type: string
+          const: DEACTIVATED
+    StaffInvitation:
+      allOf:
+        - $ref: '#/components/schemas/StaffMember'
+        - type: object
+          required: [accept_url]
+          properties:
+            accept_url:
+              type: string
+              format: uri
+              description: |
+                Where the invitee sets their password. Contains the single-use secret, which
+                is never stored in clear and never shown again.
+    NewStaffInvite:
+      type: object
+      additionalProperties: false
+      required: [full_name, role]
+      description: An email address or a phone number is required (it is how they sign in).
+      properties:
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        role:
+          $ref: '#/components/schemas/Role'
+        email:
+          type: [string, 'null']
+          maxLength: 254
+        phone:
+          type: [string, 'null']
+          maxLength: 20
+          description: Indian 10-digit input accepted; normalised to E.164
+    Invite:
+      type: object
+      required: [clinic_name, full_name, role, expires_at, has_password]
+      properties:
+        clinic_name:
+          type: string
+        full_name:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        expires_at:
+          type: [string, 'null']
+          format: date-time
+        has_password:
+          type: boolean
+          description: True when the person already has an account; the page can offer sign-in
+    AcceptInviteRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          format: password
+          description: At least 12 characters (the domain's policy)
+    NewClinic:
+      type: object
+      additionalProperties: false
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        slug:
+          type: string
+          minLength: 3
+          maxLength: 63
+          description: Lower-case words joined by single hyphens; unique platform-wide
+        timezone:
+          type: [string, 'null']
+          description: IANA name; defaults to Asia/Kolkata
+        phone:
+          type: [string, 'null']
+          maxLength: 20
+        address_line:
+          type: [string, 'null']
+          maxLength: 300
+        city:
+          type: [string, 'null']
+          maxLength: 100
+        state:
+          type: [string, 'null']
+          maxLength: 100
+        pincode:
+          type: [string, 'null']
+          maxLength: 6
+        specialties:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+    ClinicUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Only the fields sent are changed. The slug and status are not editable here.
+      properties:
+        name:
+          type: [string, 'null']
+          maxLength: 200
+        timezone:
+          type: [string, 'null']
+        phone:
+          type: [string, 'null']
+          maxLength: 20
+        address_line:
+          type: [string, 'null']
+          maxLength: 300
+        city:
+          type: [string, 'null']
+          maxLength: 100
+        state:
+          type: [string, 'null']
+          maxLength: 100
+        pincode:
+          type: [string, 'null']
+          maxLength: 6
+        specialties:
+          type: [array, 'null']
+          maxItems: 20
+          items:
+            type: string
+    NewDoctor:
+      type: object
+      additionalProperties: false
+      required: [display_name, qualification, registration_number, registration_council]
+      description: I3 — every prescription prints the qualification and registration details.
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        qualification:
+          type: string
+          minLength: 1
+          maxLength: 200
+        registration_number:
+          type: string
+          minLength: 1
+          maxLength: 50
+        registration_council:
+          type: string
+          minLength: 1
+          maxLength: 200
+        specialty:
+          type: [string, 'null']
+          maxLength: 100
+        user_id:
+          type: [string, 'null']
+          format: uuid
+          description: An active member of this clinic who has no doctor profile yet
+    DoctorUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Only the fields sent are changed; the required ones cannot be emptied (I3).
+      properties:
+        display_name:
+          type: [string, 'null']
+          maxLength: 200
+        qualification:
+          type: [string, 'null']
+          maxLength: 200
+        registration_number:
+          type: [string, 'null']
+          maxLength: 50
+        registration_council:
+          type: [string, 'null']
+          maxLength: 200
+        specialty:
+          type: [string, 'null']
+          maxLength: 100
+        user_id:
+          type: [string, 'null']
+          format: uuid
+        is_active:
+          type: [boolean, 'null']
+          description: false deactivates the doctor; history keeps referring to them
+    OnboardingChecklist:
+      type: object
+      description: When each onboarding step first happened (FR-OPS-04, R12)
+      required:
+        - started_at
+        - clinic_created_at
+        - doctors_added_at
+        - staff_invited_at
+        - patients_imported_at
+        - first_appointment_at
+        - first_prescription_at
+      properties:
+        started_at:
+          type: string
+          format: date-time
+        clinic_created_at:
+          type: [string, 'null']
+          format: date-time
+        doctors_added_at:
+          type: [string, 'null']
+          format: date-time
+        staff_invited_at:
+          type: [string, 'null']
+          format: date-time
+        patients_imported_at:
+          type: [string, 'null']
+          format: date-time
+          description: Written from M2
+        first_appointment_at:
+          type: [string, 'null']
+          format: date-time
+          description: Written from M3
+        first_prescription_at:
+          type: [string, 'null']
+          format: date-time
+          description: Written from M4
+    OpsClinicList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Clinic'
+              - type: object
+                required: [onboarding]
+                properties:
+                  onboarding:
+                    oneOf:
+                      - $ref: '#/components/schemas/OnboardingChecklist'
+                      - type: 'null'
+    OpsClinicDetail:
+      allOf:
+        - $ref: '#/components/schemas/Clinic'
+        - type: object
+          required: [onboarding, doctor_count, staff]
+          properties:
+            onboarding:
+              oneOf:
+                - $ref: '#/components/schemas/OnboardingChecklist'
+                - type: 'null'
+            doctor_count:
+              type: integer
+            staff:
+              type: array
+              items:
+                $ref: '#/components/schemas/StaffMember'
     Error:
       type: object
       required: [code, message, request_id]

@@ -68,7 +68,7 @@ def create_auth_blueprint(use_cases: AuthUseCases, *, cookie_secure: bool) -> Bl
         result = use_cases.sign_in().execute(
             SignInCommand(identifier=body.identifier, password=body.password), request_info()
         )
-        return _session_response(result, cookie_secure)
+        return session_response(result, cookie_secure)
 
     @bp.post("/refresh")
     @public
@@ -83,7 +83,7 @@ def create_auth_blueprint(use_cases: AuthUseCases, *, cookie_secure: bool) -> Bl
             response, status = domain_error_response(exc)
             clear_session_cookies(response, secure=cookie_secure)
             return response, status
-        return _session_response(result, cookie_secure)
+        return session_response(result, cookie_secure)
 
     @bp.post("/sign-out")
     @public
@@ -96,9 +96,11 @@ def create_auth_blueprint(use_cases: AuthUseCases, *, cookie_secure: bool) -> Bl
     return bp
 
 
-def _session_response(result: SessionResult, cookie_secure: bool) -> Response:
+def session_response(result: SessionResult, cookie_secure: bool) -> Response:
+    """The sign-in body plus the session cookies. Shared with invite acceptance (M1-P5)."""
     response = jsonify(_session_body(result))
     set_session_cookies(response, result.tokens, secure=cookie_secure)
+    response.headers["Cache-Control"] = "no-store"
     return response
 
 
