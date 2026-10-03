@@ -100,7 +100,7 @@ The first import or registration also writes the onboarding checklist's `patient
 | A child turns 18 | The guardian name stays; nothing forces a change |
 | A child with no guardian phone | Refused (R10): the clinic records a number that answers for the child |
 | Another clinic's patient ID or code | `404 REQ_NOT_FOUND`; never a 403 (identity-and-tenancy R8) |
-| Lookup text that is digits but too short for a phone (`0142`) | Not a phone; tried as a code pattern, then as a name prefix |
+| Lookup text that is digits but too short for a phone (`0142`) | Not a phone, and not a code (a code always has its letters): read as the start of a name |
 
 ## 9. Acceptance criteria
 - **AC1 (FR-PAT-02)** Given a patient on `+919000000001`, when registering with `090000 00001`,
