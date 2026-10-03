@@ -13,15 +13,20 @@ import { describeError, isRetryable } from "./messages";
 export function ErrorNotice({
   error,
   onRetry,
+  message: override,
   id,
   ref,
 }: {
   error: unknown;
   onRetry?: () => void;
+  /** Replaces the API's message (e.g. a lock, where we can say how long to wait). */
+  message?: string;
   id?: string;
   ref?: Ref<HTMLDivElement>;
 }) {
-  const { message, requestId } = describeError(error);
+  const described = describeError(error);
+  const message = override ?? described.message;
+  const { requestId } = described;
   return (
     <div
       id={id}
