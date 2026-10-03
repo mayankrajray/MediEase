@@ -26,6 +26,8 @@ export interface SessionValue {
   readonly clinic: ClinicChoice;
   /** Work in another of the person's clinics; ignored if it is not one of them. */
   readonly selectClinic: (clinicId: string) => void;
+  /** Drops the working clinic (and the remembered one), so a multi-clinic person is asked to choose again. */
+  readonly clearClinic: () => void;
   /** Ends the session on the server and leaves for the sign-in page. Always completes locally. */
   readonly signOut: () => Promise<void>;
   /**
@@ -126,6 +128,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           setChosen(clinicId);
           rememberClinic(clinicId);
         }
+      },
+      clearClinic: () => {
+        setChosen(null);
+        forgetClinic();
       },
       signOut: async () => {
         try {
