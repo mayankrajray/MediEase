@@ -17,7 +17,7 @@ durable only after ``UnitOfWork.commit``.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
@@ -166,6 +166,10 @@ class PatientRepository(Protocol):
     """
 
     def add(self, patient: Patient) -> None: ...
+    def add_many(self, patients: Sequence[Patient]) -> None:
+        """Insert several in one round trip (the ops import, M2-P4)."""
+        ...
+
     def get(self, patient_id: UUID, *, for_update: bool = False) -> Patient | None:
         """``for_update`` locks the row: consent, opt-out and opt-in must not interleave (M2-P3)."""
         ...
@@ -177,6 +181,10 @@ class PatientRepository(Protocol):
 
     def find_by_phone(self, phone: PhoneNumber, *, limit: int) -> Sequence[Patient]:
         """Patients on this exact number (family members may share one), oldest first."""
+        ...
+
+    def find_by_phones(self, phones: Collection[PhoneNumber]) -> Sequence[Patient]:
+        """Every patient on any of these numbers, oldest first: one query for an import (M2-P4)."""
         ...
 
     def search_by_name_prefix(self, prefix: str, *, limit: int) -> Sequence[Patient]:

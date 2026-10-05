@@ -40,3 +40,5 @@ class AuditAction(StrEnum):
     PATIENT_CONSENT_CHANGED = "patient.consent_changed"
     PATIENT_OPTED_OUT = "patient.opted_out"
     PATIENT_OPTED_IN = "patient.opted_in"
+    # M2-P4: one row per imported patient, by the ops user. Metadata: the code and the import ID.
+    PATIENT_IMPORTED = "patient.imported"

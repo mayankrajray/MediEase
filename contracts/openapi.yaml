@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.7.0
+  version: 0.8.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -33,7 +33,8 @@ tags:
     description: |
       The internal ops console (M1-P5, FR-OPS-01/04). Platform staff only: clinic staff are
       refused even as owners (spec R10). Ops users have no membership, so the clinic is named
-      in the path. No clinical content is ever returned here.
+      in the path. No clinical content is ever returned here. The CSV patient import (M2-P4)
+      reports row numbers and counts, never a patient's name or phone.
   - name: patients
     description: |
       Register, look up, read and correct patients (M2-P2, FR-PAT-01..04). Every role in a clinic
@@ -1066,6 +1067,83 @@ paths:
           $ref: '#/components/responses/AuthError'
         '422':
           $ref: '#/components/responses/AuthError'
+  /api/v1/ops/clinics/{clinic_id}/patient-imports:
+    post:
+      tags: [ops]
+      operationId: importOpsPatients
+      summary: Import a clinic's patient list from CSV (dry run by default)
+      description: |
+        FR-PAT-08, FR-OPS-02, spec patients R8 (M2-P4). Ops only. The body is the raw CSV file
+        (UTF-8, an Excel BOM is fine), at most 2 MB and 5,000 data rows, with exactly the
+        columns name, phone, sex, dob_or_age, guardian_name, language in any order and case.
+        dry_run defaults to true: the report is computed and nothing is written. With
+        dry_run=false the same checks run again under the clinic lock, importable rows are
+        created in file order with consecutive codes (consent false, not asked), one
+        patient.imported audit row each, and the checklist's patients_imported_at the first time.
+        Rows matching an existing patient or an earlier row by phone and name are skipped;
+        rows sharing only a phone are imported and flagged. The report holds row numbers
+        (the header is row 1), counts, column names and the new codes, never a cell's value.
+        Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicPath'
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: dry_run
+          in: query
+          required: false
+          description: true (the default) reports only; false imports
+          schema:
+            type: string
+            enum: ['true', 'false']
+            default: 'true'
+      requestBody:
+        required: true
+        description: The CSV file itself (not a form upload), UTF-8, at most 2 MB (2,097,152 bytes)
+        content:
+          text/csv: {}
+      responses:
+        '200':
+          description: The import report (dry run or committed)
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientImportReport'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '413':
+          description: The file is over 2 MB (REQ_REQUEST_ENTITY_TOO_LARGE)
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          description: |
+            PAT_IMPORT_INVALID (the file as a whole cannot be read: header, encoding, CSV
+            syntax, no rows or more than 5,000; details.problems lists why) or
+            REQ_VALIDATION_FAILED (dry_run is not true or false). Nothing is imported.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /health:
     get:
       tags: [platform]
@@ -2014,6 +2092,92 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/StaffMember'
+    PatientImportReport:
+      type: object
+      additionalProperties: false
+      required:
+        - dry_run
+        - rows
+        - valid
+        - invalid
+        - possible_duplicates
+        - already_registered
+        - imported
+        - codes
+        - errors
+        - duplicates
+        - errors_truncated
+        - duplicates_truncated
+      properties:
+        dry_run:
+          type: boolean
+        rows:
+          type: integer
+          description: Non-blank data rows in the file
+        valid:
+          type: integer
+        invalid:
+          type: integer
+        possible_duplicates:
+          type: integer
+          description: Importable rows whose phone is already in the clinic or on an earlier row
+        already_registered:
+          type: integer
+          description: Rows skipped because phone and name match an existing patient or an earlier row
+        imported:
+          type: integer
+          description: Patients created (always 0 on a dry run)
+        codes:
+          type: array
+          description: The codes of the patients this import created, in file order
+          items:
+            type: string
+        errors:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/PatientImportRowError'
+        duplicates:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/PatientImportDuplicate'
+        errors_truncated:
+          type: boolean
+          description: More errors than listed; the count is in invalid
+        duplicates_truncated:
+          type: boolean
+    PatientImportRowError:
+      type: object
+      additionalProperties: false
+      required: [row, field, reason]
+      properties:
+        row:
+          type: integer
+          description: Spreadsheet row number; the header is row 1
+        field:
+          type: string
+          description: The column at fault, or "row" for a row with cells beyond the header
+          enum: [name, phone, sex, dob_or_age, guardian_name, language, row]
+        reason:
+          type: string
+          description: A fixed sentence; never the cell's value
+    PatientImportDuplicate:
+      type: object
+      additionalProperties: false
+      required: [row, kind]
+      properties:
+        row:
+          type: integer
+        kind:
+          type: string
+          enum: [existing_patient, earlier_row, already_registered]
+        matches:
+          type: integer
+          description: How many of the clinic's patients share the phone (never who)
+        same_as_row:
+          type: integer
+          description: The first row in the file with the same phone (or phone and name)
     Error:
       type: object
       required: [code, message, request_id]

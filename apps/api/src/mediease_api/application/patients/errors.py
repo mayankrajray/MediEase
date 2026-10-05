@@ -22,3 +22,17 @@ class PhoneExists(DomainError):
     def __init__(self, candidates: Sequence[CandidateView]) -> None:
         super().__init__("Patients already use this phone number.")
         self.candidates = tuple(candidates)
+
+
+class ImportInvalid(DomainError):
+    """R8: the import file as a whole cannot be read (header, size, encoding). Nothing imported.
+
+    ``problems`` are fixed sentences naming columns or positions, never the file's text.
+    Bad *rows* are not this error: they are listed in the report.
+    """
+
+    code = "PAT_IMPORT_INVALID"
+
+    def __init__(self, problems: Sequence[str]) -> None:
+        super().__init__("The import file cannot be read. Nothing was imported.")
+        self.problems = tuple(problems)

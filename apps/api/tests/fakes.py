@@ -201,6 +201,10 @@ class _Audit:
             raise AuditWriteFailed(event.action.value)
         self._store.audit_events.append(event)
 
+    def record_many(self, events: Sequence[AuditEvent]) -> None:
+        for event in events:
+            self.record(event)
+
 
 class AuditWriteFailed(RuntimeError):
     """Raised by the fake audit writer when a test asks it to fail."""

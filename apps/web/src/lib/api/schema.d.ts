@@ -514,6 +514,36 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/ops/clinics/{clinic_id}/patient-imports": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Import a clinic's patient list from CSV (dry run by default)
+         * @description FR-PAT-08, FR-OPS-02, spec patients R8 (M2-P4). Ops only. The body is the raw CSV file
+         *     (UTF-8, an Excel BOM is fine), at most 2 MB and 5,000 data rows, with exactly the
+         *     columns name, phone, sex, dob_or_age, guardian_name, language in any order and case.
+         *     dry_run defaults to true: the report is computed and nothing is written. With
+         *     dry_run=false the same checks run again under the clinic lock, importable rows are
+         *     created in file order with consecutive codes (consent false, not asked), one
+         *     patient.imported audit row each, and the checklist's patients_imported_at the first time.
+         *     Rows matching an existing patient or an earlier row by phone and name are skipped;
+         *     rows sharing only a phone are imported and flagged. The report holds row numbers
+         *     (the header is row 1), counts, column names and the new codes, never a cell's value.
+         *     Needs X-CSRF-Token.
+         */
+        readonly post: operations["importOpsPatients"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/health": {
         readonly parameters: {
             readonly query?: never;
@@ -909,6 +939,46 @@ export interface components {
             readonly onboarding: components["schemas"]["OnboardingChecklist"] | null;
             readonly doctor_count: number;
             readonly staff: readonly components["schemas"]["StaffMember"][];
+        };
+        readonly PatientImportReport: {
+            readonly dry_run: boolean;
+            /** @description Non-blank data rows in the file */
+            readonly rows: number;
+            readonly valid: number;
+            readonly invalid: number;
+            /** @description Importable rows whose phone is already in the clinic or on an earlier row */
+            readonly possible_duplicates: number;
+            /** @description Rows skipped because phone and name match an existing patient or an earlier row */
+            readonly already_registered: number;
+            /** @description Patients created (always 0 on a dry run) */
+            readonly imported: number;
+            /** @description The codes of the patients this import created, in file order */
+            readonly codes: readonly string[];
+            readonly errors: readonly components["schemas"]["PatientImportRowError"][];
+            readonly duplicates: readonly components["schemas"]["PatientImportDuplicate"][];
+            /** @description More errors than listed; the count is in invalid */
+            readonly errors_truncated: boolean;
+            readonly duplicates_truncated: boolean;
+        };
+        readonly PatientImportRowError: {
+            /** @description Spreadsheet row number; the header is row 1 */
+            readonly row: number;
+            /**
+             * @description The column at fault, or "row" for a row with cells beyond the header
+             * @enum {string}
+             */
+            readonly field: "name" | "phone" | "sex" | "dob_or_age" | "guardian_name" | "language" | "row";
+            /** @description A fixed sentence; never the cell's value */
+            readonly reason: string;
+        };
+        readonly PatientImportDuplicate: {
+            readonly row: number;
+            /** @enum {string} */
+            readonly kind: "existing_patient" | "earlier_row" | "already_registered";
+            /** @description How many of the clinic's patients share the phone (never who) */
+            readonly matches?: number;
+            /** @description The first row in the file with the same phone (or phone and name) */
+            readonly same_as_row?: number;
         };
         readonly Error: {
             /**
@@ -2025,6 +2095,72 @@ export interface operations {
             readonly 409: components["responses"]["ConflictError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly importOpsPatients: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description true (the default) reports only; false imports */
+                readonly dry_run?: "true" | "false";
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description The clinic an ops request is about (ops users have no membership to infer). */
+                readonly clinic_id: components["parameters"]["ClinicPath"];
+            };
+            readonly cookie?: never;
+        };
+        /** @description The CSV file itself (not a form upload), UTF-8, at most 2 MB (2,097,152 bytes) */
+        readonly requestBody: {
+            readonly content: {
+                readonly "text/csv": unknown;
+            };
+        };
+        readonly responses: {
+            /** @description The import report (dry run or committed) */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientImportReport"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            /** @description The file is over 2 MB (REQ_REQUEST_ENTITY_TOO_LARGE) */
+            readonly 413: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            readonly 415: components["responses"]["AuthError"];
+            /**
+             * @description PAT_IMPORT_INVALID (the file as a whole cannot be read: header, encoding, CSV
+             *     syntax, no rows or more than 5,000; details.problems lists why) or
+             *     REQ_VALIDATION_FAILED (dry_run is not true or false). Nothing is imported.
+             */
+            readonly 422: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     readonly getHealth: {

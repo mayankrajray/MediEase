@@ -40,17 +40,41 @@ def record_event(
 ) -> None:
     """Append one event. ``clinic_id`` is None for user-level actions (a sign-in)."""
     uow.audit.record(
-        AuditEvent.record(
-            id=event_id,
+        audit_event(
+            event_id=event_id,
             action=action,
-            actor_type=actor.actor_type,
-            actor_user_id=actor.user_id,
+            actor=actor,
+            now=now,
             clinic_id=clinic_id,
             entity_type=entity_type,
             entity_id=entity_id,
-            request_id=actor.info.request_id,
-            ip_hash=actor.info.ip_hash,
             metadata=metadata,
-            now=now,
         )
+    )
+
+
+def audit_event(
+    *,
+    event_id: UUID,
+    action: AuditAction,
+    actor: Actor,
+    now: datetime,
+    clinic_id: UUID | None = None,
+    entity_type: str | None = None,
+    entity_id: UUID | None = None,
+    metadata: Mapping[str, str] | None = None,
+) -> AuditEvent:
+    """The event ``record_event`` would append, for callers that write many at once."""
+    return AuditEvent.record(
+        id=event_id,
+        action=action,
+        actor_type=actor.actor_type,
+        actor_user_id=actor.user_id,
+        clinic_id=clinic_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        request_id=actor.info.request_id,
+        ip_hash=actor.info.ip_hash,
+        metadata=metadata,
+        now=now,
     )

@@ -107,6 +107,7 @@ def test_nfr_08_ac7_clinic_a_cannot_find_clinic_b_patients_by_any_route(
         assert patients.get_by_code(b.patient.code) is None
         # Same phone and same name in both clinics: only A's patient comes back.
         assert [p.id for p in patients.find_by_phone(shared_phone, limit=10)] == [a.patient.id]
+        assert [p.id for p in patients.find_by_phones([shared_phone])] == [a.patient.id]
         assert [p.id for p in patients.search_by_name_prefix("asha", limit=20)] == [a.patient.id]
         assert patients.count() == 1
 
