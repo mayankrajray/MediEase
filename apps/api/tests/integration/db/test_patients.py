@@ -138,6 +138,26 @@ def test_r5_lookups_find_by_phone_code_and_name_prefix(
         assert len(patients.search_by_name_prefix("a", limit=1)) == 1
 
 
+def test_fr_pat_08_find_by_phones_returns_everyone_on_any_number_oldest_first(
+    uow_factory: UowFactory, clinic_id: UUID, staff_user_id: UUID
+) -> None:
+    shared, own = PhoneNumber.parse("9000000001"), PhoneNumber.parse("9000000002")
+    asha = a_patient(clinic_id, staff_user_id, phone=shared)
+    deepa = a_patient(clinic_id, staff_user_id, phone=own)
+    arun = a_patient(clinic_id, staff_user_id, phone=shared)
+    a_patient_elsewhere = a_patient(clinic_id, staff_user_id)
+    with uow_factory() as uow:
+        for patient in (asha, deepa, arun, a_patient_elsewhere):
+            uow.tenant(clinic_id).patients.add(patient)
+        uow.commit()
+
+    with uow_factory() as uow:
+        patients = uow.tenant(clinic_id).patients
+        found = patients.find_by_phones([own, shared, shared, PhoneNumber.parse("9000000099")])
+        assert [p.id for p in found] == [asha.id, deepa.id, arun.id]
+        assert patients.find_by_phones([]) == []
+
+
 def test_a_name_prefix_is_literal_not_a_pattern(
     uow_factory: UowFactory, clinic_id: UUID, staff_user_id: UUID
 ) -> None:

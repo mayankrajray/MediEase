@@ -220,3 +220,71 @@ def test_adr_0008_accepting_for_an_existing_account_matches_contract(
     locked = _send(stranger, "POST", accept, {"password": DEMO_PASSWORD})
     assert locked.status_code == 423
     _check(openapi, locked)
+
+
+# --- Patient import (M2-P4) -------------------------------------------------------------------
+
+IMPORT_FILE = (
+    b"name,phone,sex,dob_or_age,guardian_name,language\n"
+    b"Contract Person,9000077001,F,30,,en\n"
+    b"Contract Child,9000077001,M,5,Contract Person,hi\n"
+    b"Bad Row,12,F,30,,\n"
+)
+
+
+def _send_csv(
+    client: FlaskClient,
+    path: str,
+    data: bytes,
+    *,
+    content_type: str = "text/csv",
+) -> TestResponse:
+    csrf = client.get_cookie("me_csrf", domain="localhost", path="/")
+    assert csrf is not None
+    resp = client.post(
+        path,
+        base_url=_BASE_URL,
+        data=data,
+        content_type=content_type,
+        headers={"X-CSRF-Token": csrf.value},
+    )
+    resp.sent_body = data  # type: ignore[attr-defined]
+    return resp
+
+
+def test_adr_0008_the_patient_import_matches_contract(openapi: OpenAPI, world: World) -> None:
+    ops = world.client_for(world.ops)
+    path = f"{OPS_CLINICS}/{world.a.clinic.id}/patient-imports"
+
+    dry = _send_csv(ops, path, IMPORT_FILE)
+    assert dry.status_code == 200
+    _check(openapi, dry)
+
+    committed = _send_csv(ops, f"{path}?dry_run=false", IMPORT_FILE)
+    assert committed.status_code == 200 and committed.get_json()["imported"] == 2
+    _check(openapi, committed)
+
+    again = _send_csv(ops, f"{path}?dry_run=false", IMPORT_FILE)
+    assert again.get_json()["already_registered"] == 2
+    _check(openapi, again)
+
+
+@pytest.mark.parametrize(
+    ("data", "content_type", "status"),
+    [
+        (b"name,phone\nA,9000077002\n", "text/csv", 422),
+        (b"x" * (2 * 1024 * 1024 + 1), "text/csv", 413),
+        (b"{}", "application/json", 415),
+    ],
+)
+def test_adr_0008_patient_import_errors_match_contract(
+    openapi: OpenAPI, world: World, data: bytes, content_type: str, status: int
+) -> None:
+    ops = world.client_for(world.ops)
+    path = f"{OPS_CLINICS}/{world.a.clinic.id}/patient-imports"
+
+    resp = _send_csv(ops, path, data, content_type=content_type)
+
+    assert resp.status_code == status
+    # The 415 and 413 requests are outside the documented request body on purpose.
+    _check(openapi, resp, validate_request=status == 422)

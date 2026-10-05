@@ -7,6 +7,7 @@
 | ``GET /api/v1/ops/clinics/{id}`` | One clinic: checklist, staff, doctor count |
 | ``POST /api/v1/ops/clinics/{id}/doctors`` | Add a doctor |
 | ``POST /api/v1/ops/clinics/{id}/staff-invites`` | Invite the owner (or any role) |
+| ``POST /api/v1/ops/clinics/{id}/patient-imports`` | CSV patient import, dry run by default |
 
 Every route is ``@ops``: platform staff only, and clinic staff are refused
 even as owners (spec R10). Ops users have no membership, so the clinic is
@@ -26,8 +27,9 @@ from __future__ import annotations
 from typing import Any, Protocol
 from uuid import UUID
 
-from flask import Blueprint, Response, jsonify
+from flask import Blueprint, Response, jsonify, request
 from pydantic import BaseModel, ConfigDict, Field
+from werkzeug.exceptions import UnsupportedMediaType
 
 from mediease_api.application.clinics.invite_staff import (
     InviteStaff,
@@ -42,6 +44,12 @@ from mediease_api.application.clinics.onboard_clinic import (
 )
 from mediease_api.application.context import Actor
 from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics
+from mediease_api.application.patients.import_patients import (
+    ImportPatients,
+    ImportPatientsCommand,
+    ImportReport,
+    RowDuplicate,
+)
 from mediease_api.delivery.http.access import current_principal, ops
 from mediease_api.delivery.http.bodies import (
     checklist_body,
@@ -51,8 +59,11 @@ from mediease_api.delivery.http.bodies import (
     staff_body,
 )
 from mediease_api.delivery.http.request_info import request_info
-from mediease_api.delivery.http.validation import parse_json
+from mediease_api.delivery.http.validation import RequestValidationFailed, parse_json
 from mediease_api.domain.identity.membership import Role
+
+# The patient import's body limit (M2-P4): 5,000 rows fit with room to spare.
+MAX_IMPORT_BYTES = 2 * 1024 * 1024
 
 
 class OpsUseCases(Protocol):
@@ -63,6 +74,7 @@ class OpsUseCases(Protocol):
     def get_clinic_onboarding(self) -> GetClinicOnboarding: ...
     def add_doctor(self) -> AddDoctor: ...
     def invite_staff(self) -> InviteStaff: ...
+    def import_patients(self) -> ImportPatients: ...
 
 
 class NewClinicRequest(BaseModel):
@@ -179,7 +191,36 @@ def create_ops_blueprint(use_cases: OpsUseCases, *, public_base_url: str) -> Blu
         )
         return jsonify(invitation_body(invitation, public_base_url)), 201
 
+    @bp.post("/clinics/<uuid:clinic_id>/patient-imports")
+    @ops
+    def import_patients(clinic_id: UUID) -> Response:
+        dry_run = _dry_run_flag()
+        report = use_cases.import_patients().execute(
+            clinic_id=clinic_id,
+            actor=_actor(),
+            cmd=ImportPatientsCommand(data=_csv_body(), dry_run=dry_run),
+        )
+        return jsonify(import_report_body(report))
+
     return bp
+
+
+def _dry_run_flag() -> bool:
+    """``dry_run`` defaults to true: a call that forgets the flag never writes (M2-P4)."""
+    raw = request.args.get("dry_run", "true").strip().lower()
+    if raw not in ("true", "false"):
+        raise RequestValidationFailed([{"field": "dry_run", "reason": "must be true or false"}])
+    return raw == "true"
+
+
+def _csv_body() -> bytes:
+    """The raw CSV, ``text/csv`` only, at most ``MAX_IMPORT_BYTES`` (413 beyond)."""
+    if request.mimetype != "text/csv":
+        raise UnsupportedMediaType("Send the file as text/csv.")
+    # Per request, so only this route accepts a body this large; Werkzeug refuses
+    # a longer Content-Length up front and stops reading a chunked body at the limit.
+    request.max_content_length = MAX_IMPORT_BYTES
+    return request.get_data(cache=False)
 
 
 def _actor() -> Actor:
@@ -192,3 +233,30 @@ def invitation_body(invitation: StaffInvitation, public_base_url: str) -> dict[s
         **staff_body(invitation.member),
         "accept_url": f"{public_base_url}/invite/{invitation.token}",
     }
+
+
+def import_report_body(report: ImportReport) -> dict[str, Any]:
+    """Row numbers, counts, columns and new codes: nothing from the file (M2-P4)."""
+    return {
+        "dry_run": report.dry_run,
+        "rows": report.rows,
+        "valid": report.valid,
+        "invalid": report.invalid,
+        "possible_duplicates": report.possible_duplicates,
+        "already_registered": report.already_registered,
+        "imported": report.imported,
+        "codes": list(report.codes),
+        "errors": [{"row": e.row, "field": e.field, "reason": e.reason} for e in report.errors],
+        "duplicates": [_duplicate_body(d) for d in report.duplicates],
+        "errors_truncated": report.errors_truncated,
+        "duplicates_truncated": report.duplicates_truncated,
+    }
+
+
+def _duplicate_body(duplicate: RowDuplicate) -> dict[str, Any]:
+    body: dict[str, Any] = {"row": duplicate.row, "kind": duplicate.kind.value}
+    if duplicate.matches is not None:
+        body["matches"] = duplicate.matches
+    if duplicate.same_as_row is not None:
+        body["same_as_row"] = duplicate.same_as_row
+    return body

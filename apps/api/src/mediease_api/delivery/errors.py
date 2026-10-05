@@ -22,7 +22,7 @@ from flask import Flask, Response, jsonify
 from werkzeug.exceptions import HTTPException
 
 from mediease_api.application.auth.errors import AccountLocked
-from mediease_api.application.patients.errors import PhoneExists
+from mediease_api.application.patients.errors import ImportInvalid, PhoneExists
 from mediease_api.delivery.http.bodies import candidate_body
 from mediease_api.delivery.http.validation import RequestValidationFailed
 from mediease_api.delivery.middleware import get_request_id
@@ -77,6 +77,7 @@ DOMAIN_ERROR_STATUS = {
     "PAT_PHONE_EXISTS": 409,
     "PAT_OPTED_OUT": 409,
     "PAT_NOT_OPTED_OUT": 409,
+    "PAT_IMPORT_INVALID": 422,
 }
 
 
@@ -95,6 +96,8 @@ def domain_error_response(exc: DomainError) -> tuple[Response, int]:
     elif isinstance(exc, PhoneExists):
         # For the signed-in staff member who asked (spec R2); never logged.
         details = {"candidates": [candidate_body(c) for c in exc.candidates]}
+    elif isinstance(exc, ImportInvalid):
+        details = {"problems": list(exc.problems)}
     response, _ = error_response(exc.code, exc.message, status, details)
     if isinstance(exc, AccountLocked):
         response.headers["Retry-After"] = str(exc.retry_after_seconds)

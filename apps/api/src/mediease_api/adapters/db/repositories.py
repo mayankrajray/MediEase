@@ -12,7 +12,7 @@ unit of work, bound to one clinic.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -598,16 +598,23 @@ class SqlAlchemyPatientRepository(TenantScopedRepository[PatientRow]):
     entity_name = "patient"
 
     def add(self, patient: Patient) -> None:
-        self._check_owned(patient.clinic_id)
-        row = PatientRow(
-            id=patient.id,
-            clinic_id=self.clinic_id,
-            code=patient.code,
-            created_by=patient.created_by,
-            created_at=patient.created_at,
-        )
-        _write_patient(row, patient)
-        self._session.add(row)
+        self.add_many([patient])
+
+    def add_many(self, patients: Sequence[Patient]) -> None:
+        rows = []
+        for patient in patients:
+            self._check_owned(patient.clinic_id)
+            row = PatientRow(
+                id=patient.id,
+                clinic_id=self.clinic_id,
+                code=patient.code,
+                created_by=patient.created_by,
+                created_at=patient.created_at,
+            )
+            _write_patient(row, patient)
+            rows.append(row)
+        # One flush: SQLAlchemy sends the rows as batched multi-row INSERTs.
+        self._session.add_all(rows)
         self._session.flush()
 
     def get(self, patient_id: UUID, *, for_update: bool = False) -> Patient | None:
@@ -638,6 +645,17 @@ class SqlAlchemyPatientRepository(TenantScopedRepository[PatientRow]):
             .where(PatientRow.phone_e164 == phone.e164)
             .order_by(PatientRow.created_at, PatientRow.id)
             .limit(limit)
+        )
+        return [_patient_from_row(row) for row in self._session.scalars(query)]
+
+    def find_by_phones(self, phones: Collection[PhoneNumber]) -> Sequence[Patient]:
+        numbers = sorted({phone.e164 for phone in phones})
+        if not numbers:
+            return []
+        query = (
+            self._scoped_select()
+            .where(PatientRow.phone_e164.in_(numbers))
+            .order_by(PatientRow.created_at, PatientRow.id)
         )
         return [_patient_from_row(row) for row in self._session.scalars(query)]
 

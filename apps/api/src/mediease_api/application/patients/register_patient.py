@@ -116,7 +116,7 @@ class RegisterPatient:
                     "confirmed_shared_phone": "true" if existing else "false",
                 },
             )
-            _record_first_patient(uow, self._ids, ctx.clinic_id, now)
+            record_first_patient(uow, self._ids, ctx.clinic_id, now)
             view = PatientView.of(patient, today)
             uow.commit()
 
@@ -129,8 +129,11 @@ class RegisterPatient:
         return view
 
 
-def _record_first_patient(uow: UnitOfWork, ids: IdPort, clinic_id: UUID, now: datetime) -> None:
-    """The onboarding checklist's first-patient time (FR-OPS-04); later ones never move it."""
+def record_first_patient(uow: UnitOfWork, ids: IdPort, clinic_id: UUID, now: datetime) -> None:
+    """The onboarding checklist's first-patient time (FR-OPS-04); later ones never move it.
+
+    Registration and the ops import (M2-P4) both call it, whichever comes first.
+    """
     checklist = uow.tenant(clinic_id).checklist
     recorded = checklist.get()
     if recorded is None:

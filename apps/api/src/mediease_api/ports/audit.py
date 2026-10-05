@@ -9,6 +9,7 @@ change one (FR-AUD-02).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol
 
 from mediease_api.domain.audit.event import AuditEvent
@@ -17,4 +18,8 @@ from mediease_api.domain.audit.event import AuditEvent
 class AuditWriter(Protocol):
     def record(self, event: AuditEvent) -> None:
         """Append the event. Fails loudly: an unaudited change must not commit."""
+        ...
+
+    def record_many(self, events: Sequence[AuditEvent]) -> None:
+        """Append several events in one round trip (the ops import, M2-P4). Same guarantees."""
         ...
