@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M2-P1 and P2 confirmed 3 Oct 2026; M2-P3 approved (option A) and implemented, awaiting confirmation; P4 next |
+| Status | In progress — M2-P1 to P3 confirmed (P3 on 5 Oct 2026 after a re-check); M2-P4 approved 5 Oct 2026 (1A, 2A), in implementation |
 | Spec | `docs/specs/patients.md` (Approved 2026-10-03) |
 | Covers | FR-PAT-01..06, FR-PAT-08, FR-MSG-05 (opt-out state), NFR-08 |
 | Issue / branch / PR | #21 · `m2/21-patients` · one PR for the whole milestone (ADR-0011) |
@@ -15,16 +15,114 @@
 | P1 | Patient domain, clinic code allocation, migration `0006`, tenancy-scoped repository, indexes, the 10,000-patient lookup test | Below |
 | P2 | Register / edit / lookup endpoints, the duplicate-phone flow, `patient_code_prefix` on clinic creation | Below (M2-P2 section) |
 | P3 | Consent, language preference, opt-out and opt-in | Below (M2-P3 section) |
-| P4 | Ops CSV import with a dry-run report | Designed at its start |
+| P4 | Ops CSV import with a dry-run report | Below (M2-P4 section) |
 | P5 | Web: global search, registration drawer, profile | Designed at its start |
 
 Each phase is designed, approved, implemented, verified and confirmed before the next starts.
 
 ---
 
+## M2-P4 — Ops CSV import with a dry-run report
+
+**Status: approved by the developer 5 Oct 2026 with 1A and 2A; in implementation.** Covers FR-PAT-08,
+FR-OPS-02; spec patients R8, §7 (`patient.imported`, the checklist), §10 (`patient.import_dry_run`).
+One endpoint, one use case, one audit action, contract 0.8.0, no migration. API only in M2: the ops
+procedure is RUNBOOK §10; an upload screen is not in the M2 plan.
+
+### Endpoint
+
+`POST /api/v1/ops/clinics/{clinic_id}/patient-imports?dry_run=true|false`, `@ops` (clinic staff are
+refused even as owners), unknown clinic `404`. The body is the raw CSV as `Content-Type: text/csv`
+(`curl --data-binary @patients.csv`). `dry_run` defaults to **true**, so a forgotten flag writes
+nothing. Both modes answer `200` with the same report; a commit fills `imported`.
+
+### The file
+
+| Part | Rule |
+|---|---|
+| Encoding, size | UTF-8, an Excel BOM accepted; at most 2 MB (this route only, `413 REQ_REQUEST_ENTITY_TOO_LARGE`) and 5,000 data rows |
+| Header | Exactly `name, phone, sex, dob_or_age, guardian_name, language`, any order and case. A missing or unknown column rejects the file, so a stray "diagnosis" column is never silently dropped |
+| `phone` | Normalised as in registration (R1) |
+| `sex` | `F`/`M`/`O`/`U` or the words, any case; blank → `UNDISCLOSED` (choice 2A) |
+| `dob_or_age` | A whole number 0–120 is an age recorded on the clinic's today; otherwise a date `YYYY-MM-DD`, `DD/MM/YYYY` or `DD-MM-YYYY` (day first: Indian lists; US order is not accepted) |
+| `guardian_name` | Required under 18 (R3) |
+| `language` | `en`/`hi`/`english`/`hindi`; blank → `en` |
+| Consent | Always false and "not asked" (R8) |
+
+File-level problems (header, no rows, too many rows, not UTF-8, not parseable as CSV) are
+`422 PAT_IMPORT_INVALID` with `details.problems`; bad rows are reported, not fatal.
+
+### Report (same shape for dry run and commit)
+
+```json
+{
+  "dry_run": true,
+  "rows": 812, "valid": 790, "invalid": 22, "possible_duplicates": 31,
+  "already_registered": 4, "imported": 0, "codes": [],
+  "errors":     [{"row": 14, "field": "phone", "reason": "is not a valid phone number"}],
+  "duplicates": [{"row": 37, "kind": "existing_patient", "matches": 2},
+                 {"row": 52, "kind": "earlier_row", "same_as_row": 9}]
+}
+```
+
+- Row numbers are spreadsheet rows (header = row 1).
+- Nothing from the file is echoed: reasons are fixed strings; no names, phones or existing patients'
+  codes (ops cannot browse patients, spec §2). `codes` lists only the codes this import created.
+  The `errors` and `duplicates` lists stop at 500 entries; the counts are always complete.
+- **Possible duplicate:** the phone is already in the clinic, or on an earlier row. A warning,
+  not an error: imported and flagged (choice 1A, like `confirm_new`).
+- **Already registered:** same phone *and* same name (case and spacing ignored) as an existing
+  patient or an earlier row. Always skipped, so re-running an import does not double the list.
+
+### Use case `ImportPatients` (`application/patients/import_patients.py`)
+
+1. Read the CSV and parse every row with the domain's rules (`domain/patients/import_row.py`): pure.
+2. Fetch every patient on any of the file's phones in one query (`PatientRepository.find_by_phones`).
+3. Dry run: log `patient.import_dry_run` (counts only) and return the report; no lock, no write.
+4. Commit, one transaction: lock the clinic row (as R9, so an import and a front-desk registration
+   serialise), build the report again against the data as it is now, insert the importable rows
+   in file order with consecutive codes, one `patient.imported` audit row each (`code`,
+   `import_id`), the checklist's `patients_imported_at` the first time, commit. Any failure
+   imports nothing.
+
+### Decisions
+
+| Decision | Reason |
+|---|---|
+| Raw `text/csv`, not multipart | One file, the simplest `curl`, no form parsing |
+| No import table or job; synchronous | 5,000 rows is seconds, inside gunicorn's 30 s; background work waits for M5's worker |
+| No dry-run token for the commit | The commit re-validates against current data itself; `dry_run=true` by default is the guard |
+| One audit row per patient | Each patient's origin is on record, as `patient.created` does |
+| Exact duplicates skipped, phone-only ones imported (1A) | Re-running a file is the likely mistake; families on one phone are the normal case |
+| Blank sex is `UNDISCLOSED` (2A) | Paper lists often lack it; the front desk corrects it later |
+| Body limit on this route only | Every other endpoint takes small JSON; a global 2 MB would loosen them |
+
+### Files
+
+| Layer | Files |
+|---|---|
+| Domain | `patients/import_row.py`, `audit/actions.py` (`PATIENT_IMPORTED`) |
+| Ports / adapters | `PatientRepository.find_by_phones` + SQLAlchemy and fake versions |
+| Application | `patients/import_patients.py`, `patients/errors.py` (`ImportInvalid`) |
+| Delivery | `http/ops.py` (route, size limit), `errors.py`, `bootstrap.py` |
+| Contract / docs | `openapi.yaml` 0.8.0 + web types, `API.md`, `ERRORS.md`, `DATA_MODEL.md`, RUNBOOK §10, CHANGELOG |
+| Fixture | `scripts/fixtures/patients-import-sample.csv` (synthetic) |
+
+### Tests
+
+- **Domain:** each column (BOM, day-first dates, age 0 and 120, a future date of birth, blanks,
+  unknown values), the header rules.
+- **Use case:** a dry run writes nothing; a commit inserts only importable rows in file order;
+  the same file twice imports nothing the second time; a file problem imports nothing; the commit
+  re-checks data changed after the dry run; the checklist is written once.
+- **PostgreSQL / HTTP:** ops only (desk and owner 403), unknown clinic 404, 415 for JSON, 413 over
+  2 MB, 422 on a bad header; an import and a registration of the same phone serialise; 5,000 rows
+  well inside the limit; no names or phones in logs, audit rows, the report or errors.
+- **Contract:** the operation, the report, 413/415/422.
+
 ## M2-P3 — Consent, language and opt-out
 
-**Status: approved by the developer 3 Oct 2026 with option A; implemented the same day, awaiting confirmation.** Covers FR-PAT-05, FR-PAT-06 (consent
+**Status: approved by the developer 3 Oct 2026 with option A; implemented the same day; confirmed 5 Oct 2026 after a re-check (gate, compose flow, CI 7/7 on `e9c5cb9`).** Covers FR-PAT-05, FR-PAT-06 (consent
 against the guardian), the state side of FR-MSG-05; spec patients R6, AC5, §7. Three endpoints, two
 use cases, three audit actions, contract 0.7.0. No messages are sent in M2: this phase records who
 may be messaged, and M5 reads it. Language is already editable through `PATCH /patients/{id}` (P2);
