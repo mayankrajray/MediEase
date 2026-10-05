@@ -29,7 +29,8 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | `REQ_VALIDATION_FAILED` | 422 | Request body/query invalid | Client sent wrong shape (Pydantic, M1-P2), or a value failed a domain rule (`InvalidValue`) | `details.fields[]` lists each `field` and `reason`; the value itself is never echoed (M1-P2) |
 | `REQ_NOT_FOUND` | 404 | Resource not found | Unknown route (M0-P2); wrong ID **or other clinic's resource** (M1+; repositories raise `NotFound` from M1-P1) | Access log `route` is null for unknown routes; tenancy context for resources — expected for cross-clinic access |
 | `REQ_METHOD_NOT_ALLOWED` | 405 | Method not allowed on this URL | Client used the wrong HTTP method | `Allow` response header lists valid methods (M0-P2) |
-| `REQ_UNSUPPORTED_MEDIA_TYPE` | 415 | Wrong body format | JSON endpoint called without `Content-Type: application/json` (e.g. an HTML form) | Client request headers (M1-P2) |
+| `REQ_UNSUPPORTED_MEDIA_TYPE` | 415 | Wrong body format | JSON endpoint called without `Content-Type: application/json` (e.g. an HTML form); the patient import called without `text/csv` (M2-P4) | Client request headers (M1-P2) |
+| `REQ_REQUEST_ENTITY_TOO_LARGE` | 413 | The body is too large | The patient import's file is over 2 MB (M2-P4; the limit applies to that route only) | Split the file; RUNBOOK §10 |
 | `REQ_CONFLICT_IDEMPOTENCY` | 409 | Same `Idempotency-Key` with a different body | Client retry bug | Client code *(planned, M1)* |
 | `REQ_RATE_LIMITED` | 429 | Too many requests | Abuse or client loop | `Retry-After` header; rate-limit logs *(planned, M1)* |
 | `SYS_UNEXPECTED` | 500 | Something went wrong | Unhandled exception | API log `level=ERROR` (`app.unexpected_error`) with same `request_id`, stack trace (M0-P2) |
@@ -95,7 +96,7 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 | `PAT_GUARDIAN_REQUIRED` | 422 | A parent or guardian's name is required for a patient under 18 | Age < 18 on the registration (or edit) date without a `guardian_name`; the phone is the guardian's (spec patients R3, D1). Raised by the domain in M2-P1 | FR-PAT-06; the age is computed for the date asked about, not stored |
 | `PAT_OPTED_OUT` | 409 | This patient asked not to be messaged. Opt them back in to record new consent. | Recording consent for a patient who is opted out (spec R6, M2-P3 decision A); nothing changed | `GET /patients/{id}` shows `opted_out_at`; the way back is `POST /patients/{id}/opt-in`, which takes the new consent |
 | `PAT_NOT_OPTED_OUT` | 409 | This patient has not opted out. Record consent instead. | Opt-in for a patient with no opt-out (M2-P3) | `opted_out` on the patient; use `PUT /patients/{id}/consent` |
-| `PAT_IMPORT_INVALID` | 422 | Import file has errors | Bad columns/rows; report attached | Import dry-run report |
+| `PAT_IMPORT_INVALID` | 422 | The import file cannot be read. Nothing was imported. | The file as a whole is unusable (spec R8, M2-P4): a header missing a column, naming an unknown or repeated one, not UTF-8, broken CSV quoting, no data rows, or more than 5,000. `details.problems` lists fixed sentences naming columns or positions, never the file's text. Bad *rows* are not this error: they are in the 200 report's `errors` | Log `patient.import_dry_run` / `patient.import_committed` (counts only); RUNBOOK §10; fix the file and dry-run again |
 
 ## Appointments and queue (M3)
 

@@ -14,6 +14,19 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M2-P4 (#21): ops CSV patient import (FR-PAT-08, FR-OPS-02, spec R8).
+  `POST /api/v1/ops/clinics/{id}/patient-imports` takes the raw file as `text/csv` (UTF-8, at most
+  2 MB and 5,000 rows, columns `name, phone, sex, dob_or_age, guardian_name, language`). It is a dry
+  run unless `?dry_run=false`. The report gives spreadsheet row numbers, counts, the column and a fixed
+  reason for each invalid row, and possible duplicates, never a cell's value or an existing patient's
+  identity. A commit re-checks everything under the clinic lock (as registration does), imports valid
+  rows in file order with consecutive codes and consent "not asked", skips rows whose phone and name
+  match an existing patient or an earlier row (so a re-run is harmless), imports and flags rows that
+  only share a phone (families), writes one `patient.imported` audit row each and the checklist's
+  `patients_imported_at`. Blank sex is `UNDISCLOSED`; dates are ISO or day-first. A file that cannot
+  be read is `422 PAT_IMPORT_INVALID` with the problems; over 2 MB is `413`. 5,000 rows import in about
+  2 s (batched inserts: `PatientRepository.add_many`, `AuditWriter.record_many`). Contract 0.8.0.
+  Sample file: `scripts/fixtures/patients-import-sample.csv`.
 - M2-P3 (#21): consent, opt-out and opt-in (FR-PAT-05, FR-PAT-06, FR-MSG-05). `PUT /api/v1/patients/{id}/consent`
   records whether the patient may be messaged on WhatsApp and SMS, with who and when (the guardian's
   answer for a minor); "asked and declined" is told apart from "never asked". `POST .../opt-out` stops all

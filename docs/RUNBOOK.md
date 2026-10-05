@@ -161,11 +161,30 @@ curl -s -b jar -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/js
 4. The owner invites the doctor and front desk themselves
    (`POST /api/v1/clinic/staff`), or ops does it with the same body as above.
 5. Set booking mode (slots/tokens) and schedules with the doctor.
-6. Import patients; resolve duplicates with the front desk.
+6. Import patients (M2-P4). Ask the clinic to save their list as **CSV UTF-8** with exactly these
+   columns (any order): `name, phone, sex, dob_or_age, guardian_name, language`; a template with
+   synthetic rows is `scripts/fixtures/patients-import-sample.csv`. Dry-run first (the default),
+   fix the rows it reports in the spreadsheet (row numbers match it), dry-run again, then commit:
+
+```bash
+curl -s -b jar -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: text/csv' \
+  --data-binary @patients.csv \
+  "$API/api/v1/ops/clinics/$CLINIC/patient-imports"               # 200, report, nothing written
+
+curl -s -b jar -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: text/csv' \
+  --data-binary @patients.csv \
+  "$API/api/v1/ops/clinics/$CLINIC/patient-imports?dry_run=false" # 200, imported + codes
+```
+
+   Use `--data-binary`, not `-d` (which strips the line breaks). Invalid rows are never imported;
+   rows matching an existing patient by phone and name are skipped, so running the same file again
+   is harmless; rows that only share a phone (families) are imported and listed under `duplicates`
+   for the front desk to review. Over 2 MB or 5,000 rows: split the file. Consent is "not asked"
+   for every imported patient: the front desk records it at the next visit.
 7. Book one real appointment; issue one real prescription; confirm the patient link opens.
 8. Record consent practice: the clinic's own patient notice is displayed at the front desk.
 **Confirm:** `GET /api/v1/ops/clinics/$CLINIC` shows the checklist with `clinic_created_at`,
-`doctors_added_at` and `staff_invited_at` set; the elapsed time between the first and last
+`doctors_added_at` and `staff_invited_at` set (and `patients_imported_at` after step 6); the elapsed time between the first and last
 timestamp is the G4 measurement. Each step is also in `audit_events` (§18).
 
 ### 11. Offboard a clinic / export data

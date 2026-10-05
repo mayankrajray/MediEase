@@ -5,7 +5,7 @@
 | Requirements | FR-PAT-01..06, FR-PAT-08, FR-MSG-05 (opt-out state), NFR-08 |
 | Milestone / phases | M2 / P1–P5 |
 | Status | Approved (developer sign-off 2026-10-03: minors' contact of record is the guardian's phone; the recommendations in §12 accepted) |
-| Last updated | 2026-10-03 (approved; decisions D1–D6 recorded in §12; R2 made race-free, R3/R4/R9 tightened, age model and lookup rules specified) |
+| Last updated | 2026-10-05 (R8 records the M2-P4 import decisions 1A and 2A); 2026-10-03 (approved; decisions D1–D6 recorded in §12; R2 made race-free, R3/R4/R9 tightened, age model and lookup rules specified) |
 
 ## 1. Context
 Records are on paper and unreadable during a consultation (A11, A12). Families often share one
@@ -66,8 +66,11 @@ Invariants:
 - **R7** Editing demographics never changes the code. All edits are audited (`patient.updated`
   with changed field names only, not values).
 - **R8** CSV import (ops): columns `name, phone, sex, dob_or_age, guardian_name, language`;
-  dry run returns counts of valid, invalid (with row numbers and reasons) and possible duplicates;
-  commit imports valid rows only and sets consent false.
+  dry run (the default) returns counts of valid, invalid (with row numbers and reasons) and possible
+  duplicates; commit imports valid rows only and sets consent false. Rows whose phone and name
+  match an existing patient or an earlier row are skipped (so a re-run is harmless); rows that only
+  share a phone are imported and flagged (M2-P4 decision 1A); a blank sex is `UNDISCLOSED` (2A).
+  The report never echoes a cell or identifies an existing patient.
 - **R9** Creating a patient is serialised per clinic: the clinic row is locked first, then the
   phone is checked, then the code is allocated and the patient inserted, all in one transaction.
   Two staff members registering the same phone at the same moment therefore cannot both pass the
