@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M2-P1 to P3 confirmed (P3 on 5 Oct 2026 after a re-check); M2-P4 approved 5 Oct 2026 (1A, 2A), in implementation |
+| Status | In progress — M2-P1 to P3 confirmed (P3 on 5 Oct 2026 after a re-check); M2-P4 approved 5 Oct 2026 (1A, 2A) and implemented, awaiting confirmation; P5 next |
 | Spec | `docs/specs/patients.md` (Approved 2026-10-03) |
 | Covers | FR-PAT-01..06, FR-PAT-08, FR-MSG-05 (opt-out state), NFR-08 |
 | Issue / branch / PR | #21 · `m2/21-patients` · one PR for the whole milestone (ADR-0011) |
@@ -24,7 +24,7 @@ Each phase is designed, approved, implemented, verified and confirmed before the
 
 ## M2-P4 — Ops CSV import with a dry-run report
 
-**Status: approved by the developer 5 Oct 2026 with 1A and 2A; in implementation.** Covers FR-PAT-08,
+**Status: approved by the developer 5 Oct 2026 with 1A and 2A; implemented the same day, awaiting confirmation.** Covers FR-PAT-08,
 FR-OPS-02; spec patients R8, §7 (`patient.imported`, the checklist), §10 (`patient.import_dry_run`).
 One endpoint, one use case, one audit action, contract 0.8.0, no migration. API only in M2: the ops
 procedure is RUNBOOK §10; an upload screen is not in the M2 plan.
@@ -119,6 +119,43 @@ File-level problems (header, no rows, too many rows, not UTF-8, not parseable as
   2 MB, 422 on a bad header; an import and a registration of the same phone serialise; 5,000 rows
   well inside the limit; no names or phones in logs, audit rows, the report or errors.
 - **Contract:** the operation, the report, 413/415/422.
+
+### Verify
+
+```bash
+make up && make seed
+# as ops@mediease.example, with sample-clinic's id from GET /api/v1/ops/clinics:
+curl -s -b jar -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: text/csv' \
+  --data-binary @scripts/fixtures/patients-import-sample.csv \
+  "$API/api/v1/ops/clinics/$CLINIC/patient-imports"                # dry run: 10 rows, 2 invalid
+#   ...?dry_run=false                                              # imported + codes
+#   the same file again with dry_run=false                         # imported 0
+#   Content-Type: application/json -> 415; a bad header -> 422 PAT_IMPORT_INVALID
+make lint typecheck test
+```
+
+### Result (5 Oct 2026)
+
+`make lint typecheck test` in WSL: ruff, format, import-linter (4 contracts kept) and mypy clean;
+847 API tests pass (93 new: 49 domain, 21 use case on PostgreSQL, 17 HTTP, 4 contract, plus the
+repository, tenancy and route-policy guards) at 99.09% package and 99% `domain/` + `application/`
+coverage; web 25 files / 256 tests, types regenerated, `gen:api:check` clean; the contract passes
+`openapi-spec-validator`; `make smoke` passes. On the rebuilt compose stack with `make seed`, as
+the ops user against `sample-clinic` with the sample file: the default is a dry run (10 rows, 8
+valid, rows 8 and 9 invalid with the column and reason, row 3 an `earlier_row`, rows 10 and 11
+`already_registered`), the commit imports 6 with consecutive codes, the same file again imports 0,
+JSON is 415, a bad header 422 with the problems, 2.2 MB is 413, the front desk 403, an unknown
+clinic 404; the front desk then finds the family by phone with the guardian set and consent "not
+asked"; six `patient.imported` rows with actor `OPS`, one `import_id` and the request ID; no name
+or phone in the API log.
+
+Taken while implementing: one insert per row made 5,000 rows take 9 s, so the patient repository
+gained `add_many` and the audit writer `record_many` (batched inserts in the same transaction;
+`record` and `add` now call them) and it takes under 2 s. `record_first_patient` is shared with
+registration. CSV is parsed with `strict=True`, because the default reader silently accepts an
+unterminated quote and swallows the rest of the file; a row with cells beyond the header is
+refused rather than trimmed. The contract describes the body as `text/csv: {}`: in OpenAPI 3.1 a
+raw file body is the media type alone, and a string schema makes the validator reject bytes.
 
 ## M2-P3 — Consent, language and opt-out
 

@@ -158,7 +158,7 @@ the person holding the link knows whether to ask for a new one.
 | POST | `/api/v1/ops/clinics/{clinic_id}/doctors` | Add a doctor while onboarding | Implemented (M1-P5) |
 | POST | `/api/v1/ops/clinics/{clinic_id}/staff-invites` | Invite the owner (or any role) | Implemented (M1-P5) |
 | GET | `/api/v1/ops/clinics/{clinic_id}/health` | Usage metrics, no clinical data (FR-OPS-03) | M6-P4 |
-| POST | `/api/v1/ops/clinics/{clinic_id}/patient-imports?dry_run=true` | CSV import (FR-PAT-08) | M2-P4 |
+| POST | `/api/v1/ops/clinics/{clinic_id}/patient-imports?dry_run=true` | CSV import (FR-PAT-08), dry run unless `dry_run=false` | Implemented (M2-P4) |
 | GET | `/api/v1/ops/jobs?state=dead` | Dead jobs | M5-P1 |
 
 Ops routes are `@ops`: platform staff only, and clinic staff are refused even as owners (R10).
@@ -169,6 +169,30 @@ The **onboarding checklist** on those responses records the first time each step
 never overwritten (FR-OPS-04, spec R12), so the elapsed time for goal G4 is a fact in the
 database. `patients_imported_at`, `first_appointment_at` and `first_prescription_at` are written
 by M2, M3 and M4.
+
+**Patient import (M2-P4, spec patients R8).** The body is the CSV file itself, `Content-Type:
+text/csv` (`curl --data-binary @patients.csv`), UTF-8, at most 2 MB (`413` beyond) and 5,000 data
+rows, with exactly the columns `name, phone, sex, dob_or_age, guardian_name, language` in any order
+and case. `sex` is `F`/`M`/`O`/`U` or the words (blank is `UNDISCLOSED`); `dob_or_age` is a whole
+number 0–120 (an age recorded on the clinic's today) or a date `YYYY-MM-DD`, `DD/MM/YYYY` or
+`DD-MM-YYYY`; `language` is `en`/`hi`/`english`/`hindi` (blank is `en`); a patient under 18 needs
+`guardian_name`. It is a **dry run unless `dry_run=false`**. Both modes return the same report:
+
+```json
+{"dry_run": true, "rows": 3, "valid": 2, "invalid": 1, "possible_duplicates": 1,
+ "already_registered": 0, "imported": 0, "codes": [],
+ "errors": [{"row": 4, "field": "phone", "reason": "is not a valid phone number"}],
+ "duplicates": [{"row": 3, "kind": "earlier_row", "same_as_row": 2}],
+ "errors_truncated": false, "duplicates_truncated": false}
+```
+
+Rows are spreadsheet rows (header = 1). `already_registered` rows (same phone and name as an
+existing patient or an earlier row) are skipped, so a re-run is harmless; rows that only share a
+phone are imported and listed as `existing_patient` (with `matches`, a count) or `earlier_row`.
+The commit re-checks everything under the clinic lock and imports in file order with consecutive
+codes, consent "not asked". Nothing from the file is echoed and no existing patient is identified:
+ops cannot browse patients. A file that cannot be read at all is `422 PAT_IMPORT_INVALID` with
+`details.problems`; nothing is imported. Procedure: RUNBOOK §10.
 
 ### Audit trail (M1-P4)
 
