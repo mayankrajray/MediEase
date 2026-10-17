@@ -234,9 +234,12 @@ def uow_factory(session_factory: sessionmaker[Session]) -> Iterator[UowFactory]:
         # still be able to reset, so this is the one place that lifts the guard
         # — the same deliberate, visible step operations would have to take
         # (docs/RUNBOOK.md). Production never truncates it.
-        session.execute(text("ALTER TABLE audit_events DISABLE TRIGGER USER"))
+        # visit_addenda is append-only the same way (FR-VIS-05, migration 0009).
+        for guarded in ("audit_events", "visit_addenda"):
+            session.execute(text(f"ALTER TABLE {guarded} DISABLE TRIGGER USER"))
         session.execute(text(f"TRUNCATE {tables}"))
-        session.execute(text("ALTER TABLE audit_events ENABLE TRIGGER USER"))
+        for guarded in ("audit_events", "visit_addenda"):
+            session.execute(text(f"ALTER TABLE {guarded} ENABLE TRIGGER USER"))
         session.commit()
 
 

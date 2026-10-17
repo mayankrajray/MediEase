@@ -33,6 +33,8 @@ from mediease_api.adapters.db.models import (
     ScheduleExceptionRow,
     SessionRow,
     UserRow,
+    VisitAddendumRow,
+    VisitRow,
 )
 from mediease_api.adapters.db.tenancy import TenantScopedRepository
 from mediease_api.domain.appointments.appointment import Appointment, StatusChange
@@ -57,6 +59,8 @@ from mediease_api.domain.scheduling.sessions import SessionStatus
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.domain.visits.visit import Visit, VisitAddendum, VisitStatus
+from mediease_api.domain.visits.vitals import Vitals
 from mediease_api.ports.repositories import RowLock
 
 
@@ -1134,6 +1138,134 @@ class SqlAlchemyAppointmentHistoryRepository(TenantScopedRepository[AppointmentS
                 changed_by=row.changed_by,
                 changed_at=_utc(row.changed_at),
                 request_id=row.request_id,
+            )
+            for row in self._session.scalars(query)
+        ]
+
+
+def _visit_from_row(row: VisitRow) -> Visit:
+    return Visit(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        patient_id=row.patient_id,
+        doctor_id=row.doctor_id,
+        appointment_id=row.appointment_id,
+        status=VisitStatus(row.status),
+        chief_complaint=row.chief_complaint,
+        findings=row.findings,
+        diagnosis=row.diagnosis,
+        notes=row.notes,
+        vitals=Vitals.parse(row.vitals or {}),
+        revision=row.revision,
+        started_at=_utc(row.started_at),
+        completed_at=_utc_or_none(row.completed_at),
+        locked_at=_utc_or_none(row.locked_at),
+        created_by=row.created_by,
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+    )
+
+
+def _write_visit(row: VisitRow, visit: Visit) -> None:
+    # The patient, doctor, appointment, start and creator are fixed when the visit starts.
+    row.status = visit.status.value
+    row.chief_complaint = visit.chief_complaint
+    row.findings = visit.findings
+    row.diagnosis = visit.diagnosis
+    row.notes = visit.notes
+    row.vitals = visit.vitals.as_json()
+    row.revision = visit.revision
+    row.completed_at = visit.completed_at
+    row.locked_at = visit.locked_at
+    row.updated_at = visit.updated_at
+
+
+class SqlAlchemyVisitRepository(TenantScopedRepository[VisitRow]):
+    model = VisitRow
+    entity_name = "visit"
+
+    def add(self, visit: Visit) -> None:
+        self._check_owned(visit.clinic_id)
+        row = VisitRow(
+            id=visit.id,
+            clinic_id=self.clinic_id,
+            patient_id=visit.patient_id,
+            doctor_id=visit.doctor_id,
+            appointment_id=visit.appointment_id,
+            started_at=visit.started_at,
+            created_by=visit.created_by,
+            created_at=visit.created_at,
+        )
+        _write_visit(row, visit)
+        self._session.add(row)
+        self._session.flush()
+
+    def update(self, visit: Visit) -> None:
+        self._check_owned(visit.clinic_id)
+        row = self._require_row(visit.id)
+        _write_visit(row, visit)
+        self._session.flush()
+
+    def get(self, visit_id: UUID, *, for_update: bool = False) -> Visit | None:
+        query = self._scoped_select().where(VisitRow.id == visit_id)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        row = self._session.scalars(query).one_or_none()
+        return _visit_from_row(row) if row else None
+
+    def get_for_appointment(self, appointment_id: UUID) -> Visit | None:
+        query = self._scoped_select().where(VisitRow.appointment_id == appointment_id)
+        row = self._session.scalars(query).one_or_none()
+        return _visit_from_row(row) if row else None
+
+    def list_for_patient(
+        self, patient_id: UUID, *, limit: int, before: tuple[datetime, UUID] | None = None
+    ) -> Sequence[Visit]:
+        query = self._scoped_select().where(VisitRow.patient_id == patient_id)
+        if before is not None:
+            started, visit_id = before
+            query = query.where(
+                or_(
+                    VisitRow.started_at < started,
+                    (VisitRow.started_at == started) & (VisitRow.id < visit_id),
+                )
+            )
+        query = query.order_by(VisitRow.started_at.desc(), VisitRow.id.desc()).limit(limit)
+        return [_visit_from_row(row) for row in self._session.scalars(query)]
+
+
+class SqlAlchemyVisitAddendumRepository(TenantScopedRepository[VisitAddendumRow]):
+    model = VisitAddendumRow
+    entity_name = "visit addendum"
+
+    def add(self, addendum: VisitAddendum) -> None:
+        self._check_owned(addendum.clinic_id)
+        self._session.add(
+            VisitAddendumRow(
+                id=addendum.id,
+                clinic_id=self.clinic_id,
+                visit_id=addendum.visit_id,
+                author_user_id=addendum.author_user_id,
+                body=addendum.body,
+                created_at=addendum.created_at,
+            )
+        )
+        self._session.flush()
+
+    def list_for_visit(self, visit_id: UUID) -> Sequence[VisitAddendum]:
+        query = (
+            self._scoped_select()
+            .where(VisitAddendumRow.visit_id == visit_id)
+            .order_by(VisitAddendumRow.created_at, VisitAddendumRow.id)
+        )
+        return [
+            VisitAddendum(
+                id=row.id,
+                clinic_id=row.clinic_id,
+                visit_id=row.visit_id,
+                author_user_id=row.author_user_id,
+                body=row.body,
+                created_at=_utc(row.created_at),
             )
             for row in self._session.scalars(query)
         ]

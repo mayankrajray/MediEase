@@ -37,6 +37,8 @@ from mediease_api.ports.repositories import (
     SessionRepository,
     StaffInviteRepository,
     UserRepository,
+    VisitAddendumRepository,
+    VisitRepository,
 )
 
 
@@ -63,6 +65,10 @@ class TenantRepositories(Protocol):
     def appointments(self) -> AppointmentRepository: ...
     @property
     def appointment_history(self) -> AppointmentHistoryRepository: ...
+    @property
+    def visits(self) -> VisitRepository: ...
+    @property
+    def visit_addenda(self) -> VisitAddendumRepository: ...
 
 
 class UnitOfWork(Protocol):
