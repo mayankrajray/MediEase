@@ -31,6 +31,7 @@ from mediease_api.domain.identity.access import ClinicAccess, StaffMember
 from mediease_api.domain.identity.membership import ClinicMembership
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User
+from mediease_api.domain.links.link import PatientLink
 from mediease_api.domain.patients.patient import Patient
 from mediease_api.domain.prescriptions.library import Favourite, Template
 from mediease_api.domain.prescriptions.prescription import Prescription
@@ -393,6 +394,29 @@ class PrescriptionRepository(Protocol):
         """M4-P3, R7: medicine names on this clinic's issued (or superseded) prescriptions that
         start with ``prefix`` ignoring case, grouped ignoring case and spaces, with the distinct
         visits they were prescribed in and when last; most visits first. Never drafts."""
+        ...
+
+
+class PatientLinkRepository(Protocol):
+    """This clinic's patient links (M4-P5). The token's `jti` is the row's ID."""
+
+    def add(self, link: PatientLink) -> None: ...
+    def update(self, link: PatientLink) -> None: ...
+    def get(self, link_id: UUID, *, for_update: bool = False) -> PatientLink | None: ...
+
+    def active_for_prescription(
+        self, prescription_id: UUID, *, for_update: bool = False
+    ) -> PatientLink | None:
+        """The chain's link that is not revoked (version 1's ID), if any."""
+        ...
+
+
+class RateLimitRepository(Protocol):
+    """Fixed one-minute windows shared by every API worker (M4-P5 decision 4A)."""
+
+    def hit(self, bucket: str, *, window_start: datetime) -> int:
+        """Count one request in `bucket` for the window; return the window's count so far.
+        Windows older than an hour are removed as a side effect."""
         ...
 
 

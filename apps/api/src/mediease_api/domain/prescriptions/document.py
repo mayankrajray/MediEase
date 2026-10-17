@@ -61,6 +61,8 @@ class RxDocument:
 
     language: Language
     paper_size: PaperSize
+    # The template to use (M4-P5): the one current when the version was issued.
+    layout_version: int
     title: str
     revision_note: str | None
     clinic_name: str
@@ -100,7 +102,7 @@ def _sentence(text: str, language: Language) -> str:
     return text[:1].upper() + text[1:] if language is Language.EN else text
 
 
-def _when(item: PrescriptionItem, language: Language) -> str | None:
+def when_text(item: PrescriptionItem, language: Language) -> str | None:
     parts: list[str] = []
     if item.frequency is Frequency.CUSTOM:
         assert item.frequency_text is not None
@@ -112,7 +114,7 @@ def _when(item: PrescriptionItem, language: Language) -> str | None:
     return _sentence(", ".join(parts), language) if parts else None
 
 
-def _duration(days: int, language: Language) -> str:
+def duration_text(days: int, language: Language) -> str:
     return (
         phrase("duration.day", language)
         if days == 1
@@ -120,7 +122,7 @@ def _duration(days: int, language: Language) -> str:
     )
 
 
-def _preparation(item: PrescriptionItem, language: Language) -> str | None:
+def preparation_text(item: PrescriptionItem, language: Language) -> str | None:
     lines = []
     for p in item.preparation:
         if p.code is PreparationCode.CUSTOM:
@@ -133,7 +135,7 @@ def _preparation(item: PrescriptionItem, language: Language) -> str | None:
     return "; ".join(lines) or None
 
 
-def _storage(item: PrescriptionItem, language: Language) -> str | None:
+def storage_text(item: PrescriptionItem, language: Language) -> str | None:
     lines = []
     for s in item.storage:
         if s.code is StorageCode.DISCARD_AFTER_DAYS:
@@ -146,14 +148,14 @@ def _storage(item: PrescriptionItem, language: Language) -> str | None:
 def _medicine(item: PrescriptionItem, language: Language) -> RxMedicine:
     values = [
         ("item.dose", item.dose),
-        ("item.when", _when(item, language)),
+        ("item.when", when_text(item, language)),
         (
             "item.duration",
-            _duration(item.duration_days, language) if item.duration_days else None,
+            duration_text(item.duration_days, language) if item.duration_days else None,
         ),
         ("item.quantity", item.quantity),
-        ("item.preparation", _preparation(item, language)),
-        ("item.storage", _storage(item, language)),
+        ("item.preparation", preparation_text(item, language)),
+        ("item.storage", storage_text(item, language)),
         ("item.warnings", item.warnings),
         ("item.notes", item.notes),
     ]
@@ -166,7 +168,7 @@ def _medicine(item: PrescriptionItem, language: Language) -> RxMedicine:
     )
 
 
-def _age(patient: Patient, on: date, language: Language) -> str:
+def age_text(patient: Patient, on: date, language: Language) -> str:
     years = patient.age_years(on)
     return (
         phrase("age.infant", language) if years < 1 else phrase("age.years", language, years=years)
@@ -203,7 +205,7 @@ def build_document(
     people = [
         RxField(phrase("patient", lang), patient.full_name),
         RxField(phrase("patient_code", lang), patient.code),
-        RxField(phrase("age", lang), _age(patient, issued_on, lang)),
+        RxField(phrase("age", lang), age_text(patient, issued_on, lang)),
     ]
     if patient.sex is not Sex.UNDISCLOSED:
         people.append(RxField(phrase("sex", lang), phrase(f"sex.{patient.sex.value}", lang)))
@@ -223,6 +225,7 @@ def build_document(
     return RxDocument(
         language=lang,
         paper_size=paper_size,
+        layout_version=rx.layout_version,
         title=phrase("title", lang),
         revision_note=phrase("revised", lang, version=rx.version) if rx.version > 1 else None,
         clinic_name=clinic.name,

@@ -96,3 +96,18 @@ class IpHasher(Protocol):
     def hash(self, ip_address: str | None) -> str | None:
         """The fingerprint, or None when the address is unknown."""
         ...
+
+
+class LinkSignerPort(Protocol):
+    """HMAC for patient link and view tokens (spec prescriptions R9; M4-P5 decision 2A).
+
+    Several keys, each with an ID: ``current_key_id`` signs new links, every configured key
+    verifies, so a key can be rotated without breaking the links already sent.
+    """
+
+    @property
+    def current_key_id(self) -> str: ...
+
+    def mac(self, key_id: str, message: bytes) -> bytes | None:
+        """The 16-byte MAC of ``message`` under ``key_id``, or ``None`` for an unknown key."""
+        ...

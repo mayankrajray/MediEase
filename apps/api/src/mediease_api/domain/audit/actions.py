@@ -72,6 +72,14 @@ class AuditAction(StrEnum):
     # M4-P4: one row per PDF download (R16, spec D6). Metadata: visit, version, paper size, the
     # caller's role and whether this download rendered it; never content.
     PRESCRIPTION_PDF_DOWNLOADED = "prescription.pdf_downloaded"
+    # M4-P5: patient links (R13). Metadata: the link's ID, the version shown, the language, an
+    # attempt number; never digits, a phone number or content. Patients act as PATIENT_LINK.
+    PATIENT_LINK_OPENED = "patient_link.opened"
+    PATIENT_LINK_CHALLENGE_FAILED = "patient_link.challenge_failed"
+    PATIENT_LINK_LOCKED = "patient_link.locked"
+    PATIENT_LINK_CREATED = "patient_link.created"
+    PATIENT_LINK_RESET = "patient_link.reset"
+    PATIENT_LINK_REPLACED = "patient_link.replaced"
     # M4-P3: a doctor's favourites and templates. Metadata: none (the entity ID says which);
     # never a name or a medicine. Lists and suggestions are not audited (decision 4A).
     RX_FAVOURITE_CREATED = "rx_favourite.created"
