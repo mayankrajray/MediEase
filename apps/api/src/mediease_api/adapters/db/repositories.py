@@ -21,6 +21,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from mediease_api.adapters.db.models import (
+    AppointmentRow,
+    AppointmentStatusHistoryRow,
     ClinicMembershipRow,
     ClinicRow,
     DoctorRow,
@@ -33,6 +35,12 @@ from mediease_api.adapters.db.models import (
     UserRow,
 )
 from mediease_api.adapters.db.tenancy import TenantScopedRepository
+from mediease_api.domain.appointments.appointment import Appointment, StatusChange
+from mediease_api.domain.appointments.status import (
+    AppointmentSource,
+    AppointmentStatus,
+    CancelReason,
+)
 from mediease_api.domain.clinics.clinic import Clinic, ClinicStatus
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
@@ -903,10 +911,45 @@ class SqlAlchemySessionRepository(TenantScopedRepository[SessionRow]):
         )
         return len(self._session.execute(query).all())
 
+    def get(self, session_id: UUID, *, lock: RowLock | None = None) -> BookableSession | None:
+        if lock is None:
+            row = self._get_row(session_id)
+        else:
+            query = self._scoped_select().where(SessionRow.id == session_id)
+            row = self._session.scalars(
+                query.with_for_update(read=lock is RowLock.SHARE).execution_options(
+                    populate_existing=True
+                )
+            ).one_or_none()
+        return _session_from_row(row) if row else None
+
+    def get_many(self, session_ids: Collection[UUID]) -> Sequence[BookableSession]:
+        ids = sorted(set(session_ids))
+        if not ids:
+            return []
+        query = self._scoped_select().where(SessionRow.id.in_(ids))
+        return [_session_from_row(row) for row in self._session.scalars(query)]
+
+    def update(self, session: BookableSession) -> None:
+        self._check_owned(session.clinic_id)
+        row = self._require_row(session.id)
+        # The key (doctor, start, date) never changes; a revived session takes a new shape.
+        row.ends_at = session.ends_at
+        row.mode = session.mode.value
+        row.slot_minutes = session.slot_minutes
+        row.capacity = session.capacity
+        row.booked_count = session.booked_count
+        row.next_token = session.next_token
+        row.status = session.status.value
+        row.updated_at = session.updated_at
+        self._session.flush()
+
     def list_for_date(
-        self, on_date: date, *, doctor_id: UUID | None = None
+        self, on_date: date, *, doctor_id: UUID | None = None, include_retired: bool = False
     ) -> Sequence[BookableSession]:
         query = self._scoped_select().where(SessionRow.on_date == on_date)
+        if not include_retired:
+            query = query.where(SessionRow.status != SessionStatus.CANCELLED.value)
         if doctor_id is not None:
             query = query.where(SessionRow.doctor_id == doctor_id)
         query = query.order_by(SessionRow.starts_at, SessionRow.doctor_id)
@@ -925,3 +968,161 @@ class SqlAlchemySessionRepository(TenantScopedRepository[SessionRow]):
 
     def delete(self, session_id: UUID) -> None:
         self._delete_row(session_id)
+
+
+# --- Appointments (tenant, M3-P2) ------------------------------------------------------------
+
+
+def _appointment_from_row(row: AppointmentRow) -> Appointment:
+    return Appointment(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        session_id=row.session_id,
+        doctor_id=row.doctor_id,
+        patient_id=row.patient_id,
+        slot_start=_utc_or_none(row.slot_start),
+        token_number=row.token_number,
+        status=AppointmentStatus(row.status),
+        source=AppointmentSource(row.source),
+        reason=row.reason,
+        cancel_reason=CancelReason(row.cancel_reason) if row.cancel_reason else None,
+        cancel_note=row.cancel_note,
+        cancelled_at=_utc_or_none(row.cancelled_at),
+        rescheduled_from_id=row.rescheduled_from_id,
+        arrived_at=_utc_or_none(row.arrived_at),
+        started_at=_utc_or_none(row.started_at),
+        completed_at=_utc_or_none(row.completed_at),
+        created_by=row.created_by,
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+    )
+
+
+def _write_appointment(row: AppointmentRow, appointment: Appointment) -> None:
+    # The session, doctor, patient, place, source and creator are fixed at booking.
+    row.status = appointment.status.value
+    row.reason = appointment.reason
+    row.cancel_reason = appointment.cancel_reason.value if appointment.cancel_reason else None
+    row.cancel_note = appointment.cancel_note
+    row.cancelled_at = appointment.cancelled_at
+    row.arrived_at = appointment.arrived_at
+    row.started_at = appointment.started_at
+    row.completed_at = appointment.completed_at
+    row.updated_at = appointment.updated_at
+
+
+class SqlAlchemyAppointmentRepository(TenantScopedRepository[AppointmentRow]):
+    model = AppointmentRow
+    entity_name = "appointment"
+
+    def add(self, appointment: Appointment) -> None:
+        self._check_owned(appointment.clinic_id)
+        row = AppointmentRow(
+            id=appointment.id,
+            clinic_id=self.clinic_id,
+            session_id=appointment.session_id,
+            doctor_id=appointment.doctor_id,
+            patient_id=appointment.patient_id,
+            slot_start=appointment.slot_start,
+            token_number=appointment.token_number,
+            source=appointment.source.value,
+            rescheduled_from_id=appointment.rescheduled_from_id,
+            created_by=appointment.created_by,
+            created_at=appointment.created_at,
+        )
+        _write_appointment(row, appointment)
+        self._session.add(row)
+        self._session.flush()
+
+    def update(self, appointment: Appointment) -> None:
+        self._check_owned(appointment.clinic_id)
+        row = self._require_row(appointment.id)
+        _write_appointment(row, appointment)
+        self._session.flush()
+
+    def get(self, appointment_id: UUID, *, for_update: bool = False) -> Appointment | None:
+        if not for_update:
+            row = self._get_row(appointment_id)
+        else:
+            query = self._scoped_select().where(AppointmentRow.id == appointment_id)
+            row = self._session.scalars(
+                query.with_for_update().execution_options(populate_existing=True)
+            ).one_or_none()
+        return _appointment_from_row(row) if row else None
+
+    def list_active_for_sessions(self, session_ids: Collection[UUID]) -> Sequence[Appointment]:
+        ids = sorted(set(session_ids))
+        if not ids:
+            return []
+        query = (
+            self._scoped_select()
+            .where(
+                AppointmentRow.session_id.in_(ids),
+                AppointmentRow.status != AppointmentStatus.CANCELLED.value,
+            )
+            .order_by(
+                AppointmentRow.session_id,
+                AppointmentRow.slot_start,
+                AppointmentRow.token_number,
+            )
+        )
+        return [_appointment_from_row(row) for row in self._session.scalars(query)]
+
+    def exists_for_session(self, session_id: UUID) -> bool:
+        query = select(
+            exists().where(
+                AppointmentRow.clinic_id == self._clinic_id,
+                AppointmentRow.session_id == session_id,
+            )
+        )
+        return bool(self._session.scalar(query))
+
+    def list_for_patient(self, patient_id: UUID, *, limit: int) -> Sequence[Appointment]:
+        query = (
+            self._scoped_select()
+            .where(AppointmentRow.patient_id == patient_id)
+            .order_by(AppointmentRow.created_at.desc(), AppointmentRow.id.desc())
+            .limit(limit)
+        )
+        return [_appointment_from_row(row) for row in self._session.scalars(query)]
+
+
+class SqlAlchemyAppointmentHistoryRepository(TenantScopedRepository[AppointmentStatusHistoryRow]):
+    model = AppointmentStatusHistoryRow
+    entity_name = "appointment history"
+
+    def add(self, change: StatusChange) -> None:
+        self._check_owned(change.clinic_id)
+        self._session.add(
+            AppointmentStatusHistoryRow(
+                id=change.id,
+                clinic_id=self.clinic_id,
+                appointment_id=change.appointment_id,
+                from_status=change.from_status.value if change.from_status else None,
+                to_status=change.to_status.value,
+                changed_by=change.changed_by,
+                changed_at=change.changed_at,
+                request_id=change.request_id,
+            )
+        )
+        self._session.flush()
+
+    def list_for_appointment(self, appointment_id: UUID) -> Sequence[StatusChange]:
+        query = (
+            self._scoped_select()
+            .where(AppointmentStatusHistoryRow.appointment_id == appointment_id)
+            .order_by(AppointmentStatusHistoryRow.changed_at, AppointmentStatusHistoryRow.id)
+        )
+        return [
+            StatusChange(
+                id=row.id,
+                clinic_id=row.clinic_id,
+                appointment_id=row.appointment_id,
+                from_status=AppointmentStatus(row.from_status) if row.from_status else None,
+                to_status=AppointmentStatus(row.to_status),
+                changed_by=row.changed_by,
+                changed_at=_utc(row.changed_at),
+                request_id=row.request_id,
+            )
+            for row in self._session.scalars(query)
+        ]

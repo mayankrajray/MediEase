@@ -23,6 +23,8 @@ from uuid import UUID
 
 from mediease_api.ports.audit import AuditWriter
 from mediease_api.ports.repositories import (
+    AppointmentHistoryRepository,
+    AppointmentRepository,
     ChecklistRepository,
     ClinicAccessRepository,
     ClinicRepository,
@@ -57,6 +59,10 @@ class TenantRepositories(Protocol):
     def schedule_exceptions(self) -> ScheduleExceptionRepository: ...
     @property
     def sessions(self) -> SessionRepository: ...
+    @property
+    def appointments(self) -> AppointmentRepository: ...
+    @property
+    def appointment_history(self) -> AppointmentHistoryRepository: ...
 
 
 class UnitOfWork(Protocol):

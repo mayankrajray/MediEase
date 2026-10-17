@@ -23,6 +23,7 @@ from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
+from mediease_api.domain.appointments.appointment import Appointment, StatusChange
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist
@@ -248,8 +249,23 @@ class SessionRepository(Protocol):
         """Insert the ones not there yet (``ON CONFLICT DO NOTHING``, R1); returns how many."""
         ...
 
-    def list_for_date(self, on_date: date, *, doctor_id: UUID | None = None) -> Sequence[Session]:
-        """The date's sessions, by start time then doctor."""
+    def get(self, session_id: UUID, *, lock: RowLock | None = None) -> Session | None:
+        """One session; ``UPDATE`` while booking or cancelling in it (R5)."""
+        ...
+
+    def get_many(self, session_ids: Collection[UUID]) -> Sequence[Session]:
+        """These sessions (any status), in no particular order; unknown IDs are skipped."""
+        ...
+
+    def update(self, session: Session) -> None:
+        """Save ``booked_count``, ``next_token``, status and shape (booking, reconcile)."""
+        ...
+
+    def list_for_date(
+        self, on_date: date, *, doctor_id: UUID | None = None, include_retired: bool = False
+    ) -> Sequence[Session]:
+        """The date's sessions, by start time then doctor; retired (``CANCELLED``) ones only
+        when asked, for generation to revive."""
         ...
 
     def list_for_doctor(
@@ -259,3 +275,35 @@ class SessionRepository(Protocol):
         ...
 
     def delete(self, session_id: UUID) -> None: ...
+
+
+class AppointmentRepository(Protocol):
+    """This clinic's appointments (M3-P2)."""
+
+    def add(self, appointment: Appointment) -> None: ...
+
+    def update(self, appointment: Appointment) -> None: ...
+
+    def get(self, appointment_id: UUID, *, for_update: bool = False) -> Appointment | None: ...
+
+    def list_active_for_sessions(self, session_ids: Collection[UUID]) -> Sequence[Appointment]:
+        """Active (not cancelled) appointments in these sessions, by slot or token."""
+        ...
+
+    def exists_for_session(self, session_id: UUID) -> bool:
+        """Any appointment, cancelled or not, points at the session (so it cannot be deleted)."""
+        ...
+
+    def list_for_patient(self, patient_id: UUID, *, limit: int) -> Sequence[Appointment]:
+        """The patient's appointments, newest first."""
+        ...
+
+
+class AppointmentHistoryRepository(Protocol):
+    """Append-only status history (FR-APT-05)."""
+
+    def add(self, change: StatusChange) -> None: ...
+
+    def list_for_appointment(self, appointment_id: UUID) -> Sequence[StatusChange]:
+        """Oldest first."""
+        ...
