@@ -31,6 +31,27 @@ Rules:
 
 ## Entries
 
+### 2026-10-17 — Sign-in failed with "Something went wrong" over plain HTTP on a non-localhost host
+
+- **Milestone / area:** M2-P5 / web API client (found by the first CI Playwright run)
+- **Symptom:** The CI `smoke` job's journey stayed on `/sign-in` with "Something went wrong. Please
+  try again." and no Ref. Locally, through `http://localhost:3000`, the same spec passed.
+- **Impact:** CI only, before merge. It would hit anyone opening the app over HTTP by any name or
+  address other than localhost (a LAN address, an HTTP-only staging host). Production uses TLS.
+- **Reproduction:** Playwright against `http://web:3000` (the compose network, as `make e2e` does),
+  or locally with Chromium's `--host-resolver-rules=MAP web 127.0.0.1` and the old web image.
+- **Investigation:** The message is `describeError`'s text for an error that is not an `ApiError`,
+  so the failure was in the browser before any request. `newRequestId()` called
+  `crypto.randomUUID()`, which browsers expose only in secure contexts (HTTPS, localhost);
+  `http://web:3000` is not one, so every API call threw a `TypeError`.
+- **Root cause:** A secure-context-only browser API on the path of every request.
+- **Fix:** `newRequestId()` falls back to an RFC 4122 v4 UUID built from `crypto.getRandomValues`,
+  which works in every context.
+- **Guard:** `client.test.ts` "newRequestId" (works without `randomUUID`); the Playwright journey
+  runs at `http://web:3000` in CI.
+- **Prevention / follow-up:** Browser APIs on the request path must work outside secure contexts,
+  or be checked first. Keep the e2e base URL a non-localhost name so CI catches this class of bug.
+- **Search keywords:** randomUUID, secure context, crypto, sign-in fails, something went wrong, http, e2e
 ### 2026-10-03 — Secrets scan failed on `main` after the M1 rebase merge
 
 - **Milestone / area:** M1 → M2 / CI, gitleaks

@@ -13,6 +13,7 @@ import {
   apiPatch,
   apiPost,
   apiPut,
+  newRequestId,
 } from "./client";
 
 const API = "http://api.internal:8000";
@@ -393,5 +394,24 @@ describe("query strings and cancellation (M2-P5)", () => {
 
     expect(failure).not.toBeInstanceOf(ApiError);
     expect((failure as DOMException).name).toBe("AbortError");
+  });
+});
+
+const realCrypto = globalThis.crypto;
+
+describe("newRequestId", () => {
+  const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+  it("NFR-12: is a UUID v4 even where randomUUID is missing (plain HTTP on a non-localhost host)", () => {
+    vi.stubGlobal("crypto", { getRandomValues: (array: Uint8Array) => realCrypto.getRandomValues(array) });
+
+    const ids = new Set(Array.from({ length: 50 }, () => newRequestId()));
+
+    expect(ids.size).toBe(50);
+    for (const id of ids) expect(id).toMatch(UUID_V4);
+  });
+
+  it("uses randomUUID where the browser has it", () => {
+    expect(newRequestId()).toMatch(UUID_V4);
   });
 });
