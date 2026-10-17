@@ -2,14 +2,15 @@
 
 import { useRef, useState, type FormEvent } from "react";
 
+import { TextField } from "@/components/TextField";
+import { useFocusOnError } from "@/components/useFocusOnError";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { ApiError, type PostResponse } from "@/lib/api/client";
+import { fieldErrors } from "@/lib/api/field-errors";
 import { sessionPost } from "@/lib/auth/refresh";
 
-import { emptyToNull, fieldErrors, parseSpecialties, suggestSlug } from "./fields";
-import { TextField } from "./TextField";
-import { useFocusOnError } from "./useFocusOnError";
+import { emptyToNull, parseSpecialties, suggestSlug } from "./fields";
 
 export type NewClinicResult = PostResponse<"/api/v1/ops/clinics">;
 

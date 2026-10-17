@@ -2,14 +2,15 @@
 
 import { useRef, useState, type FormEvent } from "react";
 
+import { TextField } from "@/components/TextField";
+import { useFocusOnError } from "@/components/useFocusOnError";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import type { PostResponse } from "@/lib/api/client";
+import { fieldErrors } from "@/lib/api/field-errors";
 import { sessionPost } from "@/lib/auth/refresh";
 
-import { emptyToNull, fieldErrors } from "./fields";
-import { TextField } from "./TextField";
-import { useFocusOnError } from "./useFocusOnError";
+import { emptyToNull } from "./fields";
 
 const PATH = "/api/v1/ops/clinics/{clinic_id}/doctors" as const;
 
