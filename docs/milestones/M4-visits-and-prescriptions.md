@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; the M4-P3 design approved the same day with 1A–5A and implemented; awaiting the developer's confirmation |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 designed next |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -15,7 +15,7 @@
 |---|---|---|
 | P1 | Visit record, history, 24-hour lock and addenda | Below (done, confirmed) |
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (done, confirmed) |
-| P3 | Favourites, templates, clinic-history autocomplete | Below (implemented) |
+| P3 | Favourites, templates, clinic-history autocomplete | Below (done, confirmed) |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | At its start |
 | P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | At its start |
 | P6 | Web consultation screen, keyboard-first Rx builder | At its start |
@@ -331,7 +331,7 @@ Taken while implementing:
 
 ## M4-P3 — Favourites, templates and clinic-history autocomplete
 
-**Status: approved by the developer 18 Oct 2026 with 1A–5A (every recommendation); implemented the same day (result at the end of this section), awaiting the developer's confirmation.** API only; the builder uses it in P6. Covers
+**Status: approved by the developer 18 Oct 2026 with 1A–5A (every recommendation); implemented the same day (result at the end of this section) and confirmed by the developer.** API only; the builder uses it in P6. Covers
 FR-RX-05, FR-RX-10; spec R7; AC5.
 
 ### Concepts
