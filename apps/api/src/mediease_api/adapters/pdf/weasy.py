@@ -15,6 +15,7 @@ once and its stored file served after that (R18). The PDF's metadata holds only 
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -74,6 +75,22 @@ def _css_string(value: str) -> Markup:
     return Markup(f'"{escaped}"')
 
 
+@dataclass(frozen=True, slots=True)
+class Layout:
+    """One printed layout's files (M4-P5). Never edit a released layout: add the next one."""
+
+    html: str
+    css: str
+    page_css: str
+
+
+# Layout version -> its files. ``domain.prescriptions.prescription.CURRENT_LAYOUT`` names the
+# newest; every version a prescription may have been issued with must stay here.
+LAYOUTS: dict[int, Layout] = {
+    1: Layout(html="prescription.html.j2", css="prescription.css", page_css="page.css.j2"),
+}
+
+
 class WeasyPrintRenderer:
     """``PdfRendererPort`` with WeasyPrint. Thread-safe: every render has its own objects."""
 
@@ -86,17 +103,28 @@ class WeasyPrintRenderer:
             lstrip_blocks=True,
         )
         self._env.filters["css_string"] = _css_string
-        self._stylesheet = (ASSETS / "prescription.css").read_text(encoding="utf-8")
+        self._stylesheets = {
+            version: (ASSETS / layout.css).read_text(encoding="utf-8")
+            for version, layout in LAYOUTS.items()
+        }
         self.last_fetcher: AssetsOnlyFetcher | None = None
 
+    @staticmethod
+    def _layout(document: RxDocument) -> Layout:
+        layout = LAYOUTS.get(document.layout_version)
+        if layout is None:
+            raise ValueError(f"no printed layout {document.layout_version}")
+        return layout
+
     def html(self, document: RxDocument) -> str:
-        return self._env.get_template("prescription.html.j2").render(doc=document)
+        return self._env.get_template(self._layout(document).html).render(doc=document)
 
     def render(self, document: RxDocument) -> bytes:
+        layout = self._layout(document)
         fetcher = AssetsOnlyFetcher()
         self.last_fetcher = fetcher
         base_url = ASSETS.as_uri() + "/"
-        page = self._env.get_template("page.css.j2").render(doc=document)
+        page = self._env.get_template(layout.page_css).render(doc=document)
         try:  # fonts are fetched while the stylesheets are parsed, so all of it is inside
             fonts = FontConfiguration()
             stylesheets = [
@@ -106,7 +134,7 @@ class WeasyPrintRenderer:
                     url_fetcher=fetcher,
                     font_config=fonts,
                 )
-                for css in (self._stylesheet, page)
+                for css in (self._stylesheets[document.layout_version], page)
             ]
             html = HTML(string=self.html(document), base_url=base_url, url_fetcher=fetcher)
             pdf: bytes = html.write_pdf(stylesheets=stylesheets, font_config=fonts)

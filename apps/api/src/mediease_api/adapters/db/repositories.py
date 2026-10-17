@@ -13,7 +13,7 @@ unit of work, bound to one clinic.
 from __future__ import annotations
 
 from collections.abc import Collection, Sequence
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
 
 from sqlalchemy import Select, delete, exists, func, or_, select, text, update
@@ -29,9 +29,11 @@ from mediease_api.adapters.db.models import (
     DoctorRow,
     DoctorScheduleRow,
     OnboardingChecklistRow,
+    PatientLinkRow,
     PatientRow,
     PrescriptionItemRow,
     PrescriptionRow,
+    PublicRateLimitRow,
     RefreshTokenRow,
     RxFavouriteRow,
     RxTemplateRow,
@@ -55,6 +57,7 @@ from mediease_api.domain.identity.access import ClinicAccess, StaffMember
 from mediease_api.domain.identity.membership import ClinicMembership, MembershipStatus, Role
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User, UserStatus
+from mediease_api.domain.links.link import LinkPurpose, PatientLink
 from mediease_api.domain.patients.patient import Language, Patient, Sex
 from mediease_api.domain.prescriptions.errors import PdfBusy
 from mediease_api.domain.prescriptions.library import Favourite, NameTaken, Template
@@ -1392,6 +1395,7 @@ def _prescription_from_row(row: PrescriptionRow, items: Sequence[PrescriptionIte
         created_at=_utc(row.created_at),
         updated_at=_utc(row.updated_at),
         template_id=row.template_id,
+        layout_version=row.layout_version,
     )
 
 
@@ -1409,6 +1413,7 @@ def _write_prescription(row: PrescriptionRow, rx: Prescription) -> None:
     row.link_delivery = rx.link_delivery.value if rx.link_delivery else None
     row.link_delivery_requested_at = rx.link_delivery_requested_at
     row.template_id = rx.template_id
+    row.layout_version = rx.layout_version
     row.updated_at = rx.updated_at
 
 
@@ -1728,3 +1733,101 @@ class SqlAlchemyRxTemplateRepository(TenantScopedRepository[RxTemplateRow]):
             RxTemplateRow.clinic_id == self.clinic_id, RxTemplateRow.doctor_id == doctor_id
         )
         return int(self._session.scalar(query) or 0)
+
+
+# --- Patient links and public rate limits (M4-P5) ------------------------------------------------
+
+
+def _link_from_row(row: PatientLinkRow) -> PatientLink:
+    return PatientLink(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        patient_id=row.patient_id,
+        prescription_id=row.prescription_id,
+        purpose=LinkPurpose(row.purpose),
+        key_id=row.key_id,
+        expires_at=_utc(row.expires_at),
+        revoked_at=_utc_or_none(row.revoked_at),
+        failed_challenges=row.failed_challenges,
+        locked_at=_utc_or_none(row.locked_at),
+        open_count=row.open_count,
+        last_opened_at=_utc_or_none(row.last_opened_at),
+        created_by=row.created_by,
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+    )
+
+
+def _write_link(row: PatientLinkRow, link: PatientLink) -> None:
+    row.revoked_at = link.revoked_at
+    row.failed_challenges = link.failed_challenges
+    row.locked_at = link.locked_at
+    row.open_count = link.open_count
+    row.last_opened_at = link.last_opened_at
+    row.updated_at = link.updated_at
+
+
+class SqlAlchemyPatientLinkRepository(TenantScopedRepository[PatientLinkRow]):
+    model = PatientLinkRow
+    entity_name = "patient link"
+
+    def add(self, link: PatientLink) -> None:
+        self._check_owned(link.clinic_id)
+        row = PatientLinkRow(
+            id=link.id,
+            clinic_id=self.clinic_id,
+            patient_id=link.patient_id,
+            prescription_id=link.prescription_id,
+            purpose=link.purpose.value,
+            key_id=link.key_id,
+            expires_at=link.expires_at,
+            created_by=link.created_by,
+            created_at=link.created_at,
+        )
+        _write_link(row, link)
+        self._session.add(row)
+        self._session.flush()
+
+    def update(self, link: PatientLink) -> None:
+        self._check_owned(link.clinic_id)
+        _write_link(self._require_row(link.id), link)
+        self._session.flush()
+
+    def _one(self, query: Select[PatientLinkRow], for_update: bool) -> PatientLink | None:
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        row = self._session.scalars(query).one_or_none()
+        return _link_from_row(row) if row else None
+
+    def get(self, link_id: UUID, *, for_update: bool = False) -> PatientLink | None:
+        return self._one(self._scoped_select().where(PatientLinkRow.id == link_id), for_update)
+
+    def active_for_prescription(
+        self, prescription_id: UUID, *, for_update: bool = False
+    ) -> PatientLink | None:
+        query = self._scoped_select().where(
+            PatientLinkRow.prescription_id == prescription_id,
+            PatientLinkRow.revoked_at.is_(None),
+        )
+        return self._one(query, for_update)
+
+
+class SqlAlchemyRateLimitRepository:
+    """Counts per bucket and minute in ``public_rate_limits`` (decision 4A); not tenant data."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def hit(self, bucket: str, *, window_start: datetime) -> int:
+        values = insert(PublicRateLimitRow).values(bucket=bucket, window_start=window_start, hits=1)
+        returning = values.on_conflict_do_update(
+            index_elements=[PublicRateLimitRow.bucket, PublicRateLimitRow.window_start],
+            set_={"hits": PublicRateLimitRow.hits + 1},
+        ).returning(PublicRateLimitRow.hits)
+        hits = int(self._session.execute(returning).scalar_one())
+        self._session.execute(
+            delete(PublicRateLimitRow).where(
+                PublicRateLimitRow.window_start < window_start - timedelta(hours=1)
+            )
+        )
+        return hits

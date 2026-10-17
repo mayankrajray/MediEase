@@ -220,3 +220,16 @@ def test_the_prescriptions_own_script_takes_the_first_font(
     """With Latin first, spaces inside Hindi runs collapsed ("के7"); seen in M4-P4."""
     page = renderer._env.get_template("page.css.j2").render(doc=doc_of(issued(language)))
     assert f"html {{ font-family: {first}," in page
+
+
+def test_m4_p5_every_issued_layout_has_its_template_and_unknown_ones_fail(
+    renderer: WeasyPrintRenderer,
+) -> None:
+    from mediease_api.adapters.pdf.weasy import LAYOUTS
+    from mediease_api.domain.prescriptions.prescription import CURRENT_LAYOUT
+
+    assert set(range(1, CURRENT_LAYOUT + 1)) <= set(LAYOUTS)
+    doc = doc_of(issued())
+    assert doc.layout_version == CURRENT_LAYOUT
+    with pytest.raises(ValueError, match="no printed layout 99"):
+        renderer.render(replace(doc, layout_version=99))

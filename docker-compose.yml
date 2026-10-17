@@ -24,6 +24,9 @@ x-api-environment: &api-environment
   S3_BUCKET: ${S3_BUCKET:-}
   S3_REGION: ${S3_REGION:-ap-south-1}
   S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+  # M4-P5: patient link keys (empty locally means the development key).
+  PATIENT_LINK_SIGNING_KEYS: ${PATIENT_LINK_SIGNING_KEYS:-}
+  PATIENT_LINK_TTL_DAYS: ${PATIENT_LINK_TTL_DAYS:-90}
 
 # Least privilege for our own containers (CLAUDE.md): read-only root
 # filesystem, no Linux capabilities, no privilege escalation. Writable scratch
