@@ -22,6 +22,19 @@ updates:
     commit-message:
       prefix: build(deps)
     open-pull-requests-limit: 5
+    # Majors that the toolchain cannot take yet. Remove an entry when its blocker is gone and
+    # upgrade by hand in one build(deps) change.
+    ignore:
+      # openapi-typescript (contract types, ADR-0008) peers on typescript ^5: npm ci fails (PR #18).
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # eslint-plugin-react inside eslint-config-next still calls context.getFilename(),
+      # removed in ESLint 10, so lint crashes (PRs #17, #28).
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      # The runtime is Node 24 (apps/web/.nvmrc); newer types would allow APIs it lacks (PR #24).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # Base images are pinned by digest in the Dockerfiles; this keeps them current.
   - package-ecosystem: docker
