@@ -201,3 +201,22 @@ def test_the_pdf_metadata_holds_no_clinical_content(renderer: WeasyPrintRenderer
         document.close()
     assert metadata.get("Title") == "Prescription"
     assert set(metadata) <= {"Title", "Producer", "Creator"}
+
+
+def test_css_strings_keep_the_space_after_an_escaped_character() -> None:
+    # CSS eats one whitespace after a hex escape; the footer once lost its word gaps ("सेतैयार").
+    from mediease_api.adapters.pdf.weasy import _css_string
+
+    assert str(_css_string("से तैयार")) == '"स\\000947  त\\000948 य\\00093e र"'
+    assert str(_css_string('a"b')) == '"a\\000022 b"'
+
+
+@pytest.mark.parametrize(
+    ("language", "first"), [(Language.HI, '"RxDeva"'), (Language.EN, '"RxLatin"')]
+)
+def test_the_prescriptions_own_script_takes_the_first_font(
+    renderer: WeasyPrintRenderer, language: Language, first: str
+) -> None:
+    """With Latin first, spaces inside Hindi runs collapsed ("के7"); seen in M4-P4."""
+    page = renderer._env.get_template("page.css.j2").render(doc=doc_of(issued(language)))
+    assert f"html {{ font-family: {first}," in page

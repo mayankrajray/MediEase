@@ -64,10 +64,12 @@ def _css_string(value: str) -> Markup:
     """A CSS string literal for a phrase (they are ours, but quote them properly anyway).
 
     Everything but letters, digits and a few punctuation marks becomes a CSS escape, so the
-    result is safe in CSS and needs no HTML autoescaping (hence ``Markup``).
+    result is safe in CSS and needs no HTML autoescaping (hence ``Markup``). Each escape ends with
+    a space, which CSS consumes as its terminator: without it, a real space after an escaped
+    character (a Devanagari vowel sign, say) would be swallowed and two words would join.
     """
     escaped = "".join(
-        ch if ch.isalnum() or ch in " .,:/()-" else f"\\{ord(ch):06x}" for ch in value
+        ch if ch.isalnum() or ch in " .,:/()-" else f"\\{ord(ch):06x} " for ch in value
     )
     return Markup(f'"{escaped}"')
 

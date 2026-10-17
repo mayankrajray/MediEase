@@ -1,7 +1,8 @@
 /* Printed prescription (spec prescriptions R8; M4-P4). Fonts are vendored in this directory;
    the renderer fetches nothing else. Latin and Devanagari are two families, Pango picking the
    second for characters the first lacks: one family with unicode-range drew Devanagari
-   conjuncts with wrong glyphs (seen in M4-P4 with WeasyPrint 70.0). */
+   conjuncts with wrong glyphs (seen in M4-P4 with WeasyPrint 70.0). page.css.j2 sets their
+   order by the prescription's language. */
 
 @font-face { font-family: "RxLatin"; font-weight: normal; src: url(NotoSans-Regular.ttf); }
 @font-face { font-family: "RxLatin"; font-weight: bold; src: url(NotoSans-Bold.ttf); }
@@ -10,11 +11,11 @@
 
 @page {
   margin: 12mm 11mm 16mm 11mm;
-  @bottom-left { font-family: "RxLatin", "RxDeva"; font-size: 7.5pt; color: #555; }
-  @bottom-right { font-family: "RxLatin", "RxDeva"; font-size: 7.5pt; color: #555; }
+  @bottom-left { font-size: 7.5pt; color: #555; }
+  @bottom-right { font-size: 7.5pt; color: #555; }
 }
 
-html { font-family: "RxLatin", "RxDeva"; font-size: 9.5pt; line-height: 1.35; color: #111; }
+html { font-size: 9.5pt; line-height: 1.35; color: #111; }
 body { margin: 0; }
 p { margin: 0; }
 h1, h2, h3 { margin: 0; font-weight: bold; }
