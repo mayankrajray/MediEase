@@ -109,6 +109,44 @@ async function createClinicStep() {
 }
 
 describe("Create clinic wizard", () => {
+  it("R4, D2: sends the patient code prefix in capitals when given, and null when left empty", async () => {
+    const api = mockApi({
+      ...base,
+      "POST /api/v1/ops/clinics": () => json(201, clinic({ patient_code_prefix: "TQ" })),
+      [DETAIL]: () => detail(),
+    });
+    renderWizard();
+    await screen.findByRole("heading", { name: "Create clinic" });
+
+    type(/^Clinic name/, "Sample Clinic Three");
+    type(/^Patient code prefix/, "tq");
+    expect(screen.getByLabelText(/^Patient code prefix/)).toHaveValue("TQ");
+    click("Create clinic and continue");
+    await screen.findByRole("heading", { name: /Step 2 of 3/ });
+
+    const created = api.calls.find((c) => c.method === "POST" && c.path === "/api/v1/ops/clinics");
+    expect(created?.body).toMatchObject({ patient_code_prefix: "TQ" });
+  });
+
+  it("R4: a prefix the API refuses is shown on its field", async () => {
+    mockApi({
+      ...base,
+      "POST /api/v1/ops/clinics": () =>
+        apiError(422, "REQ_VALIDATION_FAILED", "Some fields are missing or not valid.", {}, {
+          fields: [{ field: "patient_code_prefix", reason: "must be 2-4 upper-case letters" }],
+        }),
+    });
+    renderWizard();
+    await screen.findByRole("heading", { name: "Create clinic" });
+
+    type(/^Clinic name/, "Sample Clinic Three");
+    type(/^Patient code prefix/, "Q");
+    click("Create clinic and continue");
+
+    expect(await screen.findByText("must be 2-4 upper-case letters")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Patient code prefix/)).toHaveAttribute("aria-invalid", "true");
+  });
+
   it("FR-OPS-01: walks clinic → doctors → owner invitation and shows the link once", async () => {
     const api = mockApi({
       ...base,
@@ -147,6 +185,7 @@ describe("Create clinic wizard", () => {
       state: null,
       pincode: null,
       specialties: ["General Medicine", "Paediatrics"],
+      patient_code_prefix: null,
     });
 
     type(/^Doctor's name/, "Dr. Sample Doctor");

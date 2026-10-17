@@ -29,6 +29,7 @@ export function ClinicStep({ onCreated }: { onCreated: (clinic: NewClinicResult)
   const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
   const [specialties, setSpecialties] = useState("");
+  const [codePrefix, setCodePrefix] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const container = useRef<HTMLDivElement>(null);
@@ -54,6 +55,7 @@ export function ClinicStep({ onCreated }: { onCreated: (clinic: NewClinicResult)
         state: emptyToNull(state),
         pincode: emptyToNull(pincode),
         specialties: parseSpecialties(specialties),
+        patient_code_prefix: emptyToNull(codePrefix),
       });
       onCreated(data);
     } catch (failure) {
@@ -151,6 +153,15 @@ export function ClinicStep({ onCreated }: { onCreated: (clinic: NewClinicResult)
           value={specialties}
           error={problems["specialties"]}
           onChange={setSpecialties}
+        />
+        <TextField
+          id="clinic-code-prefix"
+          label="Patient code prefix"
+          maxLength={4}
+          value={codePrefix}
+          hint="2 to 4 capital letters, as in SC-0001. Leave empty to derive it from the clinic name. It cannot change once the clinic has patients."
+          error={problems["patient_code_prefix"]}
+          onChange={(value) => setCodePrefix(value.toUpperCase())}
         />
 
         <button
