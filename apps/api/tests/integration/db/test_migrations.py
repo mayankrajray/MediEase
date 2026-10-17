@@ -21,12 +21,13 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0006"
+HEAD = "0007"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
 M1_P5_TABLES = sorted([*M1_P4_TABLES, "onboarding_checklists"])
 M2_P1_TABLES = sorted([*M1_P5_TABLES, "patients"])
+M3_P1_TABLES = sorted([*M2_P1_TABLES, "doctor_schedules", "schedule_exceptions", "sessions"])
 
 
 @pytest.fixture
@@ -216,9 +217,39 @@ def test_0006_adds_patients_and_gives_existing_clinics_a_code_prefix(
         engine.dispose()
 
 
+def test_0007_adds_schedules_and_sessions_and_tokens_mode_for_existing_clinics(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    command.upgrade(alembic_config, "0006")
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO clinics (id, name, slug, timezone, status, specialties, "
+                    "patient_code_prefix, created_at, updated_at) VALUES (gen_random_uuid(), "
+                    "'Sample Clinic', 'migrated-clinic', 'Asia/Kolkata', 'ACTIVE', '{}', 'SC', "
+                    "now(), now())"
+                )
+            )
+
+        command.upgrade(alembic_config, "0007")
+
+        assert _tables(scratch_database_url) == M3_P1_TABLES
+        with engine.connect() as conn:
+            modes = conn.execute(text("SELECT booking_mode FROM clinics")).scalars().all()
+        assert modes == ["TOKENS"]
+
+        command.downgrade(alembic_config, "0006")
+        assert _tables(scratch_database_url) == M2_P1_TABLES
+        assert "booking_mode" not in _clinic_columns(scratch_database_url)
+    finally:
+        engine.dispose()
+
+
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M2_P1_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M3_P1_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:

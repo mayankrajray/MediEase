@@ -30,6 +30,9 @@ from mediease_api.ports.repositories import (
     MembershipRepository,
     PatientRepository,
     RefreshTokenRepository,
+    ScheduleExceptionRepository,
+    ScheduleRepository,
+    SessionRepository,
     StaffInviteRepository,
     UserRepository,
 )
@@ -48,6 +51,12 @@ class TenantRepositories(Protocol):
     def checklist(self) -> ChecklistRepository: ...
     @property
     def patients(self) -> PatientRepository: ...
+    @property
+    def schedules(self) -> ScheduleRepository: ...
+    @property
+    def schedule_exceptions(self) -> ScheduleExceptionRepository: ...
+    @property
+    def sessions(self) -> SessionRepository: ...
 
 
 class UnitOfWork(Protocol):

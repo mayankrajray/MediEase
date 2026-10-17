@@ -18,7 +18,8 @@ durable only after ``UnitOfWork.commit``.
 from __future__ import annotations
 
 from collections.abc import Collection, Sequence
-from datetime import datetime
+from datetime import date, datetime
+from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
@@ -30,8 +31,19 @@ from mediease_api.domain.identity.membership import ClinicMembership
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User
 from mediease_api.domain.patients.patient import Patient
+from mediease_api.domain.scheduling.blocks import WeeklyBlock
+from mediease_api.domain.scheduling.exceptions import ScheduleException
+from mediease_api.domain.scheduling.sessions import Session
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.phone import PhoneNumber
+
+
+class RowLock(StrEnum):
+    """How a read locks its row until the unit of work ends (spec appointments R20)."""
+
+    UPDATE = "UPDATE"  # exclusive: a change that others must wait for
+    SHARE = "SHARE"  # shared: readers run together, but never alongside an UPDATE lock
+
 
 # --- Platform repositories ---------------------------------------------------------------
 
@@ -112,7 +124,10 @@ class StaffInviteRepository(Protocol):
 
 class DoctorRepository(Protocol):
     def add(self, doctor: Doctor) -> None: ...
-    def get(self, doctor_id: UUID) -> Doctor | None: ...
+    def get(self, doctor_id: UUID, *, lock: RowLock | None = None) -> Doctor | None:
+        """``lock`` serialises schedule changes and session generation per doctor (R20)."""
+        ...
+
     def get_for_user(self, user_id: UUID) -> Doctor | None:
         """This clinic's doctor profile for ``user_id``, if the account is linked to one.
 
@@ -192,3 +207,55 @@ class PatientRepository(Protocol):
         ...
 
     def count(self) -> int: ...
+
+
+class ScheduleRepository(Protocol):
+    """This clinic's weekly blocks (M3-P1)."""
+
+    def add(self, block: WeeklyBlock) -> None: ...
+    def update(self, block: WeeklyBlock) -> None: ...
+    def delete(self, block_id: UUID) -> None: ...
+    def list_for_doctor(self, doctor_id: UUID, *, valid_since: date) -> Sequence[WeeklyBlock]:
+        """Blocks still in force on or after ``valid_since``, by weekday and start time."""
+        ...
+
+    def list_current(self, *, valid_since: date) -> Sequence[WeeklyBlock]:
+        """Every doctor's blocks in force on or after ``valid_since`` (booking-mode check, R19)."""
+        ...
+
+
+class ScheduleExceptionRepository(Protocol):
+    """This clinic's leave and extra sessions (M3-P1)."""
+
+    def add(self, exception: ScheduleException) -> None: ...
+    def get(self, exception_id: UUID) -> ScheduleException | None: ...
+    def delete(self, exception_id: UUID) -> None: ...
+    def list_for_doctor(
+        self, doctor_id: UUID, *, first: date, last: date
+    ) -> Sequence[ScheduleException]:
+        """Exceptions dated ``first`` to ``last`` inclusive, by date."""
+        ...
+
+    def list_from(self, first: date) -> Sequence[ScheduleException]:
+        """Every doctor's exceptions from ``first`` on (booking-mode check, R19)."""
+        ...
+
+
+class SessionRepository(Protocol):
+    """This clinic's generated sessions (M3-P1)."""
+
+    def add_missing(self, sessions: Sequence[Session]) -> int:
+        """Insert the ones not there yet (``ON CONFLICT DO NOTHING``, R1); returns how many."""
+        ...
+
+    def list_for_date(self, on_date: date, *, doctor_id: UUID | None = None) -> Sequence[Session]:
+        """The date's sessions, by start time then doctor."""
+        ...
+
+    def list_for_doctor(
+        self, doctor_id: UUID, *, first: date, last: date | None = None
+    ) -> Sequence[Session]:
+        """A doctor's sessions dated ``first`` to ``last`` (open-ended when None), by start."""
+        ...
+
+    def delete(self, session_id: UUID) -> None: ...

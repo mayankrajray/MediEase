@@ -30,6 +30,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0004` | `audit_events` with the two triggers that make it append-only; the `v_clinic_activity` support view | M1-P4 |
 | `0005` | `clinic_memberships` invitation columns (marked *P5*); `onboarding_checklists` | M1-P5 |
 | `0006` | `clinics.patient_code_prefix` (backfilled from each clinic's name) and `next_patient_seq`; the `patients` table with its lookup indexes | M2-P1 |
+| `0007` | `clinics.booking_mode` (`TOKENS` for existing clinics); `doctor_schedules`, `schedule_exceptions`, `sessions` | M3-P1 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -89,7 +90,7 @@ set by the application). *P1* = created by migration `0002`.
 | specialties | text[] not null default `{}` | *P1* |
 | patient_code_prefix | text not null | *M2-P1* 2–4 upper-case letters (`ck_clinics_patient_code_prefix_format`), e.g. `ME` → `ME-0142`. Derived from the name at creation unless ops sets it; fixed once the clinic has patients |
 | next_patient_seq | integer not null default 1 | *M2-P1* Incremented under a row lock on the clinic (`ck_clinics_next_patient_seq_positive`); a code is never reused |
-| booking_mode | text not null | M3 — `SLOTS` \| `TOKENS` |
+| booking_mode | text not null default `'TOKENS'` | `SLOTS` \| `TOKENS` (M3-P1, migration `0007`); changing it is refused while a current block lacks the new mode's value (R19) |
 | plan | text not null default `PILOT` | Billing (post-pilot) — `PILOT` \| `STARTER` \| `CLINIC` |
 
 ### `users`
@@ -160,7 +161,7 @@ Owned by a user, not a clinic. *P2* = created by migration `0003`.
 | clinic_id | uuid FK `clinics` null | Null for platform-level events (a sign-in belongs to a user) |
 | actor_user_id | uuid FK `users` null | Null for patient/system actors |
 | actor_type | text not null | `STAFF` \| `OPS` \| `PATIENT_LINK` \| `SYSTEM` (CHECK) |
-| action | text not null | `area.past_tense`, from `domain/audit/actions.py`: `auth.signed_in`, `auth.sign_in_failed`, `auth.signed_out`, `auth.refresh_reused`, `staff.role_changed` (M1-P4), `clinic.*`, `doctor.*` and `staff.*` (M1-P5), `patient.created` and `patient.updated` (M2-P2: the code, or the changed field names - never a name or phone), `patient.consent_changed`, `patient.opted_out` and `patient.opted_in` (M2-P3: the two consent flags, `given_by` guardian or patient, and the opt-out `source`), `patient.imported` (M2-P4: the code and the `import_id` shared by one import, actor `OPS`); more per milestone |
+| action | text not null | `area.past_tense`, from `domain/audit/actions.py`: `auth.signed_in`, `auth.sign_in_failed`, `auth.signed_out`, `auth.refresh_reused`, `staff.role_changed` (M1-P4), `clinic.*`, `doctor.*` and `staff.*` (M1-P5), `patient.created` and `patient.updated` (M2-P2: the code, or the changed field names - never a name or phone), `patient.consent_changed`, `patient.opted_out` and `patient.opted_in` (M2-P3: the two consent flags, `given_by` guardian or patient, and the opt-out `source`), `patient.imported` (M2-P4: the code and the `import_id` shared by one import, actor `OPS`), `schedule.changed` (M3-P1: the block count and how many booked sessions were kept, entity the doctor), `schedule.exception_added` / `schedule.exception_removed` (the doctor ID, kind, date and kept count; never the note); more per milestone |
 | entity_type, entity_id | text, uuid | Given together or not at all |
 | request_id | text | Ties the row to the API log and to the client's "Ref" |
 | ip_hash | text | HMAC-SHA256 of the caller's IP under `AUDIT_IP_SALT`, 32 hex chars; never a raw address |
@@ -241,27 +242,60 @@ when something reads it.
 ## M3 — Schedules, appointments, queue
 
 ### `doctor_schedules`
-`id, clinic_id, doctor_id, weekday (0–6), start_time time, end_time time, slot_minutes smallint
-null (SLOTS mode), capacity smallint not null, valid_from date, valid_to date null`
+Tenant-owned, reached only through `SqlAlchemyScheduleRepository`. Migration `0007`. One row per
+weekly block (spec appointments R14–R16).
 
-### `schedule_exceptions`
-`id, clinic_id, doctor_id, on_date date, kind (LEAVE | EXTRA), start_time, end_time, capacity null, note`
-
-### `sessions` (materialised per doctor per day)
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
-| clinic_id, doctor_id | uuid FK | |
-| on_date | date not null | Clinic-local date |
-| starts_at, ends_at | timestamptz | UTC |
-| mode | text | `SLOTS` \| `TOKENS` |
-| capacity | smallint not null | |
-| booked_count | smallint not null default 0 | Maintained under `FOR UPDATE` |
+| clinic_id, doctor_id | uuid FK | Index `(clinic_id, doctor_id)` |
+| weekday | smallint not null | 0 = Monday … 6 = Sunday (`date.weekday()`) |
+| start_time, end_time | time not null | Clinic wall clock; an end at or before the start means the next day (D2). `CHECK start_time <> end_time` |
+| slot_minutes | smallint null | 5–120; needed in SLOTS mode, divides the block |
+| capacity | smallint null | 1–500; needed in TOKENS mode |
+| valid_from, valid_to | date, date null | Clinic-local, inclusive. A replaced schedule closes its blocks at yesterday (`valid_to`) instead of deleting them, so past dates keep their rules |
+| created_at, updated_at | timestamptz | |
+
+The 15-minute to 12-hour length, the slot divisibility and overlap across midnight and the week
+(R14, R15) are domain rules (`domain/scheduling/blocks.py`): they depend on each other and on the
+clinic's mode, so the database holds only the ranges.
+
+### `schedule_exceptions`
+Tenant-owned (`SqlAlchemyScheduleExceptionRepository`). Migration `0007`.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id, doctor_id | uuid FK | Index `(clinic_id, doctor_id, on_date)` |
+| on_date | date not null | Clinic-local |
+| kind | text not null | `LEAVE` (whole day, D8) \| `EXTRA` (one block) |
+| start_time, end_time, slot_minutes, capacity | time, time, smallint, smallint | Set for `EXTRA`, all null for `LEAVE` (`ck_schedule_exceptions_shape_by_kind`) |
+| note | text null | Free text for staff; never in audit metadata |
+| created_at, updated_at | timestamptz | |
+| | | One leave per doctor and date: partial unique index `uq_schedule_exceptions_doctor_id_on_date_leave` (R17) |
+
+### `sessions` (materialised per doctor per day)
+Tenant-owned (`SqlAlchemySessionRepository`). Migration `0007`.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id, doctor_id | uuid FK | Index `(clinic_id, on_date, doctor_id)` |
+| on_date | date not null | The clinic-local date the session *starts* on, also when it runs past midnight (R2) |
+| starts_at, ends_at | timestamptz | UTC; `CHECK ends_at > starts_at` |
+| mode | text | `SLOTS` \| `TOKENS`, fixed when generated |
+| slot_minutes | smallint null | Set exactly in SLOTS mode (`ck_sessions_slot_minutes_by_mode`) |
+| capacity | smallint not null | Derived in SLOTS mode (length ÷ slot), stated in TOKENS mode (D3); 1–500 |
+| booked_count | smallint not null default 0 | Maintained under `FOR UPDATE` from M3-P2. `CHECK booked_count BETWEEN 0 AND capacity`: no overbooking (D6) |
 | next_token | smallint not null default 1 | TOKENS mode |
 | status | text | `OPEN` \| `CLOSED` \| `CANCELLED` |
 | | | `UNIQUE (doctor_id, starts_at)` |
 
-Sessions are generated lazily for a date range when first requested, from schedules + exceptions.
+Sessions are generated lazily, the first time a date from the clinic's today up to 180 days ahead
+is read, with `INSERT … ON CONFLICT (doctor_id, starts_at) DO NOTHING`, so concurrent reads create
+one set (R1, D1). After a schedule or exception change, sessions that no longer match the rules are
+deleted if `booked_count = 0` and kept otherwise (D4); the next read fills in the rest. Changes lock
+the doctor row `FOR UPDATE` and generation takes `FOR SHARE` (R20).
 
 ### `appointments`
 | Column | Type | Notes |

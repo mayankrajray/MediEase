@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from mediease_api.adapters.db.models.base import Base, Keyed, TenantOwned, Timestamps, enum_check
 from mediease_api.domain.clinics.clinic import ClinicStatus
+from mediease_api.domain.scheduling.mode import BookingMode
 
 
 class ClinicRow(Keyed, Timestamps, Base):
@@ -19,6 +20,7 @@ class ClinicRow(Keyed, Timestamps, Base):
     __tablename__ = "clinics"
     __table_args__ = (
         enum_check("status", ClinicStatus),
+        enum_check("booking_mode", BookingMode),
         CheckConstraint("patient_code_prefix ~ '^[A-Z]{2,4}$'", name="patient_code_prefix_format"),
         CheckConstraint("next_patient_seq >= 1", name="next_patient_seq_positive"),
     )
@@ -36,6 +38,8 @@ class ClinicRow(Keyed, Timestamps, Base):
     # M2 (migration 0006): patient codes are "<prefix>-<seq>"; the counter is locked to allocate.
     patient_code_prefix: Mapped[str] = mapped_column(Text)
     next_patient_seq: Mapped[int] = mapped_column(server_default=text("1"))
+    # M3 (migration 0007): slot or token booking for the clinic's sessions.
+    booking_mode: Mapped[str] = mapped_column(Text, server_default=text("'TOKENS'"))
 
 
 class DoctorRow(TenantOwned, Timestamps, Base):
