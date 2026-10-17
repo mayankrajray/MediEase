@@ -9,7 +9,7 @@ belongs to B. From M1-P3 the same isolation is proved again at the HTTP level.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, time
 from uuid import UUID, uuid4
 
 import pytest
@@ -20,14 +20,21 @@ from mediease_api.adapters.db.repositories import (
     SqlAlchemyDoctorRepository,
     SqlAlchemyMembershipRepository,
     SqlAlchemyPatientRepository,
+    SqlAlchemyScheduleExceptionRepository,
+    SqlAlchemyScheduleRepository,
+    SqlAlchemySessionRepository,
 )
 from mediease_api.adapters.db.tenancy import TenancyViolation, TenantScopedRepository
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
 from mediease_api.domain.patients.patient import Patient
+from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
+from mediease_api.domain.scheduling.exceptions import ScheduleException
+from mediease_api.domain.scheduling.mode import BookingMode
+from mediease_api.domain.scheduling.sessions import Session, plan_day
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
-from tests.builders import LATER, a_clinic, a_doctor, a_membership, a_patient, a_user
+from tests.builders import LATER, NOW, a_clinic, a_doctor, a_membership, a_patient, a_user, new_id
 from tests.conftest import UowFactory
 
 
@@ -188,6 +195,73 @@ def test_unknown_clinic_scope_sees_nothing(
         assert staff.patients.search_by_name_prefix("a", limit=20) == []
 
 
+def test_nfr_08_clinic_a_cannot_reach_clinic_b_schedules_exceptions_or_sessions(
+    uow_factory: UowFactory, two_clinics: tuple[Tenant, Tenant]
+) -> None:
+    a, b = two_clinics
+    day = date(2026, 10, 19)  # a Monday
+    shape = BlockShape(time(10), time(13), 15, 12)
+    with uow_factory() as uow:
+        staff_b = uow.tenant(b.clinic_id)
+        block = WeeklyBlock.create(
+            id=new_id(),
+            clinic_id=b.clinic_id,
+            doctor_id=b.doctor.id,
+            weekday=0,
+            shape=shape,
+            mode=BookingMode.TOKENS,
+            valid_from=day,
+            now=NOW,
+        )
+        staff_b.schedules.add(block)
+        leave = ScheduleException.leave(
+            id=new_id(), clinic_id=b.clinic_id, doctor_id=b.doctor.id, on_date=day, now=NOW
+        )
+        staff_b.schedule_exceptions.add(leave)
+        plan = plan_day(
+            doctor_id=b.doctor.id,
+            on_date=day,
+            timezone="Asia/Kolkata",
+            mode=BookingMode.TOKENS,
+            blocks=[block],
+            exceptions=[],
+        )
+        session = Session.from_plan(plan[0], id=new_id(), clinic_id=b.clinic_id, now=NOW)
+        assert staff_b.sessions.add_missing([session]) == 1
+        uow.commit()
+
+    with uow_factory() as uow:
+        staff_a = uow.tenant(a.clinic_id)
+        # Asking A's scope about B's doctor finds nothing of B's.
+        assert staff_a.schedules.list_for_doctor(b.doctor.id, valid_since=day) == []
+        assert staff_a.schedules.list_current(valid_since=day) == []
+        assert staff_a.schedule_exceptions.get(leave.id) is None
+        assert staff_a.schedule_exceptions.list_from(day) == []
+        assert staff_a.schedule_exceptions.list_for_doctor(b.doctor.id, first=day, last=day) == []
+        assert staff_a.sessions.list_for_date(day) == []
+        assert staff_a.sessions.list_for_doctor(b.doctor.id, first=day) == []
+        with pytest.raises(NotFound):
+            staff_a.schedules.delete(block.id)
+        with pytest.raises(NotFound):
+            staff_a.schedule_exceptions.delete(leave.id)
+        with pytest.raises(NotFound):
+            staff_a.sessions.delete(session.id)
+        with pytest.raises(TenancyViolation):
+            staff_a.schedules.add(block)
+        with pytest.raises(TenancyViolation):
+            staff_a.schedules.update(block)
+        with pytest.raises(TenancyViolation):
+            staff_a.schedule_exceptions.add(leave)
+        with pytest.raises(TenancyViolation):
+            staff_a.sessions.add_missing([session])
+        uow.commit()
+
+    with uow_factory() as uow:
+        staff_b = uow.tenant(b.clinic_id)
+        assert [s.id for s in staff_b.sessions.list_for_date(day)] == [session.id]
+        assert staff_b.schedule_exceptions.get(leave.id) == leave
+
+
 def test_every_tenant_table_has_a_scoped_repository() -> None:
     """A new table with clinic_id must get a TenantScopedRepository (and tests here)."""
     tenant_tables = {
@@ -205,6 +279,9 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "clinic_memberships",
             "onboarding_checklists",
             "patients",
+            "doctor_schedules",
+            "schedule_exceptions",
+            "sessions",
             "audit_events",
         }
     )
@@ -213,6 +290,9 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyDoctorRepository,
         SqlAlchemyMembershipRepository,
         SqlAlchemyPatientRepository,
+        SqlAlchemyScheduleRepository,
+        SqlAlchemyScheduleExceptionRepository,
+        SqlAlchemySessionRepository,
     } == set(TenantScopedRepository.__subclasses__())
 
 

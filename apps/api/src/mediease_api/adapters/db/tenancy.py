@@ -23,7 +23,7 @@ from __future__ import annotations
 from typing import ClassVar, cast
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, delete, select
 from sqlalchemy.orm import Session
 
 from mediease_api.adapters.db.models.base import TenantOwned
@@ -70,6 +70,14 @@ class TenantScopedRepository[RowT: TenantOwned]:
         if row is None:
             raise NotFound(self.entity_name)
         return row
+
+    def _delete_row(self, row_id: UUID) -> None:
+        """Delete one row of this clinic; ``NotFound`` if it is not this clinic's (R8)."""
+        query = delete(self.model).where(
+            self.model.clinic_id == self._clinic_id, self.model.id == row_id
+        )
+        if self._session.execute(query).rowcount == 0:  # type: ignore[attr-defined]
+            raise NotFound(self.entity_name)
 
     def _check_owned(self, clinic_id: UUID) -> None:
         if clinic_id != self._clinic_id:

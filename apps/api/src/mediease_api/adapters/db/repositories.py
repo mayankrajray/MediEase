@@ -13,19 +13,23 @@ unit of work, bound to one clinic.
 from __future__ import annotations
 
 from collections.abc import Collection, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from uuid import UUID
 
-from sqlalchemy import Select, exists, func, select, update
+from sqlalchemy import Select, exists, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from mediease_api.adapters.db.models import (
     ClinicMembershipRow,
     ClinicRow,
     DoctorRow,
+    DoctorScheduleRow,
     OnboardingChecklistRow,
     PatientRow,
     RefreshTokenRow,
+    ScheduleExceptionRow,
+    SessionRow,
     UserRow,
 )
 from mediease_api.adapters.db.tenancy import TenantScopedRepository
@@ -37,9 +41,15 @@ from mediease_api.domain.identity.membership import ClinicMembership, Membership
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User, UserStatus
 from mediease_api.domain.patients.patient import Language, Patient, Sex
+from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
+from mediease_api.domain.scheduling.exceptions import ExceptionKind, ScheduleException
+from mediease_api.domain.scheduling.mode import BookingMode
+from mediease_api.domain.scheduling.sessions import Session as BookableSession
+from mediease_api.domain.scheduling.sessions import SessionStatus
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.ports.repositories import RowLock
 
 
 def _utc(value: datetime) -> datetime:
@@ -71,6 +81,7 @@ def _clinic_from_row(row: ClinicRow) -> Clinic:
         updated_at=_utc(row.updated_at),
         patient_code_prefix=row.patient_code_prefix,
         next_patient_seq=row.next_patient_seq,
+        booking_mode=BookingMode(row.booking_mode),
     )
 
 
@@ -87,6 +98,7 @@ def _write_clinic(row: ClinicRow, clinic: Clinic) -> None:
     row.specialties = list(clinic.specialties)
     row.patient_code_prefix = clinic.patient_code_prefix
     row.next_patient_seq = clinic.next_patient_seq
+    row.booking_mode = clinic.booking_mode.value
     row.updated_at = clinic.updated_at
 
 
@@ -363,8 +375,16 @@ class SqlAlchemyDoctorRepository(TenantScopedRepository[DoctorRow]):
         self._session.add(row)
         self._session.flush()
 
-    def get(self, doctor_id: UUID) -> Doctor | None:
-        row = self._get_row(doctor_id)
+    def get(self, doctor_id: UUID, *, lock: RowLock | None = None) -> Doctor | None:
+        if lock is None:
+            row = self._get_row(doctor_id)
+        else:
+            query = self._scoped_select().where(DoctorRow.id == doctor_id)
+            row = self._session.scalars(
+                query.with_for_update(read=lock is RowLock.SHARE).execution_options(
+                    populate_existing=True
+                )
+            ).one_or_none()
         return _doctor_from_row(row) if row else None
 
     def get_for_user(self, user_id: UUID) -> Doctor | None:
@@ -675,3 +695,233 @@ class SqlAlchemyPatientRepository(TenantScopedRepository[PatientRow]):
             .where(PatientRow.clinic_id == self._clinic_id)
         )
         return int(self._session.scalar(query) or 0)
+
+
+# --- Schedules, exceptions and sessions (tenant, M3-P1) ---------------------------------------
+
+
+def _shape(start: time | None, end: time | None, slot: int | None, cap: int | None) -> BlockShape:
+    assert start is not None and end is not None  # the CHECK constraints guarantee it for blocks
+    return BlockShape(start_time=start, end_time=end, slot_minutes=slot, capacity=cap)
+
+
+def _block_from_row(row: DoctorScheduleRow) -> WeeklyBlock:
+    return WeeklyBlock(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        doctor_id=row.doctor_id,
+        weekday=row.weekday,
+        shape=_shape(row.start_time, row.end_time, row.slot_minutes, row.capacity),
+        valid_from=row.valid_from,
+        valid_to=row.valid_to,
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+    )
+
+
+def _write_block(row: DoctorScheduleRow, block: WeeklyBlock) -> None:
+    row.doctor_id = block.doctor_id
+    row.weekday = block.weekday
+    row.start_time = block.shape.start_time
+    row.end_time = block.shape.end_time
+    row.slot_minutes = block.shape.slot_minutes
+    row.capacity = block.shape.capacity
+    row.valid_from = block.valid_from
+    row.valid_to = block.valid_to
+    row.updated_at = block.updated_at
+
+
+class SqlAlchemyScheduleRepository(TenantScopedRepository[DoctorScheduleRow]):
+    model = DoctorScheduleRow
+    entity_name = "schedule block"
+
+    def add(self, block: WeeklyBlock) -> None:
+        self._check_owned(block.clinic_id)
+        row = DoctorScheduleRow(id=block.id, clinic_id=self.clinic_id, created_at=block.created_at)
+        _write_block(row, block)
+        self._session.add(row)
+        self._session.flush()
+
+    def update(self, block: WeeklyBlock) -> None:
+        self._check_owned(block.clinic_id)
+        row = self._require_row(block.id)
+        _write_block(row, block)
+        self._session.flush()
+
+    def delete(self, block_id: UUID) -> None:
+        self._delete_row(block_id)
+
+    def list_for_doctor(self, doctor_id: UUID, *, valid_since: date) -> Sequence[WeeklyBlock]:
+        query = self._current(valid_since).where(DoctorScheduleRow.doctor_id == doctor_id)
+        return [_block_from_row(row) for row in self._session.scalars(query)]
+
+    def list_current(self, *, valid_since: date) -> Sequence[WeeklyBlock]:
+        return [_block_from_row(row) for row in self._session.scalars(self._current(valid_since))]
+
+    def _current(self, valid_since: date) -> Select[DoctorScheduleRow]:
+        return (
+            self._scoped_select()
+            .where(
+                or_(DoctorScheduleRow.valid_to.is_(None), DoctorScheduleRow.valid_to >= valid_since)
+            )
+            .order_by(
+                DoctorScheduleRow.doctor_id,
+                DoctorScheduleRow.weekday,
+                DoctorScheduleRow.start_time,
+                DoctorScheduleRow.valid_from,
+            )
+        )
+
+
+def _exception_from_row(row: ScheduleExceptionRow) -> ScheduleException:
+    kind = ExceptionKind(row.kind)
+    return ScheduleException(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        doctor_id=row.doctor_id,
+        on_date=row.on_date,
+        kind=kind,
+        shape=(
+            _shape(row.start_time, row.end_time, row.slot_minutes, row.capacity)
+            if kind is ExceptionKind.EXTRA
+            else None
+        ),
+        note=row.note,
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+    )
+
+
+class SqlAlchemyScheduleExceptionRepository(TenantScopedRepository[ScheduleExceptionRow]):
+    model = ScheduleExceptionRow
+    entity_name = "schedule exception"
+
+    def add(self, exception: ScheduleException) -> None:
+        self._check_owned(exception.clinic_id)
+        shape = exception.shape
+        self._session.add(
+            ScheduleExceptionRow(
+                id=exception.id,
+                clinic_id=self.clinic_id,
+                doctor_id=exception.doctor_id,
+                on_date=exception.on_date,
+                kind=exception.kind.value,
+                start_time=shape.start_time if shape else None,
+                end_time=shape.end_time if shape else None,
+                slot_minutes=shape.slot_minutes if shape else None,
+                capacity=shape.capacity if shape else None,
+                note=exception.note,
+                created_at=exception.created_at,
+                updated_at=exception.updated_at,
+            )
+        )
+        self._session.flush()
+
+    def get(self, exception_id: UUID) -> ScheduleException | None:
+        row = self._get_row(exception_id)
+        return _exception_from_row(row) if row else None
+
+    def delete(self, exception_id: UUID) -> None:
+        self._delete_row(exception_id)
+
+    def list_for_doctor(
+        self, doctor_id: UUID, *, first: date, last: date
+    ) -> Sequence[ScheduleException]:
+        query = (
+            self._scoped_select()
+            .where(
+                ScheduleExceptionRow.doctor_id == doctor_id,
+                ScheduleExceptionRow.on_date.between(first, last),
+            )
+            .order_by(ScheduleExceptionRow.on_date, ScheduleExceptionRow.start_time)
+        )
+        return [_exception_from_row(row) for row in self._session.scalars(query)]
+
+    def list_from(self, first: date) -> Sequence[ScheduleException]:
+        query = (
+            self._scoped_select()
+            .where(ScheduleExceptionRow.on_date >= first)
+            .order_by(ScheduleExceptionRow.on_date, ScheduleExceptionRow.doctor_id)
+        )
+        return [_exception_from_row(row) for row in self._session.scalars(query)]
+
+
+def _session_from_row(row: SessionRow) -> BookableSession:
+    return BookableSession(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        doctor_id=row.doctor_id,
+        on_date=row.on_date,
+        starts_at=_utc(row.starts_at),
+        ends_at=_utc(row.ends_at),
+        mode=BookingMode(row.mode),
+        slot_minutes=row.slot_minutes,
+        capacity=row.capacity,
+        booked_count=row.booked_count,
+        next_token=row.next_token,
+        status=SessionStatus(row.status),
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+    )
+
+
+class SqlAlchemySessionRepository(TenantScopedRepository[SessionRow]):
+    model = SessionRow
+    entity_name = "session"
+
+    def add_missing(self, sessions: Sequence[BookableSession]) -> int:
+        if not sessions:
+            return 0
+        for session in sessions:
+            self._check_owned(session.clinic_id)
+        values = [
+            {
+                "id": s.id,
+                "clinic_id": self.clinic_id,
+                "doctor_id": s.doctor_id,
+                "on_date": s.on_date,
+                "starts_at": s.starts_at,
+                "ends_at": s.ends_at,
+                "mode": s.mode.value,
+                "slot_minutes": s.slot_minutes,
+                "capacity": s.capacity,
+                "booked_count": s.booked_count,
+                "next_token": s.next_token,
+                "status": s.status.value,
+                "created_at": s.created_at,
+                "updated_at": s.updated_at,
+            }
+            for s in sessions
+        ]
+        # Idempotent (R1): two screens generating one date leave one set of sessions. RETURNING
+        # counts what was really inserted (rowcount is not reliable for a multi-row INSERT).
+        query = (
+            insert(SessionRow)
+            .values(values)
+            .on_conflict_do_nothing(index_elements=["doctor_id", "starts_at"])
+            .returning(SessionRow.id)
+        )
+        return len(self._session.execute(query).all())
+
+    def list_for_date(
+        self, on_date: date, *, doctor_id: UUID | None = None
+    ) -> Sequence[BookableSession]:
+        query = self._scoped_select().where(SessionRow.on_date == on_date)
+        if doctor_id is not None:
+            query = query.where(SessionRow.doctor_id == doctor_id)
+        query = query.order_by(SessionRow.starts_at, SessionRow.doctor_id)
+        return [_session_from_row(row) for row in self._session.scalars(query)]
+
+    def list_for_doctor(
+        self, doctor_id: UUID, *, first: date, last: date | None = None
+    ) -> Sequence[BookableSession]:
+        query = self._scoped_select().where(
+            SessionRow.doctor_id == doctor_id, SessionRow.on_date >= first
+        )
+        if last is not None:
+            query = query.where(SessionRow.on_date <= last)
+        query = query.order_by(SessionRow.starts_at)
+        return [_session_from_row(row) for row in self._session.scalars(query)]
+
+    def delete(self, session_id: UUID) -> None:
+        self._delete_row(session_id)
