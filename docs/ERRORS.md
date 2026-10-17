@@ -131,10 +131,12 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 | `RX_NOT_DRAFT` | 409 | This prescription is already issued; revise it instead | A save, issue or discard of an issued or superseded version (FR-RX-09, AC1); `details.status`. Also raised by the database triggers (migration 0010) for any direct change | `prescriptions.status`; revise from the latest version |
 | `RX_EMPTY` | 422 | Add at least one medicine or advice | Issuing a draft with no items and no advice (R4) | The draft's `items`, `advice` |
 | `RX_DOCTOR_INCOMPLETE` | 422 | The doctor's profile is missing registration details | A printed field is blank (AC4); `details.fields` names them (comma-separated). The app requires them (I3), so this means data changed outside it | Doctor settings (FR-ORG-02) |
-| `RX_STALE` | 409 | This prescription was changed elsewhere; reload it and try again | The `PUT` or issue sent an older `revision` (3A); `details.revision` is the current one | Reload the prescription |
+| `RX_STALE` | 409 | This prescription was changed elsewhere; reload it and try again | The `PUT` or issue sent an older `revision` (3A), or a favourite or template `PUT` did (M4-P3); `details.revision` is the current one | Reload it |
 | `RX_ALREADY_EXISTS` | 409 | This visit already has a prescription | A second "new prescription" for the visit (1A); `details.prescription_id` | The consultation view's `prescriptions` |
 | `RX_DRAFT_EXISTS` | 409 | A revision is already being drafted | Revising while the chain has a draft; `details.prescription_id` is that draft | Continue the draft |
 | `RX_NOT_LATEST` | 409 | Revise the latest version | Revising a superseded version; `details.latest_id` | The prescription's `versions` || `RX_PDF_FAILED` | 500 (job) | PDF could not be created | Renderer/font/storage error | `render_pdf` job, worker logs |
+| `RX_NAME_TAKEN` | 409 | You already have one with that name | A favourite or template name the doctor already uses, ignoring case and spaces (M4-P3) | `GET /rx-favourites`, `/rx-templates` |
+| `RX_LIBRARY_FULL` | 409 | You have reached the limit; delete one first | 200 favourites or 50 templates per doctor; `details.limit` | The doctor's list |
 
 ## Patient links (M4)
 

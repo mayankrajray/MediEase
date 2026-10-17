@@ -62,6 +62,8 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/prescriptions/<uuid:rx_id>/revise": lambda w: (
         f"{_prescription_url(w, issued=True)}/revise"
     ),
+    "/api/v1/rx-favourites/<uuid:favourite_id>": lambda w: _library_url(w, "rx-favourites"),
+    "/api/v1/rx-templates/<uuid:template_id>": lambda w: _library_url(w, "rx-templates"),
 }
 
 # Clinical writes need CLINICAL_WRITE and the visit's doctor (prescriptions spec §2), so these
@@ -72,6 +74,8 @@ AS_DOCTOR = {
     "/api/v1/visits/<uuid:visit_id>/prescriptions",
     "/api/v1/prescriptions/<uuid:rx_id>/issue",
     "/api/v1/prescriptions/<uuid:rx_id>/revise",
+    "/api/v1/rx-favourites/<uuid:favourite_id>",
+    "/api/v1/rx-templates/<uuid:template_id>",
 }
 
 # Methods a cross-tenant case must use (default GET), with the body to send: fixed, or built
@@ -93,6 +97,10 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
     "/api/v1/visits/<uuid:visit_id>/prescriptions": ("POST", {}),
     "/api/v1/prescriptions/<uuid:rx_id>/issue": ("POST", {"revision": 2}),
     "/api/v1/prescriptions/<uuid:rx_id>/revise": ("POST", {}),
+    "/api/v1/rx-favourites/<uuid:favourite_id>": (
+        "PUT",
+        {"revision": 1, "name": "Tab Y usual", "item": {"medicine_name": "Tab Y"}},
+    ),
     "/api/v1/patients/<uuid:patient_id>/consent": ("PUT", {"whatsapp": True, "sms": False}),
     "/api/v1/patients/<uuid:patient_id>/opt-out": ("POST", {}),
     "/api/v1/patients/<uuid:patient_id>/opt-in": ("POST", {"whatsapp": True, "sms": False}),
@@ -210,6 +218,22 @@ def _prescription_url(world: World, *, issued: bool = False) -> str:
         resp = doctor.post(f"{url}/issue", json={"revision": 2}, headers=headers)
         assert resp.status_code == 200, resp.get_json()
     return url
+
+
+def _library_url(world: World, kind: str) -> str:
+    """Clinic B's doctor's favourite or template."""
+    doctor = world.client_for(world.b.doctor_user)
+    csrf = doctor.get_cookie("me_csrf", path="/")
+    assert csrf is not None
+    body: dict[str, object] = {"name": "Tab Y usual"}
+    body.update(
+        {"item": {"medicine_name": "Tab Y"}}
+        if kind == "rx-favourites"
+        else {"items": [{"medicine_name": "Tab Y"}]}
+    )
+    created = doctor.post(f"/api/v1/{kind}", json=body, headers={"X-CSRF-Token": csrf.value})
+    assert created.status_code == 201, created.get_json()
+    return f"/api/v1/{kind}/{created.get_json()['id']}"
 
 
 def _staff_url(world: World) -> str:

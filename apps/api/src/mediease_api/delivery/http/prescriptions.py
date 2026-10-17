@@ -92,6 +92,8 @@ class ItemRequest(BaseModel):
     storage: list[StorageRequest] = Field(default_factory=list, max_length=limits.MAX_STORAGE)
     warnings: str | None = Field(default=None, max_length=limits.WARNINGS_MAX)
     notes: str | None = Field(default=None, max_length=limits.ITEM_NOTES_MAX)
+    # M4-P3: the favourite this line came from (counted at issue).
+    favourite_id: UUID | None = None
 
 
 class AdviceRequest(BaseModel):
@@ -112,6 +114,8 @@ class DraftRequest(BaseModel):
     items: list[ItemRequest] = Field(default_factory=list, max_length=limits.MAX_ITEMS)
     advice: AdviceRequest = Field(default_factory=AdviceRequest)
     follow_up_date: date | None = None
+    # M4-P3: the template the body came from (counted at issue).
+    template_id: UUID | None = None
 
 
 class IssueRequest(BaseModel):
@@ -120,8 +124,8 @@ class IssueRequest(BaseModel):
     revision: int = Field(ge=1)
 
 
-def _item(i: int, item: ItemRequest) -> ItemInput:
-    at = f"items.{i}"
+def item_input(i: int, item: ItemRequest, at: str | None = None) -> ItemInput:
+    at = at or f"items.{i}"
     return ItemInput(
         medicine_name=item.medicine_name,
         form=item.form,
@@ -141,6 +145,7 @@ def _item(i: int, item: ItemRequest) -> ItemInput:
         ),
         warnings=item.warnings,
         notes=item.notes,
+        favourite_id=item.favourite_id,
     )
 
 
@@ -171,7 +176,7 @@ def create_prescriptions_blueprint(use_cases: PrescriptionUseCases) -> Blueprint
         body = parse_json(DraftRequest)
         draft = DraftBody(
             seen_revision=body.revision,
-            items=[_item(i, item) for i, item in enumerate(body.items)],
+            items=[item_input(i, item) for i, item in enumerate(body.items)],
             advice=Advice.create(
                 diet=body.advice.diet,
                 activity=body.advice.activity,
@@ -179,6 +184,7 @@ def create_prescriptions_blueprint(use_cases: PrescriptionUseCases) -> Blueprint
                 notes=body.advice.notes,
             ),
             follow_up_date=body.follow_up_date,
+            template_id=body.template_id,
         )
         view = use_cases.replace_prescription().execute(current_context(), rx_id=rx_id, body=draft)
         return jsonify(prescription_body(view))

@@ -52,6 +52,16 @@ from mediease_api.application.patients.import_patients import ImportPatients
 from mediease_api.application.patients.queries import GetPatient, LookupPatients
 from mediease_api.application.patients.register_patient import RegisterPatient
 from mediease_api.application.patients.update_patient import UpdatePatient
+from mediease_api.application.prescriptions.library import (
+    DeleteFavourite,
+    DeleteTemplate,
+    GetTemplate,
+    ListFavourites,
+    ListTemplates,
+    SaveFavourite,
+    SaveTemplate,
+    SuggestMedicines,
+)
 from mediease_api.application.prescriptions.use_cases import (
     CreateDraft,
     DiscardDraft,
@@ -86,6 +96,7 @@ from mediease_api.delivery.http.patients import create_patients_blueprint
 from mediease_api.delivery.http.platform import create_platform_blueprint
 from mediease_api.delivery.http.prescriptions import create_prescriptions_blueprint
 from mediease_api.delivery.http.request_info import register_request_info
+from mediease_api.delivery.http.rx_library import create_rx_library_blueprint
 from mediease_api.delivery.http.scheduling import create_scheduling_blueprint
 from mediease_api.delivery.http.visits import create_visits_blueprint
 from mediease_api.delivery.middleware import register_request_middleware
@@ -295,6 +306,30 @@ class _UseCases:
     def revise_prescription(self) -> RevisePrescription:
         return RevisePrescription(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    def list_favourites(self) -> ListFavourites:
+        return ListFavourites(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def save_favourite(self) -> SaveFavourite:
+        return SaveFavourite(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def delete_favourite(self) -> DeleteFavourite:
+        return DeleteFavourite(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def list_templates(self) -> ListTemplates:
+        return ListTemplates(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def get_template(self) -> GetTemplate:
+        return GetTemplate(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def save_template(self) -> SaveTemplate:
+        return SaveTemplate(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def delete_template(self) -> DeleteTemplate:
+        return DeleteTemplate(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def suggest_medicines(self) -> SuggestMedicines:
+        return SuggestMedicines(uow=self._uow(), clock=self.clock, ids=self.ids)
+
     def list_clinics(self) -> ListClinics:
         return ListClinics(uow=self._uow())
 
@@ -406,6 +441,7 @@ def create_app(
     app.register_blueprint(create_appointments_blueprint(use_cases))
     app.register_blueprint(create_visits_blueprint(use_cases))
     app.register_blueprint(create_prescriptions_blueprint(use_cases))
+    app.register_blueprint(create_rx_library_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

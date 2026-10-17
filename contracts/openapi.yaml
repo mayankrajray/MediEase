@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.14.0
+  version: 0.15.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -68,6 +68,13 @@ tags:
       patient's language and the pending-delivery marker. An issued version never changes (409
       RX_NOT_DRAFT, also refused by the database); revise it for a new version. Same permissions,
       audit and caching rules as visits. Nothing validates a medicine or a dose.
+  - name: rx-library
+    description: |
+      A doctor's own favourites and templates and medicine-name suggestions (M4-P3, FR-RX-05,
+      FR-RX-10). CLINICAL_WRITE and a doctor profile: another doctor's items are 404. Suggestions
+      come from the caller's favourites and this clinic's issued prescriptions only; nothing else
+      is ever suggested, and no dose or drug data exists. Use is counted when a prescription built
+      from them is issued.
   - name: invites
     description: |
       Accepting a staff invitation (M1-P5). Public, because the invitee has no session yet: the
@@ -2351,6 +2358,367 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '409':
           $ref: '#/components/responses/PrescriptionError'
+  /api/v1/rx-favourites:
+    get:
+      tags: [rx-library]
+      operationId: listFavourites
+      summary: The caller's favourites
+      description: By use, then name. Not audited (decision 4A). Permission CLINICAL_WRITE.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+      responses:
+        '200':
+          description: Favourites
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavouriteList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+    post:
+      tags: [rx-library]
+      operationId: createFavourite
+      summary: Save a favourite
+      description: One line with its usual instructions, checked like a draft line. Records rx_favourite.created. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FavouriteInput'
+      responses:
+        '201':
+          description: Saved
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Favourite'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/LibraryError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/LibraryError'
+  /api/v1/rx-favourites/{favourite_id}:
+    put:
+      tags: [rx-library]
+      operationId: replaceFavourite
+      summary: Replace a favourite
+      description: Send revision (409 RX_STALE otherwise). Records rx_favourite.updated. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/FavouritePath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FavouriteInput'
+      responses:
+        '200':
+          description: Replaced
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Favourite'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/LibraryError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/LibraryError'
+    delete:
+      tags: [rx-library]
+      operationId: deleteFavourite
+      summary: Delete a favourite
+      description: Issued prescriptions that used it are untouched. Records rx_favourite.deleted. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/FavouritePath'
+      responses:
+        '204':
+          description: Deleted
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/rx-templates:
+    get:
+      tags: [rx-library]
+      operationId: listTemplates
+      summary: The caller's templates
+      description: By use, then name. Permission CLINICAL_WRITE.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+      responses:
+        '200':
+          description: Templates
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RxTemplateList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+    post:
+      tags: [rx-library]
+      operationId: createTemplate
+      summary: Save a template
+      description: A whole body (lines, advice, follow-up interval), checked like a draft. Records rx_template.created. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RxTemplateInput'
+      responses:
+        '201':
+          description: Saved
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RxTemplate'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/LibraryError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/LibraryError'
+  /api/v1/rx-templates/{template_id}:
+    get:
+      tags: [rx-library]
+      operationId: getTemplate
+      summary: One template
+      description: Permission CLINICAL_WRITE, its doctor.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/TemplatePath'
+      responses:
+        '200':
+          description: The template
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RxTemplate'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+    put:
+      tags: [rx-library]
+      operationId: replaceTemplate
+      summary: Replace a template
+      description: Send revision (409 RX_STALE otherwise). Records rx_template.updated. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/TemplatePath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RxTemplateInput'
+      responses:
+        '200':
+          description: Replaced
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RxTemplate'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/LibraryError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/LibraryError'
+    delete:
+      tags: [rx-library]
+      operationId: deleteTemplate
+      summary: Delete a template
+      description: Records rx_template.deleted. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/TemplatePath'
+      responses:
+        '204':
+          description: Deleted
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/medicine-suggestions:
+    get:
+      tags: [rx-library]
+      operationId: suggestMedicines
+      summary: Medicine names for a prefix
+      description: FR-RX-10, spec R7, AC5. The caller's favourites first (by use), then names on this clinic's issued prescriptions (by distinct visits, then recency), matched from the start ignoring case. At most 10. Not audited.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 50
+      responses:
+        '200':
+          description: Suggestions
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicineSuggestions'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/LibraryError'
 components:
   securitySchemes:
     sessionCookie:
@@ -2433,6 +2801,22 @@ components:
       in: path
       required: true
       description: A prescription version of the request's clinic.
+      schema:
+        type: string
+        format: uuid
+    FavouritePath:
+      name: favourite_id
+      in: path
+      required: true
+      description: One of the caller's favourites.
+      schema:
+        type: string
+        format: uuid
+    TemplatePath:
+      name: template_id
+      in: path
+      required: true
+      description: One of the caller's templates.
       schema:
         type: string
         format: uuid
@@ -2558,6 +2942,18 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    LibraryError:
+      description: |
+        RX_NAME_TAKEN (409: the caller already has one with that name, ignoring case and spaces);
+        RX_LIBRARY_FULL (409, details.limit); RX_STALE (409, details.revision);
+        REQ_VALIDATION_FAILED (422, field and rule)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
     VisitPermissionError:
       description: |
         PERM_DENIED (403: front desk, or an owner who is not a doctor writing); VIS_NOT_YOURS (403:
@@ -2661,6 +3057,104 @@ components:
       schema:
         type: string
   schemas:
+    LibraryItem:
+      description: A line's body without its identity (the fields of PrescriptionItemOutput)
+      type: object
+      required: [medicine_name]
+      additionalProperties: true
+      properties:
+        medicine_name: {type: string}
+    Favourite:
+      type: object
+      required: [id, name, item, revision, use_count, last_used_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        item:
+          $ref: '#/components/schemas/LibraryItem'
+        revision: {type: integer, minimum: 1}
+        use_count: {type: integer, minimum: 0}
+        last_used_at: {type: [string, 'null'], format: date-time}
+        updated_at: {type: string, format: date-time}
+    FavouriteInput:
+      type: object
+      additionalProperties: false
+      required: [name, item]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        item:
+          $ref: '#/components/schemas/PrescriptionItemInput'
+        revision:
+          type: [integer, 'null']
+          minimum: 1
+          description: Required to replace (409 RX_STALE otherwise)
+    FavouriteList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Favourite'
+    RxTemplate:
+      type: object
+      required: [id, name, items, advice, follow_up_days, revision, use_count, last_used_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LibraryItem'
+        advice:
+          $ref: '#/components/schemas/Advice'
+        follow_up_days: {type: [integer, 'null']}
+        revision: {type: integer, minimum: 1}
+        use_count: {type: integer, minimum: 0}
+        last_used_at: {type: [string, 'null'], format: date-time}
+        updated_at: {type: string, format: date-time}
+    RxTemplateInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        items:
+          type: array
+          maxItems: 40
+          items:
+            $ref: '#/components/schemas/PrescriptionItemInput'
+        advice:
+          $ref: '#/components/schemas/AdviceInput'
+        follow_up_days: {type: [integer, 'null'], minimum: 1, maximum: 365}
+        revision: {type: [integer, 'null'], minimum: 1}
+    RxTemplateList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RxTemplate'
+    MedicineSuggestions:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            required: [name, source, uses, favourite_id]
+            properties:
+              name: {type: string}
+              source:
+                type: string
+                enum: [FAVOURITE, HISTORY]
+              uses:
+                type: integer
+                description: A favourite's use count, or the distinct visits it was issued in
+              favourite_id: {type: [string, 'null'], format: uuid}
     Frequency:
       type: string
       enum: ['1-0-0', '0-1-0', '0-0-1', '1-0-1', '1-1-1', '1-1-1-1', SOS, ONCE, CUSTOM]
@@ -2725,6 +3219,10 @@ components:
             $ref: '#/components/schemas/StoragePhrase'
         warnings: {type: [string, 'null'], maxLength: 500}
         notes: {type: [string, 'null'], maxLength: 1000}
+        favourite_id:
+          type: [string, 'null']
+          format: uuid
+          description: The favourite this line came from (M4-P3, counted at issue)
     PrescriptionItemOutput:
       type: object
       required:
@@ -2779,6 +3277,7 @@ components:
               days: {type: [integer, 'null']}
         warnings: {type: [string, 'null']}
         notes: {type: [string, 'null']}
+        favourite_id: {type: [string, 'null'], format: uuid}
     AdviceInput:
       type: object
       additionalProperties: false
@@ -2820,6 +3319,10 @@ components:
           type: [string, 'null']
           format: date
           description: After today and within a year
+        template_id:
+          type: [string, 'null']
+          format: uuid
+          description: The template the body came from (M4-P3, counted at issue)
     PrescriptionIssue:
       type: object
       additionalProperties: false
@@ -2922,6 +3425,7 @@ components:
           oneOf:
             - $ref: '#/components/schemas/LinkDelivery'
             - type: 'null'
+        template_id: {type: [string, 'null'], format: uuid}
         versions:
           type: array
           description: The chain by version, when the response includes it (else empty)

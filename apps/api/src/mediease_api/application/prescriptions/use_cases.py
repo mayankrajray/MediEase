@@ -75,6 +75,30 @@ class ItemInput:
     storage: tuple[Storage, ...] = ()
     warnings: str | None = None
     notes: str | None = None
+    favourite_id: UUID | None = None  # M4-P3 provenance, counted at issue
+
+
+def build_item(i: ItemInput, *, id: UUID, position: int, at: str | None = None) -> PrescriptionItem:
+    "One validated line from what was sent (drafts, favourites and templates alike)."
+    return PrescriptionItem.create(
+        id=id,
+        position=position,
+        medicine_name=i.medicine_name,
+        form=i.form,
+        strength=i.strength,
+        dose=i.dose,
+        frequency=i.frequency,
+        frequency_text=i.frequency_text,
+        timing=i.timing,
+        duration_days=i.duration_days,
+        quantity=i.quantity,
+        preparation=i.preparation,
+        storage=i.storage,
+        warnings=i.warnings,
+        notes=i.notes,
+        favourite_id=i.favourite_id,
+        at=at,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +107,7 @@ class DraftBody:
     items: Sequence[ItemInput] = field(default_factory=tuple)
     advice: Advice = field(default_factory=Advice)
     follow_up_date: date | None = None
+    template_id: UUID | None = None  # M4-P3 provenance, counted at issue
 
 
 def _load(
@@ -110,6 +135,23 @@ def _check_window(visit: Visit, rx: Prescription, now: datetime) -> None:
     if rx.version == 1 and visit.is_locked(now):
         assert visit.locked_at is not None
         raise VisitLocked(visit.locked_at)
+
+
+def _record_uses(tenant: TenantRepositories, rx: Prescription, now: datetime) -> None:
+    """M4-P3 decision 3A: each favourite and the template the issued body came from, once.
+
+    Only the doctor's own count; an ID of a deleted or someone else's item is ignored.
+    """
+    for favourite_id in sorted({i.favourite_id for i in rx.items if i.favourite_id}):
+        fav = tenant.rx_favourites.get(favourite_id, for_update=True)
+        if fav is not None and fav.doctor_id == rx.doctor_id:
+            fav.record_use(now)
+            tenant.rx_favourites.update(fav)
+    if rx.template_id is not None:
+        template = tenant.rx_templates.get(rx.template_id, for_update=True)
+        if template is not None and template.doctor_id == rx.doctor_id:
+            template.record_use(now)
+            tenant.rx_templates.update(template)
 
 
 class _UseCase:
@@ -175,23 +217,7 @@ class ReplaceDraft(_UseCase):
             now = self._clock.now()
             _check_window(load_visit(tenant, ctx.clinic_id, rx.visit_id), rx, now)
             items = [
-                PrescriptionItem.create(
-                    id=self._ids.new_id(),
-                    position=position,
-                    medicine_name=i.medicine_name,
-                    form=i.form,
-                    strength=i.strength,
-                    dose=i.dose,
-                    frequency=i.frequency,
-                    frequency_text=i.frequency_text,
-                    timing=i.timing,
-                    duration_days=i.duration_days,
-                    quantity=i.quantity,
-                    preparation=i.preparation,
-                    storage=i.storage,
-                    warnings=i.warnings,
-                    notes=i.notes,
-                )
+                build_item(i, id=self._ids.new_id(), position=position)
                 for position, i in enumerate(body.items, start=1)
             ]
             rx.replace_body(
@@ -201,6 +227,7 @@ class ReplaceDraft(_UseCase):
                 seen_revision=body.seen_revision,
                 today=local_date(now, clinic.timezone),
                 now=now,
+                template_id=body.template_id,
             )
             tenant.prescriptions.update(rx)
             tenant.prescriptions.replace_items(rx)
@@ -266,6 +293,7 @@ class IssuePrescription(_UseCase):
             if older is not None:
                 older.supersede(now)
                 tenant.prescriptions.update(older)
+            _record_uses(tenant, rx, now)
             assert rx.language is not None and rx.link_delivery is not None
             metadata = {
                 "items": str(len(rx.items)),

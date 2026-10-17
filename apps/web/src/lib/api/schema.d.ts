@@ -1114,10 +1114,192 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/rx-favourites": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The caller's favourites
+         * @description By use, then name. Not audited (decision 4A). Permission CLINICAL_WRITE.
+         */
+        readonly get: operations["listFavourites"];
+        readonly put?: never;
+        /**
+         * Save a favourite
+         * @description One line with its usual instructions, checked like a draft line. Records rx_favourite.created. Needs X-CSRF-Token.
+         */
+        readonly post: operations["createFavourite"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/rx-favourites/{favourite_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * Replace a favourite
+         * @description Send revision (409 RX_STALE otherwise). Records rx_favourite.updated. Needs X-CSRF-Token.
+         */
+        readonly put: operations["replaceFavourite"];
+        readonly post?: never;
+        /**
+         * Delete a favourite
+         * @description Issued prescriptions that used it are untouched. Records rx_favourite.deleted. Needs X-CSRF-Token.
+         */
+        readonly delete: operations["deleteFavourite"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/rx-templates": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The caller's templates
+         * @description By use, then name. Permission CLINICAL_WRITE.
+         */
+        readonly get: operations["listTemplates"];
+        readonly put?: never;
+        /**
+         * Save a template
+         * @description A whole body (lines, advice, follow-up interval), checked like a draft. Records rx_template.created. Needs X-CSRF-Token.
+         */
+        readonly post: operations["createTemplate"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/rx-templates/{template_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * One template
+         * @description Permission CLINICAL_WRITE, its doctor.
+         */
+        readonly get: operations["getTemplate"];
+        /**
+         * Replace a template
+         * @description Send revision (409 RX_STALE otherwise). Records rx_template.updated. Needs X-CSRF-Token.
+         */
+        readonly put: operations["replaceTemplate"];
+        readonly post?: never;
+        /**
+         * Delete a template
+         * @description Records rx_template.deleted. Needs X-CSRF-Token.
+         */
+        readonly delete: operations["deleteTemplate"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/medicine-suggestions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Medicine names for a prefix
+         * @description FR-RX-10, spec R7, AC5. The caller's favourites first (by use), then names on this clinic's issued prescriptions (by distinct visits, then recency), matched from the start ignoring case. At most 10. Not audited.
+         */
+        readonly get: operations["suggestMedicines"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description A line's body without its identity (the fields of PrescriptionItemOutput) */
+        readonly LibraryItem: {
+            readonly medicine_name: string;
+        } & {
+            readonly [key: string]: unknown;
+        };
+        readonly Favourite: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            readonly item: components["schemas"]["LibraryItem"];
+            readonly revision: number;
+            readonly use_count: number;
+            /** Format: date-time */
+            readonly last_used_at: string | null;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        readonly FavouriteInput: {
+            readonly name: string;
+            readonly item: components["schemas"]["PrescriptionItemInput"];
+            /** @description Required to replace (409 RX_STALE otherwise) */
+            readonly revision?: number | null;
+        };
+        readonly FavouriteList: {
+            readonly items: readonly components["schemas"]["Favourite"][];
+        };
+        readonly RxTemplate: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            readonly items: readonly components["schemas"]["LibraryItem"][];
+            readonly advice: components["schemas"]["Advice"];
+            readonly follow_up_days: number | null;
+            readonly revision: number;
+            readonly use_count: number;
+            /** Format: date-time */
+            readonly last_used_at: string | null;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        readonly RxTemplateInput: {
+            readonly name: string;
+            readonly items?: readonly components["schemas"]["PrescriptionItemInput"][];
+            readonly advice?: components["schemas"]["AdviceInput"];
+            readonly follow_up_days?: number | null;
+            readonly revision?: number | null;
+        };
+        readonly RxTemplateList: {
+            readonly items: readonly components["schemas"]["RxTemplate"][];
+        };
+        readonly MedicineSuggestions: {
+            readonly items: readonly {
+                readonly name: string;
+                /** @enum {string} */
+                readonly source: "FAVOURITE" | "HISTORY";
+                /** @description A favourite's use count, or the distinct visits it was issued in */
+                readonly uses: number;
+                /** Format: uuid */
+                readonly favourite_id: string | null;
+            }[];
+        };
         /**
          * @description Morning-afternoon-night (and bedtime) pattern; CUSTOM needs frequency_text
          * @enum {string}
@@ -1151,6 +1333,11 @@ export interface components {
             readonly storage?: readonly components["schemas"]["StoragePhrase"][];
             readonly warnings?: string | null;
             readonly notes?: string | null;
+            /**
+             * Format: uuid
+             * @description The favourite this line came from (M4-P3, counted at issue)
+             */
+            readonly favourite_id?: string | null;
         };
         readonly PrescriptionItemOutput: {
             /** Format: uuid */
@@ -1175,6 +1362,8 @@ export interface components {
             }[];
             readonly warnings: string | null;
             readonly notes: string | null;
+            /** Format: uuid */
+            readonly favourite_id?: string | null;
         };
         readonly AdviceInput: {
             readonly diet?: readonly string[];
@@ -1200,6 +1389,11 @@ export interface components {
              * @description After today and within a year
              */
             readonly follow_up_date?: string | null;
+            /**
+             * Format: uuid
+             * @description The template the body came from (M4-P3, counted at issue)
+             */
+            readonly template_id?: string | null;
         };
         readonly PrescriptionIssue: {
             readonly revision: number;
@@ -1267,6 +1461,8 @@ export interface components {
             readonly doctor_snapshot: components["schemas"]["DoctorSnapshot"] | null;
             readonly clinic_snapshot: components["schemas"]["ClinicSnapshot"] | null;
             readonly link_delivery: components["schemas"]["LinkDelivery"] | null;
+            /** Format: uuid */
+            readonly template_id?: string | null;
             /** @description The chain by version, when the response includes it (else empty) */
             readonly versions: readonly components["schemas"]["PrescriptionVersion"][];
             /** Format: date-time */
@@ -2199,6 +2395,20 @@ export interface components {
             };
         };
         /**
+         * @description RX_NAME_TAKEN (409: the caller already has one with that name, ignoring case and spaces);
+         *     RX_LIBRARY_FULL (409, details.limit); RX_STALE (409, details.revision);
+         *     REQ_VALIDATION_FAILED (422, field and rule)
+         */
+        readonly LibraryError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
          * @description PERM_DENIED (403: front desk, or an owner who is not a doctor writing); VIS_NOT_YOURS (403:
          *     a doctor writing another doctor's visit); CLN_SUSPENDED (403)
          */
@@ -2319,6 +2529,10 @@ export interface components {
         readonly VisitPath: string;
         /** @description A prescription version of the request's clinic. */
         readonly PrescriptionPath: string;
+        /** @description One of the caller's favourites. */
+        readonly FavouritePath: string;
+        /** @description One of the caller's templates. */
+        readonly TemplatePath: string;
         /** @description The single-use invitation secret from the acceptance link. */
         readonly InviteToken: string;
     };
@@ -4499,6 +4713,408 @@ export interface operations {
             readonly 403: components["responses"]["VisitPermissionError"];
             readonly 404: components["responses"]["PermissionError"];
             readonly 409: components["responses"]["PrescriptionError"];
+        };
+    };
+    readonly listFavourites: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Favourites */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["FavouriteList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly createFavourite: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["FavouriteInput"];
+            };
+        };
+        readonly responses: {
+            /** @description Saved */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Favourite"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["LibraryError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["LibraryError"];
+        };
+    };
+    readonly replaceFavourite: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description One of the caller's favourites. */
+                readonly favourite_id: components["parameters"]["FavouritePath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["FavouriteInput"];
+            };
+        };
+        readonly responses: {
+            /** @description Replaced */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Favourite"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["LibraryError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["LibraryError"];
+        };
+    };
+    readonly deleteFavourite: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description One of the caller's favourites. */
+                readonly favourite_id: components["parameters"]["FavouritePath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Deleted */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly listTemplates: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Templates */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["RxTemplateList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly createTemplate: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["RxTemplateInput"];
+            };
+        };
+        readonly responses: {
+            /** @description Saved */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["RxTemplate"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["LibraryError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["LibraryError"];
+        };
+    };
+    readonly getTemplate: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description One of the caller's templates. */
+                readonly template_id: components["parameters"]["TemplatePath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The template */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["RxTemplate"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly replaceTemplate: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description One of the caller's templates. */
+                readonly template_id: components["parameters"]["TemplatePath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["RxTemplateInput"];
+            };
+        };
+        readonly responses: {
+            /** @description Replaced */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["RxTemplate"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["LibraryError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["LibraryError"];
+        };
+    };
+    readonly deleteTemplate: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description One of the caller's templates. */
+                readonly template_id: components["parameters"]["TemplatePath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Deleted */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly suggestMedicines: {
+        readonly parameters: {
+            readonly query: {
+                readonly q: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Suggestions */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["MedicineSuggestions"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 422: components["responses"]["LibraryError"];
         };
     };
 }
