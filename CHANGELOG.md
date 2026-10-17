@@ -14,7 +14,15 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
-- M4-P1 (#38): visits (FR-VIS-01..03, 05; spec prescriptions R1-R3, R16, R17; decisions 1A-6A).
+- M4-P2 (#38): prescriptions (FR-RX-01..03, 06, 09; spec R4-R6, R14, R17, R20; decisions 1A-6A).
+  A visit has one prescription chain: the doctor creates a draft, saves it whole with its
+  `revision` (medicines with dose, frequency and timing codes, preparation and storage phrases,
+  advice, a follow-up date), and issues it. Issuing freezes it with the doctor and clinic as
+  printed, the patient's language and a pending-delivery marker (`PENDING` or `NOT_CONSENTED`;
+  nothing is sent until M5). An issued version never changes (`409 RX_NOT_DRAFT`, enforced by
+  database triggers as well); revising makes version n+1 and issuing it supersedes the old one.
+  The consultation view includes the visit's prescriptions and each history visit's medicines.
+  Migration `0010`, contract 0.14.0.- M4-P1 (#38): visits (FR-VIS-01..03, 05; spec prescriptions R1-R3, R16, R17; decisions 1A-6A).
   The doctor starts the visit of an appointment in consultation (`POST /api/v1/visits`), records
   the chief complaint, findings, diagnosis, notes and vitals (`PATCH` with the `revision` seen,
   `409 VIS_STALE` otherwise) and completes it, which also completes the appointment. 24 hours
