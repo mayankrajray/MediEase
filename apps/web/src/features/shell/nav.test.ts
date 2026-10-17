@@ -24,5 +24,10 @@ describe("visibleNav", () => {
 
   it("links only to pages that exist today", () => {
     expect(visibleNav(["STAFF_MANAGE", "CLINIC_MANAGE"]).map((i) => i.href)).toEqual(["/queue"]);
+    expect(visibleNav(["PATIENTS_MANAGE", "SCHEDULES_MANAGE"]).map((i) => i.href)).toEqual([
+      "/queue",
+      "/patients",
+      "/settings/schedule",
+    ]);
   });
 });

@@ -16,6 +16,7 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/queue", label: "Queue" },
   { href: "/patients", label: "Patients", requires: "PATIENTS_MANAGE" },
+  { href: "/settings/schedule", label: "Schedule", requires: "SCHEDULES_MANAGE" },
 ];
 
 /**
