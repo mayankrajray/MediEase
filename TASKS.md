@@ -12,12 +12,12 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M4 — Visits and digital prescriptions** (issue #38, branch `m4/38-visits-and-prescriptions`, one PR for the milestone). M3 merged in PR #37 on 17 Oct 2026 |
-| Active phase | **M4-P1 — visit record, history, 24-hour lock and addenda:** design proposed 17 Oct 2026, awaiting the developer's approval |
+| Active phase | **M4-P1 — visit record, history, 24-hour lock and addenda:** design approved 17 Oct 2026 with 1A–6A; in implementation |
 | Design notes | `docs/milestones/M4-visits-and-prescriptions.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M4 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | M4-P1 design decisions 1–6 (`docs/milestones/M4-visits-and-prescriptions.md`). Follow-up outside M4: #30 (an import over 2 MB through the web origin can answer 500 instead of 413) |
+| Open decisions | Front desk printing of prescriptions (M4-P4 design). Follow-up outside M4: #30 (an import over 2 MB through the web origin can answer 500 instead of 413) |
 | Last updated | 17 Oct 2026 |
 
 

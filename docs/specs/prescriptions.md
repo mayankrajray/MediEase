@@ -50,9 +50,9 @@ repository, D5):
 These are *formatting* vocabularies chosen by the doctor, not clinical recommendations.
 
 ## 4. Behaviour
-- **R1** A visit starts from an `IN_CONSULTATION` appointment, by that session's doctor, or directly
-  for a walk-in (how a walk-in reaches a visit is decided in the M4-P1 design); one visit per
-  appointment (`VIS_ALREADY_EXISTS`, with the existing visit's ID).
+- **R1** A visit starts from an `IN_CONSULTATION` appointment, by that session's doctor, or for a walk-in
+  once M3's *Add walk-in* has put them on the queue (M4-P1 decision 5A: every visit has an
+  appointment); one visit per appointment (`VIS_ALREADY_EXISTS`, with the existing visit's ID).
 - **R2** Visit history on the consultation screen shows the last 10 visits with prescriptions,
   newest first, within 1 s.
 - **R3** Completing a visit sets `locked_at = completed_at + 24 h`. After lock, edits return
