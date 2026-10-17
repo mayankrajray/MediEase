@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; the M4-P4 design proposed, awaiting approval |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A) 18 Oct 2026, in implementation |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -16,7 +16,7 @@
 | P1 | Visit record, history, 24-hour lock and addenda | Below (done, confirmed) |
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (done, confirmed) |
 | P3 | Favourites, templates, clinic-history autocomplete | Below (done, confirmed) |
-| P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (proposed) |
+| P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (approved 1A-5A) |
 | P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | At its start |
 | P6 | Web consultation screen, keyboard-first Rx builder | At its start |
 
@@ -466,7 +466,7 @@ Taken while implementing:
 
 ## M4-P4 — PDF rendering and blob storage
 
-**Status: proposed 18 Oct 2026, awaiting approval.** API, the API image and compose; printing from
+**Status: approved by the developer 18 Oct 2026 (1A-5A, every recommendation).** API, the API image and compose; printing from
 the screens is P6. Covers FR-RX-04, FR-RX-06 (the printable PDF); spec R8, R16, R18, R20, D1, D3,
 D6; ADR-0012; AC8, AC10.
 
