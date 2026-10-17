@@ -12,13 +12,13 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M2 — Patients** (issue #21, branch `m2/21-patients`, one PR for the milestone) |
-| Active phase | **M2-P4 — ✅ implemented 5 Oct 2026, awaiting the developer's confirmation:** ops CSV patient import, dry run by default (1A, 2A), contract 0.8.0. M2-P1 to P3 are confirmed. **Next: M2-P5** (web: search, registration drawer, profile), to be designed once P4 is confirmed. Draft PR #22 is open |
+| Active phase | **M2-P5 — designed 17 Oct 2026, awaiting the developer's approval:** web patient search, registration drawer with the duplicate-phone flow, patient profile with consent and opt-out, the wizard's code-prefix field (design in the M2 notes, decisions 1–6). M2-P1 to P4 are confirmed (P4 re-checked 17 Oct 2026). Draft PR #22 is open |
 | Design notes | `docs/milestones/M2-patients.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M2 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §9). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | None. M1 was merged and its phases P1–P7 confirmed by the developer on 3 Oct 2026 |
-| Last updated | 5 Oct 2026 |
+| Open decisions | M2-P5 design decisions 1–6 (`docs/milestones/M2-patients.md`), including whether the duplicate-phone journey gets the first Playwright spec |
+| Last updated | 17 Oct 2026 |
 
 
 ---
@@ -86,7 +86,7 @@ duplicates surfaced; 10k-patient lookup p95 < 500 ms.
 | M2-P2 | Register / edit / lookup endpoints; duplicate-phone flow | ✅ |
 | M2-P3 | Consent and language preference; opt-out state | ✅ |
 | M2-P4 | Ops CSV import with dry-run report | ✅ |
-| M2-P5 | Web: patient search bar (global), registration drawer, patient profile | ☐ |
+| M2-P5 | Web: patient search bar (global), registration drawer, patient profile | ▶ |
 
 ## M3 — Appointments and daily queue  `☐`
 

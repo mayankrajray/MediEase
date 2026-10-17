@@ -55,7 +55,7 @@ Milestone issue #21 → branch m2/21-patients (from origin/main)
 ## 4. Phase breakdown
 
 Details, file lists and test plans per phase are in the design notes. Each phase is designed with
-`/plan-phase` at its start; P1–P4 are implemented and confirmed, P5 is designed at its start.
+`/plan-phase` at its start; P1–P4 are implemented and confirmed, P5 is designed and awaiting approval.
 
 | Phase | Objective | Requirements | Verify |
 |---|---|---|---|
@@ -63,7 +63,7 @@ Details, file lists and test plans per phase are in the design notes. Each phase
 | P2 | Register / edit / lookup endpoints; the duplicate-phone flow; `patient_code_prefix` on clinic creation | FR-PAT-01, 02, 03, 04; spec R1–R3, R5, R7, R9, R10; AC1, AC2, AC3, AC6, AC7 | Register by hand, lookup by phone and code, duplicate 409 with candidates, `confirm_new` takes the next code; two-thread race and audit rows with no names or phones |
 | P3 | Consent, language preference, opt-out and opt-in | FR-PAT-05, 06; spec R6; AC5 | Consent → opt-out → consent refused → opt-in; the audit rows with flags and `given_by`; idempotent opt-out; the race test |
 | P4 | Ops CSV import with a dry-run report | FR-PAT-08, FR-OPS-02; spec R8 | Dry run, commit, re-run imports nothing; 5,000 rows well inside the limit; no names or phones in the report, logs or audit; ops only |
-| P5 | Web: global search, registration drawer, profile | FR-PAT-01, 02, 03, 04, 05, 06; spec §6 | To be designed |
+| P5 | Web: global search, registration drawer, profile | FR-PAT-01, 02, 03, 04, 05, 06; spec §6 | Designed 17 Oct 2026 (M2 notes, M2-P5 section); awaiting approval |
 
 ## 5. Roadmap after M2 (one line each)
 
@@ -111,3 +111,6 @@ M5; L-03, L-05 and L-07 should be under way. Details in `TASKS.md`.
 | 3 Oct 2026 | M2-P3 design approved with option A. Implemented: consent, opt-out and opt-in as three actions, row lock, audit as evidence, `whatsapp_allowed`/`sms_allowed`, contract 0.7.0 + regenerated web types. Added test and CI timeouts after a hung test. API 754 tests at 99.0%, web 256 tests, tsc/ESLint/`gen:api:check` clean, `pip-audit` clean; on compose the whole consent story and its audit rows behave as designed | #21 / PR #22 | Implemented; awaiting the developer's confirmation |
 | 5 Oct 2026 | M2-P3 re-checked on `e9c5cb9` (`make lint typecheck test`: API 754 at 99.03%, web 256; `make smoke`; the consent flow on compose; CI 7/7) and confirmed by the developer. M2-P4 design (ops CSV import, dry run by default, report without personal data) approved with 1A (phone-only duplicates imported and flagged) and 2A (blank sex is `UNDISCLOSED`) | #21 / PR #22 | P3 confirmed; P4 in implementation |
 | 5 Oct 2026 | M2-P4 — `POST /api/v1/ops/clinics/{id}/patient-imports` (raw `text/csv`, 2 MB / 5,000 rows, dry run by default), the report without personal data, the commit under the clinic lock with one `patient.imported` row each, batched inserts (`add_many`, `record_many`; 5,000 rows in under 2 s), contract 0.8.0 + regenerated web types, RUNBOOK §10 procedure and a synthetic sample file. `make lint typecheck test` green (API 847 tests at 99.09%, core 99%; web 256); `make smoke`; the import flow on the rebuilt compose stack as designed | #21 / PR #22 | Implemented; awaiting the developer's confirmation |
+| 17 Oct 2026 | M2-P4 re-checked on a fresh machine (WSL Python 3.12 + Node 24; stack via Docker Desktop's CLI): `make lint typecheck test` (API 847 at 99.09%, core 99%; web 256; `gen:api:check`), `make smoke` 22/22, the import flow as designed, audit rows and logs free of names and phones. Confirmed by the developer. Finding: one 2.2 MB upload through the web origin answered 500 (proxy EPIPE) instead of 413; 22 repeats answered 413 (P5 design, decision 5) | #21 / PR #22 | P4 confirmed |
+| 17 Oct 2026 | Dependabot #18 (TypeScript 7) and #28 (ESLint 10) closed with "ignore this major version"; `typescript`, `eslint` and `@types/node` majors ignored in `.github/dependabot.yml` (`dc242c1`). Documentation drift fixed in one `docs:` commit (`4f16cab`). `main`'s secrets scan stays red until PR #22 lands `b994ed3` (the developer's choice) | #21 | Committed locally |
+| 17 Oct 2026 | M2-P5 design (web search combobox, registration drawer with the duplicate-phone flow, profile with consent and opt-out, PATCH/PUT in the API client, the wizard's code prefix) proposed with decisions 1–6, including the first Playwright spec for the duplicate-phone journey (4B recommended) | #21 / PR #22 | Awaiting the developer's approval |
