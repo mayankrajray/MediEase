@@ -191,7 +191,7 @@ def create_scheduling_blueprint(use_cases: SchedulingUseCases) -> Blueprint:
         sessions = use_cases.list_sessions().execute(
             current_context(), on_date, doctor_id=doctor_id
         )
-        return jsonify(items_body(session_body(s) for s in sessions))
+        return jsonify(items_body(session_body(v.session, v.taken_slots) for v in sessions))
 
     return bp
 

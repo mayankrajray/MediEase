@@ -139,7 +139,7 @@ class ReplaceSchedule:
             for block in new_blocks:
                 tenant.schedules.add(block)
 
-            kept = reconcile_doctor(tenant, clinic=clinic, doctor=doctor, first=today)
+            kept = reconcile_doctor(tenant, clinic=clinic, doctor=doctor, first=today, now=now)
             record_event(
                 uow,
                 event_id=self._ids.new_id(),

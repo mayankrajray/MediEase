@@ -25,6 +25,10 @@ from mediease_api.adapters.security.argon2_hasher import Argon2PasswordHasher
 from mediease_api.adapters.security.ip_hash import HmacIpHasher
 from mediease_api.adapters.security.jwt_tokens import JwtAccessTokenIssuer
 from mediease_api.adapters.security.refresh_secrets import Sha256RefreshTokenSecrets
+from mediease_api.application.appointments.book import BookAppointment
+from mediease_api.application.appointments.cancel import CancelAppointment
+from mediease_api.application.appointments.queries import GetAppointment, ListPatientAppointments
+from mediease_api.application.appointments.reschedule import RescheduleAppointment
 from mediease_api.application.auth._session import SessionIssuer
 from mediease_api.application.auth.authenticate import AuthenticateRequest
 from mediease_api.application.auth.refresh_session import RefreshSession
@@ -54,6 +58,7 @@ from mediease_api.config.logging import configure_logging
 from mediease_api.config.settings import AppSettings
 from mediease_api.delivery.errors import register_error_handlers
 from mediease_api.delivery.http.access import check_every_route_has_policy, register_access_control
+from mediease_api.delivery.http.appointments import create_appointments_blueprint
 from mediease_api.delivery.http.auth import create_auth_blueprint
 from mediease_api.delivery.http.clinic import create_clinic_blueprint
 from mediease_api.delivery.http.csrf import register_csrf_protection
@@ -211,6 +216,21 @@ class _UseCases:
     def list_sessions(self) -> ListSessions:
         return ListSessions(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    def book_appointment(self) -> BookAppointment:
+        return BookAppointment(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def get_appointment(self) -> GetAppointment:
+        return GetAppointment(uow=self._uow())
+
+    def cancel_appointment(self) -> CancelAppointment:
+        return CancelAppointment(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def reschedule_appointment(self) -> RescheduleAppointment:
+        return RescheduleAppointment(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def list_patient_appointments(self) -> ListPatientAppointments:
+        return ListPatientAppointments(uow=self._uow())
+
     def list_clinics(self) -> ListClinics:
         return ListClinics(uow=self._uow())
 
@@ -319,6 +339,7 @@ def create_app(
     )
     app.register_blueprint(create_patients_blueprint(use_cases))
     app.register_blueprint(create_scheduling_blueprint(use_cases))
+    app.register_blueprint(create_appointments_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

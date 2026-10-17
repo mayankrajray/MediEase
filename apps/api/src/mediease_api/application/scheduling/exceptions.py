@@ -107,7 +107,7 @@ class AddException:
 
             tenant.schedule_exceptions.add(exception)
             kept = reconcile_doctor(
-                tenant, clinic=clinic, doctor=doctor, first=on_date, last=on_date
+                tenant, clinic=clinic, doctor=doctor, first=on_date, last=on_date, now=now
             )
             record_event(
                 uow,
@@ -164,6 +164,7 @@ class RemoveException:
                 doctor=doctor,
                 first=exception.on_date,
                 last=exception.on_date,
+                now=now,
             )
             record_event(
                 uow,

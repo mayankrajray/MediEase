@@ -42,10 +42,23 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/clinic/doctors/<uuid:doctor_id>/schedule-exceptions/<uuid:exception_id>": lambda w: (
         _exception_url(w)
     ),
+    "/api/v1/appointments/<uuid:appointment_id>": lambda w: _appointment_url(w),
+    "/api/v1/appointments/<uuid:appointment_id>/cancel": lambda w: f"{_appointment_url(w)}/cancel",
+    "/api/v1/appointments/<uuid:appointment_id>/reschedule": lambda w: (
+        f"{_appointment_url(w)}/reschedule"
+    ),
+    "/api/v1/patients/<uuid:patient_id>/appointments": lambda w: f"{_patient_url(w)}/appointments",
 }
 
-# Methods a cross-tenant case must use (default GET), with the body to send.
-CROSS_TENANT_WRITES: dict[str, tuple[str, dict[str, object]]] = {
+# Methods a cross-tenant case must use (default GET), with the body to send: fixed, or built
+# from clinic B's data after the URL (a reschedule needs another of B's sessions).
+Body = dict[str, object] | Callable[[World], dict[str, object]]
+CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
+    "/api/v1/appointments/<uuid:appointment_id>/cancel": ("POST", {"reason": "PATIENT_REQUEST"}),
+    "/api/v1/appointments/<uuid:appointment_id>/reschedule": (
+        "POST",
+        lambda w: {"session_id": _session_of_b(w, days=32)},
+    ),
     "/api/v1/clinic/staff/<uuid:membership_id>": ("PATCH", {"role": "DOCTOR"}),
     "/api/v1/patients/<uuid:patient_id>/consent": ("PUT", {"whatsapp": True, "sms": False}),
     "/api/v1/patients/<uuid:patient_id>/opt-out": ("POST", {}),
@@ -77,6 +90,46 @@ def _exception_url(world: World) -> str:
     )
     assert created.status_code == 201, created.get_json()
     return f"{base}/{created.get_json()['exception']['id']}"
+
+
+def _owner_of_b(world: World) -> tuple[FlaskClient, dict[str, str]]:
+    client = world.client_for(world.b.owner)
+    csrf = client.get_cookie("me_csrf", path="/")
+    assert csrf is not None
+    return client, {"X-CSRF-Token": csrf.value}
+
+
+def _session_of_b(world: World, *, days: int) -> str:
+    """A token session of clinic B's doctor ``days`` ahead (every weekday has a block)."""
+    client, headers = _owner_of_b(world)
+    schedule = client.get(f"/api/v1/clinic/doctors/{world.b.doctor.id}/schedule").get_json()
+    if not schedule["blocks"]:
+        blocks = [
+            {"weekday": d, "start_time": "10:00", "end_time": "13:00", "capacity": 12}
+            for d in range(7)
+        ]
+        resp = client.put(
+            f"/api/v1/clinic/doctors/{world.b.doctor.id}/schedule",
+            json={"blocks": blocks},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.get_json()
+    on_date = (date.today() + timedelta(days=days)).isoformat()
+    sessions = client.get(f"/api/v1/sessions?date={on_date}&doctor_id={world.b.doctor.id}")
+    return str(sessions.get_json()["items"][0]["id"])
+
+
+def _appointment_url(world: World) -> str:
+    """Clinic B's booked appointment for its own patient, which clinic A must not reach."""
+    client, headers = _owner_of_b(world)
+    patient_id = _patient_url(world).rsplit("/", 1)[1]
+    booked = client.post(
+        "/api/v1/appointments",
+        json={"session_id": _session_of_b(world, days=30), "patient_id": patient_id},
+        headers=headers,
+    )
+    assert booked.status_code == 201, booked.get_json()
+    return f"/api/v1/appointments/{booked.get_json()['id']}"
 
 
 def _staff_url(world: World) -> str:
@@ -136,7 +189,8 @@ def test_nfr_08_every_clinic_route_with_an_id_has_a_cross_tenant_case(world: Wor
 def test_ac3_nfr_08_another_clinics_resource_is_404(world: World, rule: str) -> None:
     url = CROSS_TENANT_CASES[rule](world)
     owner_of_a = world.client_for(world.a.owner)
-    method, body = CROSS_TENANT_WRITES.get(rule, ("GET", {}))
+    method, wanted = CROSS_TENANT_WRITES.get(rule, ("GET", {}))
+    body = wanted(world) if callable(wanted) else wanted
 
     resp = _call(owner_of_a, method, url, body)
     assert resp.status_code == 404, resp.get_json()

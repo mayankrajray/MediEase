@@ -8,7 +8,7 @@ ones keep theirs (D4). Doctors are locked in ID order, as session generation doe
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 import structlog
 
@@ -32,14 +32,14 @@ def check_mode_supported(uow: UnitOfWork, clinic: Clinic, mode: BookingMode, tod
         )
 
 
-def reconcile_clinic(uow: UnitOfWork, clinic: Clinic, today: date) -> int:
+def reconcile_clinic(uow: UnitOfWork, clinic: Clinic, today: date, now: datetime) -> int:
     """After the mode changed: each doctor's future sessions follow it; how many were kept."""
     tenant = uow.tenant(clinic.id)
     kept = 0
     for doctor in sorted(tenant.doctors.list(), key=lambda d: d.id):
         locked = tenant.doctors.get(doctor.id, lock=RowLock.UPDATE)
         assert locked is not None  # listed in this transaction
-        kept += len(reconcile_doctor(tenant, clinic=clinic, doctor=locked, first=today))
+        kept += len(reconcile_doctor(tenant, clinic=clinic, doctor=locked, first=today, now=now))
     logger.info(
         "clinic.booking_mode_changed",
         clinic_id=str(clinic.id),

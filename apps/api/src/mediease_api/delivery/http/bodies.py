@@ -8,9 +8,10 @@ contract has one schema for each.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import time
+from datetime import datetime, time
 from typing import Any
 
+from mediease_api.application.appointments.views import AppointmentDetail, AppointmentView
 from mediease_api.application.patients.views import CandidateView, PatientView
 from mediease_api.application.scheduling.views import ScheduleView
 from mediease_api.domain.clinics.clinic import Clinic
@@ -171,9 +172,20 @@ def schedule_body(schedule: ScheduleView) -> dict[str, Any]:
     }
 
 
-def session_body(session: Session) -> dict[str, Any]:
-    """A session; the slots in slot mode, the next token in token mode (R3, R4)."""
+def session_body(session: Session, taken: frozenset[datetime] | None = None) -> dict[str, Any]:
+    """A session; the slots in slot mode, the next token in token mode (R3, R4).
+
+    ``taken`` (the listing passes it, M3-P2) marks each slot ``available`` or not; without it,
+    as in a schedule change's ``kept_sessions``, slots carry their times only.
+    """
     slots = session.mode is BookingMode.SLOTS
+
+    def slot(start: datetime, end: datetime) -> dict[str, Any]:
+        body: dict[str, Any] = {"starts_at": start.isoformat(), "ends_at": end.isoformat()}
+        if taken is not None:
+            body["available"] = start not in taken
+        return body
+
     return {
         "id": str(session.id),
         "doctor_id": str(session.doctor_id),
@@ -187,8 +199,54 @@ def session_body(session: Session) -> dict[str, Any]:
         "booked_count": session.booked_count,
         "available": session.available,
         "next_token": None if slots else session.next_token,
-        "slots": [
-            {"starts_at": start.isoformat(), "ends_at": end.isoformat()}
-            for start, end in session.slots()
+        "slots": [slot(start, end) for start, end in session.slots()],
+    }
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def appointment_body(view: AppointmentView) -> dict[str, Any]:
+    """An appointment and where it is. ``reason`` and ``cancel_note`` are for staff only."""
+    a, session = view.appointment, view.session
+    return {
+        "id": str(a.id),
+        "session_id": str(a.session_id),
+        "doctor_id": str(a.doctor_id),
+        "patient_id": str(a.patient_id),
+        "on_date": session.on_date.isoformat(),
+        "session_starts_at": session.starts_at.isoformat(),
+        "session_ends_at": session.ends_at.isoformat(),
+        "mode": session.mode.value,
+        "slot_start": _iso(a.slot_start),
+        "token_number": a.token_number,
+        "status": a.status.value,
+        "source": a.source.value,
+        "reason": a.reason,
+        "cancel_reason": a.cancel_reason.value if a.cancel_reason else None,
+        "cancel_note": a.cancel_note,
+        "cancelled_at": _iso(a.cancelled_at),
+        "rescheduled_from_id": str(a.rescheduled_from_id) if a.rescheduled_from_id else None,
+        "arrived_at": _iso(a.arrived_at),
+        "started_at": _iso(a.started_at),
+        "completed_at": _iso(a.completed_at),
+        "created_by": str(a.created_by) if a.created_by else None,
+        "created_at": a.created_at.isoformat(),
+        "updated_at": a.updated_at.isoformat(),
+    }
+
+
+def appointment_detail_body(detail: AppointmentDetail) -> dict[str, Any]:
+    return {
+        **appointment_body(detail.view),
+        "history": [
+            {
+                "from_status": h.from_status.value if h.from_status else None,
+                "to_status": h.to_status.value,
+                "changed_by": str(h.changed_by) if h.changed_by else None,
+                "changed_at": h.changed_at.isoformat(),
+            }
+            for h in detail.history
         ],
     }

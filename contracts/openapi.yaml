@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.9.0
+  version: 0.10.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -43,6 +43,12 @@ tags:
       Responses carry personal data and are never cached.
   - name: scheduling
     description: Doctor schedules, leave and extra sessions, and the sessions they generate (M3)
+  - name: appointments
+    description: |
+      Book, read, cancel and reschedule (M3-P2, FR-APT-03..05, FR-APT-07). Every clinic role holds
+      APPOINTMENTS_MANAGE. A session row lock serialises bookings, and the database refuses a
+      double booking whatever the code does (FR-APT-04). `reason` is a short non-clinical note;
+      it is never logged, audited or messaged.
   - name: invites
     description: |
       Accepting a staff invitation (M1-P5). Public, because the invitee has no session yet: the
@@ -603,6 +609,215 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '422':
           $ref: '#/components/responses/AuthError'
+  /api/v1/appointments:
+    post:
+      tags: [appointments]
+      operationId: bookAppointment
+      summary: Book a patient into a session
+      description: |
+        FR-APT-03, FR-APT-04, FR-APT-07; spec R3-R6, D12, D13. Slot mode needs slot_start (one of
+        the session's slots, any offset); token mode refuses it and hands out the next token,
+        never reused. Bookable until the session (token) or the slot (slot mode) ends. Source is
+        FRONT_DESK (default), PHONE or WHATSAPP. Records appointment.booked. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewAppointment'
+      responses:
+        '201':
+          description: Booked
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/AppointmentError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AppointmentError'
+  /api/v1/appointments/{appointment_id}:
+    get:
+      tags: [appointments]
+      operationId: getAppointment
+      summary: One appointment with its status history
+      description: FR-APT-05. Permission APPOINTMENTS_MANAGE.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/AppointmentPath'
+      responses:
+        '200':
+          description: The appointment
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentDetail'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/appointments/{appointment_id}/cancel:
+    post:
+      tags: [appointments]
+      operationId: cancelAppointment
+      summary: Cancel with a reason
+      description: |
+        Spec R7, D14. From BOOKED or ARRIVED until the session ends (else 409 APT_NOT_MODIFIABLE).
+        OTHER needs a note. The place is freed; the token is not. Records appointment.cancelled
+        with the reason code, never the note. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/AppointmentPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentCancel'
+      responses:
+        '200':
+          description: Cancelled
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/AppointmentError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AppointmentError'
+  /api/v1/appointments/{appointment_id}/reschedule:
+    post:
+      tags: [appointments]
+      operationId: rescheduleAppointment
+      summary: Move a booking to another session or slot
+      description: |
+        Spec R8, D15. From BOOKED only, to any open session of the clinic (another doctor's, or
+        another slot of the same session); the old appointment is cancelled with RESCHEDULED and
+        the new one points at it, in one transaction. A closed source session is fine. Records
+        appointment.rescheduled. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/AppointmentPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentReschedule'
+      responses:
+        '201':
+          description: The new appointment
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/AppointmentError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AppointmentError'
+  /api/v1/patients/{patient_id}/appointments:
+    get:
+      tags: [appointments]
+      operationId: listPatientAppointments
+      summary: A patient's appointments, newest first
+      description: FR-APT-05. At most 50, cancelled ones included. Permission APPOINTMENTS_MANAGE.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+      responses:
+        '200':
+          description: The patient's appointments
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
   /api/v1/clinic/staff:
     get:
       tags: [clinic]
@@ -1497,6 +1712,14 @@ components:
       schema:
         type: string
         format: uuid
+    AppointmentPath:
+      name: appointment_id
+      in: path
+      required: true
+      description: An appointment of the request's clinic.
+      schema:
+        type: string
+        format: uuid
     InviteToken:
       name: token
       in: path
@@ -1558,6 +1781,20 @@ components:
         SCH_INVALID_BLOCK (422: a block's times, length, slot length or capacity cannot be
         scheduled); SCH_OVERLAP (409: two blocks overlap, also across midnight and the week);
         SCH_LEAVE_EXISTS (409: leave on that date already); REQ_VALIDATION_FAILED (422)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    AppointmentError:
+      description: |
+        APT_SLOT_TAKEN, APT_SESSION_FULL (409: no place, also when a parallel booking won);
+        APT_SESSION_CLOSED (409: leave, a changed block or an inactive doctor); APT_ALREADY_BOOKED
+        (409: the patient is already in this session, details.appointment_id); APT_NOT_MODIFIABLE
+        (409: the status or the session's end forbids it); APT_OUTSIDE_SCHEDULE (422: not one of
+        the session's slots); APT_IN_PAST (422); REQ_VALIDATION_FAILED (422)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -2666,6 +2903,10 @@ components:
         ends_at:
           type: string
           format: date-time
+        available:
+          type: boolean
+          description: |
+            In the session list only (M3-P2): false while an active appointment holds the slot.
     DoctorSession:
       type: object
       description: One doctor's bookable block on one clinic-local date (not the sign-in session)
@@ -2729,6 +2970,188 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DoctorSession'
+    AppointmentStatus:
+      type: string
+      enum: [BOOKED, ARRIVED, IN_CONSULTATION, COMPLETED, NO_SHOW, CANCELLED]
+    AppointmentSource:
+      type: string
+      enum: [FRONT_DESK, PHONE, WHATSAPP, PUBLIC_PAGE, WALK_IN]
+    CancelReason:
+      type: string
+      enum: [PATIENT_REQUEST, CLINIC_REQUEST, DOCTOR_UNAVAILABLE, DUPLICATE, OTHER, RESCHEDULED]
+    NewAppointment:
+      type: object
+      additionalProperties: false
+      required: [session_id, patient_id]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        patient_id:
+          type: string
+          format: uuid
+        slot_start:
+          type: string
+          format: date-time
+          description: Slot mode only
+        source:
+          type: string
+          enum: [FRONT_DESK, PHONE, WHATSAPP]
+          default: FRONT_DESK
+        reason:
+          type: [string, 'null']
+          maxLength: 120
+          description: Short and non-clinical ("follow-up")
+    AppointmentCancel:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum: [PATIENT_REQUEST, CLINIC_REQUEST, DOCTOR_UNAVAILABLE, DUPLICATE, OTHER]
+        note:
+          type: [string, 'null']
+          maxLength: 200
+          description: Required for OTHER
+    AppointmentReschedule:
+      type: object
+      additionalProperties: false
+      required: [session_id]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        slot_start:
+          type: string
+          format: date-time
+          description: Slot mode only
+    Appointment:
+      type: object
+      required:
+        - id
+        - session_id
+        - doctor_id
+        - patient_id
+        - on_date
+        - session_starts_at
+        - session_ends_at
+        - mode
+        - slot_start
+        - token_number
+        - status
+        - source
+        - reason
+        - cancel_reason
+        - cancel_note
+        - cancelled_at
+        - rescheduled_from_id
+        - arrived_at
+        - started_at
+        - completed_at
+        - created_by
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        doctor_id:
+          type: string
+          format: uuid
+        patient_id:
+          type: string
+          format: uuid
+        on_date:
+          type: string
+          format: date
+        session_starts_at:
+          type: string
+          format: date-time
+        session_ends_at:
+          type: string
+          format: date-time
+        mode:
+          $ref: '#/components/schemas/BookingMode'
+        slot_start:
+          type: [string, 'null']
+          format: date-time
+        token_number:
+          type: [integer, 'null']
+        status:
+          $ref: '#/components/schemas/AppointmentStatus'
+        source:
+          $ref: '#/components/schemas/AppointmentSource'
+        reason:
+          type: [string, 'null']
+        cancel_reason:
+          oneOf:
+            - $ref: '#/components/schemas/CancelReason'
+            - type: 'null'
+        cancel_note:
+          type: [string, 'null']
+        cancelled_at:
+          type: [string, 'null']
+          format: date-time
+        rescheduled_from_id:
+          type: [string, 'null']
+          format: uuid
+        arrived_at:
+          type: [string, 'null']
+          format: date-time
+        started_at:
+          type: [string, 'null']
+          format: date-time
+        completed_at:
+          type: [string, 'null']
+          format: date-time
+        created_by:
+          type: [string, 'null']
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AppointmentStatusChange:
+      type: object
+      required: [from_status, to_status, changed_by, changed_at]
+      properties:
+        from_status:
+          oneOf:
+            - $ref: '#/components/schemas/AppointmentStatus'
+            - type: 'null'
+        to_status:
+          $ref: '#/components/schemas/AppointmentStatus'
+        changed_by:
+          type: [string, 'null']
+          format: uuid
+        changed_at:
+          type: string
+          format: date-time
+    AppointmentDetail:
+      allOf:
+        - $ref: '#/components/schemas/Appointment'
+        - type: object
+          required: [history]
+          properties:
+            history:
+              type: array
+              description: Oldest first
+              items:
+                $ref: '#/components/schemas/AppointmentStatusChange'
+    AppointmentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Appointment'
     Error:
       type: object
       required: [code, message, request_id]

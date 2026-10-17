@@ -257,9 +257,11 @@ Responses carry personal data and are `Cache-Control: no-store`. The clinic is t
 | POST | `/api/v1/clinic/doctors/{doctor_id}/schedule-exceptions` | Whole-day leave or an extra session — **M3-P1** | FR-APT-01 |
 | DELETE | `/api/v1/clinic/doctors/{doctor_id}/schedule-exceptions/{exception_id}` | Remove one (today or later) — **M3-P1** | FR-APT-01 |
 | GET | `/api/v1/sessions?date=&doctor_id=` | A date's sessions, generated on first read (`APPOINTMENTS_MANAGE`) — **M3-P1** | FR-APT-01, 02 |
-| POST | `/api/v1/appointments` | Book (slot or token) | FR-APT-03/04 |
-| POST | `/api/v1/appointments/{id}/reschedule` | Reschedule | FR-APT-05 |
-| POST | `/api/v1/appointments/{id}/cancel` | Cancel with reason | FR-APT-05 |
+| POST | `/api/v1/appointments` | Book (slot or token) — **M3-P2** | FR-APT-03, 04, 07 |
+| GET | `/api/v1/appointments/{id}` | One appointment with its status history — **M3-P2** | FR-APT-05 |
+| POST | `/api/v1/appointments/{id}/reschedule` | Move to another session or slot (201, new appointment) — **M3-P2** | FR-APT-05 |
+| POST | `/api/v1/appointments/{id}/cancel` | Cancel with a reason — **M3-P2** | FR-APT-05 |
+| GET | `/api/v1/patients/{id}/appointments` | A patient's appointments, newest first (≤ 50) — **M3-P2** | FR-APT-05 |
 | GET | `/api/v1/queue?doctor_id=&date=` | Queue (supports `ETag` / `If-None-Match`) | FR-QUE-01/03 |
 | POST | `/api/v1/appointments/{id}/transitions` | `{ "to": "ARRIVED" }` | FR-QUE-02 |
 | POST | `/api/v1/queue/walk-ins` | Add walk-in to today | FR-QUE-04 |
@@ -277,6 +279,22 @@ M3-P1 rules (spec appointments R1–R4, R14–R20; contract 0.9.0):
   affected future sessions that nobody booked and return the booked ones as `kept_sessions`.
 - **Sessions** for a date from the clinic's today up to 180 days ahead are generated the first time
   the date is read; reading again returns the same IDs.
+
+M3-P2 rules (spec R3–R8, D10–D16; contract 0.10.0; all routes `APPOINTMENTS_MANAGE`):
+
+- **Book** `{session_id, patient_id, slot_start?, source?, reason?}`. Slot mode needs `slot_start`
+  (one of the session's slots, any offset); token mode refuses it and returns `token_number`.
+  Bookable until the session (tokens) or the slot (slots) ends, else `422 APT_IN_PAST`. One active
+  appointment per patient per session (`409 APT_ALREADY_BOOKED`). `source` is `FRONT_DESK`
+  (default), `PHONE` or `WHATSAPP`. Parallel bookings of the last place: one 201, one 409.
+- **Cancel** `{reason, note?}`: `PATIENT_REQUEST`, `CLINIC_REQUEST`, `DOCTOR_UNAVAILABLE`,
+  `DUPLICATE`, `OTHER` (needs a note). From `BOOKED`/`ARRIVED` until the session ends. The place is
+  freed; the token is never reused.
+- **Reschedule** `{session_id, slot_start?}` from `BOOKED` only, to any open session of the clinic;
+  the old appointment becomes `CANCELLED`/`RESCHEDULED` and the new one has `rescheduled_from_id`.
+- **Sessions** now carry `status` (`CLOSED` after a leave or change left them booked: no new
+  bookings, existing ones can still move) and each slot's `available`.
+- No confirmation message yet: it arrives with M5's jobs and messaging (D16).
 
 ### Visits and prescriptions (M4)
 
