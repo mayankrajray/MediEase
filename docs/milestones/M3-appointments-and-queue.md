@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A) and in implementation |
+| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A), implemented and accepted by the developer the same day; M3-P3 designed, awaiting approval |
 | Spec | `docs/specs/appointments-and-queue.md` (Approved 2026-10-17, D1–D16) |
 | Covers | FR-APT-01..07, FR-QUE-01..05 |
 | Issue / branch / PR | #36 · `m3/36-appointments-and-queue` · one PR for the whole milestone (ADR-0011) |
@@ -13,7 +13,7 @@
 | Phase | Builds | Design |
 |---|---|---|
 | P1 | Doctor schedules, exceptions, sessions generated per clinic-local date; slot and token mode | Below |
-| P2 | Booking, reschedule, cancel under a session row lock | Below (approved) |
+| P2 | Booking, reschedule, cancel under a session row lock | Below (done) |
 | P3 | Queue state machine, transitions, walk-ins | Designed at its start |
 | P4 | Live queue (ETag polling) | Designed at its start |
 | P5 | Web: queue board, booking flow, schedule settings | Designed at its start |
@@ -177,7 +177,7 @@ Taken while implementing:
 
 ## M3-P2 — Booking, reschedule and cancel
 
-**Status: approved by the developer 17 Oct 2026 with 1A–7A (spec D10–D16).** The recommended
+**Status: approved by the developer 17 Oct 2026 with 1A–7A (spec D10–D16); implemented and accepted the same day (result at the end of this section).** The recommended
 options, marked **(rec.)**, are the ones chosen. Covers FR-APT-03 (API side), FR-APT-04, FR-APT-05, FR-APT-07; spec R3–R8, AC1, AC2.
 
 ### Concepts
@@ -304,3 +304,35 @@ make lint typecheck test && make smoke && make e2e
 | A schedule change deleting a session mid-booking | The booking holds the doctor `FOR SHARE`, and deletion needs `FOR UPDATE` plus `booked_count = 0` |
 | `booked_count` drifting from the real number of appointments | It changes only in the same transaction as the appointment row; a test compares it with a `COUNT(*)` after the concurrency runs |
 | Clinical text in `reason` | 120-character cap, a UI hint, and never logged, audited or messaged |
+### Result (17 Oct 2026)
+
+`make lint typecheck test` on the Linux clone: ruff, format, import-linter (4 contracts kept) and
+mypy (142 files) clean; API **967 tests** (56 new) at 99.11% package coverage; web lint, tsc and
+tests clean against the regenerated types; contract 0.10.0 validates and `contract-check` is
+clean. `make up` applied `0008` to the existing local database and `make smoke` passed.
+
+Concurrency, on PostgreSQL with real threads:
+- AC1 in token and slot mode: two parallel bookings of the last place or slot give one 201 and
+  one 409, and `booked_count = 1`.
+- Fifteen parallel bookings of a 12-token session: twelve win, tokens 1–12 with no gaps.
+- A booking racing a schedule change: either it wins and the session is kept `CLOSED`, or the
+  change wins and the booking gets 404. Two crossing reschedules finish without deadlock.
+- After each, `booked_count` equals the session's active appointments. The race tests passed
+  30 runs in a row.
+
+The verify steps on the stack, as the sample clinic's front desk and owner: tokens 1, 2, 3; the
+same patient again `409 APT_ALREADY_BOOKED`; cancel the second and the next booking gets token 4
+(AC2); a leave on that Monday kept the session `CLOSED` with its 3 bookings and refused a new one
+(`409 APT_SESSION_CLOSED`); rescheduling out of it to Tuesday returned 201 with
+`rescheduled_from_id`. Audit rows held IDs, mode, token and source only. The demo data was put
+back afterwards.
+
+Taken while implementing:
+- A session that no longer matches the rules, has no bookings, but is referenced by cancelled
+  appointments cannot be deleted (foreign key), so it is **retired**: status `CANCELLED`, hidden
+  from listing, and revived in place if the rules plan it again, its `next_token` carrying on.
+- A booking that waited on the doctor lock while a schedule change deleted its (unbooked) session
+  answers 404, found by the race test on its fourth run.
+- Reschedule checks the status (`BOOKED` only) before "already there", so a cancelled
+  appointment gets `APT_NOT_MODIFIABLE` rather than a validation error.
+- The patient appointment list is capped at 50 and has no cursor yet, like the patient lookup.
