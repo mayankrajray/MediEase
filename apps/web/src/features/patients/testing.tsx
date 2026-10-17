@@ -46,6 +46,10 @@ export function patient(overrides: Partial<Patient> = {}): Patient {
 
 /** The routes every workspace render needs: who is signed in, and their clinic (Kolkata). */
 export const workspaceRoutes = {
+  // The profile's appointments section (M3-P5): none yet, and no doctors to book with.
+  [`GET /api/v1/patients/${PATIENT_ID}/appointments`]: () => json(200, { items: [] }),
+  [`GET /api/v1/patients/${OTHER_ID}/appointments`]: () => json(200, { items: [] }),
+  "GET /api/v1/clinic/doctors": () => json(200, { items: [] }),
   "GET /api/v1/me": () => json(200, person([desk])),
   "GET /api/v1/clinic": () =>
     json(200, {

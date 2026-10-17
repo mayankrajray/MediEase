@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
+import { PatientAppointments } from "@/features/appointments/PatientAppointments";
 import { useClinic } from "@/features/shell/ClinicGate";
 import { formatPhone } from "@/lib/format/phone";
 
@@ -135,11 +136,13 @@ export function PatientProfile({ patientId }: { patientId: string }) {
 
       <ConsentPanel patient={patient} timeZone={clinic.timezone} onChange={show} />
 
+      <PatientAppointments patient={patient} />
+
       <section aria-labelledby="visits-heading" className="space-y-1">
         <h2 id="visits-heading" className="text-lg font-bold">
           Visits
         </h2>
-        <p className="text-slate-700">No visits yet. Visits and prescriptions appear here once appointments are set up.</p>
+        <p className="text-slate-700">No visits yet. Visits and prescriptions appear here from M4.</p>
       </section>
     </article>
   );
