@@ -112,6 +112,8 @@ export interface RequestOptions {
   readonly signal?: AbortSignal;
   /** Injected in tests; defaults to the global fetch. */
   readonly fetchImpl?: typeof fetch;
+  /** Extra request headers the contract declares, e.g. the patient page's `X-Link-View` (M4-P5). */
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 export class ApiError extends Error {
@@ -250,6 +252,7 @@ async function send(
   if (options.clinicId !== undefined) {
     headers[CLINIC_HEADER] = options.clinicId;
   }
+  Object.assign(headers, options.headers);
   if (ifNoneMatch !== undefined) {
     headers["If-None-Match"] = ifNoneMatch;
   }
