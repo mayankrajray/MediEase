@@ -139,6 +139,7 @@ describe("SignInForm", () => {
     expect(screen.getByLabelText("Email or phone number")).toHaveValue("owner@sample-clinic.example");
     const password = screen.getByLabelText("Password");
     expect(password).toHaveValue("");
+    await act(async () => {}); // the focus moves in an effect after the alert renders
     expect(password).toHaveFocus();
     expect(password).toHaveAttribute("aria-invalid", "true");
     expect(password).toHaveAccessibleDescription(/Wrong login details/);
@@ -161,6 +162,7 @@ describe("SignInForm", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Too many attempts. Try again in 14 minutes.");
     expect(alert).toHaveTextContent("Ref: test-ref");
+    await act(async () => {}); // the focus moves in an effect after the alert renders
     expect(alert).toHaveFocus();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeDisabled();
 

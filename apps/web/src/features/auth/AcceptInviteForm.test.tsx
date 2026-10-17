@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiError, json, mockApi } from "@/test/api";
@@ -161,6 +161,7 @@ describe("AcceptInviteForm", () => {
     expect(alert).toHaveTextContent("Wrong login details");
     expect(alert).toHaveTextContent("Ref: test-ref");
     expect(field).toHaveValue("");
+    await act(async () => {}); // the focus moves in an effect after the alert renders
     expect(field).toHaveFocus();
     expect(field).toHaveAttribute("aria-invalid", "true");
     expect(replace).not.toHaveBeenCalled();
