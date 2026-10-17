@@ -56,6 +56,12 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/visits/<uuid:visit_id>/complete": lambda w: f"{_visit_url(w)}/complete",
     "/api/v1/visits/<uuid:visit_id>/addenda": lambda w: f"{_visit_url(w, completed=True)}/addenda",
     "/api/v1/patients/<uuid:patient_id>/visits": lambda w: f"{_patient_url(w)}/visits",
+    "/api/v1/visits/<uuid:visit_id>/prescriptions": lambda w: f"{_visit_url(w)}/prescriptions",
+    "/api/v1/prescriptions/<uuid:rx_id>": lambda w: _prescription_url(w),
+    "/api/v1/prescriptions/<uuid:rx_id>/issue": lambda w: f"{_prescription_url(w)}/issue",
+    "/api/v1/prescriptions/<uuid:rx_id>/revise": lambda w: (
+        f"{_prescription_url(w, issued=True)}/revise"
+    ),
 }
 
 # Clinical writes need CLINICAL_WRITE and the visit's doctor (prescriptions spec §2), so these
@@ -63,6 +69,9 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
 AS_DOCTOR = {
     "/api/v1/visits/<uuid:visit_id>/complete",
     "/api/v1/visits/<uuid:visit_id>/addenda",
+    "/api/v1/visits/<uuid:visit_id>/prescriptions",
+    "/api/v1/prescriptions/<uuid:rx_id>/issue",
+    "/api/v1/prescriptions/<uuid:rx_id>/revise",
 }
 
 # Methods a cross-tenant case must use (default GET), with the body to send: fixed, or built
@@ -81,6 +90,9 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
     "/api/v1/clinic/staff/<uuid:membership_id>": ("PATCH", {"role": "DOCTOR"}),
     "/api/v1/visits/<uuid:visit_id>/complete": ("POST", {}),
     "/api/v1/visits/<uuid:visit_id>/addenda": ("POST", {"body": "seen again"}),
+    "/api/v1/visits/<uuid:visit_id>/prescriptions": ("POST", {}),
+    "/api/v1/prescriptions/<uuid:rx_id>/issue": ("POST", {"revision": 2}),
+    "/api/v1/prescriptions/<uuid:rx_id>/revise": ("POST", {}),
     "/api/v1/patients/<uuid:patient_id>/consent": ("PUT", {"whatsapp": True, "sms": False}),
     "/api/v1/patients/<uuid:patient_id>/opt-out": ("POST", {}),
     "/api/v1/patients/<uuid:patient_id>/opt-in": ("POST", {"whatsapp": True, "sms": False}),
@@ -179,6 +191,24 @@ def _visit_url(world: World, *, completed: bool = False) -> str:
     url = f"/api/v1/visits/{started.get_json()['id']}"
     if completed:
         assert doctor.post(f"{url}/complete", headers=doctor_headers).status_code == 200
+    return url
+
+
+def _prescription_url(world: World, *, issued: bool = False) -> str:
+    """Clinic B's draft (one medicine, revision 2), or issued, by B's doctor."""
+    visit = _visit_url(world)
+    doctor = world.client_for(world.b.doctor_user)
+    csrf = doctor.get_cookie("me_csrf", path="/")
+    assert csrf is not None
+    headers = {"X-CSRF-Token": csrf.value}
+    created = doctor.post(f"{visit}/prescriptions", headers=headers)
+    assert created.status_code == 201, created.get_json()
+    url = f"/api/v1/prescriptions/{created.get_json()['id']}"
+    body = {"revision": 1, "items": [{"medicine_name": "Tab Y"}]}
+    assert doctor.put(url, json=body, headers=headers).status_code == 200
+    if issued:
+        resp = doctor.post(f"{url}/issue", json={"revision": 2}, headers=headers)
+        assert resp.status_code == 200, resp.get_json()
     return url
 
 
