@@ -7,6 +7,8 @@ password:
   It also gets six synthetic patients, once (while it has none): a family of three sharing one
   phone, a child registered with a guardian, an adult known only by age, and a Hindi-speaking
   patient, so the patient screens can be tried by hand;
+- every seeded doctor gets a weekly schedule, once (while they have none): Monday to Saturday
+  10:00-13:00 with 15-minute slots and 12 tokens, so sessions can be tried in either mode (M3);
 - `sample-clinic-two`: its own owner, plus the *same* doctor user as a second
   membership, so one person belongs to two clinics and the web app's clinic
   switcher can be tried (spec: "Same phone used by a doctor in two clinics").
@@ -29,7 +31,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 from mediease_api.bootstrap import SeedDependencies, build_seed_dependencies
 from mediease_api.config.settings import AppEnv, load_settings
@@ -38,6 +40,7 @@ from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
 from mediease_api.domain.identity.user import User
 from mediease_api.domain.patients.patient import Language, Patient, Sex
+from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.shared.time import local_date
@@ -118,6 +121,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     password_hash = deps.hasher.hash(args.password)
     created: list[_ClinicSpec] = []
     patients_added = 0
+    schedules_added = 0
     with deps.uow as uow:
         users: dict[str, User] = {}
         _ensure_user(deps, uow, users, _OPS, password_hash)
@@ -128,6 +132,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             _create_clinic(deps, uow, users, spec, password_hash)
             created.append(spec)
         patients_added = _seed_patients(deps, uow, users)
+        schedules_added = _seed_schedules(deps, uow)
         uow.commit()
 
     for spec in created:
@@ -135,6 +140,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"seed: created '{spec.slug}' with users: {emails}")
     if patients_added:
         print(f"seed: added {patients_added} synthetic patients to '{DEMO_SLUG}'")
+    if schedules_added:
+        print(f"seed: gave {schedules_added} doctors a Monday-Saturday 10:00-13:00 schedule")
     if created:
         print(f"seed: ops user: {_OPS.email}")
         print("seed: sign in with any of them and the demo password (see docs/RUNBOOK.md §1)")
@@ -276,6 +283,40 @@ def _seed_patients(deps: SeedDependencies, uow: UnitOfWork, users: dict[str, Use
         )
     uow.clinics.update(clinic)
     return len(_PATIENTS)
+
+
+# Monday to Saturday mornings; both values present, so the clinic may switch modes (R19).
+_SEED_BLOCK = BlockShape(time(10), time(13), slot_minutes=15, capacity=12)
+
+
+def _seed_schedules(deps: SeedDependencies, uow: UnitOfWork) -> int:
+    """A weekly schedule for each seeded doctor who has none yet (M3-P1)."""
+    now = deps.clock.now()
+    added = 0
+    for spec in _CLINICS:
+        clinic = uow.clinics.get_by_slug(spec.slug)
+        if clinic is None:
+            continue
+        staff = uow.tenant(clinic.id)
+        today = local_date(now, clinic.timezone)
+        for doctor in staff.doctors.list():
+            if staff.schedules.list_for_doctor(doctor.id, valid_since=today):
+                continue
+            for weekday in range(6):
+                staff.schedules.add(
+                    WeeklyBlock.create(
+                        id=deps.ids.new_id(),
+                        clinic_id=clinic.id,
+                        doctor_id=doctor.id,
+                        weekday=weekday,
+                        shape=_SEED_BLOCK,
+                        mode=clinic.booking_mode,
+                        valid_from=today,
+                        now=now,
+                    )
+                )
+            added += 1
+    return added
 
 
 if __name__ == "__main__":

@@ -54,7 +54,8 @@ demo password above (local only; `--password` overrides it):
 | `sample-clinic-two` | `owner@sample-clinic-two.example`, and `doctor@sample-clinic.example` again as a second membership |
 | (no clinic) | `ops@mediease.example` |
 
-`sample-clinic` also gets six synthetic patients, once (while it has none): Asha, Arun and Meera Rao
+Every seeded doctor gets a Monday–Saturday 10:00–13:00 schedule (15-minute slots, 12 tokens), once,
+so `GET /api/v1/sessions?date=<a weekday>` has sessions to show. `sample-clinic` also gets six synthetic patients, once (while it has none): Asha, Arun and Meera Rao
 share the phone `+919000000101` (Meera is 6 and registered with Asha as guardian), Bina Shah is
 known only by age, Chetan Verma prefers Hindi, and Deepa Nair is an adult on her own number. Try
 `GET /api/v1/patients?q=9000000101` or register a new person on that number to see the duplicate
@@ -160,7 +161,19 @@ curl -s -b jar -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/js
    invite them again: the new link retires the old one.
 4. The owner invites the doctor and front desk themselves
    (`POST /api/v1/clinic/staff`), or ops does it with the same body as above.
-5. Set booking mode (slots/tokens) and schedules with the doctor.
+5. Agree the booking mode (slots or tokens, `booking_mode` on `POST /ops/clinics`; `TOKENS` by default)
+   and each doctor's weekly hours, then set them (M3-P1). Times are the clinic's wall clock; an end
+   before the start is the next day, up to 12 hours a block. Give each block both `slot_minutes` and
+   `capacity` if the clinic may switch modes later:
+
+```bash
+curl -s -b jar -X PUT -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+  -d '{"blocks":[{"weekday":0,"start_time":"10:00","end_time":"13:00","slot_minutes":15,"capacity":12}]}' \
+  "$API/api/v1/ops/clinics/$CLINIC/doctors/$DOCTOR/schedule"   # 200; weekday 0 = Monday
+```
+
+   `422 SCH_INVALID_BLOCK` names the block (`details.index`) and the reason; `409 SCH_OVERLAP` names the
+   pair. Leave and extra sessions are the owner's (`/api/v1/clinic/doctors/{id}/schedule-exceptions`).
 6. Import patients (M2-P4). Ask the clinic to save their list as **CSV UTF-8** with exactly these
    columns (any order): `name, phone, sex, dob_or_age, guardian_name, language`; a template with
    synthetic rows is `scripts/fixtures/patients-import-sample.csv`. Dry-run first (the default),
