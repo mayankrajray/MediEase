@@ -18,13 +18,21 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.prescriptions.errors import DoctorIncomplete, Empty, NotDraft, Stale
-from mediease_api.domain.prescriptions.vocabulary import Frequency, Preparation, Storage, Timing
+from mediease_api.domain.prescriptions.vocabulary import (
+    Frequency,
+    Preparation,
+    PreparationCode,
+    Storage,
+    StorageCode,
+    Timing,
+)
 from mediease_api.domain.shared.errors import InvalidValue
 from mediease_api.domain.shared.text import optional_text, required_text
 from mediease_api.domain.shared.time import require_utc
@@ -79,6 +87,8 @@ class PrescriptionItem:
     storage: tuple[Storage, ...] = ()
     warnings: str | None = None
     notes: str | None = None
+    # M4-P3: the doctor's favourite this line came from (counted at issue, decision 3A).
+    favourite_id: UUID | None = None
 
     @classmethod
     def create(
@@ -99,8 +109,10 @@ class PrescriptionItem:
         storage: Sequence[Storage] = (),
         warnings: str | None = None,
         notes: str | None = None,
+        favourite_id: UUID | None = None,
+        at: str | None = None,
     ) -> PrescriptionItem:
-        at = f"items.{position - 1}"
+        at = at or f"items.{position - 1}"
         custom = optional_text(frequency_text, f"{at}.frequency_text", max_length=SHORT_MAX)
         if (frequency is Frequency.CUSTOM) != (custom is not None):
             raise InvalidValue(f"{at}.frequency_text", "is required for CUSTOM and only then")
@@ -130,6 +142,7 @@ class PrescriptionItem:
             storage=tuple(storage),
             warnings=optional_text(warnings, f"{at}.warnings", max_length=WARNINGS_MAX),
             notes=optional_text(notes, f"{at}.notes", max_length=ITEM_NOTES_MAX),
+            favourite_id=favourite_id,
         )
 
 
@@ -277,6 +290,8 @@ class Prescription:
     created_by: UUID
     created_at: datetime
     updated_at: datetime
+    # M4-P3: the doctor's template the body came from (counted at issue, decision 3A).
+    template_id: UUID | None = None
 
     # --- Creating -----------------------------------------------------------------------------
 
@@ -337,6 +352,7 @@ class Prescription:
             revision=1,
             items=tuple(replace(item, id=new_item_id()) for item in issued.items),
             advice=issued.advice,
+            template_id=issued.template_id,
             follow_up_date=issued.follow_up_date,
             language=None,
             issued_at=None,
@@ -373,6 +389,7 @@ class Prescription:
         seen_revision: int,
         today: date,
         now: datetime,
+        template_id: UUID | None = None,
     ) -> None:
         """Decision 3A: the whole draft at once, from the revision it was loaded at."""
         now = require_utc(now, "now")
@@ -386,6 +403,7 @@ class Prescription:
         self.items = tuple(items)
         self.advice = advice
         self.follow_up_date = follow_up_date
+        self.template_id = template_id
         self.revision += 1
         self.updated_at = now
 
@@ -442,6 +460,51 @@ def _check_follow_up(follow_up: date | None, today: date) -> None:
         raise InvalidValue("follow_up_date", "must be after today")
     if follow_up > today + timedelta(days=FOLLOW_UP_MAX_DAYS):
         raise InvalidValue("follow_up_date", f"must be within {FOLLOW_UP_MAX_DAYS} days")
+
+
+def item_json(item: PrescriptionItem) -> dict[str, object]:
+    """A line's body without its identity, as favourites and templates store it (M4-P3)."""
+    return {
+        "medicine_name": item.medicine_name,
+        "form": item.form,
+        "strength": item.strength,
+        "dose": item.dose,
+        "frequency": item.frequency.value if item.frequency else None,
+        "frequency_text": item.frequency_text,
+        "timing": item.timing.value if item.timing else None,
+        "duration_days": item.duration_days,
+        "quantity": item.quantity,
+        "preparation": [p.as_json() for p in item.preparation],
+        "storage": [s.as_json() for s in item.storage],
+        "warnings": item.warnings,
+        "notes": item.notes,
+    }
+
+
+def item_from_json(data: dict[str, Any], *, id: UUID, position: int) -> PrescriptionItem:
+    """The inverse of ``item_json`` for stored bodies (already validated when saved)."""
+    return PrescriptionItem(
+        id=id,
+        position=position,
+        medicine_name=data["medicine_name"],
+        form=data.get("form"),
+        strength=data.get("strength"),
+        dose=data.get("dose"),
+        frequency=Frequency(data["frequency"]) if data.get("frequency") else None,
+        frequency_text=data.get("frequency_text"),
+        timing=Timing(data["timing"]) if data.get("timing") else None,
+        duration_days=data.get("duration_days"),
+        quantity=data.get("quantity"),
+        preparation=tuple(
+            Preparation(PreparationCode(p["code"]), p.get("text"))
+            for p in data.get("preparation", [])
+        ),
+        storage=tuple(
+            Storage(StorageCode(s["code"]), s.get("days")) for s in data.get("storage", [])
+        ),
+        warnings=data.get("warnings"),
+        notes=data.get("notes"),
+    )
 
 
 def latest_issued(chain: Sequence[Prescription]) -> Prescription | None:
