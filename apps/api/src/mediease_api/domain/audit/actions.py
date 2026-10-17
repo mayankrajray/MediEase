@@ -46,3 +46,8 @@ class AuditAction(StrEnum):
     SCHEDULE_CHANGED = "schedule.changed"
     SCHEDULE_EXCEPTION_ADDED = "schedule.exception_added"
     SCHEDULE_EXCEPTION_REMOVED = "schedule.exception_removed"
+    # M3-P2: bookings. Metadata: IDs, mode, token or slot, source and cancel reason; never a name,
+    # the appointment's reason or the cancel note.
+    APPOINTMENT_BOOKED = "appointment.booked"
+    APPOINTMENT_CANCELLED = "appointment.cancelled"
+    APPOINTMENT_RESCHEDULED = "appointment.rescheduled"
