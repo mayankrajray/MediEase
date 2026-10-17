@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M3 — Appointments and daily queue** (issue #36, branch `m3/36-appointments-and-queue`, one PR for the milestone) |
-| Active phase | **M3-P1 — approved 17 Oct 2026, in implementation:** doctor schedules (overnight blocks up to 12 h), whole-day leave and extra sessions, sessions generated per clinic-local date in slot or token mode. M2 merged in PR #22 |
+| Active phase | **M3-P1 — implemented 17 Oct 2026, awaiting the developer's confirmation:** doctor schedules (overnight blocks up to 12 h, overlap across midnight and the week), whole-day leave and extra sessions that never drop a booking, sessions generated lazily per clinic-local date in slot or token mode, `SCHEDULES_MANAGE`, migration `0007`, contract 0.9.0. **Next: M3-P2** (booking, reschedule, cancel), designed once P1 is confirmed |
 | Design notes | `docs/milestones/M3-appointments-and-queue.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M3 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |

@@ -14,6 +14,22 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M3-P1 (#36): doctor schedules and sessions (FR-APT-01, FR-APT-02; spec appointments R1-R4,
+  R14-R20). The owner sets a doctor's weekly blocks with `PUT /api/v1/clinic/doctors/{id}/schedule`
+  (ops during onboarding with `PUT /api/v1/ops/clinics/{id}/doctors/{id}/schedule`). Times are the
+  clinic's wall clock. An end at or before the start is the next day, and a block lasts 15
+  minutes to 12 hours, so 13:00-10:00 is `422 SCH_INVALID_BLOCK` while 23:00-01:00 is accepted.
+  Overlap is checked across midnight and from Sunday into Monday (`409 SCH_OVERLAP`).
+  Whole-day leave and extra sessions are added and removed under `.../schedule-exceptions`.
+  `GET /api/v1/sessions?date=` generates a date's sessions the first time it is read. It is
+  idempotent: concurrent reads create one set, and a session belongs to the date it starts on. It
+  lists slots in slot mode and the next token in token mode.
+  No change drops a booking: affected future sessions without bookings are removed, and booked ones
+  come back as `kept_sessions`. Clinics have a `booking_mode` (`TOKENS` by default). Changing it is
+  refused while a block lacks the new mode's value (`409 SCH_MODE_INCOMPATIBLE`).
+  New permission `SCHEDULES_MANAGE` (owners), audit actions `schedule.changed`,
+  `schedule.exception_added` and `schedule.exception_removed`, migration `0007`, contract 0.9.0.
+  `make seed` gives every seeded doctor a Monday-Saturday 10:00-13:00 schedule.
 - M2-P5 (#21): the patient screens (FR-PAT-01..06, FR-MSG-05). A header search (`/` focuses it)
   looks patients up by phone, code or name start, one request per pause in typing, with masked
   phones in the list; `/patients?q=` lists the matches. The Register patient drawer shows the
