@@ -9,3 +9,6 @@ traces kept on failure). This folder is not in the web image (`.dockerignore`).
 | Spec | Journey | From |
 |---|---|---|
 | `patients-duplicate-phone.spec.ts` | Register on a family's phone → use the existing patient → register a new family member → find them | M2-P5 |
+| `booking-three-interactions.spec.ts` | Book → the patient → Confirm from the queue, at most 3 interactions (AC6) | M3-P5 |
+| `queue-two-browsers.spec.ts` | Desk marks a patient arrived; the doctor's board shows it within one poll (AC4) | M3-P5 |
+| `live-queue-etag.spec.ts` | A repeat queue request with its ETag is a 304 through the web origin (R12) | M3-P4 |
