@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from datetime import date
 
 import pytest
 
@@ -181,3 +182,21 @@ def test_seed_gives_patients_to_a_demo_clinic_seeded_before_patients_existed(
     with uow_factory() as uow:
         clinic = uow.clinics.get_by_slug(seed.DEMO_SLUG)
         assert clinic is not None and uow.tenant(clinic.id).patients.count() == 6
+
+
+def test_seed_gives_every_seeded_doctor_a_weekly_schedule_once(
+    seed_env: dict[str, str], uow_factory: UowFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert seed.main([]) == 0
+    assert "gave 2 doctors a Monday-Saturday 10:00-13:00 schedule" in capsys.readouterr().out
+    assert seed.main([]) == 0
+    assert "gave" not in capsys.readouterr().out
+
+    with uow_factory() as uow:
+        clinic = uow.clinics.get_by_slug(seed.DEMO_SLUG)
+        assert clinic is not None
+        staff = uow.tenant(clinic.id)
+        [doctor] = staff.doctors.list()
+        blocks = staff.schedules.list_for_doctor(doctor.id, valid_since=date(2026, 1, 1))
+        assert [b.weekday for b in blocks] == [0, 1, 2, 3, 4, 5]
+        assert {(b.shape.slot_minutes, b.shape.capacity) for b in blocks} == {(15, 12)}
