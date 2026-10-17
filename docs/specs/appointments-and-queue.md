@@ -4,8 +4,8 @@
 |---|---|
 | Requirements | FR-APT-01..07, FR-QUE-01..05 |
 | Milestone / phases | M3 / P1–P5 |
-| Status | Approved (developer sign-off 2026-10-17: decisions D1–D9 in §12) |
-| Last updated | 2026-10-17 (approved; R1, R3, R4 made precise and R14–R20 added for schedules, exceptions and session generation) |
+| Status | Approved (developer sign-off 2026-10-17: decisions D1–D9 for M3-P1 and D10–D16 for M3-P2 in §12) |
+| Last updated | 2026-10-17 (approved; R1, R3, R4 made precise and R14–R20 added for schedules, exceptions and session generation; M3-P2 decisions D10–D16, R5's confirmation job from M5) |
 
 ## 1. Context
 Seven of fourteen clinics book through WhatsApp and phone with no central view (A7–A13).
@@ -53,7 +53,8 @@ stateDiagram-v2
   a session, including after cancellation.
 - **R5** Booking locks the session row (`SELECT … FOR UPDATE`), checks status, capacity and slot
   availability, inserts the appointment, increments `booked_count`, writes status history, audit
-  and (if consented) a `send_booking_confirmation` job — all in one transaction.
+  and (if consented, from M5 when the jobs table and messaging port exist, D16) a
+  `send_booking_confirmation` job — all in one transaction.
 - **R6** Booking in the past → `APT_IN_PAST`; outside sessions → `APT_OUTSIDE_SCHEDULE`;
   full → `APT_SESSION_FULL`; slot taken → `APT_SLOT_TAKEN`; closed → `APT_SESSION_CLOSED`.
 - **R7** Cancel requires a reason (enum + optional note) and decrements `booked_count`.
@@ -166,3 +167,20 @@ Resolved at approval (2026-10-17):
 - **D8** `LEAVE` is whole-day only in M3 (R17).
 - **D9** Schedule routes live under the doctor resource, `/api/v1/clinic/doctors/{id}/schedule`, like
   the other doctor endpoints; sessions are `/api/v1/sessions`.
+Resolved at M3-P2 approval (2026-10-17):
+- **D10** A booked session kept by a change that no longer matches the rules is `CLOSED`: its
+  bookings stay and may be cancelled or rescheduled away; new bookings get `APT_SESSION_CLOSED`. A
+  later change that matches it again reopens it.
+- **D11** A booked session whose block changed only in capacity (same start, end, mode and slot
+  length) is adjusted in place when the new capacity is at least `booked_count`; otherwise D10.
+- **D12** Token mode books until the session ends; slot mode until the slot ends. Earlier is
+  `APT_IN_PAST`.
+- **D13** One active appointment per patient per session (`APT_ALREADY_BOOKED`, a partial unique
+  index); the same patient with two doctors on one day is allowed.
+- **D14** Cancel reasons: `PATIENT_REQUEST`, `CLINIC_REQUEST`, `DOCTOR_UNAVAILABLE`, `DUPLICATE`,
+  `OTHER` (needs a note), plus an optional note of up to 200 characters; `RESCHEDULED` is set by
+  reschedule only. Cancel is allowed from `BOOKED` and `ARRIVED` until the session ends.
+- **D15** Reschedule is from `BOOKED` only, to any open session of the clinic (another doctor or
+  another slot of the same session); the source carries over; a `CLOSED` source session is fine.
+- **D16** The booking confirmation job (R5, FR-APT-06) arrives with M5's jobs table and messaging
+  port; M3 writes none.

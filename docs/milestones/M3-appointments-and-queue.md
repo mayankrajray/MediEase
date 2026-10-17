@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) and implemented the same day, awaiting the developer's confirmation |
-| Spec | `docs/specs/appointments-and-queue.md` (Approved 2026-10-17, D1–D9) |
+| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A) and in implementation |
+| Spec | `docs/specs/appointments-and-queue.md` (Approved 2026-10-17, D1–D16) |
 | Covers | FR-APT-01..07, FR-QUE-01..05 |
 | Issue / branch / PR | #36 · `m3/36-appointments-and-queue` · one PR for the whole milestone (ADR-0011) |
 | Exit criterion | Front desk books in ≤ 3 interactions; the concurrent double-booking test passes; the queue refreshes on every open screen within 5 s |
@@ -13,7 +13,7 @@
 | Phase | Builds | Design |
 |---|---|---|
 | P1 | Doctor schedules, exceptions, sessions generated per clinic-local date; slot and token mode | Below |
-| P2 | Booking, reschedule, cancel under a session row lock | Designed at its start |
+| P2 | Booking, reschedule, cancel under a session row lock | Below (approved) |
 | P3 | Queue state machine, transitions, walk-ins | Designed at its start |
 | P4 | Live queue (ETag polling) | Designed at its start |
 | P5 | Web: queue board, booking flow, schedule settings | Designed at its start |
@@ -22,7 +22,7 @@
 
 ## M3-P1 — Doctor schedules, exceptions and sessions
 
-**Status: approved by the developer 17 Oct 2026 with 1A–6A and three refinements; implemented the same day, awaiting confirmation (result at the end of this section).** (a maximum block
+**Status: approved by the developer 17 Oct 2026 with 1A–6A and three refinements; implemented the same day and confirmed by the developer (result at the end of this section).** (a maximum block
 length so a daytime inversion still fails; cross-day overlap; leave on already-generated dates).
 Covers FR-APT-01, FR-APT-02; spec R1–R4 (the token counter's home), R14–R20, AC5.
 
@@ -171,3 +171,136 @@ Taken while implementing:
 - The booking-mode change lives in `UpdateClinic` with the other clinic settings, and is audited
   as `clinic.updated` with the field name.
 - Slots carry only their times in P1; availability per slot arrives with bookings in P2.
+
+
+---
+
+## M3-P2 — Booking, reschedule and cancel
+
+**Status: approved by the developer 17 Oct 2026 with 1A–7A (spec D10–D16).** The recommended
+options, marked **(rec.)**, are the ones chosen. Covers FR-APT-03 (API side), FR-APT-04, FR-APT-05, FR-APT-07; spec R3–R8, AC1, AC2.
+
+### Concepts
+
+1. **An appointment attaches to a session.** In slot mode it holds one `slot_start`; in token mode
+   it takes the session's `next_token`, which only ever goes up (R4, AC2).
+2. **One lock order for everything that touches a session.** Booking, cancel and reschedule lock
+   the doctor row `FOR SHARE` (the lock generation already takes), then the session row
+   `FOR UPDATE`. A schedule change holds the doctor `FOR UPDATE`, so it can never delete a session
+   whose `booked_count` is being raised (R20). Reschedule locks its two doctors in ID order, then its
+   two sessions in ID order, so two crossing reschedules cannot deadlock.
+3. **The database is the last word.** The row lock serialises bookings. The partial unique indexes
+   and `booked_count <= capacity` stop a double booking even if the code were wrong (FR-APT-04).
+4. **Cancel frees the place, never the token.** Cancelling lowers `booked_count` and frees the slot
+   for another booking. `next_token` is unchanged (AC2).
+5. **History is rows, not overwrites.** Every status change appends to `appointment_status_history`,
+   and a reschedule is a cancelled appointment plus a new one pointing at it (R8, FR-APT-05).
+
+### Decisions for you
+
+| # | Question | Options |
+|---|---|---|
+| 1 | Sessions P1 kept because they were booked, but that no longer match the rules (leave, a changed block) | **A (rec.)** Reconcile marks them `CLOSED`: existing bookings stay and can be cancelled or rescheduled away, new bookings get `409 APT_SESSION_CLOSED`, and a later change that matches them again reopens them. **B** Leave them `OPEN`, so a leave day still accepts bookings. |
+| 2 | A booked session whose block changed only in capacity (e.g. 12 → 20 tokens tomorrow) | **A (rec.)** Adjust it in place when the start, end, mode and slot length are unchanged and the new capacity ≥ `booked_count`; otherwise close it as in 1A. **B** Always close it, so the extra places appear only after its bookings are moved. |
+| 3 | Until when can a session be booked? | **A (rec.)** Token mode: until the session ends (desks hand out tokens during the session). Slot mode: until the slot ends. Earlier → `422 APT_IN_PAST`. **B** Only before the session or slot starts. |
+| 4 | The same patient twice in one session | **A (rec.)** Refused: `409 APT_ALREADY_BOOKED` with the existing appointment's ID, backed by a partial unique index. This also covers a double-click. The same patient with two doctors on one day is allowed. **B** Allowed. |
+| 5 | Cancel reasons (R7) | **A (rec.)** The enum `PATIENT_REQUEST`, `CLINIC_REQUEST`, `DOCTOR_UNAVAILABLE`, `DUPLICATE`, `OTHER`, plus an optional note of up to 200 characters (`OTHER` needs the note). `RESCHEDULED` is set only by reschedule. Allowed from `BOOKED` and `ARRIVED` until the session ends; after that the right status is `NO_SHOW` (P3) → `409 APT_NOT_MODIFIABLE`. **B** Free text only. |
+| 6 | Reschedule scope | **A (rec.)** From `BOOKED` only, to any open session of the clinic, including another doctor's or the same session's other slot. The source carries over, and a `CLOSED` source session is fine, since 1A relies on it. **B** The same doctor only. |
+| 7 | Booking confirmation (R5 says a `send_booking_confirmation` job "if consented") | **A (rec.)** Deferred to M5, where the jobs table and the messaging port arrive. The spec gains "from M5", and P2 writes no job. **B** Add the jobs table now. |
+
+Fixed by the spec rather than asked:
+- Staff choose the source from `FRONT_DESK` (the default), `PHONE` or `WHATSAPP`. `WALK_IN` comes
+  with P3's walk-in route, and `PUBLIC_PAGE` with the public booking page (FR-APT-07).
+- Opted-out patients can still be booked, because opt-out affects only messages.
+- Every role books (`APPOINTMENTS_MANAGE`, spec §2).
+
+### Data (migration `0008`, expand-only)
+
+| Table | Columns (tenant tables carry `clinic_id` + FK) | Constraints |
+|---|---|---|
+| `appointments` | `session_id`, `doctor_id`, `patient_id`, `slot_start timestamptz null`, `token_number smallint null`, `status`, `source`, `reason text null`, `cancel_reason null`, `cancel_note null`, `cancelled_at null`, `rescheduled_from_id null` (self FK), `arrived_at`, `started_at`, `completed_at` (P3), `created_by`, timestamps | exactly one of `slot_start` / `token_number`; partial unique `(session_id, slot_start) WHERE status <> 'CANCELLED'`; unique `(session_id, token_number)` (never reused); partial unique `(session_id, patient_id) WHERE status <> 'CANCELLED'` (4A); `cancel_reason` set ⇔ `CANCELLED`; indexes `(clinic_id, doctor_id, status)`, `(clinic_id, patient_id, created_at desc)` |
+| `appointment_status_history` | `appointment_id`, `from_status null`, `to_status`, `changed_by`, `changed_at`, `request_id` | append-only, like `audit_events` |
+
+`reason` is a short non-clinical note of up to 120 characters ("follow-up"). The screen says so,
+and it never appears in logs, audit rows or messages.
+
+### API (contract 0.10.0)
+
+| Method | Path | Behaviour |
+|---|---|---|
+| POST | `/api/v1/appointments` | `{session_id, patient_id, slot_start?, source?, reason?}`. `slot_start` is required in slot mode and refused in token mode. Returns 201 with the appointment, including its `token_number` or `slot_start` (R5, R6) |
+| GET | `/api/v1/appointments/{id}` | One appointment with its status history |
+| GET | `/api/v1/patients/{id}/appointments` | The patient's appointments, newest first, paginated like the patient list (FR-APT-05 history) |
+| POST | `/api/v1/appointments/{id}/cancel` | `{reason, note?}` (R7) |
+| POST | `/api/v1/appointments/{id}/reschedule` | `{session_id, slot_start?}`. Returns 201 with the new appointment, which carries `rescheduled_from_id` (R8) |
+| GET | `/api/v1/sessions` | Unchanged route. Each slot gains `available`, and each session its `status` (`CLOSED` per 1A) |
+
+All routes need `APPOINTMENTS_MANAGE`; an appointment, session or patient from another clinic is
+404.
+
+New error code: `APT_ALREADY_BOOKED` (409). P2 starts raising the codes ERRORS.md already lists:
+`APT_SLOT_TAKEN`, `APT_SESSION_FULL`, `APT_SESSION_CLOSED`, `APT_OUTSIDE_SCHEDULE` (a `slot_start`
+off the session's grid), `APT_IN_PAST` and `APT_NOT_MODIFIABLE`.
+
+Audit rows:
+- `appointment.booked`, `appointment.cancelled` and `appointment.rescheduled`.
+- Entity: the appointment.
+- Metadata: session, doctor, patient ID, mode, token or slot, source and cancel reason.
+- Never the patient's name, the `reason` or the `cancel_note`.
+
+### Files
+
+| Layer | Files |
+|---|---|
+| Domain | `appointments/{appointment,errors,status}.py` (booking against a `Session`, cancel, reschedule); `scheduling/sessions.py` (`book`/`release` on `Session`; reconcile closes, reopens and adjusts per 1A/2A); `audit/actions.py` (+3) |
+| Ports / adapters | `AppointmentRepository`, `AppointmentHistoryRepository`; `SessionRepository.get(…, lock=)` and `update`; models, repositories, unit of work; migration `0008` |
+| Application | `appointments/{book,cancel,reschedule,queries,views}.py` |
+| Delivery | `http/appointments.py` (new blueprint), `http/patients.py` (history route), `bodies.py`, `errors.py`, `bootstrap.py` |
+| Contract / docs | `openapi.yaml` 0.10.0 + web types; `API.md`, `ERRORS.md`, `DATA_MODEL.md`, `RUNBOOK.md` (§1 seed note if bookings are seeded), CHANGELOG; spec R5 "from M5" (7A) |
+| Seed | none: bookings are made by hand on the seeded schedule |
+
+### Tests
+
+- **Domain:**
+  - Slot grid alignment; full and taken detection; the token sequence across cancellations (AC2).
+  - The past and in-session rules (3A).
+  - Cancel and reschedule from each status.
+  - The reconcile close, reopen and adjust rules (1A, 2A).
+- **PostgreSQL:**
+  - AC1: capacity 1 and two threads booking at once give exactly one 201 and one 409, and
+    `booked_count = 1`, in slot and in token mode.
+  - Twenty threads booking a 12-token session end with 12 bookings, tokens 1–12 and no gaps.
+  - A booking racing a schedule change: either the booking wins and the session is kept, or the
+    change wins and the booking gets 404 or `APT_SESSION_CLOSED`. A booking is never lost.
+  - Two crossing reschedules finish without deadlock.
+  - The constraints refuse bad rows; the migration runs up and down.
+- **HTTP:**
+  - Every route and error code.
+  - A leave after a booking closes the session, so a second booking there is refused.
+  - Rescheduling out of a closed session; the patient history route.
+  - Audit rows without names.
+- **Tenancy:** the new tables in the repository guard and the new routes in the HTTP guard.
+- **Contract:** every operation.
+
+### Verify
+
+```bash
+make up && make seed
+# as desk@sample-clinic.example, a seeded TOKENS session next Monday, Asha Rao's patient id:
+#   POST /api/v1/appointments {session_id, patient_id}            -> 201, token_number 1
+#   the same again                                                 -> 409 APT_ALREADY_BOOKED
+#   book two more patients, cancel the second, book a fourth      -> token 4 (AC2)
+#   as owner: leave on that Monday                                 -> kept_sessions lists it;
+#   GET /sessions shows it CLOSED; a new booking there             -> 409 APT_SESSION_CLOSED
+#   POST /appointments/{id}/reschedule to Tuesday's session        -> 201, rescheduled_from_id set
+make lint typecheck test && make smoke && make e2e
+```
+
+### Risks
+
+| Risk | Mitigation |
+|---|---|
+| Deadlocks between booking, reschedule and schedule changes | One lock order (doctor, then session, each set in ID order); a crossing-reschedule test |
+| A schedule change deleting a session mid-booking | The booking holds the doctor `FOR SHARE`, and deletion needs `FOR UPDATE` plus `booked_count = 0` |
+| `booked_count` drifting from the real number of appointments | It changes only in the same transaction as the appointment row; a test compares it with a `COUNT(*)` after the concurrency runs |
+| Clinical text in `reason` | 120-character cap, a UI hint, and never logged, audited or messaged |
