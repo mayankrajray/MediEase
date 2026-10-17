@@ -19,6 +19,7 @@ from werkzeug.test import TestResponse
 
 from mediease_api.delivery.http.access import Access, policy_of
 from tests.conftest import World
+from tests.sessions_now import running_session
 
 # A date well inside the 180-day horizon whatever day the suite runs (M3-P1 exceptions).
 _FAR_DATE = (date.today() + timedelta(days=30)).isoformat()
@@ -48,6 +49,9 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
         f"{_appointment_url(w)}/reschedule"
     ),
     "/api/v1/patients/<uuid:patient_id>/appointments": lambda w: f"{_patient_url(w)}/appointments",
+    "/api/v1/appointments/<uuid:appointment_id>/transitions": lambda w: (
+        f"{_appointment_url(w, today=True)}/transitions"
+    ),
 }
 
 # Methods a cross-tenant case must use (default GET), with the body to send: fixed, or built
@@ -55,6 +59,10 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
 Body = dict[str, object] | Callable[[World], dict[str, object]]
 CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
     "/api/v1/appointments/<uuid:appointment_id>/cancel": ("POST", {"reason": "PATIENT_REQUEST"}),
+    "/api/v1/appointments/<uuid:appointment_id>/transitions": (
+        "POST",
+        {"from": "BOOKED", "to": "ARRIVED"},
+    ),
     "/api/v1/appointments/<uuid:appointment_id>/reschedule": (
         "POST",
         lambda w: {"session_id": _session_of_b(w, days=32)},
@@ -119,13 +127,17 @@ def _session_of_b(world: World, *, days: int) -> str:
     return str(sessions.get_json()["items"][0]["id"])
 
 
-def _appointment_url(world: World) -> str:
+def _appointment_url(world: World, *, today: bool = False) -> str:
     """Clinic B's booked appointment for its own patient, which clinic A must not reach."""
     client, headers = _owner_of_b(world)
     patient_id = _patient_url(world).rsplit("/", 1)[1]
+    # Today's queue needs a session running now (tests/sessions_now.py).
+    session_id = (
+        running_session(client, world.b.doctor.id)["id"] if today else _session_of_b(world, days=30)
+    )
     booked = client.post(
         "/api/v1/appointments",
-        json={"session_id": _session_of_b(world, days=30), "patient_id": patient_id},
+        json={"session_id": session_id, "patient_id": patient_id},
         headers=headers,
     )
     assert booked.status_code == 201, booked.get_json()

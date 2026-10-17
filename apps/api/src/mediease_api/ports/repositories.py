@@ -203,6 +203,10 @@ class PatientRepository(Protocol):
         """Every patient on any of these numbers, oldest first: one query for an import (M2-P4)."""
         ...
 
+    def get_many(self, patient_ids: Collection[UUID]) -> Sequence[Patient]:
+        """These patients of this clinic, in no particular order; others are skipped."""
+        ...
+
     def search_by_name_prefix(self, prefix: str, *, limit: int) -> Sequence[Patient]:
         """Case-insensitive name prefix, ordered by name then code (spec R5)."""
         ...
@@ -288,6 +292,10 @@ class AppointmentRepository(Protocol):
 
     def list_active_for_sessions(self, session_ids: Collection[UUID]) -> Sequence[Appointment]:
         """Active (not cancelled) appointments in these sessions, by slot or token."""
+        ...
+
+    def list_for_sessions(self, session_ids: Collection[UUID]) -> Sequence[Appointment]:
+        """Every appointment in these sessions, cancelled ones too, by slot or token."""
         ...
 
     def exists_for_session(self, session_id: UUID) -> bool:

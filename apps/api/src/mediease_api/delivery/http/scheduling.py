@@ -197,9 +197,16 @@ def create_scheduling_blueprint(use_cases: SchedulingUseCases) -> Blueprint:
 
 
 def _date_arg(name: str) -> date:
-    raw = request.args.get(name)
-    if raw is None:
+    value = _date_arg_optional(name)
+    if value is None:
         raise RequestValidationFailed([{"field": name, "reason": "is required"}])
+    return value
+
+
+def _date_arg_optional(name: str) -> date | None:
+    raw = request.args.get(name)
+    if raw is None or raw == "":
+        return None
     try:
         return date.fromisoformat(raw)
     except ValueError:

@@ -19,13 +19,14 @@ from mediease_api.application.appointments.views import SessionView
 from mediease_api.application.context import RequestContext
 from mediease_api.application.scheduling.generation import generate
 from mediease_api.application.scheduling.schedules import load_clinic, load_doctor
-from mediease_api.domain.scheduling.sessions import horizon
+from mediease_api.domain.clinics.clinic import Clinic
+from mediease_api.domain.scheduling.sessions import Session, horizon
 from mediease_api.domain.shared.errors import InvalidValue
 from mediease_api.domain.shared.time import local_date
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.repositories import RowLock
-from mediease_api.ports.unit_of_work import UnitOfWork
+from mediease_api.ports.unit_of_work import TenantRepositories, UnitOfWork
 
 logger = structlog.get_logger(__name__)
 
@@ -43,29 +44,9 @@ class ListSessions:
             clinic = load_clinic(uow, ctx.clinic_id)
             tenant = uow.tenant(ctx.clinic_id)
             now = self._clock.now()
-            today = local_date(now, clinic.timezone)
-            if on_date > horizon(today):
-                raise InvalidValue("date", "must be at most 180 days ahead")
-
-            if doctor_id is not None:
-                doctor_ids = [load_doctor(tenant, ctx.clinic_id, doctor_id).id]
-            else:
-                doctor_ids = [d.id for d in tenant.doctors.list() if d.is_active]
-
-            created = 0
-            if on_date >= today:
-                # In ID order, like a booking-mode change, so two lockers never wait on each other.
-                for one_id in sorted(doctor_ids):
-                    doctor = load_doctor(tenant, ctx.clinic_id, one_id, lock=RowLock.SHARE)
-                    created += generate(
-                        tenant,
-                        clinic=clinic,
-                        doctor=doctor,
-                        on_date=on_date,
-                        ids=self._ids,
-                        now=now,
-                    )
-            sessions = tenant.sessions.list_for_date(on_date, doctor_id=doctor_id)
+            sessions, created = sessions_for_date(
+                tenant, clinic, on_date, doctor_id=doctor_id, ids=self._ids, now=now
+            )
             taken: dict[UUID, set[datetime]] = {}
             for appointment in tenant.appointments.list_active_for_sessions(
                 [s.id for s in sessions]
@@ -77,3 +58,35 @@ class ListSessions:
         if created:
             logger.info("session.generated", clinic_id=str(ctx.clinic_id), count=created)
         return [SessionView(s, frozenset(taken.get(s.id, ()))) for s in sessions]
+
+
+def sessions_for_date(
+    tenant: TenantRepositories,
+    clinic: Clinic,
+    on_date: date,
+    *,
+    doctor_id: UUID | None,
+    ids: IdPort,
+    now: datetime,
+) -> tuple[Sequence[Session], int]:
+    """R1: generate the date's missing sessions (today up to the horizon) and list them.
+
+    Returns the sessions and how many were new. Shared by the session list and the queue.
+    """
+    today = local_date(now, clinic.timezone)
+    if on_date > horizon(today):
+        raise InvalidValue("date", "must be at most 180 days ahead")
+    if doctor_id is not None:
+        doctor_ids = [load_doctor(tenant, clinic.id, doctor_id).id]
+    else:
+        doctor_ids = [d.id for d in tenant.doctors.list() if d.is_active]
+
+    created = 0
+    if on_date >= today:
+        # In ID order, like a booking-mode change, so two lockers never wait on each other.
+        for one_id in sorted(doctor_ids):
+            doctor = load_doctor(tenant, clinic.id, one_id, lock=RowLock.SHARE)
+            created += generate(
+                tenant, clinic=clinic, doctor=doctor, on_date=on_date, ids=ids, now=now
+            )
+    return tenant.sessions.list_for_date(on_date, doctor_id=doctor_id), created

@@ -19,12 +19,19 @@ from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
 
-from flask import Blueprint, Response, jsonify
+from flask import Blueprint, Response, jsonify, request
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
 from mediease_api.application.appointments.book import BookAppointment, BookCommand
 from mediease_api.application.appointments.cancel import CancelAppointment, CancelCommand
 from mediease_api.application.appointments.queries import GetAppointment, ListPatientAppointments
+from mediease_api.application.appointments.queue import (
+    AddWalkIn,
+    GetQueue,
+    TransitionAppointment,
+    TransitionCommand,
+    WalkInCommand,
+)
 from mediease_api.application.appointments.reschedule import (
     RescheduleAppointment,
     RescheduleCommand,
@@ -35,13 +42,16 @@ from mediease_api.delivery.http.bodies import (
     appointment_body,
     appointment_detail_body,
     items_body,
+    queue_body,
 )
+from mediease_api.delivery.http.scheduling import _date_arg_optional, _uuid_arg
 from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.appointments.appointment import CANCEL_NOTE_MAX, REASON_MAX
 from mediease_api.domain.appointments.status import (
     STAFF_CANCEL_REASONS,
     STAFF_SOURCES,
     AppointmentSource,
+    AppointmentStatus,
     CancelReason,
 )
 from mediease_api.domain.identity.permissions import Permission
@@ -55,6 +65,9 @@ class AppointmentUseCases(Protocol):
     def cancel_appointment(self) -> CancelAppointment: ...
     def reschedule_appointment(self) -> RescheduleAppointment: ...
     def list_patient_appointments(self) -> ListPatientAppointments: ...
+    def transition_appointment(self) -> TransitionAppointment: ...
+    def add_walk_in(self) -> AddWalkIn: ...
+    def get_queue(self) -> GetQueue: ...
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -99,6 +112,27 @@ class RescheduleRequest(BaseModel):
 
     session_id: UUID
     slot_start: AwareDatetime | None = None
+
+
+class TransitionRequest(BaseModel):
+    """D18: the status the screen showed and the one wanted."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    seen: AppointmentStatus = Field(alias="from")
+    to: AppointmentStatus
+
+
+class WalkInRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    doctor_id: UUID
+    patient_id: UUID
+    # Another of today's sessions than the one running or next (D21).
+    session_id: UUID | None = None
+    # Slot mode: a free slot; without it the earliest free one that has not ended.
+    slot_start: AwareDatetime | None = None
+    reason: str | None = Field(default=None, max_length=REASON_MAX)
 
 
 def create_appointments_blueprint(use_cases: AppointmentUseCases) -> Blueprint:
@@ -165,5 +199,47 @@ def create_appointments_blueprint(use_cases: AppointmentUseCases) -> Blueprint:
     def list_patient_appointments(patient_id: UUID) -> Response:
         views = use_cases.list_patient_appointments().execute(current_context(), patient_id)
         return jsonify(items_body(appointment_body(v) for v in views))
+
+    @bp.post(f"{one}/transitions")
+    @clinic(Permission.QUEUE_MOVE)
+    def transition_appointment(appointment_id: UUID) -> Response:
+        body = parse_json(TransitionRequest)
+        ctx = current_context()
+        view = use_cases.transition_appointment().execute(
+            clinic_id=ctx.clinic_id,
+            actor=Actor.staff(ctx),
+            appointment_id=appointment_id,
+            cmd=TransitionCommand(seen=body.seen, to=body.to),
+        )
+        return jsonify(appointment_body(view))
+
+    @bp.post("/queue/walk-ins")
+    @clinic(Permission.QUEUE_MOVE)
+    def add_walk_in() -> tuple[Response, int]:
+        body = parse_json(WalkInRequest)
+        ctx = current_context()
+        view = use_cases.add_walk_in().execute(
+            clinic_id=ctx.clinic_id,
+            actor=Actor.staff(ctx),
+            cmd=WalkInCommand(
+                doctor_id=body.doctor_id,
+                patient_id=body.patient_id,
+                session_id=body.session_id,
+                slot_start=_as_utc(body.slot_start),
+                reason=body.reason,
+            ),
+        )
+        return jsonify(appointment_body(view)), 201
+
+    @bp.get("/queue")
+    @clinic(Permission.APPOINTMENTS_MANAGE)
+    def get_queue() -> Response:
+        queue = use_cases.get_queue().execute(
+            current_context(),
+            on_date=_date_arg_optional("date"),
+            doctor_id=_uuid_arg("doctor_id"),
+            include_cancelled=request.args.get("include_cancelled") == "true",
+        )
+        return jsonify(queue_body(queue))
 
     return bp

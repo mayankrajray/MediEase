@@ -162,7 +162,7 @@ Owned by a user, not a clinic. *P2* = created by migration `0003`.
 | clinic_id | uuid FK `clinics` null | Null for platform-level events (a sign-in belongs to a user) |
 | actor_user_id | uuid FK `users` null | Null for patient/system actors |
 | actor_type | text not null | `STAFF` \| `OPS` \| `PATIENT_LINK` \| `SYSTEM` (CHECK) |
-| action | text not null | `area.past_tense`, from `domain/audit/actions.py`: `auth.signed_in`, `auth.sign_in_failed`, `auth.signed_out`, `auth.refresh_reused`, `staff.role_changed` (M1-P4), `clinic.*`, `doctor.*` and `staff.*` (M1-P5), `patient.created` and `patient.updated` (M2-P2: the code, or the changed field names - never a name or phone), `patient.consent_changed`, `patient.opted_out` and `patient.opted_in` (M2-P3: the two consent flags, `given_by` guardian or patient, and the opt-out `source`), `patient.imported` (M2-P4: the code and the `import_id` shared by one import, actor `OPS`), `schedule.changed` (M3-P1: the block count and how many booked sessions were kept, entity the doctor), `schedule.exception_added` / `schedule.exception_removed` (the doctor ID, kind, date and kept count; never the note), `appointment.booked` / `appointment.cancelled` / `appointment.rescheduled` (M3-P2: session, doctor and patient IDs, mode, token or slot, source, cancel reason; never a name, the reason or the note); more per milestone |
+| action | text not null | `area.past_tense`, from `domain/audit/actions.py`: `auth.signed_in`, `auth.sign_in_failed`, `auth.signed_out`, `auth.refresh_reused`, `staff.role_changed` (M1-P4), `clinic.*`, `doctor.*` and `staff.*` (M1-P5), `patient.created` and `patient.updated` (M2-P2: the code, or the changed field names - never a name or phone), `patient.consent_changed`, `patient.opted_out` and `patient.opted_in` (M2-P3: the two consent flags, `given_by` guardian or patient, and the opt-out `source`), `patient.imported` (M2-P4: the code and the `import_id` shared by one import, actor `OPS`), `schedule.changed` (M3-P1: the block count and how many booked sessions were kept, entity the doctor), `schedule.exception_added` / `schedule.exception_removed` (the doctor ID, kind, date and kept count; never the note), `appointment.booked` / `appointment.cancelled` / `appointment.rescheduled` (M3-P2: session, doctor and patient IDs, mode, token or slot, source, cancel reason; never a name, the reason or the note), `appointment.status_changed` (M3-P3: from, to, session and doctor IDs); more per milestone |
 | entity_type, entity_id | text, uuid | Given together or not at all |
 | request_id | text | Ties the row to the API log and to the client's "Ref" |
 | ip_hash | text | HMAC-SHA256 of the caller's IP under `AUDIT_IP_SALT`, 32 hex chars; never a raw address |
@@ -313,7 +313,7 @@ session (spec appointments R3–R8).
 | reason | text null | ≤ 120 characters, non-clinical; never logged, audited or messaged |
 | cancel_reason, cancel_note, cancelled_at | text, text, timestamptz | Set together with `CANCELLED` (`ck_appointments_cancelled_has_reason`); note ≤ 200 |
 | rescheduled_from_id | uuid FK appointments null | The cancelled appointment a reschedule replaced (R8) |
-| arrived_at, started_at, completed_at | timestamptz null | Queue (M3-P3), wait-time metrics |
+| arrived_at, started_at, completed_at | timestamptz null | Set on entering `ARRIVED` / `IN_CONSULTATION` / `COMPLETED` (M3-P3); the queue's wait time |
 | created_by | uuid FK users null | Null for public-page requests |
 | created_at, updated_at | timestamptz | |
 

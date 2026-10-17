@@ -11,6 +11,7 @@ from collections.abc import Iterable
 from datetime import datetime, time
 from typing import Any
 
+from mediease_api.application.appointments.queue import QueueView
 from mediease_api.application.appointments.views import AppointmentDetail, AppointmentView
 from mediease_api.application.patients.views import CandidateView, PatientView
 from mediease_api.application.scheduling.views import ScheduleView
@@ -248,5 +249,32 @@ def appointment_detail_body(detail: AppointmentDetail) -> dict[str, Any]:
                 "changed_at": h.changed_at.isoformat(),
             }
             for h in detail.history
+        ],
+    }
+
+
+def queue_body(queue: QueueView) -> dict[str, Any]:
+    """The day's queue (FR-QUE-01): sessions with their appointments by token or slot."""
+    return {
+        "on_date": queue.on_date.isoformat(),
+        "sessions": [
+            {
+                **session_body(q.session),
+                "appointments": [
+                    {
+                        **appointment_body(e.view),
+                        "patient": {
+                            "id": str(e.patient.id),
+                            "code": e.patient.code,
+                            "full_name": e.patient.full_name,
+                            "age_years": e.patient.age_years,
+                            "sex": e.patient.sex.value,
+                        },
+                        "wait_minutes": e.wait_minutes,
+                    }
+                    for e in q.entries
+                ],
+            }
+            for q in queue.sessions
         ],
     }

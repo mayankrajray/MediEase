@@ -28,6 +28,7 @@ from mediease_api.adapters.security.refresh_secrets import Sha256RefreshTokenSec
 from mediease_api.application.appointments.book import BookAppointment
 from mediease_api.application.appointments.cancel import CancelAppointment
 from mediease_api.application.appointments.queries import GetAppointment, ListPatientAppointments
+from mediease_api.application.appointments.queue import AddWalkIn, GetQueue, TransitionAppointment
 from mediease_api.application.appointments.reschedule import RescheduleAppointment
 from mediease_api.application.auth._session import SessionIssuer
 from mediease_api.application.auth.authenticate import AuthenticateRequest
@@ -230,6 +231,15 @@ class _UseCases:
 
     def list_patient_appointments(self) -> ListPatientAppointments:
         return ListPatientAppointments(uow=self._uow())
+
+    def transition_appointment(self) -> TransitionAppointment:
+        return TransitionAppointment(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def add_walk_in(self) -> AddWalkIn:
+        return AddWalkIn(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def get_queue(self) -> GetQueue:
+        return GetQueue(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def list_clinics(self) -> ListClinics:
         return ListClinics(uow=self._uow())

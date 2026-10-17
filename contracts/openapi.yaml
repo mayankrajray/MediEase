@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.10.0
+  version: 0.11.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -49,6 +49,11 @@ tags:
       APPOINTMENTS_MANAGE. A session row lock serialises bookings, and the database refuses a
       double booking whatever the code does (FR-APT-04). `reason` is a short non-clinical note;
       it is never logged, audited or messaged.
+  - name: queue
+    description: |
+      The daily queue (M3-P3, FR-QUE-01/02/04): status transitions, walk-ins and the day's read.
+      Every clinic role holds QUEUE_MOVE. A transition names the status the screen showed, so a
+      stale tab cannot move a patient who has already moved. Live refresh (ETag, 304) is M3-P4.
   - name: invites
     description: |
       Accepting a staff invitation (M1-P5). Public, because the invitee has no session yet: the
@@ -818,6 +823,159 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '404':
           $ref: '#/components/responses/PermissionError'
+  /api/v1/appointments/{appointment_id}/transitions:
+    post:
+      tags: [queue]
+      operationId: transitionAppointment
+      summary: Move an appointment along the queue
+      description: |
+        FR-QUE-02; spec R9, AC3, D18, D19. BOOKED -> ARRIVED | NO_SHOW, ARRIVED -> IN_CONSULTATION |
+        NO_SHOW, IN_CONSULTATION -> COMPLETED, NO_SHOW -> ARRIVED. `from` must be the current
+        status (else 409 QUE_INVALID_TRANSITION with the real `from`). Only on the session's
+        clinic-local date (or while an overnight session runs); NO_SHOW once the session or slot
+        has started (409 QUE_WRONG_TIME). Records appointment.status_changed. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/AppointmentPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentTransition'
+      responses:
+        '200':
+          description: Moved
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/QueueError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AppointmentError'
+  /api/v1/queue/walk-ins:
+    post:
+      tags: [queue]
+      operationId: addWalkIn
+      summary: Add a walk-in to today's queue
+      description: |
+        FR-QUE-04; spec R11, D21. Joins the doctor's open session running now, else the next one
+        today, or the named session_id of today's (409 QUE_NO_SESSION when there is none): the next
+        token, or in slot mode slot_start or the earliest free slot that has not ended (409
+        APT_SESSION_FULL when none). Source WALK_IN, status ARRIVED at once. Records
+        appointment.booked. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewWalkIn'
+      responses:
+        '201':
+          description: Added and arrived
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/QueueError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AppointmentError'
+  /api/v1/queue:
+    get:
+      tags: [queue]
+      operationId: getQueue
+      summary: A day's queue
+      description: |
+        FR-QUE-01; D22. The date's sessions (generated as GET /sessions does) with their active
+        appointments in token or slot order, each with the patient's code, name and age and the
+        minutes waited. date defaults to the clinic's today. Permission APPOINTMENTS_MANAGE.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: doctor_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: include_cancelled
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: The day's queue
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Queue'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/AuthError'
   /api/v1/clinic/staff:
     get:
       tags: [clinic]
@@ -1795,6 +1953,19 @@ components:
         (409: the patient is already in this session, details.appointment_id); APT_NOT_MODIFIABLE
         (409: the status or the session's end forbids it); APT_OUTSIDE_SCHEDULE (422: not one of
         the session's slots); APT_IN_PAST (422); REQ_VALIDATION_FAILED (422)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    QueueError:
+      description: |
+        QUE_INVALID_TRANSITION (409: not allowed from the current status, or the screen saw
+        another one; details.from is the real status, details.to the one asked); QUE_WRONG_TIME
+        (409: details.reason not_today or not_started); QUE_NO_SESSION (409: no session left
+        today); and the booking codes of AppointmentError for a walk-in
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -3152,6 +3323,82 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Appointment'
+    AppointmentTransition:
+      type: object
+      additionalProperties: false
+      required: [from, to]
+      properties:
+        from:
+          $ref: '#/components/schemas/AppointmentStatus'
+        to:
+          $ref: '#/components/schemas/AppointmentStatus'
+    NewWalkIn:
+      type: object
+      additionalProperties: false
+      required: [doctor_id, patient_id]
+      properties:
+        doctor_id:
+          type: string
+          format: uuid
+        patient_id:
+          type: string
+          format: uuid
+        session_id:
+          type: [string, 'null']
+          format: uuid
+        slot_start:
+          type: [string, 'null']
+          format: date-time
+        reason:
+          type: [string, 'null']
+          maxLength: 120
+    QueuePatient:
+      type: object
+      required: [id, code, full_name, age_years, sex]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        full_name:
+          type: string
+        age_years:
+          type: integer
+        sex:
+          type: string
+    QueueEntry:
+      allOf:
+        - $ref: '#/components/schemas/Appointment'
+        - type: object
+          required: [patient, wait_minutes]
+          properties:
+            patient:
+              $ref: '#/components/schemas/QueuePatient'
+            wait_minutes:
+              type: [integer, 'null']
+              description: Since arrival while ARRIVED; arrival to start once started
+    QueueSession:
+      allOf:
+        - $ref: '#/components/schemas/DoctorSession'
+        - type: object
+          required: [appointments]
+          properties:
+            appointments:
+              type: array
+              items:
+                $ref: '#/components/schemas/QueueEntry'
+    Queue:
+      type: object
+      required: [on_date, sessions]
+      properties:
+        on_date:
+          type: string
+          format: date
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/QueueSession'
     Error:
       type: object
       required: [code, message, request_id]
