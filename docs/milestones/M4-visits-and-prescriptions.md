@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 designed next |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; the M4-P5 design proposed, awaiting approval |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -17,7 +17,7 @@
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (done, confirmed) |
 | P3 | Favourites, templates, clinic-history autocomplete | Below (done, confirmed) |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (done) |
-| P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | At its start |
+| P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | Below (proposed) |
 | P6 | Web consultation screen, keyboard-first Rx builder | At its start |
 
 ---
@@ -621,3 +621,139 @@ Taken while implementing:
 - Listing printable versions is not audited (no clinical content is read); each download is.
 - WSL lacks `libharfbuzz-subset0`, so local renders use fontTools for font subsetting; the image
   and CI install it.
+
+---
+
+## M4-P5 — Signed patient links, last-4 check, bilingual patient page
+
+**Status: proposed 18 Oct 2026, awaiting approval.** API and the public web page; the clinic's
+QR code and copy button are P6. Covers FR-RX-07, FR-RX-08; spec R9–R13, R19, R20, D2, D5; AC2,
+AC3, AC10 (the page half); NFR-02, NFR-07, NFR-09.
+
+### Concepts
+
+1. **One link per prescription chain (decision 1).** Issuing version 1 creates the chain's
+   `patient_links` row in the same transaction; revisions reuse it, and the page always shows the
+   latest issued version with "Updated by your doctor on <date>" when older versions exist (R11).
+   So a link M5 sends, or a QR code shown today, never goes stale when the doctor revises.
+2. **The token proves the link, the row decides (R9).** `base64url(header).base64url(claims).
+   base64url(mac)`: header `{v, kid}`, claims `{jti, cid, pur: RX_VIEW, rid, exp}`, HMAC-SHA256
+   with the key named by `kid` from `PATIENT_LINK_SIGNING_KEYS` (the first signs, all verify, so
+   keys rotate without breaking links). The token is computed from the row and the key, so the
+   clinic can show it again and nothing secret is stored. Verification order: shape, key, MAC
+   (constant time), purpose, expiry, then the row (exists, same clinic and resource, not revoked,
+   not locked). Every failure the patient could not cause looks the same: `404 LINK_INVALID`.
+3. **The last-4 challenge (R10, AC3).** `POST …/verify {"phone_last4"}` compares with the
+   patient's *current* phone, under a row lock on the link. A wrong answer counts
+   (`401 LINK_CHALLENGE_FAILED`, `details.attempts_left`); the fifth locks the link and every
+   later attempt, right or wrong, is `423 LINK_LOCKED` until clinic staff reset it. Success clears
+   the count, records the open (R13) and sets the view cookie.
+4. **The view cookie (decision 3).** `me_rx_view`, HttpOnly, `Secure` outside local,
+   `SameSite=Lax`, 30 minutes, path-scoped to that token's API path, value an HMAC-signed
+   `{jti, exp}` under the same keys. Stateless: no session table. Reading the prescription without
+   a valid cookie for *this* link is `401 LINK_CHALLENGE_REQUIRED`.
+5. **What the patient sees (R11, R12, R19, R20, AC2).** A view model built by the domain from the
+   latest issued version with the P4 phrasebook, in the patient's saved language or the page's
+   `?lang=en|hi` switch (which changes only that view). One card per medicine with *When to take*,
+   *How much*, *How to give*, *For how long*, *Storage*, warnings and notes; advice and "Come back
+   immediately if…"; the follow-up date; the clinic's name and a call button. Free text exactly as
+   the doctor wrote it. No clinical content in the URL, the page title, Open Graph tags or logs;
+   responses are `no-store` with `X-Robots-Tag: noindex`.
+6. **Abuse limits (decision 4).** Besides the per-link lockout, the public routes allow 20
+   requests a minute per IP fingerprint (the M1 HMAC of the address, never the address), counted
+   in PostgreSQL so every API worker shares it; over the limit is `429 LINK_RATE_LIMITED` with
+   `Retry-After`.
+7. **Clinic controls (decision 6).** Staff with `RX_PRINT` can fetch the link for the QR code
+   (P6), reset a locked link and replace a link (revoke and create a new one, for an expired or
+   forwarded link). Each is audited with IDs only. Front desk sees the link's state (expires,
+   locked, opened count), never content.
+8. **Audit (R13, R16, R17).** `patient_link.opened` (actor `PATIENT_LINK`, the link's ID, the
+   version shown, the language), `patient_link.challenge_failed` (attempt number),
+   `patient_link.locked`, and for staff `patient_link.reset`, `patient_link.replaced`. Metadata
+   never holds digits, phone numbers or content. Re-reading within the cookie's 30 minutes (a
+   language switch) is not a new open.
+
+### Data (migration `0013`, expand-only)
+
+| Table | Columns |
+|---|---|
+| `patient_links` | `id` (= `jti`), `clinic_id`, `patient_id`, `prescription_id` (version 1 of the chain; the page resolves the latest), `purpose` (`RX_VIEW`), `key_id`, `expires_at` (issue + 90 days), `revoked_at`, `failed_challenges` (0–5), `locked_at`, `open_count`, `last_opened_at`, timestamps. Unique: one active `RX_VIEW` link per chain (partial, `revoked_at IS NULL`) |
+| `public_rate_limits` | `bucket` (purpose + IP fingerprint), `window_start`, `hits`; one upsert per request, rows older than an hour removed on write. Not a tenant table |
+
+`patient_links` is a tenant table with a scoped repository (ADR-0003); the public use cases reach
+it by the token's `cid`, after the MAC check, and then only through the tenant scope.
+
+### Domain, application, delivery
+
+| Where | What |
+|---|---|
+| `domain/links/link.py` | `PatientLink` (create, `check_open(now)`, `record_failure`, `record_open`, `reset`, `revoke`), errors |
+| `domain/links/token.py` | Token claims and the encoding (no crypto): `LinkClaims`, `encode/decode` of header and claims |
+| `ports/security.py` | `LinkSignerPort` (`sign`, `verify` with key IDs) |
+| `adapters/security/link_signer.py` | HMAC-SHA256 with the configured keys, constant-time compare |
+| `domain/prescriptions/patient_view.py` | The patient page's view model from the latest version and the phrasebook |
+| `application/links/` | `OpenLink` (describe), `VerifyChallenge`, `ViewPrescription`, and staff `GetLink`, `ResetLink`, `ReplaceLink`; `IssuePrescription` creates the link for version 1 |
+| `application/links/rate_limit.py` + `adapters/db` | `RateLimiterPort` over `public_rate_limits` |
+| `delivery/http/public_links.py` | The public routes (`Access.PUBLIC`), the cookie, `noindex` |
+| `scripts/inspect_link_token.py` | Decodes a token's header and claims offline (no key, no network; says "signature not checked") for DEBUGGING §5.9 |
+| Settings | `PATIENT_LINK_SIGNING_KEYS` (`kid:secret,…`, each ≥ 32 characters; `change-me` only in local), `PATIENT_LINK_TTL_DAYS` (90, 1–90) |
+
+### API (contract 0.17.0)
+
+| Method | Path | Access | Behaviour |
+|---|---|---|---|
+| GET | `/api/v1/public/links/{token}` | public | `{clinic_name, language, challenge_required, locked}`; `LINK_INVALID`, `LINK_EXPIRED` (410), `LINK_REVOKED` (410) |
+| POST | `/api/v1/public/links/{token}/verify` | public | `{"phone_last4"}` → 204 and the cookie; 401 `LINK_CHALLENGE_FAILED`, 423 `LINK_LOCKED`, 429 |
+| GET | `/api/v1/public/links/{token}/prescription?lang=` | public + cookie | The patient view model; 401 `LINK_CHALLENGE_REQUIRED` |
+| GET | `/api/v1/prescriptions/{id}/link` | `RX_PRINT` | `{url, expires_at, locked, open_count, last_opened_at}` for the QR code (P6) |
+| POST | `/api/v1/prescriptions/{id}/link/reset` | `RX_PRINT` | Unlock; 409 `LINK_NOT_LOCKED` otherwise |
+| POST | `/api/v1/prescriptions/{id}/link/replace` | `RX_PRINT` | Revoke and create a new link; returns it |
+
+### Web (the patient page)
+
+`app/(patient)/p/[token]/`: Server Components, **no client JavaScript** (decision 5). The
+challenge is a plain HTML form posting to a Next route handler that calls the API, passes the
+cookie through and redirects (303) back; the language switch is a link. System fonts (Android and
+iOS ship Devanagari), so the page needs no web font. Targets: < 200 KB transferred (NFR-02), no
+horizontal scroll at 360 px (AC2), WCAG AA contrast, labels on every field, the error read out
+(`role="alert"`). Playwright: the PRD §8.6 sample at 360 × 640, "10 ml" under *How to give*, the
+challenge, the lock, the language switch, the size budget.
+
+### Tests
+
+- **Token:** round trip; a changed byte in any part, a wrong purpose, an unknown or retired key,
+  an expired claim and a claim that disagrees with the row are all `LINK_INVALID`; rotation (an
+  old `kid` still verifies, new links use the first key); constant-time compare used.
+- **AC3:** five wrong attempts, then the right digits → 423; concurrent wrong attempts never
+  exceed five (row lock); reset unlocks; replace makes the old token `LINK_REVOKED`.
+- **R11:** after a revision the same link shows the latest version with the banner.
+- **R12, R13, R17:** a sentinel in every clinical field never appears in logs, audit metadata,
+  the page title or error bodies; one `patient_link.opened` per successful challenge.
+- **Cookie:** scoped to one link (another link's cookie is refused), expires after 30 minutes,
+  forged or other-key values refused.
+- **Rate limit:** the 21st request in a minute from one fingerprint is 429; another IP is not.
+- **Tenancy:** a token naming clinic A's link with clinic B's `cid` is `LINK_INVALID`; staff
+  routes 404 across clinics; migration and repository registries.
+- **AC2, AC10, NFR-02:** Playwright at 360 px on the stack.
+
+### Verify (on the rebuilt stack, with `make seed`)
+
+1. Issue the PRD sample as the doctor; as front desk `GET /prescriptions/{id}/link` → a URL.
+2. Open it in a 360-px browser: the clinic's name and the challenge, nothing clinical.
+3. Wrong digits four times (`attempts_left` counts down), then right: the cards, "10 ml" under
+   *How to give*; switch to हिन्दी: Hindi labels, free text unchanged.
+4. Five wrong attempts on another link, then the right digits → "contact the clinic" (423).
+   **Failure path.** Front desk resets it; the right digits work.
+5. Revise and issue version 2: the first link shows version 2 with the update banner.
+6. `scripts/inspect_link_token.py <token>` prints the header and claims without the key.
+
+### Decisions for approval
+
+| # | Question | Options | Recommendation |
+|---|---|---|---|
+| 1 | When does a link exist? | **A** created when version 1 is issued, one per chain, reused by revisions · **B** created only when staff ask for it | **A**: M5 can send it without another step, and a shown QR code never goes stale |
+| 2 | Token format | **A** R9's claims in a compact binary encoding (about 95 characters) · **B** a standard JWT via PyJWT (about 280) · **C** only `jti`, `pur` and `exp`, the rest from the row (about 52; departs from R9's wording) | **A**: R9 as written, short enough for a QR code and an SMS-length link in M5, no new dependency |
+| 3 | View access after the challenge | **A** a signed, HttpOnly, 30-minute cookie scoped to the link (stateless) · **B** a server-side session row | **A**: nothing to clean up; the link row still decides on every read |
+| 4 | Per-IP limit (20 a minute) | **A** a counter table in PostgreSQL, shared by all API workers · **B** in each process's memory · **C** none until the M6 proxy | **A**: correct with several workers today, small, and no new service |
+| 5 | The patient page | **A** server-rendered with no client JavaScript, plain forms, system fonts · **B** a React client form | **A**: smallest page on 3G (NFR-02), works on old phones, nothing to hydrate |
+| 6 | Who may reset or replace a link | **A** any `RX_PRINT` holder (front desk handles the patient at the counter), audited · **B** owners and doctors only | **A**: the patient asks reception, as D6 already assumes for printing |
