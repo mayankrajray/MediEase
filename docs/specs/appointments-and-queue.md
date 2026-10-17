@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-APT-01..07, FR-QUE-01..05 |
 | Milestone / phases | M3 / P1–P5 |
-| Status | Approved (developer sign-off 2026-10-17: decisions D1–D9 for M3-P1 and D10–D16 for M3-P2 in §12) |
+| Status | Approved (developer sign-off 2026-10-17: decisions D1–D9 for M3-P1 and D10–D16 for M3-P2, D17–D22 for M3-P3 in §12) |
 | Last updated | 2026-10-17 (approved; R1, R3, R4 made precise and R14–R20 added for schedules, exceptions and session generation; M3-P2 decisions D10–D16, R5's confirmation job from M5) |
 
 ## 1. Context
@@ -184,3 +184,13 @@ Resolved at M3-P2 approval (2026-10-17):
   another slot of the same session); the source carries over; a `CLOSED` source session is fine.
 - **D16** The booking confirmation job (R5, FR-APT-06) arrives with M5's jobs table and messaging
   port; M3 writes none.
+Resolved at M3-P3 design (2026-10-17; the developer approved the recommended options in advance):
+- **D17** Every role moves the queue (`QUE_MOVE`); history and audit record who.
+- **D18** A transition names the status it saw and the one it wants (`{from, to}`); a different
+  current status is `QUE_INVALID_TRANSITION` with the real `from`.
+- **D19** Transitions happen on the session's clinic-local date, or until an overnight session ends;
+  `NO_SHOW` once the session (token) or slot (slot mode) has started. Otherwise `QUE_WRONG_TIME`.
+- **D20** No undo in M3.
+- **D21** A walk-in joins the doctor's open session running now, else the next one today, or the
+  named one of today's; none is `QUE_NO_SESSION`. It is `ARRIVED` at once, source `WALK_IN`.
+- **D22** The queue read arrives in P3 without caching; P4 adds the `ETag` and 304 (R12).
