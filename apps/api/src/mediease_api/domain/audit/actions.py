@@ -51,3 +51,5 @@ class AuditAction(StrEnum):
     APPOINTMENT_BOOKED = "appointment.booked"
     APPOINTMENT_CANCELLED = "appointment.cancelled"
     APPOINTMENT_RESCHEDULED = "appointment.rescheduled"
+    # M3-P3: the queue. Metadata: from, to, session and doctor IDs.
+    APPOINTMENT_STATUS_CHANGED = "appointment.status_changed"
