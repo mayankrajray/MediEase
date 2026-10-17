@@ -13,6 +13,7 @@
 | [0009](0009-deployment-and-environments.md) | Docker everywhere; single India region for the pilot | Accepted |
 | [0010](0010-issue-driven-workflow-and-logical-commits.md) | Issue-driven workflow with logical commits and rebase merges | Accepted; per-phase issue/branch/PR superseded by ADR-0011 |
 | [0011](0011-one-branch-and-pr-per-milestone.md) | One branch and one pull request per milestone | Accepted |
+| [0012](0012-in-house-pdf-rendering-and-blob-storage.md) | In-house PDF rendering and blob storage behind ports | Accepted |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, and add a row here.
 Accepted ADRs are never edited; supersede them with a new ADR.

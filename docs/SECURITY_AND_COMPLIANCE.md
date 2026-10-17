@@ -54,7 +54,7 @@ Use this list in the M6 security review. Each row names where it is implemented.
 - [ ] Encryption at rest for database, backups and object storage (M6)
 - [ ] Application-level encryption for `messages.to_phone_e164` (M5)
 - [ ] Patient links: HMAC-signed, purpose-bound, 90-day expiry, revocable, last-4 challenge, attempt lockout, open audit (M4)
-- [ ] PDFs via short-lived pre-signed URLs only (M4)
+- [ ] PDFs only through the authenticated, audited API; no public or pre-signed URLs (M4, ADR-0012)
 - [ ] India-region hosting for all data stores and backups (M6)
 - [ ] No clinical content in message bodies — links only (M5)
 

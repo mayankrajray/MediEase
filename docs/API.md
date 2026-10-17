@@ -328,7 +328,7 @@ compared weakly, as RFC 9110 requires (`*`, lists and `W/` tags work).
 | PUT | `/api/v1/prescriptions/{rx_id}` | Replace draft body | FR-RX-01..03 |
 | POST | `/api/v1/prescriptions/{rx_id}/issue` | Issue (immutable) → PDF + link jobs | FR-RX-06 |
 | POST | `/api/v1/prescriptions/{rx_id}/revise` | New version superseding | FR-RX-09 |
-| GET | `/api/v1/prescriptions/{rx_id}/pdf` | Short-lived download URL | FR-RX-06 |
+| GET | `/api/v1/prescriptions/{rx_id}/pdf` | The PDF, rendered once per version (spec R18, ADR-0012) | FR-RX-06 |
 | GET/POST/DELETE | `/api/v1/rx-favourites` | Favourites | FR-RX-05 |
 | GET/POST/DELETE | `/api/v1/rx-templates` | Templates | FR-RX-05 |
 | GET | `/api/v1/medicine-suggestions?q=` | From this clinic's history only | FR-RX-10 |
