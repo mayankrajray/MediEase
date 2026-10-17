@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; the M4-P2 design approved the same day with 1A–6A, in implementation |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; the M4-P2 design approved the same day with 1A–6A and implemented; awaiting the developer's confirmation |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -14,7 +14,7 @@
 | Phase | Builds | Design |
 |---|---|---|
 | P1 | Visit record, history, 24-hour lock and addenda | Below (done, confirmed) |
-| P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (approved) |
+| P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (implemented) |
 | P3 | Favourites, templates, clinic-history autocomplete | At its start |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | At its start |
 | P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | At its start |
@@ -175,7 +175,7 @@ Taken while implementing:
 
 ## M4-P2 — Prescription domain: items, instructions, versions, immutability
 
-**Status: approved by the developer 17 Oct 2026 with 1A–6A (every recommendation); in implementation.** API only; the builder screen is P6, the PDF
+**Status: approved by the developer 17 Oct 2026 with 1A–6A (every recommendation); implemented the same day (result at the end of this section), awaiting the developer's confirmation.** API only; the builder screen is P6, the PDF
 P4, the patient page P5. Covers FR-RX-01, 02, 03, 06 (the issue step), 09; spec R4–R6, R14,
 R17, R20 (language at issue); AC1, AC4, AC7 (for prescriptions).
 
@@ -296,3 +296,33 @@ Creating a draft locks the visit row, so two "new prescription" clicks make one.
 | 4 | Structured instructions | **A** items as rows; frequency and timing enums; preparation and storage as phrase-code lists (jsonb) with an amount or days · **B** the whole body as one jsonb document | **A**: rows let P3 rank medicine names by use and let the trigger guard each line; phrase codes are what P4/P5 translate |
 | 5 | Clinic details on the prescription | **A** snapshot the clinic's name, address and phone at issue, with the doctor's · **B** read the clinic live when rendering | **A**: an issued prescription prints and reads exactly as it was given |
 | 6 | Front desk's "a prescription was issued" | **A** in P5/P6, where its actions live (show the QR, resend), as a non-clinical status on the queue row · **B** now, as a separate endpoint | **A**: nothing in P2 needs it, and it changes the queue's ETagged body only once |
+
+### Result (17–18 Oct 2026)
+
+API only, as designed. `make lint typecheck contract-check` clean; `make test`: API **1121 tests**
+at 99.01% (43 more than P1: 17 domain rules, 14 prescriptions over HTTP on PostgreSQL, the
+contract, repository and HTTP tenancy cases for the new routes, the migration), web 344. `make
+up` applied `0010`; `make seed` and `make smoke` passed. The verify steps on the stack, as the
+seeded doctor and front desk with the PRD §8.6 sample: a draft 201 and again 409
+`RX_ALREADY_EXISTS` with the same ID; `PUT` 200 (revision 2) and a stale one 409 `RX_STALE`;
+issue 200 with both snapshots, language `en` and `link_delivery` `PENDING` (the patient had
+consented); `PUT` after issue 409 `RX_NOT_DRAFT`; direct SQL `UPDATE` of the advice and of an
+item both refused with `RX_NOT_DRAFT`; revise 201 v2, issuing it left v1 `SUPERSEDED` with its
+delivery `SUPERSEDED`; front desk 403; the chain's audit rows carry no item text.
+
+Taken while implementing:
+- The window of decision 2A applies to the draft being written: version 1 is created, saved and
+  issued only until the visit locks (`409 VIS_LOCKED`); a revision's draft may be saved and issued
+  at any time.
+- Items are rewritten whole on every save (new IDs each time), matching decision 3A; a revision
+  copies the issued items into new rows.
+- `RX_DOCTOR_INCOMPLETE` lists the blank printed fields in `details.fields`.
+- Issuing a revision locks the version it supersedes before the draft, so two issues in a chain
+  serialise; two concurrent issues give one 200 and one 409, two revisions one draft.
+- The consultation view loads every prescription on the screen in one query and still writes one
+  audit row; history lines carry their latest issued medicines only.
+- The test reset lifts the prescription triggers the same deliberate way as the audit and addenda
+  ones (`GUARDED_TABLES` in `tests/conftest.py`).
+- Verifying after midnight found that the previous run's extra session ran past 00:00 and
+  overlapped a new one (`SCH_OVERLAP`, correct behaviour); the verify script now uses whichever
+  session is running, also one dated yesterday.
