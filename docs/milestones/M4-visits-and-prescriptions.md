@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A) and implemented 18 Oct 2026, awaiting confirmation |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 designed next |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -16,7 +16,7 @@
 | P1 | Visit record, history, 24-hour lock and addenda | Below (done, confirmed) |
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (done, confirmed) |
 | P3 | Favourites, templates, clinic-history autocomplete | Below (done, confirmed) |
-| P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (implemented) |
+| P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (done) |
 | P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | At its start |
 | P6 | Web consultation screen, keyboard-first Rx builder | At its start |
 
@@ -466,7 +466,7 @@ Taken while implementing:
 
 ## M4-P4 — PDF rendering and blob storage
 
-**Status: approved by the developer 18 Oct 2026 with 1A-5A (every recommendation); implemented the same day (result at the end of this section), awaiting the developer's confirmation.** API, the API image and compose; printing from
+**Status: approved by the developer 18 Oct 2026 with 1A-5A (every recommendation); implemented the same day (result at the end of this section) and confirmed by the developer 18 Oct 2026.** API, the API image and compose; printing from
 the screens is P6. Covers FR-RX-04, FR-RX-06 (the printable PDF); spec R8, R16, R18, R20, D1, D3,
 D6; ADR-0012; AC8, AC10.
 
@@ -613,7 +613,7 @@ Taken while implementing:
   cleanly. Pages were also checked by eye.
 - Latin and Devanagari are two font families, the prescription's own script first. One family
   with `unicode-range` drew conjuncts with the wrong glyphs, and Latin first collapsed spaces
-  inside Hindi runs; the footer also lost spaces to CSS escapes (`ac4752b`, DEBUG_JOURNAL).
+  inside Hindi runs; the footer also lost spaces to CSS escapes (`241bc12`, DEBUG_JOURNAL).
 - Two renders of one document read the same but are not always byte-identical (font naming
   inside WeasyPrint), so identical downloads rest on render-once and the stored file, as designed.
 - A stored key whose file is missing is rendered again under the lock with the same key and
