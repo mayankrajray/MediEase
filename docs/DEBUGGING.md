@@ -101,7 +101,7 @@ every environment (`DB_ECHO_PARAMS=false` is enforced by settings validation).
 | `404` for a record you can see in the database | Tenancy | Wrong `X-Clinic-ID` or user not a member of that clinic — expected behaviour |
 | Times off by 5 h 30 m | Timezone | A naive datetime or server-local "now" somewhere; see §5.4 |
 | Two patients booked into one slot | Concurrency | Session row lock missing or bypassed; unique index present? §5.5 |
-| Queue screen stale | Polling / ETag | Network tab: 304 forever? ETag not changing on transition |
+| Queue screen stale | Polling / ETag | Network tab: polling every 5 s? 304 forever although something changed? §5.5a |
 | Reminder shows `SCHEDULED` long after due time | Worker / jobs | Worker running? oldest queued job age; §5.6 |
 | Reminder `SKIPPED_NO_CONSENT` | Consent | Patient consent flags / opt-out — expected behaviour |
 | Message `FAILED` with `MSG_TEMPLATE_*` | Provider templates | Template name/language/variables vs `templates.yaml`; §5.7 |
@@ -232,6 +232,19 @@ from audit_events where clinic_id = '<clinic id>' order by occurred_at desc limi
 2. Confirm the partial unique indexes exist: `\d appointments`.
 3. Run the concurrency test: `make test-api ARGS="-k fr_apt_04"`.
 4. Check whether a code path inserts appointments without going through the use case (scripts, ops import).
+
+### 5.5a Queue screen not refreshing (M3-P4)
+The queue polls `GET /api/v1/queue` every 5 s with `If-None-Match` (`lib/api/poll.ts`,
+`features/queue/useQueue.ts`); a 304 means "nothing changed", a 200 brings the new body and tag.
+1. Network tab: is a request made every 5 s? None while the tab is hidden is expected; after an
+   error the next try is 30 s later.
+2. 304 although something changed: the tag is a SHA-256 of the body (`delivery/http/etag.py`), so
+   the change is not in the body. Compare the 200 bodies of `curl -i` before and after; check the
+   filters (`date`, `doctor_id`) are the screen's.
+3. Always 200 though nothing changed: an arrived patient's `wait_minutes` changes the body once a
+   minute (D24) — expected. More often means a field that differs per request (none should).
+4. Works on :8000 but not through :3000: the web proxy dropped `ETag` or `If-None-Match`; the
+   Playwright check `e2e/live-queue-etag.spec.ts` covers this.
 
 ### 5.6 Jobs not running (M5+)
 ```sql
