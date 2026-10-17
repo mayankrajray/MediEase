@@ -19,6 +19,12 @@ M1-P6: sign-in, invitation acceptance, the clinic chooser and switcher, and an e
 shell (`/queue`). `/` redirects to `/queue`; the proxy sends a visitor with no `me_csrf` cookie to
 `/sign-in?next=…`.
 
+M2-P5: the patient screens (`src/features/patients/`). The header search (`/` focuses it) looks
+up by phone, code or name; `/patients?q=` lists the matches; `/patients/[id]` is the profile with an
+in-place edit and the message consent. The Register patient drawer handles a phone the clinic
+already has (use the existing patient, or register a new family member). Phones are masked in lists
+and shown in full on the profile. The first Playwright journey is in `e2e/` (`make e2e`).
+
 ### How sign-in works in the browser
 
 - The session tokens are HttpOnly and `me_access` is scoped to `/api`, so page requests never carry

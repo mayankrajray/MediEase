@@ -14,6 +14,22 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M2-P5 (#21): the patient screens (FR-PAT-01..06, FR-MSG-05). A header search (`/` focuses it)
+  looks patients up by phone, code or name start, one request per pause in typing, with masked
+  phones in the list; `/patients?q=` lists the matches. The Register patient drawer shows the
+  guardian field, and calls the phone the guardian's, once the age is under 18 on the clinic's
+  date; a phone the clinic already has lists the family on it, to use one of them or register a
+  new family member (`confirm_new`). The profile `/patients/{id}` shows the code, the phone in full
+  for dialling and an in-place edit that sends only what changed; another clinic's patient reads
+  "Patient not found". The Messages panel tells "not asked", "declined" and "allowed" apart,
+  records consent with a read-aloud script, confirms an opt-out and then offers only "Opt back
+  in". The Create clinic wizard takes an optional patient code prefix. The web API client sends
+  PUT and PATCH (with CSRF), query strings and cancellable requests. No API or contract change.
+- M2-P5: the first Playwright journey (`apps/web/e2e/patients-duplicate-phone.spec.ts`,
+  TESTING.md §3): `make e2e` runs it in the official Playwright image against the seeded stack, and
+  the CI `smoke` job runs it on every PR. `@playwright/test` 1.64.1 (dev only). `make smoke` also
+  checks that `/patients` and the patient API refuse visitors without a session.
+
 - M2-P4 (#21): ops CSV patient import (FR-PAT-08, FR-OPS-02, spec R8).
   `POST /api/v1/ops/clinics/{id}/patient-imports` takes the raw file as `text/csv` (UTF-8, at most
   2 MB and 5,000 rows, columns `name, phone, sex, dob_or_age, guardian_name, language`). It is a dry
@@ -185,6 +201,8 @@ first production release.
   that is still being set up. Web only; the API is unchanged.
 
 ### Fixed
+- Web tests that checked where focus moved before the effect that moves it had run, which failed
+  about one run in four under load (SignInForm, AcceptInviteForm, the Create clinic wizard).
 - CI (#21): the secrets scan failed on `main` after the M1 merge and on PR #22. The reviewed
   gitleaks false positive (the synthetic test password) was fingerprinted by its M1-branch commit,
   and rebase-merging gave that commit a new SHA on `main`. `.gitleaksignore` now names the commit`s
