@@ -47,7 +47,7 @@ Rules:
   the Latin face and collapsed; and CSS consumes one whitespace after a hex escape, so the real
   space after an escaped vowel sign vanished.
 - **Fix:** The print stylesheet puts the prescription's own script first; each CSS escape ends
-  with its own space. Commit: `ac4752b` — PR: #39
+  with its own space. Commit: `241bc12` — PR: #39
 - **Guard:** `tests/unit/adapters/test_pdf_renderer.py::test_css_strings_keep_the_space_after_an_escaped_character`
   and `::test_the_prescriptions_own_script_takes_the_first_font`.
 - **Prevention / follow-up:** Look at a rendered page of every new layout in both languages;
