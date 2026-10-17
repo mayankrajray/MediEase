@@ -97,6 +97,7 @@ do not exist.
 | `make help` | List targets | now |
 | `make up` | Build images and start the whole local stack with one command (`db` → `migrate` → `api` → `web` via `depends_on`; runs `docker compose up -d --wait --build`) | now |
 | `make smoke` | End-to-end check of the running stack, including non-root / read-only / no capabilities (also a CI job) | now |
+| `make e2e` | Playwright journeys (`apps/web/e2e/`) in the official Playwright image against the running stack (`make up`, `make seed` and `make install-web` first; also in the CI `smoke` job) | now |
 | `make audit` | Known-vulnerability check of API (pip-audit) and web (npm audit) dependencies | now |
 | `make down` | Stop the stack | now |
 | `make ps` / `make logs` | Service status / follow logs | now |

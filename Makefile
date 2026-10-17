@@ -28,7 +28,7 @@ CORE_COVERAGE := --include='*/mediease_api/domain/*,*/mediease_api/application/*
 
 .PHONY: help env-check up down ps logs psql migrate seed smoke install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
-	typecheck-web dev-web contract contract-check audit
+	typecheck-web dev-web contract contract-check audit e2e
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | \
@@ -100,6 +100,15 @@ typecheck-api: api-venv-check
 
 typecheck-web: web-deps-check
 	cd $(WEB_DIR) && npm run -s typecheck
+
+# Browser journeys (docs/TESTING.md §3) in the official Playwright image, on the compose network,
+# so no browser is installed on the host. The tag must equal @playwright/test in apps/web/package.json.
+E2E_IMAGE := mcr.microsoft.com/playwright:v1.64.1-noble
+
+e2e: web-deps-check ## Browser journeys (Playwright) against the running stack (make up && make seed first)
+	docker run --rm --network mediease_default --ipc=host --user "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI \
+		-e E2E_BASE_URL=http://web:3000 -v "$(CURDIR)/$(WEB_DIR):/work" -w /work $(E2E_IMAGE) \
+		npx --no-install playwright test -c e2e
 
 dev-web: web-deps-check ## Run the web app on :3000 against the API on localhost (make up first)
 	cd $(WEB_DIR) && API_INTERNAL_URL=http://localhost:$(or $(API_PORT),8000) npm run dev
