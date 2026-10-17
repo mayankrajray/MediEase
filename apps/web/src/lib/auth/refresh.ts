@@ -18,12 +18,20 @@
 import {
   ApiError,
   apiGet,
+  apiPatch,
   apiPost,
+  apiPut,
   type GetPath,
   type GetResponse,
   type PostBody,
   type PostPath,
   type PostResponse,
+  type PatchBody,
+  type PatchPath,
+  type PatchResponse,
+  type PutBody,
+  type PutPath,
+  type PutResponse,
   type ApiResult,
   type RequestOptions,
 } from "@/lib/api/client";
@@ -132,4 +140,22 @@ export function sessionPost<P extends PostPath>(
   options: RequestOptions = {},
 ): Promise<ApiResult<PostResponse<P>>> {
   return withSessionRefresh(() => apiPost(path, body, options));
+}
+
+/** `apiPut` that survives an expired access token. */
+export function sessionPut<P extends PutPath>(
+  path: P,
+  body: PutBody<P>,
+  options: RequestOptions = {},
+): Promise<ApiResult<PutResponse<P>>> {
+  return withSessionRefresh(() => apiPut(path, body, options));
+}
+
+/** `apiPatch` that survives an expired access token. */
+export function sessionPatch<P extends PatchPath>(
+  path: P,
+  body: PatchBody<P>,
+  options: RequestOptions = {},
+): Promise<ApiResult<PatchResponse<P>>> {
+  return withSessionRefresh(() => apiPatch(path, body, options));
 }

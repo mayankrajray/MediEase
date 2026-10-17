@@ -10,7 +10,9 @@ import {
   CSRF_HEADER,
   apiBaseUrl,
   apiGet,
+  apiPatch,
   apiPost,
+  apiPut,
 } from "./client";
 
 const API = "http://api.internal:8000";
@@ -299,5 +301,97 @@ describe("clinic header (spec R6)", () => {
     await apiGet("/health", { fetchImpl });
 
     expect(new Headers(fetchImpl.mock.calls[0]?.[1]?.headers).has(CSRF_HEADER)).toBe(false);
+  });
+});
+
+describe("apiPut and apiPatch (M2-P5)", () => {
+  const PATIENT = "0192f0a0-0000-7000-8000-0000000000c1";
+  const patient = { id: PATIENT, code: "SC-0001" };
+
+  it("FR-PAT-05: PUT sends the method, JSON body, CSRF and clinic headers and fills the path", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    vi.stubGlobal("document", { cookie: "me_csrf=csrf-put" });
+    const fetchImpl = fakeFetch(jsonResponse(200, patient));
+
+    const result = await apiPut(
+      "/api/v1/patients/{patient_id}/consent",
+      { whatsapp: true, sms: false },
+      { fetchImpl, clinicId: "c-1", pathParams: { patient_id: PATIENT } },
+    );
+
+    expect(result.data).toEqual(patient);
+    const [url, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(url).toBe(`${API}/api/v1/patients/${PATIENT}/consent`);
+    expect(init?.method).toBe("PUT");
+    expect(init?.body).toBe(JSON.stringify({ whatsapp: true, sms: false }));
+    const headers = new Headers(init?.headers);
+    expect(headers.get(CSRF_HEADER)).toBe("csrf-put");
+    expect(headers.get(CLINIC_HEADER)).toBe("c-1");
+  });
+
+  it("FR-PAT-01: PATCH sends the method, the partial body and CSRF", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    vi.stubGlobal("document", { cookie: "me_csrf=csrf-patch" });
+    const fetchImpl = fakeFetch(jsonResponse(200, patient));
+
+    await apiPatch("/api/v1/patients/{patient_id}", { full_name: "Sample Name" }, {
+      fetchImpl,
+      pathParams: { patient_id: PATIENT },
+    });
+
+    const init = fetchImpl.mock.calls[0]?.[1];
+    expect(init?.method).toBe("PATCH");
+    expect(init?.body).toBe(JSON.stringify({ full_name: "Sample Name" }));
+    expect(new Headers(init?.headers).get(CSRF_HEADER)).toBe("csrf-patch");
+  });
+
+  it("an error on PATCH becomes an ApiError with the API's code and details", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const refused = jsonResponse(422, {
+      error: {
+        code: "PAT_GUARDIAN_REQUIRED",
+        message: "A patient under 18 needs a guardian.",
+        request_id: "g-1",
+        details: { fields: [{ field: "guardian_name", reason: "required" }] },
+      },
+    });
+
+    const error = await caught(
+      apiPatch("/api/v1/patients/{patient_id}", { guardian_name: "" }, {
+        fetchImpl: fakeFetch(refused),
+        pathParams: { patient_id: PATIENT },
+      }),
+    );
+
+    expect(error.code).toBe("PAT_GUARDIAN_REQUIRED");
+    expect(error.details).toEqual({ fields: [{ field: "guardian_name", reason: "required" }] });
+  });
+});
+
+describe("query strings and cancellation (M2-P5)", () => {
+  it("FR-PAT-04: encodes query values and leaves undefined ones out", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const fetchImpl = fakeFetch(jsonResponse(200, { items: [] }));
+
+    await apiGet("/api/v1/patients", { fetchImpl, query: { q: "90000 00101&x=1", unused: undefined } });
+
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(`${API}/api/v1/patients?q=90000+00101%26x%3D1`);
+  });
+
+  it("a request the caller cancels rejects with the abort, not WEB_API_UNREACHABLE", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const controller = new AbortController();
+    const fetchImpl = vi.fn<typeof fetch>((_input, init) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    });
+
+    const pending = apiGet("/api/v1/patients", { fetchImpl, query: { q: "asha" }, signal: controller.signal });
+    controller.abort();
+    const failure = await pending.catch((error: unknown) => error);
+
+    expect(failure).not.toBeInstanceOf(ApiError);
+    expect((failure as DOMException).name).toBe("AbortError");
   });
 });
