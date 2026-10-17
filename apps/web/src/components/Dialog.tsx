@@ -1,0 +1,48 @@
+"use client";
+
+import { useEffect, useId, useRef, type ReactNode } from "react";
+
+/**
+ * A centred modal on a native `<dialog>` (`showModal()`): focus stays inside, the page behind
+ * is inert, Escape closes, and focus returns to what opened it. For confirmations and short
+ * forms (M3-P5); side panels use `Drawer`. Render it only while open.
+ */
+export function Dialog({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    const dialog = ref.current;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (dialog !== null && !dialog.open) {
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+    }
+    return () => opener?.focus();
+  }, []);
+
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby={titleId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      className="w-full max-w-md rounded bg-white p-0 shadow-xl backdrop:bg-slate-900/40"
+    >
+      <h2 id={titleId} className="border-b border-slate-300 px-5 py-3 text-xl font-bold">
+        {title}
+      </h2>
+      <div className="space-y-4 p-5">{children}</div>
+    </dialog>
+  );
+}

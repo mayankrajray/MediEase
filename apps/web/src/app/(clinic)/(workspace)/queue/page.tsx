@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { EmptyQueue } from "@/features/shell/EmptyQueue";
+import { QueueBoard } from "@/features/queue/QueueBoard";
 
 export const metadata: Metadata = { title: "Queue · MediEase" };
 
 export default function QueuePage() {
-  return <EmptyQueue />;
+  return <QueueBoard />;
 }
