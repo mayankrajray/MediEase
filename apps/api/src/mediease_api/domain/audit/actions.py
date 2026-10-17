@@ -69,3 +69,11 @@ class AuditAction(StrEnum):
     PRESCRIPTION_ISSUED = "prescription.issued"
     PRESCRIPTION_REVISED = "prescription.revised"
     PRESCRIPTION_VIEWED = "prescription.viewed"
+    # M4-P3: a doctor's favourites and templates. Metadata: none (the entity ID says which);
+    # never a name or a medicine. Lists and suggestions are not audited (decision 4A).
+    RX_FAVOURITE_CREATED = "rx_favourite.created"
+    RX_FAVOURITE_UPDATED = "rx_favourite.updated"
+    RX_FAVOURITE_DELETED = "rx_favourite.deleted"
+    RX_TEMPLATE_CREATED = "rx_template.created"
+    RX_TEMPLATE_UPDATED = "rx_template.updated"
+    RX_TEMPLATE_DELETED = "rx_template.deleted"

@@ -332,9 +332,9 @@ compared weakly, as RFC 9110 requires (`*`, lists and `W/` tags work).
 | POST | `/api/v1/prescriptions/{rx_id}/issue` | Issue (immutable), snapshots, language, pending-delivery marker (spec R5, R14) | FR-RX-06 | Implemented (M4-P2) |
 | POST | `/api/v1/prescriptions/{rx_id}/revise` | New version from the latest issued one | FR-RX-09 | Implemented (M4-P2) |
 | GET | `/api/v1/prescriptions/{rx_id}/pdf` | The PDF, rendered once per version (spec R18, ADR-0012) | FR-RX-06 | M4-P4 |
-| GET/POST/DELETE | `/api/v1/rx-favourites` | Favourites | FR-RX-05 | M4-P3 |
-| GET/POST/DELETE | `/api/v1/rx-templates` | Templates | FR-RX-05 | M4-P3 |
-| GET | `/api/v1/medicine-suggestions?q=` | From this clinic's history only | FR-RX-10 | M4-P3 |
+| GET/POST | `/api/v1/rx-favourites` · PUT/DELETE `…/{favourite_id}` | The caller's favourites | FR-RX-05 | Implemented (M4-P3) |
+| GET/POST | `/api/v1/rx-templates` · GET/PUT/DELETE `…/{template_id}` | The caller's templates | FR-RX-05 | Implemented (M4-P3) |
+| GET | `/api/v1/medicine-suggestions?q=` | The caller's favourites, then names this clinic issued; at most 10 | FR-RX-10 | Implemented (M4-P3) |
 
 M4-P1 rules (spec prescriptions R1-R3, R16, R17; decisions 1A-6A; contract 0.13.0): reads need
 `CLINICAL_VIEW` (doctors, owners), writes `CLINICAL_WRITE` and being the visit's doctor, so front
@@ -349,6 +349,13 @@ Issued versions never change (`409 RX_NOT_DRAFT`, and the database refuses it to
 metadata carries IDs, versions, counts, the language and the delivery state, never item text.
 `GET /visits/{id}` now also returns the visit's `prescriptions` and, per history visit, its latest
 issued `prescription` (medicines only) — still one read and one audit row.
+M4-P3 rules (spec R7, AC5; decisions 1A-5A; contract 0.15.0): favourites and templates are
+each doctor's own (`CLINICAL_WRITE` and a doctor profile; another doctor's are 404). Suggestions
+match from the start of the name ignoring case, favourites first (by use) then names on this
+clinic's issued prescriptions (by distinct visits, then recency); nothing else is ever suggested.
+Draft lines may carry `favourite_id` and the draft `template_id`; issuing counts each once.
+Changes are audited with IDs only; lists and suggestions are not audited.
+
 ### Patient links (M4) — public, no session
 
 | Method | Path | Purpose | Req |

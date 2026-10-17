@@ -369,6 +369,7 @@ def item_body(item: PrescriptionItem) -> dict[str, Any]:
         "storage": [s.as_json() for s in item.storage],
         "warnings": item.warnings,
         "notes": item.notes,
+        "favourite_id": str(item.favourite_id) if item.favourite_id else None,
     }
 
 
@@ -392,6 +393,7 @@ def prescription_body(view: PrescriptionView) -> dict[str, Any]:
         "doctor_snapshot": rx.doctor_snapshot.as_json() if rx.doctor_snapshot else None,
         "clinic_snapshot": rx.clinic_snapshot.as_json() if rx.clinic_snapshot else None,
         "link_delivery": rx.link_delivery.value if rx.link_delivery else None,
+        "template_id": str(rx.template_id) if rx.template_id else None,
         "versions": [
             {
                 "id": str(v.id),
