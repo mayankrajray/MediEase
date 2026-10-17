@@ -21,7 +21,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0009"
+HEAD = "0010"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -30,6 +30,7 @@ M2_P1_TABLES = sorted([*M1_P5_TABLES, "patients"])
 M3_P1_TABLES = sorted([*M2_P1_TABLES, "doctor_schedules", "schedule_exceptions", "sessions"])
 M3_P2_TABLES = sorted([*M3_P1_TABLES, "appointment_status_history", "appointments"])
 M4_P1_TABLES = sorted([*M3_P2_TABLES, "visit_addenda", "visits"])
+M4_P2_TABLES = sorted([*M4_P1_TABLES, "prescription_items", "prescriptions"])
 
 
 @pytest.fixture
@@ -299,9 +300,46 @@ def test_0009_adds_visits_and_append_only_addenda(
         engine.dispose()
 
 
+def test_0010_adds_prescriptions_guarded_by_triggers(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    command.upgrade(alembic_config, "0010")
+    assert _tables(scratch_database_url) == M4_P2_TABLES
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            triggers = conn.execute(
+                text(
+                    "SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgrelid IN"
+                    " ('prescriptions'::regclass, 'prescription_items'::regclass) ORDER BY tgname"
+                )
+            ).scalars()
+            assert list(triggers) == [
+                "trg_prescription_items_frozen",
+                "trg_prescription_items_no_truncate",
+                "trg_prescriptions_immutable",
+                "trg_prescriptions_no_truncate",
+            ]
+            indexes = {i["name"]: i for i in inspect(conn).get_indexes("prescriptions")}
+            assert indexes["uq_prescriptions_visit_id_draft"]["unique"]
+
+        command.downgrade(alembic_config, "0009")
+        assert _tables(scratch_database_url) == M4_P1_TABLES
+        with engine.connect() as conn:
+            left = conn.execute(
+                text(
+                    "SELECT count(*) FROM pg_proc WHERE proname IN"
+                    " ('prescriptions_immutable', 'prescription_items_frozen')"
+                )
+            ).scalar()
+            assert left == 0
+    finally:
+        engine.dispose()
+
+
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M4_P1_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M4_P2_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:

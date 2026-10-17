@@ -32,6 +32,7 @@ from mediease_api.domain.identity.membership import ClinicMembership
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User
 from mediease_api.domain.patients.patient import Patient
+from mediease_api.domain.prescriptions.prescription import Prescription
 from mediease_api.domain.scheduling.blocks import WeeklyBlock
 from mediease_api.domain.scheduling.exceptions import ScheduleException
 from mediease_api.domain.scheduling.sessions import Session
@@ -343,4 +344,34 @@ class VisitAddendumRepository(Protocol):
 
     def list_for_visit(self, visit_id: UUID) -> Sequence[VisitAddendum]:
         """Oldest first."""
+        ...
+
+
+class PrescriptionRepository(Protocol):
+    """This clinic's prescription versions with their items (M4-P2). Clinical: never logged."""
+
+    def add(self, prescription: Prescription) -> None:
+        """Insert the version and its items."""
+        ...
+
+    def update(self, prescription: Prescription) -> None:
+        """Save the version's own columns (items untouched)."""
+        ...
+
+    def replace_items(self, prescription: Prescription) -> None:
+        """A draft's items become exactly ``prescription.items``."""
+        ...
+
+    def get(self, prescription_id: UUID, *, for_update: bool = False) -> Prescription | None: ...
+
+    def list_for_visit(self, visit_id: UUID) -> Sequence[Prescription]:
+        """The visit's chain, by version."""
+        ...
+
+    def list_for_visits(self, visit_ids: Collection[UUID]) -> Sequence[Prescription]:
+        """Every version of these visits, by visit then version."""
+        ...
+
+    def delete(self, prescription_id: UUID) -> None:
+        """Remove a draft and its items (the database refuses anything else)."""
         ...

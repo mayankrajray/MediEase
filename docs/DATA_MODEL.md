@@ -33,6 +33,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0007` | `clinics.booking_mode` (`TOKENS` for existing clinics); `doctor_schedules`, `schedule_exceptions`, `sessions` | M3-P1 |
 | `0008` | `appointments` and `appointment_status_history` | M3-P2 |
 | `0009` | `visits` and append-only `visit_addenda` (trigger `VIS_ADDENDUM_APPEND_ONLY`) | M4-P1 |
+| `0010` | `prescriptions` and `prescription_items`, immutable once issued (triggers, `RX_NOT_DRAFT`) | M4-P2 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -384,28 +385,43 @@ serves the history (newest first, keyset pages).
 `id, clinic_id, visit_id, author_user_id, body text (1–5,000), created_at`; index
 `(visit_id, created_at)`. **Append-only:** triggers refuse `UPDATE`, `DELETE` and `TRUNCATE`
 (`VIS_ADDENDUM_APPEND_ONLY`), like `audit_events`. Tests reset it the same deliberate way.
-### `prescriptions`
+### `prescriptions` (migration `0010`, M4-P2)
+One version of a visit's prescription chain (spec R4-R6, R14; decisions 1A-6A).
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
-| clinic_id, visit_id, patient_id, doctor_id | uuid FK | |
-| version | smallint not null default 1 | |
-| supersedes_id | uuid FK prescriptions null | FR-RX-09 |
-| status | text | `DRAFT` \| `ISSUED` \| `SUPERSEDED` |
-| advice | jsonb | `{diet[], activity[], return_if[], free_text}` — clinical |
-| follow_up_date | date null | Triggers FR-REM-01 |
-| language | text | Patient page language at issue time |
+| clinic_id, visit_id, patient_id, doctor_id | uuid FK | `doctor_id` is the visit's doctor, the only writer |
+| version | smallint not null | `UNIQUE (visit_id, version)`; 1 ⇔ `supersedes_id` null (CHECK) |
+| supersedes_id | uuid FK prescriptions null | The version this one replaces (FR-RX-09) |
+| status | text | `DRAFT` \| `ISSUED` \| `SUPERSEDED`; at most one draft per visit (`uq_prescriptions_visit_id_draft`, partial) |
+| revision | integer not null default 1 | +1 per save; `PUT`/issue must send it (`RX_STALE`) |
+| advice | jsonb not null | `{diet[], activity[], return_if[], notes}` — **clinical**, as written |
+| follow_up_date | date null | After the issue date, within a year; for M5's reminders |
+| language | text null | `en` \| `hi`: the patient's preference at issue; the PDF uses it (R20) |
 | issued_at | timestamptz null | |
-| pdf_object_key | text null | |
-| doctor_snapshot | jsonb | Name, qualification, registration number **as printed** |
+| doctor_snapshot | jsonb null | Name, qualification, registration number and council, specialty **as printed** |
+| clinic_snapshot | jsonb null | Name, address, city, state, pincode, phone **as printed** (5A) |
+| pdf_object_key | text null | Set once by P4 (ADR-0012) |
+| link_delivery | text null | `PENDING` \| `NOT_CONSENTED` \| `SUPERSEDED` \| `SENT` \| `EXPIRED` (R14, R15; the last two are M5's) |
+| link_delivery_requested_at | timestamptz null | = `issued_at` when `PENDING`; M5 sends only within 24 h of it |
+| created_by | uuid FK users | |
+| created_at, updated_at | timestamptz | |
 
-A database trigger rejects `UPDATE` of clinical columns when `status <> 'DRAFT'`.
+CHECKs: an issued or superseded version has `issued_at`, `language`, both snapshots and
+`link_delivery`; a draft has none of them and no PDF. **Immutable once issued** (trigger
+`prescriptions_immutable`, `RX_NOT_DRAFT`): only `status` ISSUED → SUPERSEDED, `pdf_object_key`
+once, `link_delivery` PENDING → SUPERSEDED/SENT/EXPIRED and `updated_at` may change; a non-draft
+cannot be deleted; `TRUNCATE` is refused. Index `(clinic_id, patient_id, issued_at DESC)`.
 
-### `prescription_items`
-`id, clinic_id, prescription_id, position, medicine_name, form, strength, dose, frequency,
-timing (BEFORE_FOOD | AFTER_FOOD | WITH_FOOD | EMPTY_STOMACH | BEDTIME | ANY), duration_days,
-quantity, preparation, storage, warnings, free_text` — all clinical.
-
+### `prescription_items` (migration `0010`, M4-P2)
+`id, clinic_id, prescription_id, position (UNIQUE per prescription, from 1), medicine_name
+(1–200), form, strength, dose, quantity (≤ 100 each), frequency (spec §3 codes, CHECK),
+frequency_text (≤ 100; set ⇔ frequency CUSTOM), timing (BEFORE_FOOD | AFTER_FOOD | WITH_FOOD |
+EMPTY_STOMACH | BEDTIME | ANY), duration_days (1–365), preparation jsonb [{code, text}],
+storage jsonb [{code, days}], warnings (≤ 500), notes (≤ 1,000)` — all clinical, never logged.
+Trigger `prescription_items_frozen` allows `INSERT`/`UPDATE`/`DELETE` only while the parent is a
+draft; `TRUNCATE` refused.
 ### `rx_favourites` / `rx_templates`
 `id, clinic_id, doctor_id, name, body jsonb, use_count, last_used_at`
 

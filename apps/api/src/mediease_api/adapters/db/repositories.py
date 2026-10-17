@@ -16,7 +16,7 @@ from collections.abc import Collection, Sequence
 from datetime import UTC, date, datetime, time
 from uuid import UUID
 
-from sqlalchemy import Select, exists, func, or_, select, update
+from sqlalchemy import Select, delete, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,8 @@ from mediease_api.adapters.db.models import (
     DoctorScheduleRow,
     OnboardingChecklistRow,
     PatientRow,
+    PrescriptionItemRow,
+    PrescriptionRow,
     RefreshTokenRow,
     ScheduleExceptionRow,
     SessionRow,
@@ -51,6 +53,23 @@ from mediease_api.domain.identity.membership import ClinicMembership, Membership
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User, UserStatus
 from mediease_api.domain.patients.patient import Language, Patient, Sex
+from mediease_api.domain.prescriptions.prescription import (
+    Advice,
+    ClinicSnapshot,
+    DoctorSnapshot,
+    LinkDelivery,
+    Prescription,
+    PrescriptionItem,
+    PrescriptionStatus,
+)
+from mediease_api.domain.prescriptions.vocabulary import (
+    Frequency,
+    Preparation,
+    PreparationCode,
+    Storage,
+    StorageCode,
+    Timing,
+)
 from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
 from mediease_api.domain.scheduling.exceptions import ExceptionKind, ScheduleException
 from mediease_api.domain.scheduling.mode import BookingMode
@@ -1269,3 +1288,213 @@ class SqlAlchemyVisitAddendumRepository(TenantScopedRepository[VisitAddendumRow]
             )
             for row in self._session.scalars(query)
         ]
+
+
+def _item_from_row(row: PrescriptionItemRow) -> PrescriptionItem:
+    return PrescriptionItem(
+        id=row.id,
+        position=row.position,
+        medicine_name=row.medicine_name,
+        form=row.form,
+        strength=row.strength,
+        dose=row.dose,
+        frequency=Frequency(row.frequency) if row.frequency else None,
+        frequency_text=row.frequency_text,
+        timing=Timing(row.timing) if row.timing else None,
+        duration_days=row.duration_days,
+        quantity=row.quantity,
+        preparation=tuple(
+            Preparation(PreparationCode(p["code"]), p.get("text")) for p in row.preparation
+        ),
+        storage=tuple(Storage(StorageCode(s["code"]), s.get("days")) for s in row.storage),
+        warnings=row.warnings,
+        notes=row.notes,
+    )
+
+
+def _item_row(
+    clinic_id: UUID, prescription_id: UUID, item: PrescriptionItem
+) -> PrescriptionItemRow:
+    return PrescriptionItemRow(
+        id=item.id,
+        clinic_id=clinic_id,
+        prescription_id=prescription_id,
+        position=item.position,
+        medicine_name=item.medicine_name,
+        form=item.form,
+        strength=item.strength,
+        dose=item.dose,
+        frequency=item.frequency.value if item.frequency else None,
+        frequency_text=item.frequency_text,
+        timing=item.timing.value if item.timing else None,
+        duration_days=item.duration_days,
+        quantity=item.quantity,
+        preparation=[p.as_json() for p in item.preparation],
+        storage=[s.as_json() for s in item.storage],
+        warnings=item.warnings,
+        notes=item.notes,
+    )
+
+
+def _prescription_from_row(row: PrescriptionRow, items: Sequence[PrescriptionItem]) -> Prescription:
+    advice = row.advice or {}
+    doctor = row.doctor_snapshot
+    clinic = row.clinic_snapshot
+    return Prescription(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        visit_id=row.visit_id,
+        patient_id=row.patient_id,
+        doctor_id=row.doctor_id,
+        version=row.version,
+        supersedes_id=row.supersedes_id,
+        status=PrescriptionStatus(row.status),
+        revision=row.revision,
+        items=tuple(items),
+        advice=Advice(
+            diet=tuple(advice.get("diet", ())),
+            activity=tuple(advice.get("activity", ())),
+            return_if=tuple(advice.get("return_if", ())),
+            notes=advice.get("notes"),
+        ),
+        follow_up_date=row.follow_up_date,
+        language=Language(row.language) if row.language else None,
+        issued_at=_utc_or_none(row.issued_at),
+        doctor_snapshot=(
+            DoctorSnapshot(
+                doctor_id=UUID(doctor["doctor_id"]),
+                display_name=doctor["display_name"],
+                qualification=doctor["qualification"],
+                registration_number=doctor["registration_number"],
+                registration_council=doctor["registration_council"],
+                specialty=doctor.get("specialty"),
+            )
+            if doctor
+            else None
+        ),
+        clinic_snapshot=ClinicSnapshot(**clinic) if clinic else None,
+        pdf_object_key=row.pdf_object_key,
+        link_delivery=LinkDelivery(row.link_delivery) if row.link_delivery else None,
+        link_delivery_requested_at=_utc_or_none(row.link_delivery_requested_at),
+        created_by=row.created_by,
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+    )
+
+
+def _write_prescription(row: PrescriptionRow, rx: Prescription) -> None:
+    # The visit, patient, doctor, version, predecessor and creator are fixed at creation.
+    row.status = rx.status.value
+    row.revision = rx.revision
+    row.advice = rx.advice.as_json()
+    row.follow_up_date = rx.follow_up_date
+    row.language = rx.language.value if rx.language else None
+    row.issued_at = rx.issued_at
+    row.doctor_snapshot = rx.doctor_snapshot.as_json() if rx.doctor_snapshot else None
+    row.clinic_snapshot = rx.clinic_snapshot.as_json() if rx.clinic_snapshot else None
+    row.pdf_object_key = rx.pdf_object_key
+    row.link_delivery = rx.link_delivery.value if rx.link_delivery else None
+    row.link_delivery_requested_at = rx.link_delivery_requested_at
+    row.updated_at = rx.updated_at
+
+
+class SqlAlchemyPrescriptionItemRepository(TenantScopedRepository[PrescriptionItemRow]):
+    """The items of this clinic's prescriptions; used through the prescription repository."""
+
+    model = PrescriptionItemRow
+    entity_name = "prescription item"
+
+    def for_prescriptions(self, ids: Collection[UUID]) -> dict[UUID, list[PrescriptionItem]]:
+        found: dict[UUID, list[PrescriptionItem]] = {i: [] for i in ids}
+        if not found:
+            return found
+        query = (
+            self._scoped_select()
+            .where(PrescriptionItemRow.prescription_id.in_(sorted(found)))
+            .order_by(PrescriptionItemRow.prescription_id, PrescriptionItemRow.position)
+        )
+        for row in self._session.scalars(query):
+            found[row.prescription_id].append(_item_from_row(row))
+        return found
+
+    def insert(self, rx: Prescription) -> None:
+        self._session.add_all([_item_row(self.clinic_id, rx.id, item) for item in rx.items])
+        self._session.flush()
+
+    def delete_for(self, prescription_id: UUID) -> None:
+        self._session.execute(
+            delete(PrescriptionItemRow).where(
+                PrescriptionItemRow.clinic_id == self.clinic_id,
+                PrescriptionItemRow.prescription_id == prescription_id,
+            )
+        )
+        self._session.flush()
+
+
+class SqlAlchemyPrescriptionRepository(TenantScopedRepository[PrescriptionRow]):
+    model = PrescriptionRow
+    entity_name = "prescription"
+
+    def __init__(self, session: Session, clinic_id: UUID) -> None:
+        super().__init__(session, clinic_id)
+        self._items = SqlAlchemyPrescriptionItemRepository(session, clinic_id)
+
+    def add(self, prescription: Prescription) -> None:
+        self._check_owned(prescription.clinic_id)
+        row = PrescriptionRow(
+            id=prescription.id,
+            clinic_id=self.clinic_id,
+            visit_id=prescription.visit_id,
+            patient_id=prescription.patient_id,
+            doctor_id=prescription.doctor_id,
+            version=prescription.version,
+            supersedes_id=prescription.supersedes_id,
+            created_by=prescription.created_by,
+            created_at=prescription.created_at,
+        )
+        _write_prescription(row, prescription)
+        self._session.add(row)
+        self._session.flush()
+        self._items.insert(prescription)
+
+    def update(self, prescription: Prescription) -> None:
+        self._check_owned(prescription.clinic_id)
+        row = self._require_row(prescription.id)
+        _write_prescription(row, prescription)
+        self._session.flush()
+
+    def replace_items(self, prescription: Prescription) -> None:
+        self._check_owned(prescription.clinic_id)
+        self._require_row(prescription.id)
+        self._items.delete_for(prescription.id)
+        self._items.insert(prescription)
+
+    def get(self, prescription_id: UUID, *, for_update: bool = False) -> Prescription | None:
+        query = self._scoped_select().where(PrescriptionRow.id == prescription_id)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        row = self._session.scalars(query).one_or_none()
+        if row is None:
+            return None
+        return _prescription_from_row(row, self._items.for_prescriptions([row.id])[row.id])
+
+    def list_for_visit(self, visit_id: UUID) -> Sequence[Prescription]:
+        return self.list_for_visits([visit_id])
+
+    def list_for_visits(self, visit_ids: Collection[UUID]) -> Sequence[Prescription]:
+        ids = sorted(set(visit_ids))
+        if not ids:
+            return []
+        query = (
+            self._scoped_select()
+            .where(PrescriptionRow.visit_id.in_(ids))
+            .order_by(PrescriptionRow.visit_id, PrescriptionRow.version)
+        )
+        rows = list(self._session.scalars(query))
+        items = self._items.for_prescriptions([r.id for r in rows])
+        return [_prescription_from_row(r, items[r.id]) for r in rows]
+
+    def delete(self, prescription_id: UUID) -> None:
+        self._require_row(prescription_id)
+        self._items.delete_for(prescription_id)
+        self._delete_row(prescription_id)

@@ -223,6 +223,9 @@ def session_factory(migrated_database_url: str) -> Iterator[sessionmaker[Session
 
 UowFactory = Callable[[], SqlAlchemyUnitOfWork]
 
+# Tables whose triggers refuse TRUNCATE; the test reset lifts them deliberately.
+GUARDED_TABLES = ("audit_events", "visit_addenda", "prescriptions", "prescription_items")
+
 
 @pytest.fixture
 def uow_factory(session_factory: sessionmaker[Session]) -> Iterator[UowFactory]:
@@ -235,10 +238,11 @@ def uow_factory(session_factory: sessionmaker[Session]) -> Iterator[UowFactory]:
         # — the same deliberate, visible step operations would have to take
         # (docs/RUNBOOK.md). Production never truncates it.
         # visit_addenda is append-only the same way (FR-VIS-05, migration 0009).
-        for guarded in ("audit_events", "visit_addenda"):
+        # prescriptions and their items refuse TRUNCATE too (FR-RX-09, migration 0010).
+        for guarded in GUARDED_TABLES:
             session.execute(text(f"ALTER TABLE {guarded} DISABLE TRIGGER USER"))
         session.execute(text(f"TRUNCATE {tables}"))
-        for guarded in ("audit_events", "visit_addenda"):
+        for guarded in GUARDED_TABLES:
             session.execute(text(f"ALTER TABLE {guarded} ENABLE TRIGGER USER"))
         session.commit()
 
