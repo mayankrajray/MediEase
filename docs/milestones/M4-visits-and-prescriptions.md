@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 designed next |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; the M4-P3 design proposed, awaiting approval |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -15,7 +15,7 @@
 |---|---|---|
 | P1 | Visit record, history, 24-hour lock and addenda | Below (done, confirmed) |
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (done, confirmed) |
-| P3 | Favourites, templates, clinic-history autocomplete | At its start |
+| P3 | Favourites, templates, clinic-history autocomplete | Below (proposed) |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | At its start |
 | P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | At its start |
 | P6 | Web consultation screen, keyboard-first Rx builder | At its start |
@@ -326,3 +326,114 @@ Taken while implementing:
 - Verifying after midnight found that the previous run's extra session ran past 00:00 and
   overlapped a new one (`SCH_OVERLAP`, correct behaviour); the verify script now uses whichever
   session is running, also one dated yesterday.
+
+---
+
+## M4-P3 — Favourites, templates and clinic-history autocomplete
+
+**Status: proposed 18 Oct 2026, awaiting approval.** API only; the builder uses it in P6. Covers
+FR-RX-05, FR-RX-10; spec R7; AC5.
+
+### Concepts
+
+1. **Speed from the doctor's own habits, never from outside data.** Three aids for the builder,
+   all made of what this clinic's doctors have written themselves: *favourites* (one medicine line
+   with its usual instructions), *templates* (a whole prescription body: lines and advice), and
+   *suggestions* while typing a medicine name. There is no drug list, no dose, no interaction
+   check, no external source (FR-RX-10, principle 6). AC5 is the guard: a name the clinic never
+   prescribed is never suggested.
+2. **Favourites and templates belong to a doctor** (decision 1). They are the doctor's working
+   tools, not clinical records about a patient, so they are edited freely, versioned by a
+   `revision` like drafts, and deleted for real.
+3. **Same shape as a draft.** A favourite holds exactly one `PrescriptionItem` body; a template
+   holds `items` and `advice` (and an optional "follow up in N days"). They are validated by the
+   P2 domain rules, so anything saved can be inserted into a draft unchanged. Applying one is the
+   builder's job: it copies the body into the draft it then `PUT`s (P2), so issued prescriptions
+   stay the only clinical record.
+4. **What counts as "used" (decision 3).** A draft's `PUT` may say which favourite each line and
+   which template the body came from (`favourite_id`, `template_id`, stored as plain IDs, not
+   foreign keys, because issued rows never change and a deleted favourite must not touch them).
+   Issuing counts them: `use_count + 1`, `last_used_at = issued_at`. Saving a draft five times
+   counts nothing.
+5. **Suggestions rank the clinic's history (R7, decision 2).** For a prefix of 2 or more
+   characters, case-insensitive, from the start of the name: first the doctor's favourites
+   (by use), then medicine names that appear on the clinic's **issued** prescriptions (issued or
+   superseded, never drafts), ranked by the number of distinct visits they were prescribed in,
+   then most recent. Names are grouped case- and space-insensitively and shown in their most
+   recent spelling. At most 10. A typo in a discarded draft never becomes a suggestion.
+6. **Not patient data in the audit sense.** Suggestions and favourites name medicines, not
+   patients; reading them is not a view of anyone's record (R16 is about patient content), and the
+   builder asks on every keystroke. Changes to favourites and templates are audited with IDs only
+   (decision 4).
+
+### Data (migration `0011`, expand-only)
+
+| Table | Columns (all carry `clinic_id`) | Constraints |
+|---|---|---|
+| `rx_favourites` | `id`, `doctor_id`, `name`, `item jsonb`, `revision`, `use_count`, `last_used_at null`, timestamps | name 1–100; unique per doctor, case-insensitive (`lower(name)`); `use_count >= 0` |
+| `rx_templates` | `id`, `doctor_id`, `name`, `items jsonb`, `advice jsonb`, `follow_up_days smallint null`, `revision`, `use_count`, `last_used_at null`, timestamps | as favourites; `follow_up_days` 1–365 |
+| `prescription_items` | + `favourite_id uuid null` | No foreign key (see concept 4) |
+| `prescriptions` | + `template_id uuid null` | No foreign key; the P2 immutability trigger already covers new columns (it compares the whole row) |
+| index | `ix_prescription_items_clinic_id_medicine_name` on `(clinic_id, lower(medicine_name) text_pattern_ops)` | The M2 pattern for name prefixes; no extension |
+
+Limits: 200 favourites and 50 templates per doctor; a template holds up to 40 lines (P2's limit).
+
+### Domain and application
+
+| Where | What |
+|---|---|
+| `domain/prescriptions/library.py` | `Favourite` and `Template`: name rules, the body validated through `PrescriptionItem.create` / `Advice.create`, `replace(…, seen_revision)`, `record_use(at)` |
+| `domain/prescriptions/suggestions.py` | Pure ranking: merge favourites and history counts, group by normalised name, cap at 10 |
+| `domain/prescriptions/prescription.py` | `PrescriptionItem.favourite_id`, `Prescription.template_id` (provenance, copied into revisions) |
+| `application/prescriptions/library.py` | `List/Create/Replace/DeleteFavourite`, the same for templates, `SuggestMedicines` |
+| `application/prescriptions/use_cases.py` | `IssuePrescription` records the uses of the favourites and template it names (the caller's own; a stale ID is ignored) |
+| `domain/audit/actions.py` | `rx_favourite.created/.updated/.deleted`, `rx_template.created/.updated/.deleted` |
+
+### API (contract 0.15.0)
+
+| Method | Path | Permission | Behaviour |
+|---|---|---|---|
+| GET | `/api/v1/rx-favourites` | `CLINICAL_WRITE` | The caller's favourites by use, then name |
+| POST | `/api/v1/rx-favourites` | `CLINICAL_WRITE` | `{name, item}` → 201; `409 RX_NAME_TAKEN`; `409 RX_LIBRARY_FULL` |
+| PUT | `/api/v1/rx-favourites/{id}` | `CLINICAL_WRITE`, its doctor | `{revision, name, item}`; `409 RX_STALE` |
+| DELETE | `/api/v1/rx-favourites/{id}` | `CLINICAL_WRITE`, its doctor | 204 |
+| GET/POST/PUT/DELETE | `/api/v1/rx-templates[/{id}]` | the same | `{name, items, advice, follow_up_days}` |
+| GET | `/api/v1/medicine-suggestions?q=` | `CLINICAL_WRITE` | `q` 2–50 characters; up to 10 `{name, source: FAVOURITE \| HISTORY, favourite_id?, uses}` |
+| PUT | `/api/v1/prescriptions/{id}` | as P2 | Items may carry `favourite_id`, the body `template_id` |
+
+Another doctor's favourite or template is `404` (only its owner sees it). `CLINICAL_WRITE`
+because only a prescribing doctor needs them; owners who are not doctors and front desk get 403.
+
+### Tests
+
+- **AC5:** a clinic that prescribed "Drug P" but not "Drug Q" (another clinic did, and a draft
+  here did): "Dru" suggests "Drug P" only. Cross-clinic history never appears.
+- **Ranking:** favourites first; then distinct visits (a revised prescription counts once),
+  then recency; grouping of "syrup x" and "Syrup  X"; the cap; `q` of 1 character is a 422.
+- **Library:** name uniqueness per doctor (another doctor may reuse it), limits, stale revision,
+  bodies checked by the P2 rules, another doctor's items 404, front desk 403.
+- **Use counts:** issuing a prescription built from a favourite and a template counts each once;
+  saving drafts counts nothing; deleting a favourite leaves the issued prescription untouched.
+- **Performance:** suggestions over 20,000 issued lines in one clinic answer within 150 ms p95 on
+  the local PostgreSQL (the index is used).
+- **Contract, tenancy suites, permissions; `make contract-check`.**
+
+### Verify (on the rebuilt stack, with `make seed`)
+
+1. As the doctor, save a favourite "Fever syrup" (the PRD sample line) → 201; the same name again
+   → 409 `RX_NAME_TAKEN`.
+2. Issue a prescription using it (P2 routes with `favourite_id`); `GET /rx-favourites` shows
+   `use_count` 1.
+3. `GET /medicine-suggestions?q=syr` → "Syrup X" first, `source` `FAVOURITE`; `q=Dru` → nothing.
+4. Front desk `GET /medicine-suggestions?q=syr` → 403. **Failure path.**
+5. A template with two lines and advice; `PUT` with an old revision → 409 `RX_STALE`.
+
+### Decisions for approval
+
+| # | Question | Options | Recommendation |
+|---|---|---|---|
+| 1 | Whose favourites and templates? | **A** each doctor's own · **B** shared by the clinic | **A**: as the data model sketches; habits differ between doctors, and a shared list needs an owner to curate it |
+| 2 | Which history feeds suggestions? | **A** medicine names on issued (and superseded) prescriptions of the clinic, any doctor, ranked by distinct visits · **B** also drafts · **C** only the caller's own prescriptions | **A**: what the clinic has actually given (R7); drafts carry typos; the clinic's colleagues' names help a new doctor |
+| 3 | How is "use" counted for ranking favourites? | **A** at issue, from the `favourite_id` / `template_id` the draft carries · **B** a separate "applied" call from the builder · **C** no counts, alphabetical | **A**: counts what was really prescribed, no extra call, no double counting |
+| 4 | Audit | **A** changes to favourites and templates audited with IDs only; suggestions and lists not audited · **B** audit the lists and suggestions too | **A**: no patient record is read, and suggestions are asked per keystroke |
+| 5 | Matching | **A** from the start of the name, case-insensitive (the M2 index pattern, no extension) · **B** any word in the name (needs the `pg_trgm` extension) | **A**: doctors type names from the start; B can follow if pilots ask, with its own ADR for the extension |
