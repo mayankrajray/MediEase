@@ -15,6 +15,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from mediease_api.domain.patients.code import derive_code_prefix, format_code, validate_code_prefix
+from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.shared.errors import DomainError, InvalidTransition, InvalidValue
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.shared.text import optional_text, required_text
@@ -65,6 +66,9 @@ class Clinic:
     # counter only ever moves forward, so a code is never reused.
     patient_code_prefix: str
     next_patient_seq: int
+    # M3 (spec appointments R3, R4): how the clinic's sessions are booked. Changing it is a use case
+    # (R19), because every current block must support the new mode.
+    booking_mode: BookingMode = BookingMode.TOKENS
 
     @classmethod
     def create(
@@ -82,6 +86,7 @@ class Clinic:
         pincode: str | None = None,
         specialties: tuple[str, ...] = (),
         patient_code_prefix: str | None = None,
+        booking_mode: BookingMode = BookingMode.TOKENS,
     ) -> Clinic:
         """A new clinic in ``ONBOARDING`` (FR-ORG-01).
 
@@ -109,6 +114,7 @@ class Clinic:
                 else derive_code_prefix(clean_name)
             ),
             next_patient_seq=1,
+            booking_mode=booking_mode,
         )
 
     def allocate_patient_code(self, *, now: datetime) -> str:
@@ -174,6 +180,14 @@ class Clinic:
         for attribute, value in validated.items():
             if value is not None:
                 setattr(self, attribute, value)
+
+    def change_booking_mode(self, mode: BookingMode, *, now: datetime) -> bool:
+        """Switch slots/tokens; True if it changed. The caller has checked every block (R19)."""
+        if mode is self.booking_mode:
+            return False
+        self.updated_at = require_utc(now, "now")
+        self.booking_mode = mode
+        return True
 
     def _set_status(self, status: ClinicStatus, now: datetime) -> None:
         self.updated_at = require_utc(now, "now")  # validated first: a bad value changes nothing
