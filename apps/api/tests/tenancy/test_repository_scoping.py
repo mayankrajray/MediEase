@@ -16,6 +16,8 @@ import pytest
 
 from mediease_api.adapters.db.models import Base
 from mediease_api.adapters.db.repositories import (
+    SqlAlchemyAppointmentHistoryRepository,
+    SqlAlchemyAppointmentRepository,
     SqlAlchemyChecklistRepository,
     SqlAlchemyDoctorRepository,
     SqlAlchemyMembershipRepository,
@@ -25,15 +27,17 @@ from mediease_api.adapters.db.repositories import (
     SqlAlchemySessionRepository,
 )
 from mediease_api.adapters.db.tenancy import TenancyViolation, TenantScopedRepository
+from mediease_api.domain.appointments.appointment import Appointment, history_entry
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
 from mediease_api.domain.patients.patient import Patient
 from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
 from mediease_api.domain.scheduling.exceptions import ScheduleException
 from mediease_api.domain.scheduling.mode import BookingMode
-from mediease_api.domain.scheduling.sessions import Session, plan_day
+from mediease_api.domain.scheduling.sessions import Session, SessionStatus, plan_day
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.ports.repositories import RowLock
 from tests.builders import LATER, NOW, a_clinic, a_doctor, a_membership, a_patient, a_user, new_id
 from tests.conftest import UowFactory
 
@@ -262,6 +266,89 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_schedules_exceptions_or_sessions(
         assert staff_b.schedule_exceptions.get(leave.id) == leave
 
 
+def test_nfr_08_clinic_a_cannot_reach_clinic_b_appointments_or_their_history(
+    uow_factory: UowFactory, two_clinics: tuple[Tenant, Tenant]
+) -> None:
+    a, b = two_clinics
+    day = date(2026, 10, 19)
+    with uow_factory() as uow:
+        staff_b = uow.tenant(b.clinic_id)
+        [planned] = plan_day(
+            doctor_id=b.doctor.id,
+            on_date=day,
+            timezone="Asia/Kolkata",
+            mode=BookingMode.TOKENS,
+            blocks=[
+                WeeklyBlock.create(
+                    id=new_id(),
+                    clinic_id=b.clinic_id,
+                    doctor_id=b.doctor.id,
+                    weekday=0,
+                    shape=BlockShape(time(10), time(13), 15, 12),
+                    mode=BookingMode.TOKENS,
+                    valid_from=day,
+                    now=NOW,
+                )
+            ],
+            exceptions=[],
+        )
+        session = Session.from_plan(planned, id=new_id(), clinic_id=b.clinic_id, now=NOW)
+        staff_b.sessions.add_missing([session])
+        appointment = Appointment.book(
+            session, id=new_id(), patient_id=b.patient.id, active=[], now=NOW
+        )
+        staff_b.sessions.update(session)
+        staff_b.appointments.add(appointment)
+        staff_b.appointment_history.add(
+            history_entry(
+                appointment, id=new_id(), from_status=None, changed_by=None, request_id=None
+            )
+        )
+        uow.commit()
+
+    with uow_factory() as uow:
+        staff_a = uow.tenant(a.clinic_id)
+        assert staff_a.sessions.get(session.id) is None
+        assert staff_a.sessions.get_many([session.id]) == []
+        assert staff_a.appointments.get(appointment.id) is None
+        assert staff_a.appointments.get(appointment.id, for_update=True) is None
+        assert staff_a.appointments.list_active_for_sessions([session.id]) == []
+        assert not staff_a.appointments.exists_for_session(session.id)
+        assert staff_a.appointments.list_for_patient(b.patient.id, limit=10) == []
+        assert staff_a.appointment_history.list_for_appointment(appointment.id) == []
+        with pytest.raises(TenancyViolation):
+            staff_a.sessions.update(session)
+        with pytest.raises(TenancyViolation):
+            staff_a.appointments.add(appointment)
+        with pytest.raises(TenancyViolation):
+            staff_a.appointments.update(appointment)
+        with pytest.raises(TenancyViolation):
+            staff_a.appointment_history.add(
+                history_entry(
+                    appointment, id=new_id(), from_status=None, changed_by=None, request_id=None
+                )
+            )
+
+    with uow_factory() as uow:
+        staff_b = uow.tenant(b.clinic_id)
+        stored = staff_b.appointments.get(appointment.id)
+        assert stored == appointment and stored.token_number == 1
+        assert staff_b.appointments.exists_for_session(session.id)
+        assert [
+            h.appointment_id
+            for h in staff_b.appointment_history.list_for_appointment(appointment.id)
+        ] == [appointment.id]
+        locked = staff_b.sessions.get(session.id, lock=RowLock.UPDATE)
+        assert locked is not None and locked.booked_count == 1 and locked.next_token == 2
+        locked.booked_count = 0
+        locked.retire(LATER)
+        staff_b.sessions.update(locked)
+        assert staff_b.sessions.list_for_date(day) == []
+        assert [s.status for s in staff_b.sessions.list_for_date(day, include_retired=True)] == [
+            SessionStatus.CANCELLED
+        ]
+
+
 def test_every_tenant_table_has_a_scoped_repository() -> None:
     """A new table with clinic_id must get a TenantScopedRepository (and tests here)."""
     tenant_tables = {
@@ -282,6 +369,8 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "doctor_schedules",
             "schedule_exceptions",
             "sessions",
+            "appointments",
+            "appointment_status_history",
             "audit_events",
         }
     )
@@ -293,6 +382,8 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyScheduleRepository,
         SqlAlchemyScheduleExceptionRepository,
         SqlAlchemySessionRepository,
+        SqlAlchemyAppointmentRepository,
+        SqlAlchemyAppointmentHistoryRepository,
     } == set(TenantScopedRepository.__subclasses__())
 
 

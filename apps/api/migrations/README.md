@@ -12,6 +12,7 @@ Schema history for the MediEase database (ADR-0004). Config: `../alembic.ini`; e
 | `0005` | `clinic_memberships` invitation columns; `onboarding_checklists` | M1-P5 |
 | `0006` | `clinics.patient_code_prefix` and `next_patient_seq`; `patients` table with lookup indexes | M2-P1 |
 | `0007` | `clinics.booking_mode`; `doctor_schedules`, `schedule_exceptions`, `sessions` | M3-P1 |
+| `0008` | `appointments` (partial unique indexes back the booking rules), `appointment_status_history` | M3-P2 |
 
 ## Running
 

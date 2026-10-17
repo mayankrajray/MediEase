@@ -19,6 +19,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from mediease_api.adapters.db.audit import SqlAlchemyAuditWriter
 from mediease_api.adapters.db.repositories import (
+    SqlAlchemyAppointmentHistoryRepository,
+    SqlAlchemyAppointmentRepository,
     SqlAlchemyChecklistRepository,
     SqlAlchemyClinicAccessRepository,
     SqlAlchemyClinicRepository,
@@ -56,6 +58,8 @@ class SqlAlchemyTenantRepositories:
         self._schedules = SqlAlchemyScheduleRepository(session, clinic_id)
         self._schedule_exceptions = SqlAlchemyScheduleExceptionRepository(session, clinic_id)
         self._sessions = SqlAlchemySessionRepository(session, clinic_id)
+        self._appointments = SqlAlchemyAppointmentRepository(session, clinic_id)
+        self._appointment_history = SqlAlchemyAppointmentHistoryRepository(session, clinic_id)
 
     @property
     def clinic_id(self) -> UUID:
@@ -88,6 +92,14 @@ class SqlAlchemyTenantRepositories:
     @property
     def sessions(self) -> SqlAlchemySessionRepository:
         return self._sessions
+
+    @property
+    def appointments(self) -> SqlAlchemyAppointmentRepository:
+        return self._appointments
+
+    @property
+    def appointment_history(self) -> SqlAlchemyAppointmentHistoryRepository:
+        return self._appointment_history
 
 
 class _OpenUnit:

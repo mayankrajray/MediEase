@@ -31,6 +31,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0005` | `clinic_memberships` invitation columns (marked *P5*); `onboarding_checklists` | M1-P5 |
 | `0006` | `clinics.patient_code_prefix` (backfilled from each clinic's name) and `next_patient_seq`; the `patients` table with its lookup indexes | M2-P1 |
 | `0007` | `clinics.booking_mode` (`TOKENS` for existing clinics); `doctor_schedules`, `schedule_exceptions`, `sessions` | M3-P1 |
+| `0008` | `appointments` and `appointment_status_history` | M3-P2 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -161,7 +162,7 @@ Owned by a user, not a clinic. *P2* = created by migration `0003`.
 | clinic_id | uuid FK `clinics` null | Null for platform-level events (a sign-in belongs to a user) |
 | actor_user_id | uuid FK `users` null | Null for patient/system actors |
 | actor_type | text not null | `STAFF` \| `OPS` \| `PATIENT_LINK` \| `SYSTEM` (CHECK) |
-| action | text not null | `area.past_tense`, from `domain/audit/actions.py`: `auth.signed_in`, `auth.sign_in_failed`, `auth.signed_out`, `auth.refresh_reused`, `staff.role_changed` (M1-P4), `clinic.*`, `doctor.*` and `staff.*` (M1-P5), `patient.created` and `patient.updated` (M2-P2: the code, or the changed field names - never a name or phone), `patient.consent_changed`, `patient.opted_out` and `patient.opted_in` (M2-P3: the two consent flags, `given_by` guardian or patient, and the opt-out `source`), `patient.imported` (M2-P4: the code and the `import_id` shared by one import, actor `OPS`), `schedule.changed` (M3-P1: the block count and how many booked sessions were kept, entity the doctor), `schedule.exception_added` / `schedule.exception_removed` (the doctor ID, kind, date and kept count; never the note); more per milestone |
+| action | text not null | `area.past_tense`, from `domain/audit/actions.py`: `auth.signed_in`, `auth.sign_in_failed`, `auth.signed_out`, `auth.refresh_reused`, `staff.role_changed` (M1-P4), `clinic.*`, `doctor.*` and `staff.*` (M1-P5), `patient.created` and `patient.updated` (M2-P2: the code, or the changed field names - never a name or phone), `patient.consent_changed`, `patient.opted_out` and `patient.opted_in` (M2-P3: the two consent flags, `given_by` guardian or patient, and the opt-out `source`), `patient.imported` (M2-P4: the code and the `import_id` shared by one import, actor `OPS`), `schedule.changed` (M3-P1: the block count and how many booked sessions were kept, entity the doctor), `schedule.exception_added` / `schedule.exception_removed` (the doctor ID, kind, date and kept count; never the note), `appointment.booked` / `appointment.cancelled` / `appointment.rescheduled` (M3-P2: session, doctor and patient IDs, mode, token or slot, source, cancel reason; never a name, the reason or the note); more per milestone |
 | entity_type, entity_id | text, uuid | Given together or not at all |
 | request_id | text | Ties the row to the API log and to the client's "Ref" |
 | ip_hash | text | HMAC-SHA256 of the caller's IP under `AUDIT_IP_SALT`, 32 hex chars; never a raw address |
@@ -286,9 +287,9 @@ Tenant-owned (`SqlAlchemySessionRepository`). Migration `0007`.
 | mode | text | `SLOTS` \| `TOKENS`, fixed when generated |
 | slot_minutes | smallint null | Set exactly in SLOTS mode (`ck_sessions_slot_minutes_by_mode`) |
 | capacity | smallint not null | Derived in SLOTS mode (length ÷ slot), stated in TOKENS mode (D3); 1–500 |
-| booked_count | smallint not null default 0 | Maintained under `FOR UPDATE` from M3-P2. `CHECK booked_count BETWEEN 0 AND capacity`: no overbooking (D6) |
+| booked_count | smallint not null default 0 | Changed under `FOR UPDATE` with the appointment (M3-P2). `CHECK booked_count BETWEEN 0 AND capacity`: no overbooking (D6) |
 | next_token | smallint not null default 1 | TOKENS mode |
-| status | text | `OPEN` \| `CLOSED` \| `CANCELLED` |
+| status | text | `OPEN` \| `CLOSED` (booked, no longer planned: no new bookings, D10) \| `CANCELLED` (retired: unbooked, kept for cancelled appointments; hidden from listing) |
 | | | `UNIQUE (doctor_id, starts_at)` |
 
 Sessions are generated lazily, the first time a date from the clinic's today up to 180 days ahead
@@ -298,8 +299,43 @@ deleted if `booked_count = 0` and kept otherwise (D4); the next read fills in th
 the doctor row `FOR UPDATE` and generation takes `FOR SHARE` (R20).
 
 ### `appointments`
+Tenant-owned (`SqlAlchemyAppointmentRepository`). Migration `0008`. One patient's place in one
+session (spec appointments R3–R8).
+
 | Column | Type | Notes |
 |---|---|---|
+| id | uuid PK | |
+| clinic_id, session_id, doctor_id, patient_id | uuid FK | |
+| slot_start | timestamptz null | SLOTS mode: one of the session's slot starts |
+| token_number | smallint null | TOKENS mode; exactly one of the two is set (`ck_appointments_one_place`) |
+| status | text not null | `BOOKED` \| `ARRIVED` \| `IN_CONSULTATION` \| `COMPLETED` \| `NO_SHOW` \| `CANCELLED` |
+| source | text not null | `FRONT_DESK` \| `PHONE` \| `WHATSAPP` \| `PUBLIC_PAGE` \| `WALK_IN` (FR-APT-07) |
+| reason | text null | ≤ 120 characters, non-clinical; never logged, audited or messaged |
+| cancel_reason, cancel_note, cancelled_at | text, text, timestamptz | Set together with `CANCELLED` (`ck_appointments_cancelled_has_reason`); note ≤ 200 |
+| rescheduled_from_id | uuid FK appointments null | The cancelled appointment a reschedule replaced (R8) |
+| arrived_at, started_at, completed_at | timestamptz null | Queue (M3-P3), wait-time metrics |
+| created_by | uuid FK users null | Null for public-page requests |
+| created_at, updated_at | timestamptz | |
+
+The database backs the booking rules whatever the code does (FR-APT-04):
+- `uq_appointments_session_id_slot_start_active`: partial unique `(session_id, slot_start) WHERE status <> 'CANCELLED' AND slot_start IS NOT NULL` (R3).
+- `uq_appointments_session_id_patient_id_active`: partial unique `(session_id, patient_id) WHERE status <> 'CANCELLED'` (D13).
+- `uq_appointments_session_id_token_number`: a token is never handed out twice, cancelled or not (R4).
+- Indexes `(clinic_id, doctor_id, status)` and `(clinic_id, patient_id, created_at desc)`.
+
+Booking, cancel and reschedule lock the doctor `FOR SHARE`, then the session `FOR UPDATE`, and
+change `sessions.booked_count` / `next_token` in the same transaction as the appointment row. A
+session that no longer matches the rules but has bookings becomes `CLOSED` (D10); one whose
+capacity alone changed is resized (D11); an unbooked one that cancelled appointments still point
+at is retired (`CANCELLED`) instead of deleted, and revived if the rules plan it again.
+
+### `appointment_status_history` (append-only)
+Tenant-owned (`SqlAlchemyAppointmentHistoryRepository`). Migration `0008`.
+`id, clinic_id, appointment_id, from_status null, to_status, changed_by, changed_at, request_id`;
+index `(appointment_id, changed_at)`. One row per status change, including the booking
+(`from_status` null) and a reschedule's cancellation (FR-APT-05).
+
+---|---|---|
 | id | uuid PK | |
 | clinic_id, session_id, doctor_id, patient_id | uuid FK | |
 | slot_start | timestamptz null | SLOTS mode |
