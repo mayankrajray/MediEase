@@ -52,6 +52,14 @@ from mediease_api.application.patients.import_patients import ImportPatients
 from mediease_api.application.patients.queries import GetPatient, LookupPatients
 from mediease_api.application.patients.register_patient import RegisterPatient
 from mediease_api.application.patients.update_patient import UpdatePatient
+from mediease_api.application.prescriptions.use_cases import (
+    CreateDraft,
+    DiscardDraft,
+    GetPrescription,
+    IssuePrescription,
+    ReplaceDraft,
+    RevisePrescription,
+)
 from mediease_api.application.scheduling.exceptions import AddException, RemoveException
 from mediease_api.application.scheduling.schedules import GetSchedule, ReplaceSchedule
 from mediease_api.application.scheduling.sessions import ListSessions
@@ -76,6 +84,7 @@ from mediease_api.delivery.http.me import create_me_blueprint
 from mediease_api.delivery.http.ops import create_ops_blueprint
 from mediease_api.delivery.http.patients import create_patients_blueprint
 from mediease_api.delivery.http.platform import create_platform_blueprint
+from mediease_api.delivery.http.prescriptions import create_prescriptions_blueprint
 from mediease_api.delivery.http.request_info import register_request_info
 from mediease_api.delivery.http.scheduling import create_scheduling_blueprint
 from mediease_api.delivery.http.visits import create_visits_blueprint
@@ -268,6 +277,24 @@ class _UseCases:
     def list_patient_visits(self) -> ListPatientVisits:
         return ListPatientVisits(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    def create_prescription(self) -> CreateDraft:
+        return CreateDraft(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def get_prescription(self) -> GetPrescription:
+        return GetPrescription(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def replace_prescription(self) -> ReplaceDraft:
+        return ReplaceDraft(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def discard_prescription(self) -> DiscardDraft:
+        return DiscardDraft(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def issue_prescription(self) -> IssuePrescription:
+        return IssuePrescription(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def revise_prescription(self) -> RevisePrescription:
+        return RevisePrescription(uow=self._uow(), clock=self.clock, ids=self.ids)
+
     def list_clinics(self) -> ListClinics:
         return ListClinics(uow=self._uow())
 
@@ -378,6 +405,7 @@ def create_app(
     app.register_blueprint(create_scheduling_blueprint(use_cases))
     app.register_blueprint(create_appointments_blueprint(use_cases))
     app.register_blueprint(create_visits_blueprint(use_cases))
+    app.register_blueprint(create_prescriptions_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

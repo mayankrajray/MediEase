@@ -61,3 +61,11 @@ class AuditAction(StrEnum):
     VISIT_ADDENDUM_ADDED = "visit.addendum_added"
     VISIT_VIEWED = "visit.viewed"
     PATIENT_VISITS_VIEWED = "patient.visits_viewed"
+    # M4-P2: prescriptions. Metadata: visit, version, revision, counts, language and delivery
+    # state; never a medicine, a dose or advice text (R17).
+    PRESCRIPTION_CREATED = "prescription.created"
+    PRESCRIPTION_UPDATED = "prescription.updated"
+    PRESCRIPTION_DISCARDED = "prescription.discarded"
+    PRESCRIPTION_ISSUED = "prescription.issued"
+    PRESCRIPTION_REVISED = "prescription.revised"
+    PRESCRIPTION_VIEWED = "prescription.viewed"

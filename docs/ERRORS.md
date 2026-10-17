@@ -121,17 +121,20 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 
 | Code | HTTP | Meaning | Likely cause | Where to look |
 |---|---|---|---|---|
-| `VIS_LOCKED` | 409 | This visit is locked; add an addendum | An edit from 24 h after completion (FR-VIS-05, AC6); `details.locked_at` | `visits.locked_at`; the server clock |
+| `VIS_LOCKED` | 409 | This visit is locked; add an addendum | An edit from 24 h after completion (FR-VIS-05, AC6), or creating, saving or issuing version 1 of its prescription then (M4-P2, 2A); `details.locked_at` | `visits.locked_at`; the server clock |
 | `VIS_ALREADY_EXISTS` | 409 | This consultation already has a visit | A second start for the same appointment (two clicks, two tabs); `details.visit_id` is the existing one: open it | `visits.appointment_id` |
 | `VIS_NOT_STARTABLE` | 409 | Start the consultation on the queue first | The appointment is not `IN_CONSULTATION` (decision 1A); `details.status` | The appointment's `history` |
 | `VIS_NOT_YOURS` | 403 | Only the visit's doctor can change it | A doctor (or owner-doctor) writing another doctor's visit, or a caller with no active doctor profile (spec §2, 3A) | `doctors.user_id`; the visit's `doctor_id` |
 | `VIS_STALE` | 409 | This visit was changed elsewhere; reload it and try again | The `PATCH` sent an older `revision`: another tab saved first (4A); `details.revision` is the current one | Reload the visit |
 | `VIS_NOT_COMPLETED` | 409 | Edit the visit directly until it is completed | An addendum on an open visit (R3) | `visits.status` |
 | `VIS_ADDENDUM_APPEND_ONLY` | — (database) | — | An `UPDATE`, `DELETE` or `TRUNCATE` of `visit_addenda` (migration 0009); never from the app | The statement's author; RUNBOOK for deliberate corrections |
-| `RX_NOT_DRAFT` | 409 | Prescription already issued; revise instead | Edit after issue (FR-RX-09) | `prescriptions.status` |
-| `RX_EMPTY` | 422 | Add at least one medicine or advice | Issue with no content | Draft body |
-| `RX_DOCTOR_INCOMPLETE` | 422 | Doctor profile missing registration details | Registration number/qualification empty | Doctor settings (FR-ORG-02) |
-| `RX_PDF_FAILED` | 500 (job) | PDF could not be created | Renderer/font/storage error | `render_pdf` job, worker logs |
+| `RX_NOT_DRAFT` | 409 | This prescription is already issued; revise it instead | A save, issue or discard of an issued or superseded version (FR-RX-09, AC1); `details.status`. Also raised by the database triggers (migration 0010) for any direct change | `prescriptions.status`; revise from the latest version |
+| `RX_EMPTY` | 422 | Add at least one medicine or advice | Issuing a draft with no items and no advice (R4) | The draft's `items`, `advice` |
+| `RX_DOCTOR_INCOMPLETE` | 422 | The doctor's profile is missing registration details | A printed field is blank (AC4); `details.fields` names them (comma-separated). The app requires them (I3), so this means data changed outside it | Doctor settings (FR-ORG-02) |
+| `RX_STALE` | 409 | This prescription was changed elsewhere; reload it and try again | The `PUT` or issue sent an older `revision` (3A); `details.revision` is the current one | Reload the prescription |
+| `RX_ALREADY_EXISTS` | 409 | This visit already has a prescription | A second "new prescription" for the visit (1A); `details.prescription_id` | The consultation view's `prescriptions` |
+| `RX_DRAFT_EXISTS` | 409 | A revision is already being drafted | Revising while the chain has a draft; `details.prescription_id` is that draft | Continue the draft |
+| `RX_NOT_LATEST` | 409 | Revise the latest version | Revising a superseded version; `details.latest_id` | The prescription's `versions` || `RX_PDF_FAILED` | 500 (job) | PDF could not be created | Renderer/font/storage error | `render_pdf` job, worker logs |
 
 ## Patient links (M4)
 

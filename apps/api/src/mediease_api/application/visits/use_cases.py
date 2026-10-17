@@ -19,7 +19,7 @@ names only (R17).
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID
 
 import structlog
@@ -39,6 +39,7 @@ from mediease_api.application.scheduling.schedules import load_clinic
 from mediease_api.domain.appointments.queue import is_session_day, transition
 from mediease_api.domain.appointments.status import AppointmentStatus
 from mediease_api.domain.audit.actions import AuditAction
+from mediease_api.domain.prescriptions.prescription import Prescription, latest_issued
 from mediease_api.domain.shared.errors import InvalidValue, NotFound
 from mediease_api.domain.shared.time import local_date
 from mediease_api.domain.visits.errors import VisitAlreadyExists, VisitNotYours
@@ -71,6 +72,9 @@ class ConsultationView:
     visit: VisitView
     patient: PatientView
     history: tuple[Visit, ...]
+    # M4-P2: this visit's chain (by version), and each history visit's latest issued version.
+    prescriptions: tuple[Prescription, ...] = ()
+    history_prescriptions: Mapping[UUID, Prescription] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,7 +84,7 @@ class VisitPage:
     next_before: UUID | None
 
 
-def _load_visit(
+def load_visit(
     tenant: TenantRepositories, clinic_id: UUID, visit_id: UUID, *, for_update: bool = False
 ) -> Visit:
     visit = tenant.visits.get(visit_id, for_update=for_update)
@@ -92,7 +96,7 @@ def _load_visit(
     return visit
 
 
-def _callers_doctor_id(tenant: TenantRepositories, ctx: RequestContext) -> UUID:
+def callers_doctor_id(tenant: TenantRepositories, ctx: RequestContext) -> UUID:
     """The doctor profile of the signed-in user; without one, nobody's visits are theirs."""
     doctor = tenant.doctors.get_for_user(ctx.user_id)
     if doctor is None or not doctor.is_active:
@@ -115,7 +119,7 @@ class StartVisit:
     def execute(self, ctx: RequestContext, *, appointment_id: UUID) -> VisitView:
         with self._uow as uow:
             tenant = uow.tenant(ctx.clinic_id)
-            doctor_id = _callers_doctor_id(tenant, ctx)
+            doctor_id = callers_doctor_id(tenant, ctx)
             seen = load_appointment(tenant, ctx.clinic_id, appointment_id)
             lock_sessions(tenant, ctx.clinic_id, [seen.session_id])
             appointment = load_appointment(tenant, ctx.clinic_id, appointment_id, for_update=True)
@@ -175,8 +179,8 @@ class UpdateVisit:
     def execute(self, ctx: RequestContext, *, visit_id: UUID, changes: VisitChanges) -> VisitView:
         with self._uow as uow:
             tenant = uow.tenant(ctx.clinic_id)
-            visit = _load_visit(tenant, ctx.clinic_id, visit_id, for_update=True)
-            visit.check_writer(_callers_doctor_id(tenant, ctx))
+            visit = load_visit(tenant, ctx.clinic_id, visit_id, for_update=True)
+            visit.check_writer(callers_doctor_id(tenant, ctx))
             now = self._clock.now()
             changed = visit.edit(changes.fields, seen_revision=changes.seen_revision, now=now)
             if changed:
@@ -212,14 +216,14 @@ class CompleteVisit:
         with self._uow as uow:
             clinic = load_clinic(uow, ctx.clinic_id)
             tenant = uow.tenant(ctx.clinic_id)
-            seen = _load_visit(tenant, ctx.clinic_id, visit_id)
-            seen.check_writer(_callers_doctor_id(tenant, ctx))
+            seen = load_visit(tenant, ctx.clinic_id, visit_id)
+            seen.check_writer(callers_doctor_id(tenant, ctx))
             appointment = load_appointment(tenant, ctx.clinic_id, seen.appointment_id)
             session = lock_sessions(tenant, ctx.clinic_id, [appointment.session_id]).sessions[
                 appointment.session_id
             ]
             appointment = load_appointment(tenant, ctx.clinic_id, appointment.id, for_update=True)
-            visit = _load_visit(tenant, ctx.clinic_id, visit_id, for_update=True)
+            visit = load_visit(tenant, ctx.clinic_id, visit_id, for_update=True)
             now = self._clock.now()
             moved = False
             if visit.complete(now):
@@ -289,8 +293,8 @@ class AddAddendum:
     def execute(self, ctx: RequestContext, *, visit_id: UUID, body: str) -> VisitAddendum:
         with self._uow as uow:
             tenant = uow.tenant(ctx.clinic_id)
-            visit = _load_visit(tenant, ctx.clinic_id, visit_id, for_update=True)
-            visit.check_writer(_callers_doctor_id(tenant, ctx))
+            visit = load_visit(tenant, ctx.clinic_id, visit_id, for_update=True)
+            visit.check_writer(callers_doctor_id(tenant, ctx))
             now = self._clock.now()
             addendum = visit.addendum(
                 id=self._ids.new_id(), author_user_id=ctx.user_id, body=body, now=now
@@ -328,7 +332,7 @@ class GetConsultation:
         with self._uow as uow:
             clinic = load_clinic(uow, ctx.clinic_id)
             tenant = uow.tenant(ctx.clinic_id)
-            visit = _load_visit(tenant, ctx.clinic_id, visit_id)
+            visit = load_visit(tenant, ctx.clinic_id, visit_id)
             patient = tenant.patients.get(visit.patient_id)
             assert patient is not None  # the foreign key keeps it
             # Previous visits only: this one is shown in full.
@@ -337,11 +341,20 @@ class GetConsultation:
                 for v in tenant.visits.list_for_patient(visit.patient_id, limit=HISTORY_SIZE + 1)
                 if v.id != visit.id
             )[:HISTORY_SIZE]
+            # One query for every prescription on the screen, still one read and one audit row.
+            chains: dict[UUID, list[Prescription]] = {}
+            for rx in tenant.prescriptions.list_for_visits([visit.id, *(v.id for v in history)]):
+                chains.setdefault(rx.visit_id, []).append(rx)
+            latest = {
+                v.id: found for v in history if (found := latest_issued(chains.get(v.id, [])))
+            }
             now = self._clock.now()
             view = ConsultationView(
                 _view(tenant, visit, locked=visit.is_locked(now)),
                 PatientView.of(patient, local_date(now, clinic.timezone)),
                 history,
+                tuple(chains.get(visit.id, [])),
+                latest,
             )
             record_event(
                 uow,

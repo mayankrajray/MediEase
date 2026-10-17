@@ -14,12 +14,14 @@ from typing import Any
 from mediease_api.application.appointments.queue import QueueView
 from mediease_api.application.appointments.views import AppointmentDetail, AppointmentView
 from mediease_api.application.patients.views import CandidateView, PatientView
+from mediease_api.application.prescriptions.use_cases import PrescriptionView
 from mediease_api.application.scheduling.views import ScheduleView
 from mediease_api.application.visits.use_cases import ConsultationView, VisitView
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
 from mediease_api.domain.identity.access import StaffMember
+from mediease_api.domain.prescriptions.prescription import Prescription, PrescriptionItem
 from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
 from mediease_api.domain.scheduling.exceptions import ScheduleException
 from mediease_api.domain.scheduling.mode import BookingMode
@@ -320,8 +322,8 @@ def visit_body(view: VisitView) -> dict[str, Any]:
     }
 
 
-def visit_summary_body(visit: Visit) -> dict[str, Any]:
-    """One line of a patient's history (R2): when, who, why and what was found."""
+def visit_summary_body(visit: Visit, prescription: Prescription | None = None) -> dict[str, Any]:
+    """One line of a patient's history (R2): when, who, why, what was found and what was given."""
     return {
         "id": str(visit.id),
         "doctor_id": str(visit.doctor_id),
@@ -331,6 +333,7 @@ def visit_summary_body(visit: Visit) -> dict[str, Any]:
         "completed_at": _iso(visit.completed_at),
         "chief_complaint": visit.chief_complaint,
         "diagnosis": visit.diagnosis,
+        "prescription": prescription_summary_body(prescription) if prescription else None,
     }
 
 
@@ -339,5 +342,85 @@ def consultation_body(view: ConsultationView) -> dict[str, Any]:
     return {
         "visit": visit_body(view.visit),
         "patient": patient_body(view.patient),
-        "history": [visit_summary_body(v) for v in view.history],
+        "history": [
+            visit_summary_body(v, view.history_prescriptions.get(v.id)) for v in view.history
+        ],
+        "prescriptions": [prescription_body(PrescriptionView(rx)) for rx in view.prescriptions],
+    }
+
+
+# --- Prescriptions (M4-P2). Clinical content: CLINICAL_VIEW routes only, never logged. -----------
+
+
+def item_body(item: PrescriptionItem) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "position": item.position,
+        "medicine_name": item.medicine_name,
+        "form": item.form,
+        "strength": item.strength,
+        "dose": item.dose,
+        "frequency": item.frequency.value if item.frequency else None,
+        "frequency_text": item.frequency_text,
+        "timing": item.timing.value if item.timing else None,
+        "duration_days": item.duration_days,
+        "quantity": item.quantity,
+        "preparation": [p.as_json() for p in item.preparation],
+        "storage": [s.as_json() for s in item.storage],
+        "warnings": item.warnings,
+        "notes": item.notes,
+    }
+
+
+def prescription_body(view: PrescriptionView) -> dict[str, Any]:
+    """One version in full; ``versions`` lists the chain when the read had it."""
+    rx = view.prescription
+    return {
+        "id": str(rx.id),
+        "visit_id": str(rx.visit_id),
+        "patient_id": str(rx.patient_id),
+        "doctor_id": str(rx.doctor_id),
+        "version": rx.version,
+        "supersedes_id": str(rx.supersedes_id) if rx.supersedes_id else None,
+        "status": rx.status.value,
+        "revision": rx.revision,
+        "items": [item_body(i) for i in rx.items],
+        "advice": rx.advice.as_json(),
+        "follow_up_date": rx.follow_up_date.isoformat() if rx.follow_up_date else None,
+        "language": rx.language.value if rx.language else None,
+        "issued_at": _iso(rx.issued_at),
+        "doctor_snapshot": rx.doctor_snapshot.as_json() if rx.doctor_snapshot else None,
+        "clinic_snapshot": rx.clinic_snapshot.as_json() if rx.clinic_snapshot else None,
+        "link_delivery": rx.link_delivery.value if rx.link_delivery else None,
+        "versions": [
+            {
+                "id": str(v.id),
+                "version": v.version,
+                "status": v.status.value,
+                "issued_at": _iso(v.issued_at),
+            }
+            for v in view.chain
+        ],
+        "created_at": rx.created_at.isoformat(),
+        "updated_at": rx.updated_at.isoformat(),
+    }
+
+
+def prescription_summary_body(rx: Prescription) -> dict[str, Any]:
+    """A history line's prescription: the medicines and how they were taken (R2)."""
+    return {
+        "id": str(rx.id),
+        "version": rx.version,
+        "issued_at": _iso(rx.issued_at),
+        "items": [
+            {
+                "medicine_name": i.medicine_name,
+                "dose": i.dose,
+                "frequency": i.frequency.value if i.frequency else None,
+                "frequency_text": i.frequency_text,
+                "timing": i.timing.value if i.timing else None,
+                "duration_days": i.duration_days,
+            }
+            for i in rx.items
+        ],
     }

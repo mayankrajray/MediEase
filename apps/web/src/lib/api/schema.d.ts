@@ -1014,10 +1014,281 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/visits/{visit_id}/prescriptions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Start the visit's prescription (an empty draft, version 1)
+         * @description FR-RX-01; M4-P2 decision 1A. One chain per visit: 409 RX_ALREADY_EXISTS with
+         *     details.prescription_id when it has one. 409 VIS_LOCKED once the visit is locked. Records
+         *     prescription.created. Permission CLINICAL_WRITE, the visit's doctor. Needs X-CSRF-Token.
+         */
+        readonly post: operations["createPrescription"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/prescriptions/{rx_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * One prescription version with its chain
+         * @description FR-RX-01, 09; spec R16. Records one prescription.viewed. Permission CLINICAL_VIEW.
+         */
+        readonly get: operations["getPrescription"];
+        /**
+         * Save the whole draft
+         * @description FR-RX-01..03; decision 3A. Replaces items, advice and follow-up date. 409 RX_NOT_DRAFT on an
+         *     issued version, 409 RX_STALE (details.revision) when another tab saved first. Records
+         *     prescription.updated with counts only. Permission CLINICAL_WRITE, the visit's doctor. Needs
+         *     X-CSRF-Token.
+         */
+        readonly put: operations["replacePrescription"];
+        readonly post?: never;
+        /**
+         * Discard a draft
+         * @description Only a draft (409 RX_NOT_DRAFT otherwise). Records prescription.discarded. Needs X-CSRF-Token.
+         */
+        readonly delete: operations["discardPrescription"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/prescriptions/{rx_id}/issue": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Issue the draft (it never changes again)
+         * @description FR-RX-06, 09; spec R4, R5, R14, R20, AC1, AC4. Freezes the draft with the doctor and clinic
+         *     as printed, the patient's language and link_delivery (PENDING when the patient allows
+         *     WhatsApp or SMS, else NOT_CONSENTED). A revision supersedes the version before it. 422
+         *     RX_EMPTY, 422 RX_DOCTOR_INCOMPLETE (details.fields). Records prescription.issued. No message
+         *     is sent in M4. Permission CLINICAL_WRITE, the visit's doctor. Needs X-CSRF-Token.
+         */
+        readonly post: operations["issuePrescription"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/prescriptions/{rx_id}/revise": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Start a new version from the latest issued one
+         * @description FR-RX-09; spec R6, decision 2A (at any time). A draft, version n+1, with the same content.
+         *     409 RX_DRAFT_EXISTS (details.prescription_id), 409 RX_NOT_LATEST (details.latest_id).
+         *     Records prescription.revised. Permission CLINICAL_WRITE, the visit's doctor. Needs
+         *     X-CSRF-Token.
+         */
+        readonly post: operations["revisePrescription"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description Morning-afternoon-night (and bedtime) pattern; CUSTOM needs frequency_text
+         * @enum {string}
+         */
+        readonly Frequency: "1-0-0" | "0-1-0" | "0-0-1" | "1-0-1" | "1-1-1" | "1-1-1-1" | "SOS" | "ONCE" | "CUSTOM";
+        /** @enum {string} */
+        readonly Timing: "BEFORE_FOOD" | "AFTER_FOOD" | "WITH_FOOD" | "EMPTY_STOMACH" | "BEDTIME" | "ANY";
+        readonly PreparationPhrase: {
+            /** @enum {string} */
+            readonly code: "SHAKE_WELL" | "DILUTE_IN_WATER" | "DISSOLVE" | "CHEW" | "DO_NOT_CRUSH" | "CUSTOM";
+            /** @description The amount for DILUTE_IN_WATER, the doctor's words for CUSTOM; else absent */
+            readonly text?: string | null;
+        };
+        readonly StoragePhrase: {
+            /** @enum {string} */
+            readonly code: "ROOM_TEMP" | "REFRIGERATE" | "AWAY_FROM_LIGHT" | "DISCARD_AFTER_DAYS";
+            /** @description Only for DISCARD_AFTER_DAYS */
+            readonly days?: number | null;
+        };
+        readonly PrescriptionItemInput: {
+            readonly medicine_name: string;
+            readonly form?: string | null;
+            readonly strength?: string | null;
+            readonly dose?: string | null;
+            readonly frequency?: components["schemas"]["Frequency"] | null;
+            readonly frequency_text?: string | null;
+            readonly timing?: components["schemas"]["Timing"] | null;
+            readonly duration_days?: number | null;
+            readonly quantity?: string | null;
+            readonly preparation?: readonly components["schemas"]["PreparationPhrase"][];
+            readonly storage?: readonly components["schemas"]["StoragePhrase"][];
+            readonly warnings?: string | null;
+            readonly notes?: string | null;
+        };
+        readonly PrescriptionItemOutput: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly position: number;
+            readonly medicine_name: string;
+            readonly form: string | null;
+            readonly strength: string | null;
+            readonly dose: string | null;
+            readonly frequency: components["schemas"]["Frequency"] | null;
+            readonly frequency_text: string | null;
+            readonly timing: components["schemas"]["Timing"] | null;
+            readonly duration_days: number | null;
+            readonly quantity: string | null;
+            readonly preparation: readonly {
+                readonly code: string;
+                readonly text: string | null;
+            }[];
+            readonly storage: readonly {
+                readonly code: string;
+                readonly days: number | null;
+            }[];
+            readonly warnings: string | null;
+            readonly notes: string | null;
+        };
+        readonly AdviceInput: {
+            readonly diet?: readonly string[];
+            readonly activity?: readonly string[];
+            /** @description When to come back immediately */
+            readonly return_if?: readonly string[];
+            readonly notes?: string | null;
+        };
+        readonly Advice: {
+            readonly diet: readonly string[];
+            readonly activity: readonly string[];
+            readonly return_if: readonly string[];
+            readonly notes: string | null;
+        };
+        /** @description The whole draft; what is not sent is emptied (decision 3A) */
+        readonly PrescriptionDraft: {
+            /** @description The revision the screen shows (409 RX_STALE otherwise) */
+            readonly revision: number;
+            readonly items?: readonly components["schemas"]["PrescriptionItemInput"][];
+            readonly advice?: components["schemas"]["AdviceInput"];
+            /**
+             * Format: date
+             * @description After today and within a year
+             */
+            readonly follow_up_date?: string | null;
+        };
+        readonly PrescriptionIssue: {
+            readonly revision: number;
+        };
+        /** @enum {string} */
+        readonly PrescriptionStatus: "DRAFT" | "ISSUED" | "SUPERSEDED";
+        /**
+         * @description The patient link's delivery (spec R14, R15): PENDING until M5 sends it (only within 24
+         *     hours of issue), NOT_CONSENTED when the patient allows no messages, SUPERSEDED when a newer
+         *     version replaced it first. SENT and EXPIRED are written by M5.
+         * @enum {string}
+         */
+        readonly LinkDelivery: "PENDING" | "NOT_CONSENTED" | "SUPERSEDED" | "SENT" | "EXPIRED";
+        readonly DoctorSnapshot: {
+            /** Format: uuid */
+            readonly doctor_id: string;
+            readonly display_name: string;
+            readonly qualification: string;
+            readonly registration_number: string;
+            readonly registration_council: string;
+            readonly specialty: string | null;
+        };
+        readonly ClinicSnapshot: {
+            readonly name: string;
+            readonly address_line: string | null;
+            readonly city: string | null;
+            readonly state: string | null;
+            readonly pincode: string | null;
+            readonly phone_e164: string | null;
+        };
+        readonly PrescriptionVersion: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly version: number;
+            readonly status: components["schemas"]["PrescriptionStatus"];
+            /** Format: date-time */
+            readonly issued_at: string | null;
+        };
+        /** @description Clinical content (C3). Never cached, never logged. */
+        readonly Prescription: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly visit_id: string;
+            /** Format: uuid */
+            readonly patient_id: string;
+            /** Format: uuid */
+            readonly doctor_id: string;
+            readonly version: number;
+            /** Format: uuid */
+            readonly supersedes_id: string | null;
+            readonly status: components["schemas"]["PrescriptionStatus"];
+            readonly revision: number;
+            readonly items: readonly components["schemas"]["PrescriptionItemOutput"][];
+            readonly advice: components["schemas"]["Advice"];
+            /** Format: date */
+            readonly follow_up_date: string | null;
+            /**
+             * @description The patient's language at issue; the PDF uses it (R20)
+             * @enum {string|null}
+             */
+            readonly language: "en" | "hi" | null;
+            /** Format: date-time */
+            readonly issued_at: string | null;
+            readonly doctor_snapshot: components["schemas"]["DoctorSnapshot"] | null;
+            readonly clinic_snapshot: components["schemas"]["ClinicSnapshot"] | null;
+            readonly link_delivery: components["schemas"]["LinkDelivery"] | null;
+            /** @description The chain by version, when the response includes it (else empty) */
+            readonly versions: readonly components["schemas"]["PrescriptionVersion"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        readonly PrescriptionSummary: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly version: number;
+            /** Format: date-time */
+            readonly issued_at: string | null;
+            readonly items: readonly {
+                readonly medicine_name: string;
+                readonly dose: string | null;
+                readonly frequency: components["schemas"]["Frequency"] | null;
+                readonly frequency_text: string | null;
+                readonly timing: components["schemas"]["Timing"] | null;
+                readonly duration_days: number | null;
+            }[];
+        };
         readonly NewVisit: {
             /** Format: uuid */
             readonly appointment_id: string;
@@ -1119,12 +1390,16 @@ export interface components {
             readonly completed_at: string | null;
             readonly chief_complaint: string | null;
             readonly diagnosis: string | null;
+            /** @description The visit's latest issued prescription (medicines only), if any */
+            readonly prescription: components["schemas"]["PrescriptionSummary"] | null;
         };
         readonly Consultation: {
             readonly visit: components["schemas"]["Visit"];
             readonly patient: components["schemas"]["Patient"];
             /** @description The patient's previous visits (at most 10), newest first */
             readonly history: readonly components["schemas"]["VisitSummary"][];
+            /** @description This visit's prescription chain, by version (M4-P2) */
+            readonly prescriptions: readonly components["schemas"]["Prescription"][];
         };
         readonly VisitPage: {
             readonly items: readonly components["schemas"]["VisitSummary"][];
@@ -1908,6 +2183,22 @@ export interface components {
             };
         };
         /**
+         * @description RX_NOT_DRAFT (409, details.status: issued versions never change, revise instead);
+         *     RX_STALE (409, details.revision); RX_ALREADY_EXISTS (409, details.prescription_id: the
+         *     visit's chain); RX_DRAFT_EXISTS (409, details.prescription_id); RX_NOT_LATEST (409,
+         *     details.latest_id); VIS_LOCKED (409: version 1 after the visit's lock); RX_EMPTY (422);
+         *     RX_DOCTOR_INCOMPLETE (422, details.fields); REQ_VALIDATION_FAILED (422, field and rule)
+         */
+        readonly PrescriptionError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
          * @description PERM_DENIED (403: front desk, or an owner who is not a doctor writing); VIS_NOT_YOURS (403:
          *     a doctor writing another doctor's visit); CLN_SUSPENDED (403)
          */
@@ -2026,6 +2317,8 @@ export interface components {
         readonly AppointmentPath: string;
         /** @description A visit of the request's clinic. */
         readonly VisitPath: string;
+        /** @description A prescription version of the request's clinic. */
+        readonly PrescriptionPath: string;
         /** @description The single-use invitation secret from the acceptance link. */
         readonly InviteToken: string;
     };
@@ -3952,6 +4245,260 @@ export interface operations {
             readonly 403: components["responses"]["VisitPermissionError"];
             readonly 404: components["responses"]["PermissionError"];
             readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly createPrescription: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A visit of the request's clinic. */
+                readonly visit_id: components["parameters"]["VisitPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The draft */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Prescription"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["PrescriptionError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["PrescriptionError"];
+        };
+    };
+    readonly getPrescription: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description A prescription version of the request's clinic. */
+                readonly rx_id: components["parameters"]["PrescriptionPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The version */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Prescription"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly replacePrescription: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A prescription version of the request's clinic. */
+                readonly rx_id: components["parameters"]["PrescriptionPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PrescriptionDraft"];
+            };
+        };
+        readonly responses: {
+            /** @description The draft after the change */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Prescription"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["PrescriptionError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["PrescriptionError"];
+        };
+    };
+    readonly discardPrescription: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A prescription version of the request's clinic. */
+                readonly rx_id: components["parameters"]["PrescriptionPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Discarded */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["PrescriptionError"];
+        };
+    };
+    readonly issuePrescription: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A prescription version of the request's clinic. */
+                readonly rx_id: components["parameters"]["PrescriptionPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PrescriptionIssue"];
+            };
+        };
+        readonly responses: {
+            /** @description Issued */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Prescription"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["PrescriptionError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["PrescriptionError"];
+        };
+    };
+    readonly revisePrescription: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A prescription version of the request's clinic. */
+                readonly rx_id: components["parameters"]["PrescriptionPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The new draft */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Prescription"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["PrescriptionError"];
         };
     };
 }

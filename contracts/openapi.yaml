@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.13.0
+  version: 0.14.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -61,6 +61,13 @@ tags:
       desk gets 403 PERM_DENIED. Read-only 24 hours after completion, then addenda. Every read
       that returns clinical content records one audit row for the whole view (spec R16).
       Responses are never cached.
+  - name: prescriptions
+    description: |
+      Prescriptions (M4-P2, FR-RX-01..03, 06, 09): one chain of versions per visit. A draft is
+      saved whole with its revision; issuing freezes it with the doctor and clinic as printed, the
+      patient's language and the pending-delivery marker. An issued version never changes (409
+      RX_NOT_DRAFT, also refused by the database); revise it for a new version. Same permissions,
+      audit and caching rules as visits. Nothing validates a medicine or a dose.
   - name: invites
     description: |
       Accepting a staff invitation (M1-P5). Public, because the invitee has no session yet: the
@@ -2105,6 +2112,245 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '422':
           $ref: '#/components/responses/AuthError'
+  /api/v1/visits/{visit_id}/prescriptions:
+    post:
+      tags: [prescriptions]
+      operationId: createPrescription
+      summary: Start the visit's prescription (an empty draft, version 1)
+      description: |
+        FR-RX-01; M4-P2 decision 1A. One chain per visit: 409 RX_ALREADY_EXISTS with
+        details.prescription_id when it has one. 409 VIS_LOCKED once the visit is locked. Records
+        prescription.created. Permission CLINICAL_WRITE, the visit's doctor. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/VisitPath'
+      responses:
+        '201':
+          description: The draft
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prescription'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/PrescriptionError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/PrescriptionError'
+  /api/v1/prescriptions/{rx_id}:
+    get:
+      tags: [prescriptions]
+      operationId: getPrescription
+      summary: One prescription version with its chain
+      description: FR-RX-01, 09; spec R16. Records one prescription.viewed. Permission CLINICAL_VIEW.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PrescriptionPath'
+      responses:
+        '200':
+          description: The version
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prescription'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+    put:
+      tags: [prescriptions]
+      operationId: replacePrescription
+      summary: Save the whole draft
+      description: |
+        FR-RX-01..03; decision 3A. Replaces items, advice and follow-up date. 409 RX_NOT_DRAFT on an
+        issued version, 409 RX_STALE (details.revision) when another tab saved first. Records
+        prescription.updated with counts only. Permission CLINICAL_WRITE, the visit's doctor. Needs
+        X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/PrescriptionPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrescriptionDraft'
+      responses:
+        '200':
+          description: The draft after the change
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prescription'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/PrescriptionError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/PrescriptionError'
+    delete:
+      tags: [prescriptions]
+      operationId: discardPrescription
+      summary: Discard a draft
+      description: Only a draft (409 RX_NOT_DRAFT otherwise). Records prescription.discarded. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/PrescriptionPath'
+      responses:
+        '204':
+          description: Discarded
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/PrescriptionError'
+  /api/v1/prescriptions/{rx_id}/issue:
+    post:
+      tags: [prescriptions]
+      operationId: issuePrescription
+      summary: Issue the draft (it never changes again)
+      description: |
+        FR-RX-06, 09; spec R4, R5, R14, R20, AC1, AC4. Freezes the draft with the doctor and clinic
+        as printed, the patient's language and link_delivery (PENDING when the patient allows
+        WhatsApp or SMS, else NOT_CONSENTED). A revision supersedes the version before it. 422
+        RX_EMPTY, 422 RX_DOCTOR_INCOMPLETE (details.fields). Records prescription.issued. No message
+        is sent in M4. Permission CLINICAL_WRITE, the visit's doctor. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/PrescriptionPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrescriptionIssue'
+      responses:
+        '200':
+          description: Issued
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prescription'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/PrescriptionError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/PrescriptionError'
+  /api/v1/prescriptions/{rx_id}/revise:
+    post:
+      tags: [prescriptions]
+      operationId: revisePrescription
+      summary: Start a new version from the latest issued one
+      description: |
+        FR-RX-09; spec R6, decision 2A (at any time). A draft, version n+1, with the same content.
+        409 RX_DRAFT_EXISTS (details.prescription_id), 409 RX_NOT_LATEST (details.latest_id).
+        Records prescription.revised. Permission CLINICAL_WRITE, the visit's doctor. Needs
+        X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/PrescriptionPath'
+      responses:
+        '201':
+          description: The new draft
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prescription'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/PrescriptionError'
 components:
   securitySchemes:
     sessionCookie:
@@ -2179,6 +2425,14 @@ components:
       in: path
       required: true
       description: A visit of the request's clinic.
+      schema:
+        type: string
+        format: uuid
+    PrescriptionPath:
+      name: rx_id
+      in: path
+      required: true
+      description: A prescription version of the request's clinic.
       schema:
         type: string
         format: uuid
@@ -2290,6 +2544,20 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    PrescriptionError:
+      description: |
+        RX_NOT_DRAFT (409, details.status: issued versions never change, revise instead);
+        RX_STALE (409, details.revision); RX_ALREADY_EXISTS (409, details.prescription_id: the
+        visit's chain); RX_DRAFT_EXISTS (409, details.prescription_id); RX_NOT_LATEST (409,
+        details.latest_id); VIS_LOCKED (409: version 1 after the visit's lock); RX_EMPTY (422);
+        RX_DOCTOR_INCOMPLETE (422, details.fields); REQ_VALIDATION_FAILED (422, field and rule)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
     VisitPermissionError:
       description: |
         PERM_DENIED (403: front desk, or an owner who is not a doctor writing); VIS_NOT_YOURS (403:
@@ -2393,6 +2661,299 @@ components:
       schema:
         type: string
   schemas:
+    Frequency:
+      type: string
+      enum: ['1-0-0', '0-1-0', '0-0-1', '1-0-1', '1-1-1', '1-1-1-1', SOS, ONCE, CUSTOM]
+      description: Morning-afternoon-night (and bedtime) pattern; CUSTOM needs frequency_text
+    Timing:
+      type: string
+      enum: [BEFORE_FOOD, AFTER_FOOD, WITH_FOOD, EMPTY_STOMACH, BEDTIME, ANY]
+    PreparationPhrase:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code:
+          type: string
+          enum: [SHAKE_WELL, DILUTE_IN_WATER, DISSOLVE, CHEW, DO_NOT_CRUSH, CUSTOM]
+        text:
+          type: [string, 'null']
+          maxLength: 100
+          description: The amount for DILUTE_IN_WATER, the doctor's words for CUSTOM; else absent
+    StoragePhrase:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code:
+          type: string
+          enum: [ROOM_TEMP, REFRIGERATE, AWAY_FROM_LIGHT, DISCARD_AFTER_DAYS]
+        days:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 365
+          description: Only for DISCARD_AFTER_DAYS
+    PrescriptionItemInput:
+      type: object
+      additionalProperties: false
+      required: [medicine_name]
+      properties:
+        medicine_name: {type: string, minLength: 1, maxLength: 200}
+        form: {type: [string, 'null'], maxLength: 100}
+        strength: {type: [string, 'null'], maxLength: 100}
+        dose: {type: [string, 'null'], maxLength: 100}
+        frequency:
+          oneOf:
+            - $ref: '#/components/schemas/Frequency'
+            - type: 'null'
+        frequency_text: {type: [string, 'null'], maxLength: 100}
+        timing:
+          oneOf:
+            - $ref: '#/components/schemas/Timing'
+            - type: 'null'
+        duration_days: {type: [integer, 'null'], minimum: 1, maximum: 365}
+        quantity: {type: [string, 'null'], maxLength: 100}
+        preparation:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/PreparationPhrase'
+        storage:
+          type: array
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/StoragePhrase'
+        warnings: {type: [string, 'null'], maxLength: 500}
+        notes: {type: [string, 'null'], maxLength: 1000}
+    PrescriptionItemOutput:
+      type: object
+      required:
+        - id
+        - position
+        - medicine_name
+        - form
+        - strength
+        - dose
+        - frequency
+        - frequency_text
+        - timing
+        - duration_days
+        - quantity
+        - preparation
+        - storage
+        - warnings
+        - notes
+      properties:
+        id: {type: string, format: uuid}
+        position: {type: integer, minimum: 1}
+        medicine_name: {type: string}
+        form: {type: [string, 'null']}
+        strength: {type: [string, 'null']}
+        dose: {type: [string, 'null']}
+        frequency:
+          oneOf:
+            - $ref: '#/components/schemas/Frequency'
+            - type: 'null'
+        frequency_text: {type: [string, 'null']}
+        timing:
+          oneOf:
+            - $ref: '#/components/schemas/Timing'
+            - type: 'null'
+        duration_days: {type: [integer, 'null']}
+        quantity: {type: [string, 'null']}
+        preparation:
+          type: array
+          items:
+            type: object
+            required: [code, text]
+            properties:
+              code: {type: string}
+              text: {type: [string, 'null']}
+        storage:
+          type: array
+          items:
+            type: object
+            required: [code, days]
+            properties:
+              code: {type: string}
+              days: {type: [integer, 'null']}
+        warnings: {type: [string, 'null']}
+        notes: {type: [string, 'null']}
+    AdviceInput:
+      type: object
+      additionalProperties: false
+      properties:
+        diet: {type: array, maxItems: 10, items: {type: string, maxLength: 300}}
+        activity: {type: array, maxItems: 10, items: {type: string, maxLength: 300}}
+        return_if:
+          type: array
+          maxItems: 10
+          description: When to come back immediately
+          items: {type: string, maxLength: 300}
+        notes: {type: [string, 'null'], maxLength: 2000}
+    Advice:
+      type: object
+      required: [diet, activity, return_if, notes]
+      properties:
+        diet: {type: array, items: {type: string}}
+        activity: {type: array, items: {type: string}}
+        return_if: {type: array, items: {type: string}}
+        notes: {type: [string, 'null']}
+    PrescriptionDraft:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      description: The whole draft; what is not sent is emptied (decision 3A)
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+          description: The revision the screen shows (409 RX_STALE otherwise)
+        items:
+          type: array
+          maxItems: 40
+          items:
+            $ref: '#/components/schemas/PrescriptionItemInput'
+        advice:
+          $ref: '#/components/schemas/AdviceInput'
+        follow_up_date:
+          type: [string, 'null']
+          format: date
+          description: After today and within a year
+    PrescriptionIssue:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        revision: {type: integer, minimum: 1}
+    PrescriptionStatus:
+      type: string
+      enum: [DRAFT, ISSUED, SUPERSEDED]
+    LinkDelivery:
+      type: string
+      enum: [PENDING, NOT_CONSENTED, SUPERSEDED, SENT, EXPIRED]
+      description: |
+        The patient link's delivery (spec R14, R15): PENDING until M5 sends it (only within 24
+        hours of issue), NOT_CONSENTED when the patient allows no messages, SUPERSEDED when a newer
+        version replaced it first. SENT and EXPIRED are written by M5.
+    DoctorSnapshot:
+      type: object
+      required: [doctor_id, display_name, qualification, registration_number, registration_council, specialty]
+      properties:
+        doctor_id: {type: string, format: uuid}
+        display_name: {type: string}
+        qualification: {type: string}
+        registration_number: {type: string}
+        registration_council: {type: string}
+        specialty: {type: [string, 'null']}
+    ClinicSnapshot:
+      type: object
+      required: [name, address_line, city, state, pincode, phone_e164]
+      properties:
+        name: {type: string}
+        address_line: {type: [string, 'null']}
+        city: {type: [string, 'null']}
+        state: {type: [string, 'null']}
+        pincode: {type: [string, 'null']}
+        phone_e164: {type: [string, 'null']}
+    PrescriptionVersion:
+      type: object
+      required: [id, version, status, issued_at]
+      properties:
+        id: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        status:
+          $ref: '#/components/schemas/PrescriptionStatus'
+        issued_at: {type: [string, 'null'], format: date-time}
+    Prescription:
+      type: object
+      description: Clinical content (C3). Never cached, never logged.
+      required:
+        - id
+        - visit_id
+        - patient_id
+        - doctor_id
+        - version
+        - supersedes_id
+        - status
+        - revision
+        - items
+        - advice
+        - follow_up_date
+        - language
+        - issued_at
+        - doctor_snapshot
+        - clinic_snapshot
+        - link_delivery
+        - versions
+        - created_at
+        - updated_at
+      properties:
+        id: {type: string, format: uuid}
+        visit_id: {type: string, format: uuid}
+        patient_id: {type: string, format: uuid}
+        doctor_id: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        supersedes_id: {type: [string, 'null'], format: uuid}
+        status:
+          $ref: '#/components/schemas/PrescriptionStatus'
+        revision: {type: integer, minimum: 1}
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrescriptionItemOutput'
+        advice:
+          $ref: '#/components/schemas/Advice'
+        follow_up_date: {type: [string, 'null'], format: date}
+        language:
+          type: [string, 'null']
+          enum: [en, hi, null]
+          description: The patient's language at issue; the PDF uses it (R20)
+        issued_at: {type: [string, 'null'], format: date-time}
+        doctor_snapshot:
+          oneOf:
+            - $ref: '#/components/schemas/DoctorSnapshot'
+            - type: 'null'
+        clinic_snapshot:
+          oneOf:
+            - $ref: '#/components/schemas/ClinicSnapshot'
+            - type: 'null'
+        link_delivery:
+          oneOf:
+            - $ref: '#/components/schemas/LinkDelivery'
+            - type: 'null'
+        versions:
+          type: array
+          description: The chain by version, when the response includes it (else empty)
+          items:
+            $ref: '#/components/schemas/PrescriptionVersion'
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    PrescriptionSummary:
+      type: object
+      required: [id, version, issued_at, items]
+      properties:
+        id: {type: string, format: uuid}
+        version: {type: integer}
+        issued_at: {type: [string, 'null'], format: date-time}
+        items:
+          type: array
+          items:
+            type: object
+            required: [medicine_name, dose, frequency, frequency_text, timing, duration_days]
+            properties:
+              medicine_name: {type: string}
+              dose: {type: [string, 'null']}
+              frequency:
+                oneOf:
+                  - $ref: '#/components/schemas/Frequency'
+                  - type: 'null'
+              frequency_text: {type: [string, 'null']}
+              timing:
+                oneOf:
+                  - $ref: '#/components/schemas/Timing'
+                  - type: 'null'
+              duration_days: {type: [integer, 'null']}
     NewVisit:
       type: object
       additionalProperties: false
@@ -2510,7 +3071,8 @@ components:
         updated_at: {type: string, format: date-time}
     VisitSummary:
       type: object
-      required: [id, doctor_id, appointment_id, status, started_at, completed_at, chief_complaint, diagnosis]
+      required:
+        [id, doctor_id, appointment_id, status, started_at, completed_at, chief_complaint, diagnosis, prescription]
       properties:
         id: {type: string, format: uuid}
         doctor_id: {type: string, format: uuid}
@@ -2521,9 +3083,14 @@ components:
         completed_at: {type: [string, 'null'], format: date-time}
         chief_complaint: {type: [string, 'null']}
         diagnosis: {type: [string, 'null']}
+        prescription:
+          description: The visit's latest issued prescription (medicines only), if any
+          oneOf:
+            - $ref: '#/components/schemas/PrescriptionSummary'
+            - type: 'null'
     Consultation:
       type: object
-      required: [visit, patient, history]
+      required: [visit, patient, history, prescriptions]
       properties:
         visit:
           $ref: '#/components/schemas/Visit'
@@ -2534,6 +3101,11 @@ components:
           description: The patient's previous visits (at most 10), newest first
           items:
             $ref: '#/components/schemas/VisitSummary'
+        prescriptions:
+          type: array
+          description: This visit's prescription chain, by version (M4-P2)
+          items:
+            $ref: '#/components/schemas/Prescription'
     VisitPage:
       type: object
       required: [items, next_before]

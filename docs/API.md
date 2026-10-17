@@ -325,10 +325,12 @@ compared weakly, as RFC 9110 requires (`*`, lists and `W/` tags work).
 | PATCH | `/api/v1/visits/{visit_id}` | Notes and vitals with the `revision` seen (`CLINICAL_WRITE`, its doctor) | FR-VIS-02 | Implemented (M4-P1) |
 | POST | `/api/v1/visits/{visit_id}/complete` | Complete; also completes the appointment | FR-VIS-05 | Implemented (M4-P1) |
 | POST | `/api/v1/visits/{visit_id}/addenda` | Addendum on a completed visit | FR-VIS-05 | Implemented (M4-P1) |
-| GET | `/api/v1/patients/{patient_id}/visits?limit=&before=` | A patient's visits, newest first, keyset pages (`CLINICAL_VIEW`) | FR-VIS-03 | Implemented (M4-P1) || POST | `/api/v1/visits/{visit_id}/prescriptions` | Create draft | FR-RX-01 | M4-P2 |
-| PUT | `/api/v1/prescriptions/{rx_id}` | Replace draft body | FR-RX-01..03 | M4-P2 |
-| POST | `/api/v1/prescriptions/{rx_id}/issue` | Issue (immutable), pending-delivery marker (spec R5, R14) | FR-RX-06 | M4-P2 |
-| POST | `/api/v1/prescriptions/{rx_id}/revise` | New version superseding | FR-RX-09 | M4-P2 |
+| GET | `/api/v1/patients/{patient_id}/visits?limit=&before=` | A patient's visits, newest first, keyset pages (`CLINICAL_VIEW`) | FR-VIS-03 | Implemented (M4-P1) || POST | `/api/v1/visits/{visit_id}/prescriptions` | Create the chain's first draft | FR-RX-01 | Implemented (M4-P2) |
+| GET | `/api/v1/prescriptions/{rx_id}` | One version with its chain | FR-RX-01, 09 | Implemented (M4-P2) |
+| PUT | `/api/v1/prescriptions/{rx_id}` | Replace the whole draft with its `revision` | FR-RX-01..03 | Implemented (M4-P2) |
+| DELETE | `/api/v1/prescriptions/{rx_id}` | Discard a draft | FR-RX-01 | Implemented (M4-P2) |
+| POST | `/api/v1/prescriptions/{rx_id}/issue` | Issue (immutable), snapshots, language, pending-delivery marker (spec R5, R14) | FR-RX-06 | Implemented (M4-P2) |
+| POST | `/api/v1/prescriptions/{rx_id}/revise` | New version from the latest issued one | FR-RX-09 | Implemented (M4-P2) |
 | GET | `/api/v1/prescriptions/{rx_id}/pdf` | The PDF, rendered once per version (spec R18, ADR-0012) | FR-RX-06 | M4-P4 |
 | GET/POST/DELETE | `/api/v1/rx-favourites` | Favourites | FR-RX-05 | M4-P3 |
 | GET/POST/DELETE | `/api/v1/rx-templates` | Templates | FR-RX-05 | M4-P3 |
@@ -340,6 +342,13 @@ desk gets `403 PERM_DENIED` on every visit route. Responses are `no-store`. Each
 clinical content writes **one** audit row for the whole view (`visit.viewed`,
 `patient.visits_viewed`); writes are audited by their own action with the names of changed fields,
 never their values. Locked 24 hours after completion (`409 VIS_LOCKED`); then addenda.
+M4-P2 rules (spec R4-R6, R14, R16, R17, R20; decisions 1A-6A; contract 0.14.0): the same
+permissions, caching and audit rules as visits. One chain per visit, at most one draft. Version 1
+is created, saved and issued until the visit locks; an issued version is revised at any time.
+Issued versions never change (`409 RX_NOT_DRAFT`, and the database refuses it too). Audit
+metadata carries IDs, versions, counts, the language and the delivery state, never item text.
+`GET /visits/{id}` now also returns the visit's `prescriptions` and, per history visit, its latest
+issued `prescription` (medicines only) — still one read and one audit row.
 ### Patient links (M4) — public, no session
 
 | Method | Path | Purpose | Req |
