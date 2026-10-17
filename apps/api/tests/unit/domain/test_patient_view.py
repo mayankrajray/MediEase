@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from mediease_api.domain.patients.patient import Language
-from mediease_api.domain.prescriptions.patient_view import PatientView, build_patient_view
+from mediease_api.domain.prescriptions.patient_view import PatientPage, build_patient_view
 from mediease_api.domain.prescriptions.prescription import (
     CURRENT_LAYOUT,
     Prescription,
@@ -18,13 +18,13 @@ from tests.unit.domain.test_rx_document import issued
 TZ = "Asia/Kolkata"
 
 
-def view(chain: list[Prescription], language: Language = Language.EN) -> PatientView:
+def view(chain: list[Prescription], language: Language = Language.EN) -> PatientPage:
     built = build_patient_view(chain, language=language, timezone=TZ)
     assert built is not None
     return built
 
 
-def fields(v: PatientView) -> dict[str, str]:
+def fields(v: PatientPage) -> dict[str, str]:
     return {f.label: f.value for f in v.medicines[0].fields}
 
 
@@ -62,10 +62,10 @@ def test_a_chain_with_only_a_draft_has_no_page() -> None:
 
 
 def test_the_page_leaves_out_the_patients_own_details() -> None:
-    rendered = repr(view([issued()]))
-    assert "patient" not in rendered.lower().replace("patientview", "").replace(
-        "patientmedicine", ""
-    )
+    rendered = repr(view([issued()])).lower()
+    for word in ("patientpage", "patientmedicine"):
+        rendered = rendered.replace(word, "")
+    assert "sample patient" not in rendered and "patient" not in rendered
 
 
 def test_m4_p5_issue_fixes_the_current_layout_version() -> None:

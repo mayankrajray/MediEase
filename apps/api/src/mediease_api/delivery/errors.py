@@ -26,6 +26,7 @@ from mediease_api.application.patients.errors import ImportInvalid, PhoneExists
 from mediease_api.delivery.http.bodies import candidate_body
 from mediease_api.delivery.http.validation import RequestValidationFailed
 from mediease_api.delivery.middleware import get_request_id
+from mediease_api.domain.links.errors import LinkRateLimited
 from mediease_api.domain.prescriptions.errors import PdfBusy
 from mediease_api.domain.shared.errors import DomainError, InvalidValue
 from mediease_api.ports.readiness import DatabaseTimeout, DatabaseUnavailable, ReadinessError
@@ -109,6 +110,14 @@ DOMAIN_ERROR_STATUS = {
     "RX_NOT_ISSUED": 409,
     "RX_PDF_BUSY": 503,
     "RX_PDF_FAILED": 500,
+    "LINK_INVALID": 404,
+    "LINK_EXPIRED": 410,
+    "LINK_REVOKED": 410,
+    "LINK_CHALLENGE_FAILED": 401,
+    "LINK_LOCKED": 423,
+    "LINK_CHALLENGE_REQUIRED": 401,
+    "LINK_RATE_LIMITED": 429,
+    "LINK_NOT_LOCKED": 409,
     "RX_NAME_TAKEN": 409,
     "RX_LIBRARY_FULL": 409,
 }
@@ -132,7 +141,7 @@ def domain_error_response(exc: DomainError) -> tuple[Response, int]:
     elif isinstance(exc, ImportInvalid):
         details = {"problems": list(exc.problems)}
     response, _ = error_response(exc.code, exc.message, status, details)
-    if isinstance(exc, AccountLocked | PdfBusy):
+    if isinstance(exc, AccountLocked | PdfBusy | LinkRateLimited):
         response.headers["Retry-After"] = str(exc.retry_after_seconds)
     return response, status
 

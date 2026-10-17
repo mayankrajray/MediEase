@@ -13,6 +13,7 @@ from typing import Any
 
 from mediease_api.application.appointments.queue import QueueView
 from mediease_api.application.appointments.views import AppointmentDetail, AppointmentView
+from mediease_api.application.links.use_cases import LinkInfo
 from mediease_api.application.patients.views import CandidateView, PatientView
 from mediease_api.application.prescriptions.pdf import Printable
 from mediease_api.application.prescriptions.use_cases import PrescriptionView
@@ -22,6 +23,8 @@ from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
 from mediease_api.domain.identity.access import StaffMember
+from mediease_api.domain.prescriptions.document import RxField
+from mediease_api.domain.prescriptions.patient_view import PatientPage
 from mediease_api.domain.prescriptions.prescription import Prescription, PrescriptionItem
 from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
 from mediease_api.domain.scheduling.exceptions import ScheduleException
@@ -407,6 +410,52 @@ def prescription_body(view: PrescriptionView) -> dict[str, Any]:
         ],
         "created_at": rx.created_at.isoformat(),
         "updated_at": rx.updated_at.isoformat(),
+    }
+
+
+def _field(f: RxField) -> dict[str, str]:
+    return {"label": f.label, "value": f.value}
+
+
+def patient_view_body(v: PatientPage) -> dict[str, Any]:
+    """M4-P5: the patient page; labels translated, the doctor's text as written."""
+    return {
+        "language": v.language.value,
+        "version": v.version,
+        "clinic_name": v.clinic_name,
+        "clinic_phone_e164": v.clinic_phone_e164,
+        "call_label": v.call_label,
+        "doctor_name": v.doctor_name,
+        "doctor_lines": list(v.doctor_lines),
+        "issued_on": _field(v.issued_on),
+        "updated_note": v.updated_note,
+        "medicines_heading": v.medicines_heading,
+        "medicines": [
+            {
+                "number": m.number,
+                "name": m.name,
+                "form_strength": m.form_strength,
+                "fields": [_field(f) for f in m.fields],
+            }
+            for m in v.medicines
+        ],
+        "advice_heading": v.advice_heading,
+        "advice": [{"heading": a.heading, "entries": list(a.entries)} for a in v.advice],
+        "advice_notes": _field(v.advice_notes) if v.advice_notes else None,
+        "follow_up": _field(v.follow_up) if v.follow_up else None,
+    }
+
+
+def patient_link_body(info: LinkInfo, public_base_url: str) -> dict[str, Any]:
+    """M4-P5 decision 6A: what the clinic sees about a link; no content, no digits."""
+    link = info.link
+    return {
+        "id": str(link.id),
+        "url": f"{public_base_url}/p/{info.token}",
+        "expires_at": link.expires_at.isoformat(),
+        "locked": link.is_locked,
+        "open_count": link.open_count,
+        "last_opened_at": _iso(link.last_opened_at),
     }
 
 

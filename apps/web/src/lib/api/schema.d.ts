@@ -1166,6 +1166,141 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/prescriptions/{rx_id}/link": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The prescription chain's patient link, for the QR code and copy button
+         * @description M4-P5 decisions 1A, 6A; spec R9. One link per chain, made when version 1 is issued
+         *     (and here for chains issued before M4-P5, recording patient_link.created); any version's
+         *     ID names the chain. IDs, expiry, lock state and open count only, never content. 409
+         *     RX_NOT_ISSUED while the chain has only a draft. Permission RX_PRINT.
+         */
+        readonly get: operations["getPatientLink"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/prescriptions/{rx_id}/link/reset": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Unlock a patient link after five wrong last-4 answers
+         * @description Spec R10, decision 6A. 409 LINK_NOT_LOCKED when it is not locked. Records
+         *     patient_link.reset. Permission RX_PRINT. Needs X-CSRF-Token.
+         */
+        readonly post: operations["resetPatientLink"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/prescriptions/{rx_id}/link/replace": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Revoke the chain's patient link and make a new one
+         * @description Decision 6A: for an expired, forwarded or lost link. The old token answers 410
+         *     LINK_REVOKED from now on. Records patient_link.replaced. Permission RX_PRINT. Needs
+         *     X-CSRF-Token.
+         */
+        readonly post: operations["replacePatientLink"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/public/links/{token}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * What the patient page shows before the last-4 check
+         * @description Spec R9, R12; FR-RX-08. No session. The clinic's name, the patient's saved language and
+         *     whether the link is locked; nothing clinical. 404 LINK_INVALID for any token that is not
+         *     exactly one of ours; 410 LINK_EXPIRED or LINK_REVOKED; 429 LINK_RATE_LIMITED.
+         */
+        readonly get: operations["describePatientLink"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/public/links/{token}/verify": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * The last-4 check; returns a 30-minute view token
+         * @description Spec R10, R13; FR-RX-08; AC3. The last 4 digits of the patient's phone. Wrong: 401
+         *     LINK_CHALLENGE_FAILED with details.attempts_left; the fifth wrong answer, and every
+         *     attempt after it, is 423 LINK_LOCKED until clinic staff reset it. Right: records
+         *     patient_link.opened and returns a view token for this link only (30 minutes), which the
+         *     patient page keeps in its own HttpOnly cookie and sends as X-Link-View.
+         */
+        readonly post: operations["verifyPatientLink"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/public/links/{token}/prescription": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The patient page's content (the latest issued version)
+         * @description Spec R11, R12, R19, R20; FR-RX-07; AC2, AC10. Needs X-Link-View from verify, else 401
+         *     LINK_CHALLENGE_REQUIRED. The chain's latest issued version, with updated_note when older
+         *     versions exist; labels and structured phrases in lang (default: the patient's saved
+         *     language), everything the doctor wrote exactly as written. No patient details.
+         */
+        readonly get: operations["viewLinkedPrescription"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/rx-favourites": {
         readonly parameters: {
             readonly query?: never;
@@ -1744,6 +1879,66 @@ export interface components {
             readonly patient_code_prefix: string;
             readonly booking_mode: components["schemas"]["BookingMode"];
             readonly rx_paper_size: components["schemas"]["PaperSize"];
+        };
+        /** @description What the clinic sees about a patient link (M4-P5 decision 6A); no content. */
+        readonly PatientLinkInfo: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description PUBLIC_BASE_URL/p/<token>, for the QR code and copy button */
+            readonly url: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+            readonly locked: boolean;
+            readonly open_count: number;
+            /** Format: date-time */
+            readonly last_opened_at: string | null;
+        };
+        readonly PatientLinkSummary: {
+            readonly clinic_name: string;
+            readonly language: components["schemas"]["Language"];
+            readonly locked: boolean;
+            readonly challenge_required: boolean;
+        };
+        readonly PatientLinkChallenge: {
+            readonly phone_last4: string;
+        };
+        readonly PatientLinkView: {
+            readonly view_token: string;
+            /** Format: date-time */
+            readonly view_expires_at: string;
+        };
+        readonly PageField: {
+            readonly label: string;
+            readonly value: string;
+        };
+        /**
+         * @description The patient page (spec §6, R11, R20): every string final; labels in the page's language,
+         *     the doctor's text as written. No patient details.
+         */
+        readonly PatientPrescriptionPage: {
+            readonly language: components["schemas"]["Language"];
+            readonly version: number;
+            readonly clinic_name: string;
+            readonly clinic_phone_e164: string | null;
+            readonly call_label: string;
+            readonly doctor_name: string;
+            readonly doctor_lines: readonly string[];
+            readonly issued_on: components["schemas"]["PageField"];
+            readonly updated_note: string | null;
+            readonly medicines_heading: string;
+            readonly medicines: readonly {
+                readonly number: number;
+                readonly name: string;
+                readonly form_strength: string | null;
+                readonly fields: readonly components["schemas"]["PageField"][];
+            }[];
+            readonly advice_heading: string;
+            readonly advice: readonly {
+                readonly heading: string;
+                readonly entries: readonly string[];
+            }[];
+            readonly advice_notes: components["schemas"]["PageField"] | null;
+            readonly follow_up: components["schemas"]["PageField"] | null;
         };
         /**
          * @description The clinic's prescription paper (M4-P4 decision 3A). Applied when a version is first
@@ -2461,11 +2656,39 @@ export interface components {
          *     visit's chain); RX_DRAFT_EXISTS (409, details.prescription_id); RX_NOT_LATEST (409,
          *     details.latest_id); VIS_LOCKED (409: version 1 after the visit's lock); RX_EMPTY (422);
          *     RX_DOCTOR_INCOMPLETE (422, details.fields); REQ_VALIDATION_FAILED (422, field and rule);
-         *     RX_NOT_ISSUED (409, details.status: a draft is never printed, M4-P4)
+         *     RX_NOT_ISSUED (409, details.status: a draft is never printed, M4-P4);
+         *     LINK_NOT_LOCKED (409: resetting a link that is not locked, M4-P5)
          */
         readonly PrescriptionError: {
             headers: {
                 readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description LINK_INVALID (404: not one of our tokens); LINK_EXPIRED, LINK_REVOKED (410: ask the
+         *     clinic for a new link); LINK_CHALLENGE_FAILED (401, details.attempts_left);
+         *     LINK_CHALLENGE_REQUIRED (401: verify first, or the view ended); LINK_LOCKED (423: five
+         *     wrong answers; the clinic can reset it)
+         */
+        readonly LinkError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description LINK_RATE_LIMITED (too many requests for this link this minute) */
+        readonly LinkRateLimited: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                /** @description Seconds until the next minute */
+                readonly "Retry-After"?: string;
                 readonly [name: string]: unknown;
             };
             content: {
@@ -2613,6 +2836,8 @@ export interface components {
         readonly TemplatePath: string;
         /** @description The single-use invitation secret from the acceptance link. */
         readonly InviteToken: string;
+        /** @description The patient link token (spec R9); never logged. */
+        readonly LinkToken: string;
     };
     requestBodies: never;
     headers: {
@@ -4893,6 +5118,235 @@ export interface operations {
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly getPatientLink: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description A prescription version of the request's clinic. */
+                readonly rx_id: components["parameters"]["PrescriptionPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The chain's link */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientLinkInfo"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["PrescriptionError"];
+        };
+    };
+    readonly resetPatientLink: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A prescription version of the request's clinic. */
+                readonly rx_id: components["parameters"]["PrescriptionPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The chain's link */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientLinkInfo"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["PrescriptionError"];
+        };
+    };
+    readonly replacePatientLink: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A prescription version of the request's clinic. */
+                readonly rx_id: components["parameters"]["PrescriptionPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The chain's link */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientLinkInfo"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["PrescriptionError"];
+        };
+    };
+    readonly describePatientLink: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                /** @description The patient link token (spec R9); never logged. */
+                readonly token: components["parameters"]["LinkToken"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The link is usable */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientLinkSummary"];
+                };
+            };
+            readonly 404: components["responses"]["LinkError"];
+            readonly 410: components["responses"]["LinkError"];
+            readonly 429: components["responses"]["LinkRateLimited"];
+        };
+    };
+    readonly verifyPatientLink: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                /** @description The patient link token (spec R9); never logged. */
+                readonly token: components["parameters"]["LinkToken"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PatientLinkChallenge"];
+            };
+        };
+        readonly responses: {
+            /** @description Opened */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientLinkView"];
+                };
+            };
+            readonly 401: components["responses"]["LinkError"];
+            readonly 404: components["responses"]["LinkError"];
+            readonly 410: components["responses"]["LinkError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+            readonly 423: components["responses"]["LinkError"];
+            readonly 429: components["responses"]["LinkRateLimited"];
+        };
+    };
+    readonly viewLinkedPrescription: {
+        readonly parameters: {
+            readonly query?: {
+                readonly lang?: components["schemas"]["Language"];
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description The view token from verify */
+                readonly "X-Link-View"?: string;
+            };
+            readonly path: {
+                /** @description The patient link token (spec R9); never logged. */
+                readonly token: components["parameters"]["LinkToken"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The page */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientPrescriptionPage"];
+                };
+            };
+            readonly 401: components["responses"]["LinkError"];
+            readonly 404: components["responses"]["LinkError"];
+            readonly 410: components["responses"]["LinkError"];
+            readonly 422: components["responses"]["AuthError"];
+            readonly 423: components["responses"]["LinkError"];
+            readonly 429: components["responses"]["LinkRateLimited"];
         };
     };
     readonly listFavourites: {

@@ -44,7 +44,7 @@ class PatientMedicine:
 
 
 @dataclass(frozen=True, slots=True)
-class PatientView:
+class PatientPage:
     language: Language
     version: int
     clinic_name: str
@@ -83,7 +83,7 @@ def _card(item: PrescriptionItem, lang: Language) -> PatientMedicine:
 
 def build_patient_view(
     chain: Sequence[Prescription], *, language: Language, timezone: str
-) -> PatientView | None:
+) -> PatientPage | None:
     """The page for this chain, or ``None`` while nothing in it is issued."""
     rx = latest_issued(chain)
     if rx is None:
@@ -99,7 +99,7 @@ def build_patient_view(
         number=doctor.registration_number,
         council=doctor.registration_council,
     )
-    return PatientView(
+    return PatientPage(
         language=lang,
         version=rx.version,
         clinic_name=clinic.name,
