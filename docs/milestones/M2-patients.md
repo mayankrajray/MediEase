@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M2-P1 to P3 confirmed (P3 on 5 Oct 2026 after a re-check); M2-P4 approved 5 Oct 2026 (1A, 2A) and implemented, awaiting confirmation; P5 next |
+| Status | In progress — M2-P1 to P4 confirmed (P3 on 5 Oct 2026 after a re-check; P4 on 17 Oct 2026 after a re-check); M2-P5 designed 17 Oct 2026, awaiting approval |
 | Spec | `docs/specs/patients.md` (Approved 2026-10-03) |
 | Covers | FR-PAT-01..06, FR-PAT-08, FR-MSG-05 (opt-out state), NFR-08 |
 | Issue / branch / PR | #21 · `m2/21-patients` · one PR for the whole milestone (ADR-0011) |
@@ -16,15 +16,164 @@
 | P2 | Register / edit / lookup endpoints, the duplicate-phone flow, `patient_code_prefix` on clinic creation | Below (M2-P2 section) |
 | P3 | Consent, language preference, opt-out and opt-in | Below (M2-P3 section) |
 | P4 | Ops CSV import with a dry-run report | Below (M2-P4 section) |
-| P5 | Web: global search, registration drawer, profile | Designed at its start |
+| P5 | Web: global search, registration drawer, profile | Below (M2-P5 section, proposed) |
 
 Each phase is designed, approved, implemented, verified and confirmed before the next starts.
 
 ---
 
+## M2-P5 — Web: patient search, registration drawer, patient profile
+
+**Status: proposed 17 Oct 2026, awaiting the developer's approval (decisions 1–6 below).** Covers
+FR-PAT-01..06 on the web; spec patients §6, R2, R3, R6, R10, AC1, AC5, AC6; the wizard's
+`patient_code_prefix` field deferred from M2-P2 (R4, D2). **Web only:** no API, contract or
+migration change. Every endpoint exists (P2, P3) and the generated `schema.d.ts` already holds
+`Patient`, `NewPatient`, `PatientUpdate`, `PatientConsent`, `PatientList` and `PatientCandidate`.
+
+### Concepts
+
+1. **The client learns PATCH and PUT.** `lib/api/client.ts` sends only GET and POST, and adds
+   `X-CSRF-Token` only on POST. Editing (`PATCH /patients/{id}`) and consent
+   (`PUT /patients/{id}/consent`) need the other two. The client gains `apiPatch`/`apiPut`, typed
+   from the contract like `apiPost`, plus `sessionPatch`/`sessionPut` in `lib/auth/refresh.ts`.
+   CSRF goes on every unsafe method. Trade-off: two more helpers rather than one generic
+   `apiSend(method)`; the existing per-method typing stays exact.
+2. **Search is a lookup, not a list.** `GET /patients` needs `q` and returns at most 20 matches
+   (R5). There is no "all patients" page, so there is nothing to paginate or leak. The header
+   search is an accessible combobox (WAI-ARIA pattern): `/` focuses it, typing debounces 250 ms,
+   and arrow keys plus Enter open a match. Trade-off: no browsing; a clinic finds patients, and
+   lists come with FR-PAT-07 (P1 priority).
+3. **A drawer is a native `<dialog>`.** There is no dialog primitive yet (`components/` is empty).
+   `showModal()` gives focus containment, Escape to close and an inert background without a
+   library. A small `components/Drawer.tsx` wraps it and restores focus to the opener.
+   Trade-off: styling `::backdrop` is limited; enough for a front-desk screen.
+4. **The guardian field is a hint; the API decides.** The drawer shows "Parent or guardian's name"
+   and relabels the phone as soon as the date of birth or age is under 18 on the clinic's today
+   (`useClinic().timezone`, not the browser's). `PAT_GUARDIAN_REQUIRED` from the API is still
+   mapped onto the same field, so a hint that disagrees with the server cannot let a minor through.
+5. **A 409 that carries data.** `PAT_PHONE_EXISTS` arrives as an `ApiError` with
+   `details.candidates` (id, code, name, age, never a phone). The drawer swaps the form for the
+   candidates. "Use this patient" opens the profile; "Register as a new family member" resends the
+   same body with `confirm_new: true`. The submit button is disabled while a request is in flight,
+   which stands in for an idempotency key (M2-P2 decision).
+6. **Three consent states, three actions.** Not asked (`consent_recorded_at` null), declined
+   (recorded, both false) and given are shown in words. "Record consent" (PUT) is offered only when
+   not opted out. "Opt out" (POST, confirmed first) stops all messages. "Opt back in" takes the new
+   answer (POST `opt-in`). This mirrors AC5: no checkbox can undo an opt-out. For a minor the
+   script says "Ask the parent or guardian".
+
+### Flow
+
+```mermaid
+flowchart LR
+  S["Header search (/)"] -->|"GET /patients?q="| R{matches?}
+  R -->|pick one| P["/patients/{id} profile"]
+  R -->|none| D["Register drawer"]
+  D -->|POST /patients| C{response}
+  C -->|201| P
+  C -->|409 PAT_PHONE_EXISTS| K["Candidates"]
+  K -->|Use this patient| P
+  K -->|"New family member: POST confirm_new=true"| P
+  C -->|422| D
+  P -->|PATCH| P
+  P -->|"PUT consent / POST opt-out / POST opt-in"| P
+```
+
+### Files
+
+| Area | Files |
+|---|---|
+| Lib | `lib/api/client.ts` (`apiPatch`, `apiPut`, CSRF on every unsafe method), `lib/auth/refresh.ts` (`sessionPatch`, `sessionPut`), `lib/format/phone.ts` (`maskPhone`) |
+| Shared UI | `components/Drawer.tsx` (new); `components/TextField.tsx` (moved from `features/ops`, decision 6) |
+| Routes | `app/(clinic)/(workspace)/patients/page.tsx` (results for `?q=`), `app/(clinic)/(workspace)/patients/[id]/page.tsx` (UUID-checked like the wizard's resume id); both thin |
+| `features/patients/` | `PatientSearch.tsx`, `PatientResults.tsx`, `RegisterPatientDrawer.tsx`, `DuplicateCandidates.tsx`, `PatientProfile.tsx`, `EditPatientForm.tsx`, `ConsentPanel.tsx`, `fields.ts` (`PAT_*` and `REQ_VALIDATION_FAILED` → field errors, age text "6 years" / "about 47 years"), `messages.ts`, `api.ts` (the calls) |
+| Shell | `features/shell/AppShell.tsx` (search in the header, "Register patient" button), `features/shell/nav.ts` (`Patients`, `requires: PATIENTS_MANAGE`) |
+| Ops | `features/ops/ClinicStep.tsx` (optional "Patient code prefix", 2–4 capitals, hint "Leave empty to derive it from the name") |
+| Checks / docs | `scripts/smoke.sh` (`/patients` without a session redirects to sign-in), `apps/web/README.md`, `CHANGELOG.md`; with decision 4B also `apps/web/e2e/`, `docs/TESTING.md`, `AGENTS.md`, `Makefile`, `ci.yml` |
+
+### States and errors
+
+| Screen | Loading | Empty | Error |
+|---|---|---|---|
+| Search | "Searching…" in the listbox (`aria-busy`) | "No patient matches" + "Register patient" (phone pre-filled when the text was a phone) | Message and "Ref: <request_id>" |
+| Results page | Skeleton rows | As above | As above, with "Try again" |
+| Profile | Skeleton | — | 404 (unknown or another clinic's id, R8): "Patient not found", no hint which; others with Ref and "Try again" |
+| Drawer / edit / consent | Button disabled, "Saving…" | — | `PAT_PHONE_INVALID` → phone field; `PAT_GUARDIAN_REQUIRED` → guardian field; `REQ_VALIDATION_FAILED` → `details.fields`; `PAT_OPTED_OUT` / `PAT_NOT_OPTED_OUT` → the reason in words and the right next action |
+
+### Tests (Vitest + Testing Library, `src/test/api.ts` mocks)
+
+- `lib/api/client.test.ts`: PATCH and PUT send the method, JSON body, CSRF and `X-Clinic-ID`;
+  GET still sends no CSRF.
+- `PatientSearch.test.tsx`: `/` focuses; debounced single request; arrow keys and Enter open the
+  profile; empty and error states with the Ref; the query is not written to storage or the URL
+  until Enter (FR-PAT-04).
+- `RegisterPatientDrawer.test.tsx`: register with a date of birth and with an age (FR-PAT-01); the
+  guardian field and phone label appear under 18 on the clinic's date, tested across Kolkata
+  midnight (FR-PAT-06, R3); `PAT_GUARDIAN_REQUIRED` and `PAT_PHONE_INVALID` land on their fields;
+  409 shows the candidates; "Use this patient" navigates; "New family member" resends with
+  `confirm_new: true` (AC1, AC6, FR-PAT-02); submit is disabled while sending.
+- `PatientProfile.test.tsx` / `ConsentPanel.test.tsx`: not asked / declined / given; record
+  consent; opt-out with confirmation; consent hidden and opt-in offered while opted out (AC5);
+  `PAT_OPTED_OUT` from a stale screen explained; edit sends only changed fields and the code is
+  never editable (R7).
+- `nav.test.ts`, `ClinicStep` in `CreateClinicWizard.test.tsx`: Patients link for every clinic role;
+  the prefix is sent when given and omitted when blank.
+
+### Decisions for approval
+
+1. **Search results.** **A (recommended):** a combobox under the header showing up to 20 matches;
+   Enter without a selection opens `/patients?q=`. B: Enter always opens the results page (simpler,
+   one navigation per search).
+2. **Editing demographics.** **A (recommended):** an edit form in place on the profile, the same
+   fields as registration. B: a second drawer.
+3. **Phones on screen.** **A (recommended):** masked (`+91******0101`) in search results, full on
+   the profile, where staff dial (apps/web/CLAUDE.md). B: full everywhere in the clinic screens.
+4. **The duplicate-phone journey (TESTING.md §3 lists it from M2).** A: a scripted manual check in
+   the verify steps, with Playwright from M3 as `apps/web/e2e/README.md` says. **B
+   (recommended):** the first Playwright spec. `@playwright/test` pinned, Chromium only;
+   `e2e/patients-duplicate-phone.spec.ts` signs in as the front desk, registers on the Rao family's
+   phone, sees the candidates, uses one, then registers a new family member. `make e2e` runs it
+   against `make up && make seed`, and a CI job runs it after the smoke stack. Cost: one dev
+   dependency, a browser download in CI (about 2–4 minutes per run), and the frame M3 and M4 need
+   anyway. TESTING.md requires the journey "from the milestone it arrives", which is this one.
+5. **The P4 finding (500 instead of 413 through the web origin, see M2-P4 re-check).** **A
+   (recommended):** outside P5. Record it in RUNBOOK §10 (keep files under 2 MB; the API origin
+   always answers 413) and open a follow-up issue; there is no upload screen in M2, so ops use
+   curl. B: fix it in P5 by streaming the upload through a route handler.
+6. **`TextField`.** **A (recommended):** move it to `components/` in its own `refactor(web)` commit,
+   since registration, editing and the wizard share it. B: import it from `features/ops`.
+
+### Verify
+
+```bash
+make up && make seed && make dev-web     # or the web container on :3000
+# as desk@sample-clinic.example (RUNBOOK §1):
+#  1. Press /, type "90000 00101": Asha, Arun and Meera Rao (masked phones); Enter opens one.
+#  2. Profile: code, full phone, "Not asked"; Bina Shah shows "about 47 years".
+#  3. Register patient: phone 90000 00101 -> the three candidates; "Use this patient" -> profile;
+#     again, "Register as a new family member" -> 201 and the next SC code.
+#  4. Age 6 without a guardian: the guardian field appears; submitting blank -> field error.
+#  5. Record consent (WhatsApp yes, SMS no) -> "WhatsApp allowed"; Opt out -> consent hidden,
+#     "Opt back in" -> both allowed.
+#  6. Failure path: /patients/<a sample-clinic-two patient id or a random UUID> -> "Patient not found".
+#  7. Ops: Create clinic with prefix "TQ" -> the clinic shows TQ.
+make lint typecheck test && make smoke   # (+ make e2e with decision 4B)
+```
+
+### Risks
+
+| Risk | Mitigation |
+|---|---|
+| A slow lookup makes typing feel stuck | 250 ms debounce, the previous request aborted, `aria-busy`; the API answers in milliseconds at 10,000 patients (P1) |
+| The client hint and the API disagree on "under 18" | The hint uses the clinic's date; the API error lands on the same field anyway |
+| Candidate names linger after the drawer closes | They live only in drawer state, cleared on close; never in storage, URL or logs |
+| Playwright is flaky in CI (4B) | Seeded data, role-based locators, no sleeps, traces kept on failure; a flaky spec is fixed the same day (TESTING.md §2) |
+
+---
+
 ## M2-P4 — Ops CSV import with a dry-run report
 
-**Status: approved by the developer 5 Oct 2026 with 1A and 2A; implemented the same day, awaiting confirmation.** Covers FR-PAT-08,
+**Status: approved by the developer 5 Oct 2026 with 1A and 2A; implemented the same day; confirmed 17 Oct 2026 after a re-check (below).** Covers FR-PAT-08,
 FR-OPS-02; spec patients R8, §7 (`patient.imported`, the checklist), §10 (`patient.import_dry_run`).
 One endpoint, one use case, one audit action, contract 0.8.0, no migration. API only in M2: the ops
 procedure is RUNBOOK §10; an upload screen is not in the M2 plan.
@@ -156,6 +305,33 @@ registration. CSV is parsed with `strict=True`, because the default reader silen
 unterminated quote and swallows the rest of the file; a row with cells beyond the header is
 refused rather than trimmed. The contract describes the body as `text/csv: {}`: in OpenAPI 3.1 a
 raw file body is the media type alone, and a string schema makes the validator reject bytes.
+
+### Re-check (17 Oct 2026, confirmed)
+
+On `4f16cab` (P4 code unchanged since `8b3dfaa`), on a fresh machine: WSL Ubuntu 26.04 with Python
+3.12 (uv) and Node 24.21.0 (nvm). The stack was started with Docker Desktop's CLI from Windows,
+because WSL integration is off. `docker compose up -d --wait --build`: migrate exited 0 and api and
+web were healthy; seed loaded both clinics, the ops user and six patients. `make lint typecheck`:
+ruff, format, import-linter (4 contracts kept), mypy (114 files) and the web lint and types were
+clean. `make test`: API 847 passed at 99.09% package and 99% `domain/` + `application/`
+coverage; web 25 files and 256 tests; `gen:api:check` clean. `make smoke`: 22/22 checks passed.
+
+The import flow through the web origin, as ops on `sample-clinic` with the sample file:
+- The default dry run reported 10 rows, 8 valid, rows 8 (`guardian_name`) and 9 (`phone`)
+  invalid, row 3 `earlier_row`, and rows 10 and 11 `already_registered`.
+- The commit imported 6, with 6 codes. The same file again imported 0.
+- JSON was 415 `REQ_UNSUPPORTED_MEDIA_TYPE`, a bad header 422 `PAT_IMPORT_INVALID` (5 problems),
+  an unknown clinic 404, and the front desk 403 `PERM_DENIED`.
+- The front desk found the imported family by phone: the child had a guardian and consent was
+  "not asked".
+- There are six `patient.imported` rows, actor `OPS`, one `import_id` and one request ID; their
+  metadata holds only `code` and `import_id`. None of the file's names or phones, and no
+  unmasked `+91` number, appear in the API log.
+
+**Finding:** the first 2.2 MB upload through the **web** origin answered `500`, not `413`. The
+web log showed `Failed to proxy … Error: write EPIPE`: the API answered 413 and closed the
+connection while the Next.js proxy was still sending the body. 22 repeats (11 on each origin) all answered `413 REQ_REQUEST_ENTITY_TOO_LARGE`. Under 2 MB is unaffected.
+Handling is decision 5 in the M2-P5 design.
 
 ## M2-P3 — Consent, language and opt-out
 
