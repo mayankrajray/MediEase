@@ -56,6 +56,7 @@ from mediease_api.delivery.http.access import clinic, current_context
 from mediease_api.delivery.http.bodies import clinic_body, doctor_body, items_body, staff_body
 from mediease_api.delivery.http.ops import invitation_body
 from mediease_api.delivery.http.validation import parse_json
+from mediease_api.domain.clinics.clinic import PaperSize
 from mediease_api.domain.identity.membership import MembershipStatus, Role
 from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.scheduling.mode import BookingMode
@@ -146,6 +147,8 @@ class UpdateClinicRequest(BaseModel):
     specialties: list[str] | None = Field(default=None, max_length=20)
     # R19: refused while a current block lacks what the new mode needs.
     booking_mode: BookingMode | None = None
+    # M4-P4 (decision 3A): applies to versions first rendered after the change.
+    rx_paper_size: PaperSize | None = None
 
     @model_validator(mode="after")
     def _at_least_one_change(self) -> UpdateClinicRequest:
@@ -186,6 +189,7 @@ def create_clinic_blueprint(queries: ClinicUseCases, *, public_base_url: str) ->
                 pincode=body.pincode,
                 specialties=tuple(body.specialties) if body.specialties is not None else None,
                 booking_mode=body.booking_mode,
+                rx_paper_size=body.rx_paper_size,
             ),
         )
         return jsonify(clinic_body(clinic_row))

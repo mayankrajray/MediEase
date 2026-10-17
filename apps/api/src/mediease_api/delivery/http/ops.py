@@ -63,6 +63,7 @@ from mediease_api.delivery.http.bodies import (
 from mediease_api.delivery.http.request_info import request_info
 from mediease_api.delivery.http.scheduling import ScheduleRequest, schedule_change_body
 from mediease_api.delivery.http.validation import RequestValidationFailed, parse_json
+from mediease_api.domain.clinics.clinic import PaperSize
 from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.scheduling.mode import BookingMode
 
@@ -98,6 +99,7 @@ class NewClinicRequest(BaseModel):
     # 2-4 upper-case letters for patient codes (ME-0142); derived from the name when omitted.
     patient_code_prefix: str | None = Field(default=None, max_length=4)
     booking_mode: BookingMode = BookingMode.TOKENS
+    rx_paper_size: PaperSize = PaperSize.A5
 
 
 class NewDoctorRequest(BaseModel):
@@ -146,6 +148,7 @@ def create_ops_blueprint(use_cases: OpsUseCases, *, public_base_url: str) -> Blu
                 specialties=tuple(body.specialties),
                 patient_code_prefix=body.patient_code_prefix,
                 booking_mode=body.booking_mode,
+                rx_paper_size=body.rx_paper_size,
             ),
         )
         return jsonify(clinic_body(clinic)), 201

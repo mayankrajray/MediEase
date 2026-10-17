@@ -26,6 +26,7 @@ from mediease_api.application.patients.errors import ImportInvalid, PhoneExists
 from mediease_api.delivery.http.bodies import candidate_body
 from mediease_api.delivery.http.validation import RequestValidationFailed
 from mediease_api.delivery.middleware import get_request_id
+from mediease_api.domain.prescriptions.errors import PdfBusy
 from mediease_api.domain.shared.errors import DomainError, InvalidValue
 from mediease_api.ports.readiness import DatabaseTimeout, DatabaseUnavailable, ReadinessError
 
@@ -105,6 +106,9 @@ DOMAIN_ERROR_STATUS = {
     "RX_ALREADY_EXISTS": 409,
     "RX_DRAFT_EXISTS": 409,
     "RX_NOT_LATEST": 409,
+    "RX_NOT_ISSUED": 409,
+    "RX_PDF_BUSY": 503,
+    "RX_PDF_FAILED": 500,
     "RX_NAME_TAKEN": 409,
     "RX_LIBRARY_FULL": 409,
 }
@@ -128,7 +132,7 @@ def domain_error_response(exc: DomainError) -> tuple[Response, int]:
     elif isinstance(exc, ImportInvalid):
         details = {"problems": list(exc.problems)}
     response, _ = error_response(exc.code, exc.message, status, details)
-    if isinstance(exc, AccountLocked):
+    if isinstance(exc, AccountLocked | PdfBusy):
         response.headers["Retry-After"] = str(exc.retry_after_seconds)
     return response, status
 

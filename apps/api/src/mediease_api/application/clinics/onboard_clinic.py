@@ -31,7 +31,7 @@ from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor
 from mediease_api.application.scheduling.booking_mode import check_mode_supported, reconcile_clinic
 from mediease_api.domain.audit.actions import AuditAction
-from mediease_api.domain.clinics.clinic import Clinic
+from mediease_api.domain.clinics.clinic import Clinic, PaperSize
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
 from mediease_api.domain.identity.membership import MembershipStatus
@@ -64,6 +64,7 @@ class CreateClinicCommand:
     specialties: tuple[str, ...] = ()
     patient_code_prefix: str | None = None
     booking_mode: BookingMode = BookingMode.TOKENS
+    rx_paper_size: PaperSize = PaperSize.A5
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +91,7 @@ class UpdateClinicCommand:
     pincode: str | None = None
     specialties: tuple[str, ...] | None = None
     booking_mode: BookingMode | None = None
+    rx_paper_size: PaperSize | None = None
 
 
 class CreateClinic:
@@ -119,6 +121,7 @@ class CreateClinic:
                 specialties=cmd.specialties,
                 patient_code_prefix=cmd.patient_code_prefix,
                 booking_mode=cmd.booking_mode,
+                rx_paper_size=cmd.rx_paper_size,
             )
             uow.clinics.add(clinic)
 
@@ -265,6 +268,7 @@ class UpdateClinic:
                 state=cmd.state,
                 pincode=cmd.pincode,
                 specialties=cmd.specialties,
+                rx_paper_size=cmd.rx_paper_size,
             )
             if cmd.booking_mode is not None and cmd.booking_mode is not clinic.booking_mode:
                 # R19: refused unless every current block supports the new mode.

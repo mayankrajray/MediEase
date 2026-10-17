@@ -53,3 +53,34 @@ def test_adr_0008_the_prescription_routes_match_the_contract(
     _expect(openapi, _send(doctor, "DELETE", f"/api/v1/prescriptions/{v2['id']}"), 204)
     view = _expect(openapi, _send(doctor, "GET", f"/api/v1/visits/{visit['id']}"), 200)
     assert [p["version"] for p in view["prescriptions"]] == [1]
+
+
+def test_adr_0008_printing_matches_the_contract(
+    openapi: OpenAPI,  # noqa: F811
+    world: World,
+) -> None:
+    """M4-P4: the PDF, the printable list, the paper size, and their refusals."""
+    doctor, visit = _started(world)
+    desk, owner = world.client_for(world.a.desk), world.client_for(world.a.owner)
+    rx = _expect(openapi, _send(doctor, "POST", f"/api/v1/visits/{visit['id']}/prescriptions"), 201)
+    one = f"/api/v1/prescriptions/{rx['id']}"
+    _expect(openapi, _send(doctor, "PUT", one, {"revision": 1, "items": [SAMPLE_ITEM]}), 200)
+    _expect(openapi, _send(desk, "GET", f"{one}/pdf"), 409)  # RX_NOT_ISSUED
+    _expect(openapi, _send(doctor, "POST", f"{one}/issue", {"revision": 2}), 200)
+
+    pdf = _send(desk, "GET", f"{one}/pdf")
+    assert pdf.status_code == 200 and pdf.data.startswith(b"%PDF-")
+    _check(openapi, pdf)
+    listed = _expect(
+        openapi, _send(desk, "GET", f"/api/v1/patients/{visit['patient_id']}/prescriptions"), 200
+    )
+    assert [r["id"] for r in listed["items"]] == [rx["id"]]
+
+    v2 = _expect(openapi, _send(doctor, "POST", f"{one}/revise"), 201)
+    _send(doctor, "POST", f"/api/v1/prescriptions/{v2['id']}/issue", {"revision": 1})
+    _expect(openapi, _send(desk, "GET", f"{one}/pdf"), 409)  # RX_NOT_LATEST
+
+    clinic = _expect(openapi, _send(owner, "PATCH", "/api/v1/clinic", {"rx_paper_size": "A4"}), 200)
+    assert clinic["rx_paper_size"] == "A4"
+    # An invalid request is refused by the contract itself; the API agrees.
+    assert _send(owner, "PATCH", "/api/v1/clinic", {"rx_paper_size": "B5"}).status_code == 422

@@ -1114,6 +1114,58 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/prescriptions/{rx_id}/pdf": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The printable PDF of an issued prescription
+         * @description FR-RX-04, 06; spec R8, R16, R18, D6; ADR-0012; M4-P4. Rendered on the first download of a
+         *     version and stored (write-once); later downloads stream the stored file, so every caller
+         *     gets the same bytes and concurrent first downloads cause one render (AC8). Labels and
+         *     structured phrases in the prescription's language, the doctor's text as written (R20).
+         *     Paper size from the clinic setting at first render. Records one
+         *     prescription.pdf_downloaded per download. Permission RX_PRINT (every role): the latest
+         *     issued version; a superseded one also needs CLINICAL_VIEW, else 409 RX_NOT_LATEST
+         *     (details.latest_id). 409 RX_NOT_ISSUED for a draft. 503 RX_PDF_BUSY with Retry-After
+         *     while another download renders it; 500 RX_PDF_FAILED (nothing stored; try again).
+         *     Served only here: never a public or pre-signed URL.
+         */
+        readonly get: operations["getPrescriptionPdf"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/patients/{patient_id}/prescriptions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A patient's current prescriptions, for printing (no content)
+         * @description M4-P4 decision 2A, spec D6. The patient's issued versions (never drafts or superseded
+         *     ones), newest first, at most 20: IDs, version, issue time and the doctor's name, without
+         *     any clinical content. Not audited (nothing clinical is read); each download is.
+         *     Permission RX_PRINT.
+         */
+        readonly get: operations["listPrintablePrescriptions"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/rx-favourites": {
         readonly parameters: {
             readonly query?: never;
@@ -1691,6 +1743,27 @@ export interface components {
             /** @description Prefix of this clinic's patient codes, e.g. ME for ME-0142 */
             readonly patient_code_prefix: string;
             readonly booking_mode: components["schemas"]["BookingMode"];
+            readonly rx_paper_size: components["schemas"]["PaperSize"];
+        };
+        /**
+         * @description The clinic's prescription paper (M4-P4 decision 3A). Applied when a version is first
+         *     rendered and then fixed in its stored PDF; a change never alters a printed prescription.
+         * @enum {string}
+         */
+        readonly PaperSize: "A5" | "A4";
+        /** @description What front desk may print (M4-P4 decision 2A). No clinical content. */
+        readonly PrintablePrescription: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly visit_id: string;
+            readonly version: number;
+            /** Format: date-time */
+            readonly issued_at: string;
+            readonly doctor_display_name: string;
+        };
+        readonly PrintablePrescriptionList: {
+            readonly items: readonly components["schemas"]["PrintablePrescription"][];
         };
         /** @enum {string} */
         readonly Sex: "FEMALE" | "MALE" | "OTHER" | "UNDISCLOSED";
@@ -1887,6 +1960,8 @@ export interface components {
             readonly patient_code_prefix?: string | null;
             /** @description Defaults to TOKENS */
             readonly booking_mode?: components["schemas"]["BookingMode"];
+            /** @description Defaults to A5 */
+            readonly rx_paper_size?: components["schemas"]["PaperSize"];
         };
         /** @description Only the fields sent are changed. The slug and status are not editable here. */
         readonly ClinicUpdate: {
@@ -1903,6 +1978,8 @@ export interface components {
              *     what the new mode needs (spec R19); unbooked future sessions follow the new mode.
              */
             readonly booking_mode?: components["schemas"]["BookingMode"] | null;
+            /** @description Applies to versions first rendered after the change (M4-P4). */
+            readonly rx_paper_size?: components["schemas"]["PaperSize"] | null;
         };
         /** @description I3 — every prescription prints the qualification and registration details. */
         readonly NewDoctor: {
@@ -2383,7 +2460,8 @@ export interface components {
          *     RX_STALE (409, details.revision); RX_ALREADY_EXISTS (409, details.prescription_id: the
          *     visit's chain); RX_DRAFT_EXISTS (409, details.prescription_id); RX_NOT_LATEST (409,
          *     details.latest_id); VIS_LOCKED (409: version 1 after the visit's lock); RX_EMPTY (422);
-         *     RX_DOCTOR_INCOMPLETE (422, details.fields); REQ_VALIDATION_FAILED (422, field and rule)
+         *     RX_DOCTOR_INCOMPLETE (422, details.fields); REQ_VALIDATION_FAILED (422, field and rule);
+         *     RX_NOT_ISSUED (409, details.status: a draft is never printed, M4-P4)
          */
         readonly PrescriptionError: {
             headers: {
@@ -4713,6 +4791,108 @@ export interface operations {
             readonly 403: components["responses"]["VisitPermissionError"];
             readonly 404: components["responses"]["PermissionError"];
             readonly 409: components["responses"]["PrescriptionError"];
+        };
+    };
+    readonly getPrescriptionPdf: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description A prescription version of the request's clinic. */
+                readonly rx_id: components["parameters"]["PrescriptionPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The PDF */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    /** @description private, no-store */
+                    readonly "Cache-Control"?: string;
+                    /** @description inline; filename="prescription-<id>-v<version>.pdf" */
+                    readonly "Content-Disposition"?: string;
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/pdf": unknown;
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["PrescriptionError"];
+            /** @description RX_PDF_FAILED; nothing was stored, so the next download tries again */
+            readonly 500: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description RX_PDF_BUSY; another download is preparing it */
+            readonly 503: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    /** @description Seconds to wait before trying again */
+                    readonly "Retry-After"?: string;
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    readonly listPrintablePrescriptions: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description A patient of the request's clinic. */
+                readonly patient_id: components["parameters"]["PatientPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The printable versions */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PrintablePrescriptionList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
         };
     };
     readonly listFavourites: {

@@ -14,6 +14,7 @@ from typing import Any
 from mediease_api.application.appointments.queue import QueueView
 from mediease_api.application.appointments.views import AppointmentDetail, AppointmentView
 from mediease_api.application.patients.views import CandidateView, PatientView
+from mediease_api.application.prescriptions.pdf import Printable
 from mediease_api.application.prescriptions.use_cases import PrescriptionView
 from mediease_api.application.scheduling.views import ScheduleView
 from mediease_api.application.visits.use_cases import ConsultationView, VisitView
@@ -49,6 +50,7 @@ def clinic_body(clinic: Clinic) -> dict[str, Any]:
         "specialties": list(clinic.specialties),
         "patient_code_prefix": clinic.patient_code_prefix,
         "booking_mode": clinic.booking_mode.value,
+        "rx_paper_size": clinic.rx_paper_size.value,
     }
 
 
@@ -405,6 +407,17 @@ def prescription_body(view: PrescriptionView) -> dict[str, Any]:
         ],
         "created_at": rx.created_at.isoformat(),
         "updated_at": rx.updated_at.isoformat(),
+    }
+
+
+def printable_body(p: Printable) -> dict[str, Any]:
+    """M4-P4 decision 2A: what front desk may print. IDs, version, date, doctor; no content."""
+    return {
+        "id": str(p.prescription_id),
+        "visit_id": str(p.visit_id),
+        "version": p.version,
+        "issued_at": p.issued_at.isoformat(),
+        "doctor_display_name": p.doctor_display_name,
     }
 
 
