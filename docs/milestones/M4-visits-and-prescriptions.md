@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; the M4-P5 design proposed, awaiting approval |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 approved (1A-6A) 18 Oct 2026, in implementation |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -17,7 +17,7 @@
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (done, confirmed) |
 | P3 | Favourites, templates, clinic-history autocomplete | Below (done, confirmed) |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (done) |
-| P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | Below (proposed) |
+| P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | Below (approved 1A-6A) |
 | P6 | Web consultation screen, keyboard-first Rx builder | At its start |
 
 ---
@@ -626,7 +626,7 @@ Taken while implementing:
 
 ## M4-P5 — Signed patient links, last-4 check, bilingual patient page
 
-**Status: proposed 18 Oct 2026, awaiting approval.** API and the public web page; the clinic's
+**Status: approved by the developer 18 Oct 2026 (1A-6A, every recommendation).** API and the public web page; the clinic's
 QR code and copy button are P6. Covers FR-RX-07, FR-RX-08; spec R9–R13, R19, R20, D2, D5; AC2,
 AC3, AC10 (the page half); NFR-02, NFR-07, NFR-09.
 
