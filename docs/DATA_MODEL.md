@@ -34,6 +34,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0008` | `appointments` and `appointment_status_history` | M3-P2 |
 | `0009` | `visits` and append-only `visit_addenda` (trigger `VIS_ADDENDUM_APPEND_ONLY`) | M4-P1 |
 | `0010` | `prescriptions` and `prescription_items`, immutable once issued (triggers, `RX_NOT_DRAFT`) | M4-P2 |
+| `0011` | `rx_favourites`, `rx_templates`; `prescription_items.favourite_id`, `prescriptions.template_id`; the medicine-name prefix index | M4-P3 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -422,8 +423,19 @@ EMPTY_STOMACH | BEDTIME | ANY), duration_days (1–365), preparation jsonb [{cod
 storage jsonb [{code, days}], warnings (≤ 500), notes (≤ 1,000)` — all clinical, never logged.
 Trigger `prescription_items_frozen` allows `INSERT`/`UPDATE`/`DELETE` only while the parent is a
 draft; `TRUNCATE` refused.
-### `rx_favourites` / `rx_templates`
-`id, clinic_id, doctor_id, name, body jsonb, use_count, last_used_at`
+### `rx_favourites` / `rx_templates` (migration `0011`, M4-P3)
+A doctor's own working tools (decision 1A), not clinical records about a patient.
+`id, clinic_id, doctor_id, name (1–100, unique per doctor ignoring case:
+uq_<table>_doctor_id_name on lower(name)), revision, use_count (≥ 0), last_used_at, created_at,
+updated_at`; `rx_favourites.item jsonb` (one line's body); `rx_templates.items jsonb`,
+`advice jsonb`, `follow_up_days` (1–365). Bodies are validated by the prescription rules when
+saved. At most 200 favourites and 50 templates per doctor (application limit).
+
+M4-P3 also adds `prescription_items.favourite_id` and `prescriptions.template_id` (plain IDs,
+no foreign key: a deleted favourite must not touch an issued prescription; the P2 trigger covers
+them), counted into `use_count` when the prescription is issued (3A), and
+`ix_prescription_items_clinic_id_medicine_name (clinic_id, lower(medicine_name)
+text_pattern_ops)` for start-of-name suggestions (5A).
 
 ### `patient_links`
 | Column | Type | Notes |

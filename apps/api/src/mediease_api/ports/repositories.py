@@ -32,7 +32,9 @@ from mediease_api.domain.identity.membership import ClinicMembership
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User
 from mediease_api.domain.patients.patient import Patient
+from mediease_api.domain.prescriptions.library import Favourite, Template
 from mediease_api.domain.prescriptions.prescription import Prescription
+from mediease_api.domain.prescriptions.suggestions import HistoryName
 from mediease_api.domain.scheduling.blocks import WeeklyBlock
 from mediease_api.domain.scheduling.exceptions import ScheduleException
 from mediease_api.domain.scheduling.sessions import Session
@@ -375,3 +377,43 @@ class PrescriptionRepository(Protocol):
     def delete(self, prescription_id: UUID) -> None:
         """Remove a draft and its items (the database refuses anything else)."""
         ...
+
+    def medicine_history(self, prefix: str, *, limit: int) -> Sequence[HistoryName]:
+        """M4-P3, R7: medicine names on this clinic's issued (or superseded) prescriptions that
+        start with ``prefix`` ignoring case, grouped ignoring case and spaces, with the distinct
+        visits they were prescribed in and when last; most visits first. Never drafts."""
+        ...
+
+
+class FavouriteRepository(Protocol):
+    """This clinic's favourites (M4-P3). A name the doctor already uses raises ``NameTaken``."""
+
+    def add(self, favourite: Favourite) -> None: ...
+
+    def update(self, favourite: Favourite) -> None: ...
+
+    def delete(self, favourite_id: UUID) -> None: ...
+
+    def get(self, favourite_id: UUID, *, for_update: bool = False) -> Favourite | None: ...
+
+    def list_for_doctor(self, doctor_id: UUID) -> Sequence[Favourite]:
+        """By use, then name."""
+        ...
+
+    def count_for_doctor(self, doctor_id: UUID) -> int: ...
+
+
+class TemplateRepository(Protocol):
+    """This clinic's templates (M4-P3), as ``FavouriteRepository``."""
+
+    def add(self, template: Template) -> None: ...
+
+    def update(self, template: Template) -> None: ...
+
+    def delete(self, template_id: UUID) -> None: ...
+
+    def get(self, template_id: UUID, *, for_update: bool = False) -> Template | None: ...
+
+    def list_for_doctor(self, doctor_id: UUID) -> Sequence[Template]: ...
+
+    def count_for_doctor(self, doctor_id: UUID) -> int: ...

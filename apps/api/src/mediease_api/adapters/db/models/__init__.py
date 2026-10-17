@@ -11,6 +11,7 @@ from mediease_api.adapters.db.models.clinics import ClinicRow, DoctorRow, Onboar
 from mediease_api.adapters.db.models.identity import ClinicMembershipRow, RefreshTokenRow, UserRow
 from mediease_api.adapters.db.models.patients import PatientRow
 from mediease_api.adapters.db.models.prescriptions import PrescriptionItemRow, PrescriptionRow
+from mediease_api.adapters.db.models.rx_library import RxFavouriteRow, RxTemplateRow
 from mediease_api.adapters.db.models.scheduling import (
     DoctorScheduleRow,
     ScheduleExceptionRow,
@@ -32,6 +33,8 @@ __all__ = [
     "PrescriptionItemRow",
     "PrescriptionRow",
     "RefreshTokenRow",
+    "RxFavouriteRow",
+    "RxTemplateRow",
     "ScheduleExceptionRow",
     "SessionRow",
     "UserRow",

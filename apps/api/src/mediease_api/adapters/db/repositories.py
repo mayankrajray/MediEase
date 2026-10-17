@@ -17,7 +17,8 @@ from datetime import UTC, date, datetime, time
 from uuid import UUID
 
 from sqlalchemy import Select, delete, exists, func, or_, select, update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import aggregate_order_by, insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from mediease_api.adapters.db.models import (
@@ -32,6 +33,8 @@ from mediease_api.adapters.db.models import (
     PrescriptionItemRow,
     PrescriptionRow,
     RefreshTokenRow,
+    RxFavouriteRow,
+    RxTemplateRow,
     ScheduleExceptionRow,
     SessionRow,
     UserRow,
@@ -53,6 +56,7 @@ from mediease_api.domain.identity.membership import ClinicMembership, Membership
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User, UserStatus
 from mediease_api.domain.patients.patient import Language, Patient, Sex
+from mediease_api.domain.prescriptions.library import Favourite, NameTaken, Template
 from mediease_api.domain.prescriptions.prescription import (
     Advice,
     ClinicSnapshot,
@@ -61,7 +65,10 @@ from mediease_api.domain.prescriptions.prescription import (
     Prescription,
     PrescriptionItem,
     PrescriptionStatus,
+    item_from_json,
+    item_json,
 )
+from mediease_api.domain.prescriptions.suggestions import HistoryName
 from mediease_api.domain.prescriptions.vocabulary import (
     Frequency,
     Preparation,
@@ -1309,6 +1316,7 @@ def _item_from_row(row: PrescriptionItemRow) -> PrescriptionItem:
         storage=tuple(Storage(StorageCode(s["code"]), s.get("days")) for s in row.storage),
         warnings=row.warnings,
         notes=row.notes,
+        favourite_id=row.favourite_id,
     )
 
 
@@ -1333,6 +1341,7 @@ def _item_row(
         storage=[s.as_json() for s in item.storage],
         warnings=item.warnings,
         notes=item.notes,
+        favourite_id=item.favourite_id,
     )
 
 
@@ -1379,6 +1388,7 @@ def _prescription_from_row(row: PrescriptionRow, items: Sequence[PrescriptionIte
         created_by=row.created_by,
         created_at=_utc(row.created_at),
         updated_at=_utc(row.updated_at),
+        template_id=row.template_id,
     )
 
 
@@ -1395,6 +1405,7 @@ def _write_prescription(row: PrescriptionRow, rx: Prescription) -> None:
     row.pdf_object_key = rx.pdf_object_key
     row.link_delivery = rx.link_delivery.value if rx.link_delivery else None
     row.link_delivery_requested_at = rx.link_delivery_requested_at
+    row.template_id = rx.template_id
     row.updated_at = rx.updated_at
 
 
@@ -1498,3 +1509,195 @@ class SqlAlchemyPrescriptionRepository(TenantScopedRepository[PrescriptionRow]):
         self._require_row(prescription_id)
         self._items.delete_for(prescription_id)
         self._delete_row(prescription_id)
+
+    def medicine_history(self, prefix: str, *, limit: int) -> Sequence[HistoryName]:
+        key = func.lower(func.regexp_replace(PrescriptionItemRow.medicine_name, r"\s+", " ", "g"))
+        pattern = _like_prefix(prefix.lower())
+        visits = func.count(PrescriptionRow.visit_id.distinct())
+        last = func.max(PrescriptionRow.issued_at)
+        spelling = func.array_agg(
+            aggregate_order_by(PrescriptionItemRow.medicine_name, PrescriptionRow.issued_at.desc())
+        )[1]
+        query = (
+            select(spelling, visits, last)
+            .select_from(PrescriptionItemRow)
+            .join(PrescriptionRow, PrescriptionRow.id == PrescriptionItemRow.prescription_id)
+            .where(
+                PrescriptionItemRow.clinic_id == self.clinic_id,
+                PrescriptionRow.clinic_id == self.clinic_id,
+                PrescriptionRow.status.in_(
+                    [PrescriptionStatus.ISSUED.value, PrescriptionStatus.SUPERSEDED.value]
+                ),
+                # Served by ix_prescription_items_clinic_id_medicine_name (text_pattern_ops).
+                func.lower(PrescriptionItemRow.medicine_name).like(pattern, escape="\\"),
+            )
+            .group_by(key)
+            .order_by(visits.desc(), last.desc())
+            .limit(limit)
+        )
+        return [
+            HistoryName(name=row[0], visits=int(row[1]), last_issued_at=_utc(row[2]))
+            for row in self._session.execute(query)
+        ]
+
+
+def _add_library_row(session: Session, row: RxFavouriteRow | RxTemplateRow) -> None:
+    """Insert or flush, turning the per-doctor name index into ``NameTaken``."""
+    try:
+        with session.begin_nested():
+            session.add(row)
+            session.flush()
+    except IntegrityError as exc:
+        if "_doctor_id_name" in str(exc.orig):
+            raise NameTaken() from None
+        raise
+
+
+def _favourite_from_row(row: RxFavouriteRow) -> Favourite:
+    return Favourite(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        doctor_id=row.doctor_id,
+        name=row.name,
+        item=item_from_json(row.item, id=row.id, position=1),
+        revision=row.revision,
+        use_count=row.use_count,
+        last_used_at=_utc_or_none(row.last_used_at),
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+    )
+
+
+def _template_from_row(row: RxTemplateRow) -> Template:
+    advice = row.advice or {}
+    return Template(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        doctor_id=row.doctor_id,
+        name=row.name,
+        items=tuple(
+            item_from_json(item, id=row.id, position=i) for i, item in enumerate(row.items, start=1)
+        ),
+        advice=Advice(
+            diet=tuple(advice.get("diet", ())),
+            activity=tuple(advice.get("activity", ())),
+            return_if=tuple(advice.get("return_if", ())),
+            notes=advice.get("notes"),
+        ),
+        follow_up_days=row.follow_up_days,
+        revision=row.revision,
+        use_count=row.use_count,
+        last_used_at=_utc_or_none(row.last_used_at),
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+    )
+
+
+class SqlAlchemyRxFavouriteRepository(TenantScopedRepository[RxFavouriteRow]):
+    model = RxFavouriteRow
+    entity_name = "favourite"
+
+    def _write(self, row: RxFavouriteRow, fav: Favourite) -> None:
+        row.name = fav.name
+        row.item = item_json(fav.item)
+        row.revision = fav.revision
+        row.use_count = fav.use_count
+        row.last_used_at = fav.last_used_at
+        row.updated_at = fav.updated_at
+
+    def add(self, favourite: Favourite) -> None:
+        self._check_owned(favourite.clinic_id)
+        row = RxFavouriteRow(
+            id=favourite.id,
+            clinic_id=self.clinic_id,
+            doctor_id=favourite.doctor_id,
+            created_at=favourite.created_at,
+        )
+        self._write(row, favourite)
+        _add_library_row(self._session, row)
+
+    def update(self, favourite: Favourite) -> None:
+        self._check_owned(favourite.clinic_id)
+        row = self._require_row(favourite.id)
+        self._write(row, favourite)
+        _add_library_row(self._session, row)
+
+    def delete(self, favourite_id: UUID) -> None:
+        self._delete_row(favourite_id)
+
+    def get(self, favourite_id: UUID, *, for_update: bool = False) -> Favourite | None:
+        query = self._scoped_select().where(RxFavouriteRow.id == favourite_id)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        row = self._session.scalars(query).one_or_none()
+        return _favourite_from_row(row) if row else None
+
+    def list_for_doctor(self, doctor_id: UUID) -> Sequence[Favourite]:
+        query = (
+            self._scoped_select()
+            .where(RxFavouriteRow.doctor_id == doctor_id)
+            .order_by(RxFavouriteRow.use_count.desc(), func.lower(RxFavouriteRow.name))
+        )
+        return [_favourite_from_row(row) for row in self._session.scalars(query)]
+
+    def count_for_doctor(self, doctor_id: UUID) -> int:
+        query = select(func.count()).where(
+            RxFavouriteRow.clinic_id == self.clinic_id, RxFavouriteRow.doctor_id == doctor_id
+        )
+        return int(self._session.scalar(query) or 0)
+
+
+class SqlAlchemyRxTemplateRepository(TenantScopedRepository[RxTemplateRow]):
+    model = RxTemplateRow
+    entity_name = "template"
+
+    def _write(self, row: RxTemplateRow, template: Template) -> None:
+        row.name = template.name
+        row.items = [item_json(i) for i in template.items]
+        row.advice = template.advice.as_json()
+        row.follow_up_days = template.follow_up_days
+        row.revision = template.revision
+        row.use_count = template.use_count
+        row.last_used_at = template.last_used_at
+        row.updated_at = template.updated_at
+
+    def add(self, template: Template) -> None:
+        self._check_owned(template.clinic_id)
+        row = RxTemplateRow(
+            id=template.id,
+            clinic_id=self.clinic_id,
+            doctor_id=template.doctor_id,
+            created_at=template.created_at,
+        )
+        self._write(row, template)
+        _add_library_row(self._session, row)
+
+    def update(self, template: Template) -> None:
+        self._check_owned(template.clinic_id)
+        row = self._require_row(template.id)
+        self._write(row, template)
+        _add_library_row(self._session, row)
+
+    def delete(self, template_id: UUID) -> None:
+        self._delete_row(template_id)
+
+    def get(self, template_id: UUID, *, for_update: bool = False) -> Template | None:
+        query = self._scoped_select().where(RxTemplateRow.id == template_id)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        row = self._session.scalars(query).one_or_none()
+        return _template_from_row(row) if row else None
+
+    def list_for_doctor(self, doctor_id: UUID) -> Sequence[Template]:
+        query = (
+            self._scoped_select()
+            .where(RxTemplateRow.doctor_id == doctor_id)
+            .order_by(RxTemplateRow.use_count.desc(), func.lower(RxTemplateRow.name))
+        )
+        return [_template_from_row(row) for row in self._session.scalars(query)]
+
+    def count_for_doctor(self, doctor_id: UUID) -> int:
+        query = select(func.count()).where(
+            RxTemplateRow.clinic_id == self.clinic_id, RxTemplateRow.doctor_id == doctor_id
+        )
+        return int(self._session.scalar(query) or 0)

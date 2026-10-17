@@ -24,6 +24,8 @@ from mediease_api.adapters.db.repositories import (
     SqlAlchemyPatientRepository,
     SqlAlchemyPrescriptionItemRepository,
     SqlAlchemyPrescriptionRepository,
+    SqlAlchemyRxFavouriteRepository,
+    SqlAlchemyRxTemplateRepository,
     SqlAlchemyScheduleExceptionRepository,
     SqlAlchemyScheduleRepository,
     SqlAlchemySessionRepository,
@@ -35,6 +37,7 @@ from mediease_api.domain.appointments.appointment import Appointment, history_en
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
 from mediease_api.domain.patients.patient import Patient
+from mediease_api.domain.prescriptions.library import Favourite, Template
 from mediease_api.domain.prescriptions.prescription import Advice, Prescription, PrescriptionItem
 from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
 from mediease_api.domain.scheduling.exceptions import ScheduleException
@@ -428,6 +431,26 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
             now=NOW,
         )
         staff_b.prescriptions.add(rx)
+        fav = Favourite.create(
+            id=new_id(),
+            clinic_id=b.clinic_id,
+            doctor_id=b.doctor.id,
+            name="Tab Y usual",
+            item=rx.items[0],
+            now=NOW,
+        )
+        staff_b.rx_favourites.add(fav)
+        template = Template.create(
+            id=new_id(),
+            clinic_id=b.clinic_id,
+            doctor_id=b.doctor.id,
+            name="Cough",
+            items=list(rx.items),
+            advice=Advice(),
+            follow_up_days=None,
+            now=NOW,
+        )
+        staff_b.rx_templates.add(template)
         uow.commit()
 
     with uow_factory() as uow:
@@ -454,6 +477,18 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
             staff_a.prescriptions.replace_items(rx)
         with pytest.raises(NotFound):
             staff_a.prescriptions.delete(rx.id)
+        assert staff_a.rx_favourites.get(fav.id) is None
+        assert staff_a.rx_favourites.list_for_doctor(b.doctor.id) == []
+        assert staff_a.rx_favourites.count_for_doctor(b.doctor.id) == 0
+        assert staff_a.rx_templates.get(template.id) is None
+        assert staff_a.rx_templates.list_for_doctor(b.doctor.id) == []
+        assert staff_a.prescriptions.medicine_history("tab", limit=10) == []
+        with pytest.raises(TenancyViolation):
+            staff_a.rx_favourites.add(fav)
+        with pytest.raises(TenancyViolation):
+            staff_a.rx_templates.update(template)
+        with pytest.raises(NotFound):
+            staff_a.rx_favourites.delete(fav.id)
 
     with uow_factory() as uow:
         staff_b = uow.tenant(b.clinic_id)
@@ -463,6 +498,8 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
         assert staff_b.visit_addenda.list_for_visit(visit.id) == [addendum]
         assert staff_b.prescriptions.get(rx.id) == rx
         assert staff_b.prescriptions.list_for_visit(visit.id) == [rx]
+        assert [f.id for f in staff_b.rx_favourites.list_for_doctor(b.doctor.id)] == [fav.id]
+        assert staff_b.rx_templates.get(template.id) is not None
 
 
 def test_every_tenant_table_has_a_scoped_repository() -> None:
@@ -491,6 +528,8 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "visit_addenda",
             "prescriptions",
             "prescription_items",
+            "rx_favourites",
+            "rx_templates",
             "audit_events",
         }
     )
@@ -508,6 +547,8 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyVisitAddendumRepository,
         SqlAlchemyPrescriptionRepository,
         SqlAlchemyPrescriptionItemRepository,
+        SqlAlchemyRxFavouriteRepository,
+        SqlAlchemyRxTemplateRepository,
     } == set(TenantScopedRepository.__subclasses__())
 
 
