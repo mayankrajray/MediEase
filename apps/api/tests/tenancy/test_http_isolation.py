@@ -11,6 +11,7 @@ permanent test suite").
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date, timedelta
 
 import pytest
 from flask.testing import FlaskClient
@@ -18,6 +19,10 @@ from werkzeug.test import TestResponse
 
 from mediease_api.delivery.http.access import Access, policy_of
 from tests.conftest import World
+
+# A date well inside the 180-day horizon whatever day the suite runs (M3-P1 exceptions).
+_FAR_DATE = (date.today() + timedelta(days=30)).isoformat()
+
 
 # Rule -> a URL naming a resource of clinic B. Requested by clinic A's owner,
 # each must answer 404 as if it did not exist.
@@ -28,6 +33,15 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/patients/<uuid:patient_id>/consent": lambda w: f"{_patient_url(w)}/consent",
     "/api/v1/patients/<uuid:patient_id>/opt-out": lambda w: f"{_patient_url(w)}/opt-out",
     "/api/v1/patients/<uuid:patient_id>/opt-in": lambda w: f"{_opted_out_patient_url(w)}/opt-in",
+    "/api/v1/clinic/doctors/<uuid:doctor_id>/schedule": lambda w: (
+        f"/api/v1/clinic/doctors/{w.b.doctor.id}/schedule"
+    ),
+    "/api/v1/clinic/doctors/<uuid:doctor_id>/schedule-exceptions": lambda w: (
+        f"/api/v1/clinic/doctors/{w.b.doctor.id}/schedule-exceptions"
+    ),
+    "/api/v1/clinic/doctors/<uuid:doctor_id>/schedule-exceptions/<uuid:exception_id>": lambda w: (
+        _exception_url(w)
+    ),
 }
 
 # Methods a cross-tenant case must use (default GET), with the body to send.
@@ -36,10 +50,33 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, dict[str, object]]] = {
     "/api/v1/patients/<uuid:patient_id>/consent": ("PUT", {"whatsapp": True, "sms": False}),
     "/api/v1/patients/<uuid:patient_id>/opt-out": ("POST", {}),
     "/api/v1/patients/<uuid:patient_id>/opt-in": ("POST", {"whatsapp": True, "sms": False}),
+    "/api/v1/clinic/doctors/<uuid:doctor_id>/schedule-exceptions": (
+        "POST",
+        {"kind": "LEAVE", "on_date": _FAR_DATE},
+    ),
+    "/api/v1/clinic/doctors/<uuid:doctor_id>/schedule-exceptions/<uuid:exception_id>": (
+        "DELETE",
+        {},
+    ),
 }
 
 # Patients have their own read and write cross-clinic cases in integration/test_patients_http.py;
 # this suite reads one by ID so the "every route with an ID" guard below stays complete.
+
+
+def _exception_url(world: World) -> str:
+    """Clinic B's leave for its doctor, which clinic A must not be able to remove."""
+    owner_of_b = world.client_for(world.b.owner)
+    csrf = owner_of_b.get_cookie("me_csrf", path="/")
+    assert csrf is not None
+    base = f"/api/v1/clinic/doctors/{world.b.doctor.id}/schedule-exceptions"
+    created = owner_of_b.post(
+        base,
+        json={"kind": "LEAVE", "on_date": (date.today() + timedelta(days=31)).isoformat()},
+        headers={"X-CSRF-Token": csrf.value},
+    )
+    assert created.status_code == 201, created.get_json()
+    return f"{base}/{created.get_json()['exception']['id']}"
 
 
 def _staff_url(world: World) -> str:
@@ -105,7 +142,7 @@ def test_ac3_nfr_08_another_clinics_resource_is_404(world: World, rule: str) -> 
     assert resp.status_code == 404, resp.get_json()
     assert resp.get_json()["error"]["code"] == "REQ_NOT_FOUND"
     # The same URL works for its own clinic, so the 404 is the scope, not the route.
-    assert _call(world.client_for(world.b.owner), method, url, body).status_code == 200
+    assert _call(world.client_for(world.b.owner), method, url, body).status_code in (200, 201)
 
 
 def _call(client: FlaskClient, method: str, url: str, body: dict[str, object]) -> TestResponse:

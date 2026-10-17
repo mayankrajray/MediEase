@@ -47,6 +47,9 @@ from mediease_api.application.patients.import_patients import ImportPatients
 from mediease_api.application.patients.queries import GetPatient, LookupPatients
 from mediease_api.application.patients.register_patient import RegisterPatient
 from mediease_api.application.patients.update_patient import UpdatePatient
+from mediease_api.application.scheduling.exceptions import AddException, RemoveException
+from mediease_api.application.scheduling.schedules import GetSchedule, ReplaceSchedule
+from mediease_api.application.scheduling.sessions import ListSessions
 from mediease_api.config.logging import configure_logging
 from mediease_api.config.settings import AppSettings
 from mediease_api.delivery.errors import register_error_handlers
@@ -60,6 +63,7 @@ from mediease_api.delivery.http.ops import create_ops_blueprint
 from mediease_api.delivery.http.patients import create_patients_blueprint
 from mediease_api.delivery.http.platform import create_platform_blueprint
 from mediease_api.delivery.http.request_info import register_request_info
+from mediease_api.delivery.http.scheduling import create_scheduling_blueprint
 from mediease_api.delivery.middleware import register_request_middleware
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -192,6 +196,21 @@ class _UseCases:
     def import_patients(self) -> ImportPatients:
         return ImportPatients(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    def get_schedule(self) -> GetSchedule:
+        return GetSchedule(uow=self._uow(), clock=self.clock)
+
+    def replace_schedule(self) -> ReplaceSchedule:
+        return ReplaceSchedule(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def add_schedule_exception(self) -> AddException:
+        return AddException(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def remove_schedule_exception(self) -> RemoveException:
+        return RemoveException(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def list_sessions(self) -> ListSessions:
+        return ListSessions(uow=self._uow(), clock=self.clock, ids=self.ids)
+
     def list_clinics(self) -> ListClinics:
         return ListClinics(uow=self._uow())
 
@@ -299,6 +318,7 @@ def create_app(
         create_ops_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
     )
     app.register_blueprint(create_patients_blueprint(use_cases))
+    app.register_blueprint(create_scheduling_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

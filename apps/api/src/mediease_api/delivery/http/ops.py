@@ -8,6 +8,7 @@
 | ``POST /api/v1/ops/clinics/{id}/doctors`` | Add a doctor |
 | ``POST /api/v1/ops/clinics/{id}/staff-invites`` | Invite the owner (or any role) |
 | ``POST /api/v1/ops/clinics/{id}/patient-imports`` | CSV patient import, dry run by default |
+| ``PUT /api/v1/ops/clinics/{id}/doctors/{doctor_id}/schedule`` | Weekly schedule (D5) |
 
 Every route is ``@ops``: platform staff only, and clinic staff are refused
 even as owners (spec R10). Ops users have no membership, so the clinic is
@@ -50,6 +51,7 @@ from mediease_api.application.patients.import_patients import (
     ImportReport,
     RowDuplicate,
 )
+from mediease_api.application.scheduling.schedules import ReplaceSchedule
 from mediease_api.delivery.http.access import current_principal, ops
 from mediease_api.delivery.http.bodies import (
     checklist_body,
@@ -59,8 +61,10 @@ from mediease_api.delivery.http.bodies import (
     staff_body,
 )
 from mediease_api.delivery.http.request_info import request_info
+from mediease_api.delivery.http.scheduling import ScheduleRequest, schedule_change_body
 from mediease_api.delivery.http.validation import RequestValidationFailed, parse_json
 from mediease_api.domain.identity.membership import Role
+from mediease_api.domain.scheduling.mode import BookingMode
 
 # The patient import's body limit (M2-P4): 5,000 rows fit with room to spare.
 MAX_IMPORT_BYTES = 2 * 1024 * 1024
@@ -75,6 +79,7 @@ class OpsUseCases(Protocol):
     def add_doctor(self) -> AddDoctor: ...
     def invite_staff(self) -> InviteStaff: ...
     def import_patients(self) -> ImportPatients: ...
+    def replace_schedule(self) -> ReplaceSchedule: ...
 
 
 class NewClinicRequest(BaseModel):
@@ -92,6 +97,7 @@ class NewClinicRequest(BaseModel):
     specialties: list[str] = Field(default_factory=list, max_length=20)
     # 2-4 upper-case letters for patient codes (ME-0142); derived from the name when omitted.
     patient_code_prefix: str | None = Field(default=None, max_length=4)
+    booking_mode: BookingMode = BookingMode.TOKENS
 
 
 class NewDoctorRequest(BaseModel):
@@ -139,6 +145,7 @@ def create_ops_blueprint(use_cases: OpsUseCases, *, public_base_url: str) -> Blu
                 pincode=body.pincode,
                 specialties=tuple(body.specialties),
                 patient_code_prefix=body.patient_code_prefix,
+                booking_mode=body.booking_mode,
             ),
         )
         return jsonify(clinic_body(clinic)), 201
@@ -177,6 +184,18 @@ def create_ops_blueprint(use_cases: OpsUseCases, *, public_base_url: str) -> Blu
             cmd=DoctorCommand(**body.model_dump()),
         )
         return jsonify(doctor_body(doctor)), 201
+
+    @bp.put("/clinics/<uuid:clinic_id>/doctors/<uuid:doctor_id>/schedule")
+    @ops
+    def replace_schedule(clinic_id: UUID, doctor_id: UUID) -> Response:
+        body = parse_json(ScheduleRequest)
+        change = use_cases.replace_schedule().execute(
+            clinic_id=clinic_id,
+            actor=_actor(),
+            doctor_id=doctor_id,
+            blocks=[b.command() for b in body.blocks],
+        )
+        return jsonify(schedule_change_body(change))
 
     @bp.post("/clinics/<uuid:clinic_id>/staff-invites")
     @ops

@@ -29,13 +29,16 @@ import structlog
 
 from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor
+from mediease_api.application.scheduling.booking_mode import check_mode_supported, reconcile_clinic
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
 from mediease_api.domain.identity.membership import MembershipStatus
+from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.shared.errors import InvalidValue, NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.domain.shared.time import local_date
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.unit_of_work import UnitOfWork
@@ -60,6 +63,7 @@ class CreateClinicCommand:
     pincode: str | None = None
     specialties: tuple[str, ...] = ()
     patient_code_prefix: str | None = None
+    booking_mode: BookingMode = BookingMode.TOKENS
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +89,7 @@ class UpdateClinicCommand:
     state: str | None = None
     pincode: str | None = None
     specialties: tuple[str, ...] | None = None
+    booking_mode: BookingMode | None = None
 
 
 class CreateClinic:
@@ -113,6 +118,7 @@ class CreateClinic:
                 pincode=cmd.pincode,
                 specialties=cmd.specialties,
                 patient_code_prefix=cmd.patient_code_prefix,
+                booking_mode=cmd.booking_mode,
             )
             uow.clinics.add(clinic)
 
@@ -260,6 +266,13 @@ class UpdateClinic:
                 pincode=cmd.pincode,
                 specialties=cmd.specialties,
             )
+            if cmd.booking_mode is not None and cmd.booking_mode is not clinic.booking_mode:
+                # R19: refused unless every current block supports the new mode.
+                today = local_date(now, clinic.timezone)
+                check_mode_supported(uow, clinic, cmd.booking_mode, today)
+                clinic.change_booking_mode(cmd.booking_mode, now=now)
+                uow.clinics.update(clinic)
+                reconcile_clinic(uow, clinic, today)
             uow.clinics.update(clinic)
             record_event(
                 uow,

@@ -157,6 +157,7 @@ the person holding the link knows whether to ask for a new one.
 | GET | `/api/v1/ops/clinics/{clinic_id}` | Checklist, staff and doctor count | Implemented (M1-P5) |
 | POST | `/api/v1/ops/clinics/{clinic_id}/doctors` | Add a doctor while onboarding | Implemented (M1-P5) |
 | POST | `/api/v1/ops/clinics/{clinic_id}/staff-invites` | Invite the owner (or any role) | Implemented (M1-P5) |
+| PUT | `/api/v1/ops/clinics/{clinic_id}/doctors/{doctor_id}/schedule` | Set a doctor's weekly schedule while onboarding; `POST /ops/clinics` also takes `booking_mode` | Implemented (M3-P1) |
 | GET | `/api/v1/ops/clinics/{clinic_id}/health` | Usage metrics, no clinical data (FR-OPS-03) | M6-P4 |
 | POST | `/api/v1/ops/clinics/{clinic_id}/patient-imports?dry_run=true` | CSV import (FR-PAT-08), dry run unless `dry_run=false` | Implemented (M2-P4) |
 | GET | `/api/v1/ops/jobs?state=dead` | Dead jobs | M5-P1 |
@@ -251,15 +252,31 @@ Responses carry personal data and are `Cache-Control: no-store`. The clinic is t
 
 | Method | Path | Purpose | Req |
 |---|---|---|---|
-| GET/PUT | `/api/v1/doctors/{doctor_id}/schedule` | Weekly schedule | FR-APT-01 |
-| POST | `/api/v1/doctors/{doctor_id}/schedule-exceptions` | Leave / extra session | FR-APT-01 |
-| GET | `/api/v1/sessions?doctor_id=&date=` | Sessions with availability | FR-APT-02 |
+| GET | `/api/v1/clinic/doctors/{doctor_id}/schedule` | Weekly blocks and upcoming exceptions (`DOCTORS_VIEW`) — **M3-P1** | FR-APT-01 |
+| PUT | `/api/v1/clinic/doctors/{doctor_id}/schedule` | Replace the weekly blocks (`SCHEDULES_MANAGE`, owners) — **M3-P1** | FR-APT-01 |
+| POST | `/api/v1/clinic/doctors/{doctor_id}/schedule-exceptions` | Whole-day leave or an extra session — **M3-P1** | FR-APT-01 |
+| DELETE | `/api/v1/clinic/doctors/{doctor_id}/schedule-exceptions/{exception_id}` | Remove one (today or later) — **M3-P1** | FR-APT-01 |
+| GET | `/api/v1/sessions?date=&doctor_id=` | A date's sessions, generated on first read (`APPOINTMENTS_MANAGE`) — **M3-P1** | FR-APT-01, 02 |
 | POST | `/api/v1/appointments` | Book (slot or token) | FR-APT-03/04 |
 | POST | `/api/v1/appointments/{id}/reschedule` | Reschedule | FR-APT-05 |
 | POST | `/api/v1/appointments/{id}/cancel` | Cancel with reason | FR-APT-05 |
 | GET | `/api/v1/queue?doctor_id=&date=` | Queue (supports `ETag` / `If-None-Match`) | FR-QUE-01/03 |
 | POST | `/api/v1/appointments/{id}/transitions` | `{ "to": "ARRIVED" }` | FR-QUE-02 |
 | POST | `/api/v1/queue/walk-ins` | Add walk-in to today | FR-QUE-04 |
+
+M3-P1 rules (spec appointments R1–R4, R14–R20; contract 0.9.0):
+
+- **Times** in schedule bodies are the clinic's wall clock, `HH:MM`. An end at or before the start
+  means the next day (`overnight: true`), and a block lasts 15 minutes to 12 hours, so `13:00–10:00`
+  is `422 SCH_INVALID_BLOCK` while `23:00–01:00` is accepted. Session instants are UTC with an offset.
+- **Mode:** SLOTS blocks need `slot_minutes` (dividing the block; capacity is derived), TOKENS blocks
+  need `capacity`. The clinic's `booking_mode` is on `GET /clinic` and changed with `PATCH /clinic`
+  (refused with `409 SCH_MODE_INCOMPATIBLE` while a current block lacks the new mode's value).
+- **Overlap** is checked across midnight and from Sunday into Monday (`409 SCH_OVERLAP`).
+- **Changes never drop a booking:** `PUT .../schedule`, a leave and removing an extra delete the
+  affected future sessions that nobody booked and return the booked ones as `kept_sessions`.
+- **Sessions** for a date from the clinic's today up to 180 days ahead are generated the first time
+  the date is read; reading again returns the same IDs.
 
 ### Visits and prescriptions (M4)
 

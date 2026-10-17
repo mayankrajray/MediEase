@@ -173,6 +173,113 @@ export interface paths {
         readonly patch: operations["updateDoctor"];
         readonly trace?: never;
     };
+    readonly "/api/v1/clinic/doctors/{doctor_id}/schedule": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A doctor's weekly blocks and upcoming exceptions
+         * @description FR-APT-01. Permission: DOCTORS_VIEW (every clinic role). The blocks in force from the
+         *     clinic's today, and leave or extra sessions from today up to 180 days ahead. Times are
+         *     the clinic's wall clock (HH:MM); `overnight` is true when a block ends the next day.
+         */
+        readonly get: operations["getDoctorSchedule"];
+        /**
+         * Replace a doctor's weekly schedule
+         * @description FR-APT-01; spec R14-R16, R20. Permission: SCHEDULES_MANAGE (owners). The blocks replace
+         *     the whole weekly schedule from the clinic's today; an empty list clears it. An end at or
+         *     before the start means the next day, and a block lasts 15 minutes to 12 hours, so
+         *     13:00-10:00 is refused (422 SCH_INVALID_BLOCK) while 23:00-01:00 is accepted. Blocks may
+         *     not overlap, also across midnight and from Sunday into Monday (409 SCH_OVERLAP). Slot mode
+         *     needs slot_minutes (dividing the block); token mode needs capacity. Future sessions that no
+         *     longer match are removed if nobody is booked; booked ones are kept and listed in
+         *     kept_sessions. Records schedule.changed. Needs X-CSRF-Token.
+         */
+        readonly put: operations["replaceDoctorSchedule"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/doctors/{doctor_id}/schedule-exceptions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Add a whole-day leave or an extra session on a date
+         * @description FR-APT-01; spec R15, R17, R18. Permission: SCHEDULES_MANAGE (owners). The date is the
+         *     clinic's today up to 180 days ahead. LEAVE covers the whole day (send no times; one per
+         *     doctor and date, else 409 SCH_LEAVE_EXISTS): that day's generated sessions with nobody
+         *     booked are removed and booked ones are listed in kept_sessions. EXTRA is one block
+         *     validated like a weekly block; it may not overlap what the rules plan that day, the day
+         *     before or the day after (409 SCH_OVERLAP). Records schedule.exception_added. Needs
+         *     X-CSRF-Token.
+         */
+        readonly post: operations["addScheduleException"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/doctors/{doctor_id}/schedule-exceptions/{exception_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        /**
+         * Remove a leave or an extra session
+         * @description Spec R17, R18. Permission: SCHEDULES_MANAGE (owners). Past exceptions are history and
+         *     cannot be removed (422). Removing an extra deletes its session if nobody is booked (a
+         *     booked one is listed in kept_sessions); removing a leave lets the day generate again.
+         *     Records schedule.exception_removed. Needs X-CSRF-Token.
+         */
+        readonly delete: operations["removeScheduleException"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/sessions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The sessions of one date
+         * @description FR-APT-01, FR-APT-02; spec R1-R4. Permission: APPOINTMENTS_MANAGE (every clinic role).
+         *     A date from the clinic's today up to 180 days ahead first generates the sessions its
+         *     rules plan (idempotent: two screens asking at once still get one set); an earlier date
+         *     shows what was generated then, a later one is 422. Without doctor_id, every active
+         *     doctor. A session belongs to the clinic-local date it starts on, also when it runs past
+         *     midnight. Slot mode lists the slots; token mode gives the next token.
+         */
+        readonly get: operations["listSessions"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/clinic/staff": {
         readonly parameters: {
             readonly query?: never;
@@ -492,6 +599,28 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/ops/clinics/{clinic_id}/doctors/{doctor_id}/schedule": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * Set a doctor's weekly schedule while onboarding
+         * @description FR-APT-01, FR-OPS-01; spec D5. Ops only; the same body, rules and response as the
+         *     clinic's own endpoint (RUNBOOK §10 step 5). Records schedule.changed with actor OPS.
+         *     Needs X-CSRF-Token.
+         */
+        readonly put: operations["replaceOpsDoctorSchedule"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/ops/clinics/{clinic_id}/staff-invites": {
         readonly parameters: {
             readonly query?: never;
@@ -655,7 +784,7 @@ export interface components {
         /** @enum {string} */
         readonly MembershipStatus: "INVITED" | "ACTIVE" | "DEACTIVATED";
         /** @enum {string} */
-        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW";
+        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "SCHEDULES_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW";
         readonly Clinic: {
             /** Format: uuid */
             readonly id: string;
@@ -673,6 +802,7 @@ export interface components {
             readonly specialties: readonly string[];
             /** @description Prefix of this clinic's patient codes, e.g. ME for ME-0142 */
             readonly patient_code_prefix: string;
+            readonly booking_mode: components["schemas"]["BookingMode"];
         };
         /** @enum {string} */
         readonly Sex: "FEMALE" | "MALE" | "OTHER" | "UNDISCLOSED";
@@ -867,6 +997,8 @@ export interface components {
             readonly specialties?: readonly string[];
             /** @description 2-4 upper-case letters for patient codes (ME-0142); derived from the name when omitted. Fixed once the clinic has patients. */
             readonly patient_code_prefix?: string | null;
+            /** @description Defaults to TOKENS */
+            readonly booking_mode?: components["schemas"]["BookingMode"];
         };
         /** @description Only the fields sent are changed. The slug and status are not editable here. */
         readonly ClinicUpdate: {
@@ -878,6 +1010,11 @@ export interface components {
             readonly state?: string | null;
             readonly pincode?: string | null;
             readonly specialties?: readonly string[] | null;
+            /**
+             * @description Refused with 409 SCH_MODE_INCOMPATIBLE while a current block or upcoming extra lacks
+             *     what the new mode needs (spec R19); unbooked future sessions follow the new mode.
+             */
+            readonly booking_mode?: components["schemas"]["BookingMode"] | null;
         };
         /** @description I3 — every prescription prints the qualification and registration details. */
         readonly NewDoctor: {
@@ -980,6 +1117,117 @@ export interface components {
             /** @description The first row in the file with the same phone (or phone and name) */
             readonly same_as_row?: number;
         };
+        /**
+         * @description Fixed time slots, or numbered tokens per session (FR-APT-02)
+         * @enum {string}
+         */
+        readonly BookingMode: "SLOTS" | "TOKENS";
+        /** @description Clinic wall-clock time, HH:MM */
+        readonly LocalTime: string;
+        readonly ScheduleBlockInput: {
+            /** @description 0 = Monday ... 6 = Sunday */
+            readonly weekday: number;
+            readonly start_time: components["schemas"]["LocalTime"];
+            /** @description At or before start_time means the next day; a block lasts at most 12 hours */
+            readonly end_time: components["schemas"]["LocalTime"];
+            /** @description Needed in slot mode; must divide the block */
+            readonly slot_minutes?: number | null;
+            /** @description Needed in token mode */
+            readonly capacity?: number | null;
+        };
+        readonly ScheduleReplace: {
+            readonly blocks: readonly components["schemas"]["ScheduleBlockInput"][];
+        };
+        readonly ScheduleBlock: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly weekday: number;
+            readonly start_time: string;
+            readonly end_time: string;
+            /** @description True when the block ends the next day */
+            readonly overnight: boolean;
+            readonly slot_minutes: number | null;
+            readonly capacity: number | null;
+        };
+        /** @enum {string} */
+        readonly ScheduleExceptionKind: "LEAVE" | "EXTRA";
+        readonly ScheduleException: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly doctor_id: string;
+            /** Format: date */
+            readonly on_date: string;
+            readonly kind: components["schemas"]["ScheduleExceptionKind"];
+            readonly note: string | null;
+            readonly start_time: string | null;
+            readonly end_time: string | null;
+            readonly overnight: boolean;
+            readonly slot_minutes: number | null;
+            readonly capacity: number | null;
+        };
+        /** @description LEAVE takes no times; EXTRA needs start_time and end_time. */
+        readonly NewScheduleException: {
+            readonly kind: components["schemas"]["ScheduleExceptionKind"];
+            /** Format: date */
+            readonly on_date: string;
+            readonly start_time?: components["schemas"]["LocalTime"] | null;
+            readonly end_time?: components["schemas"]["LocalTime"] | null;
+            readonly slot_minutes?: number | null;
+            readonly capacity?: number | null;
+            readonly note?: string | null;
+        };
+        readonly Schedule: {
+            /** Format: uuid */
+            readonly doctor_id: string;
+            readonly booking_mode: components["schemas"]["BookingMode"];
+            readonly blocks: readonly components["schemas"]["ScheduleBlock"][];
+            readonly exceptions: readonly components["schemas"]["ScheduleException"][];
+        };
+        readonly ScheduleChange: components["schemas"]["Schedule"] & {
+            /** @description Booked sessions the change did not touch, for the owner to reschedule */
+            readonly kept_sessions: readonly components["schemas"]["DoctorSession"][];
+        };
+        readonly ScheduleExceptionChange: {
+            readonly exception: components["schemas"]["ScheduleException"];
+            readonly kept_sessions: readonly components["schemas"]["DoctorSession"][];
+        };
+        readonly SessionSlot: {
+            /** Format: date-time */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly ends_at: string;
+        };
+        /** @description One doctor's bookable block on one clinic-local date (not the sign-in session) */
+        readonly DoctorSession: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly doctor_id: string;
+            /**
+             * Format: date
+             * @description The clinic-local date the session starts on
+             */
+            readonly on_date: string;
+            /** Format: date-time */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly ends_at: string;
+            readonly mode: components["schemas"]["BookingMode"];
+            /** @enum {string} */
+            readonly status: "OPEN" | "CLOSED" | "CANCELLED";
+            readonly slot_minutes: number | null;
+            readonly capacity: number;
+            readonly booked_count: number;
+            readonly available: number;
+            /** @description Token mode only */
+            readonly next_token: number | null;
+            /** @description Slot mode only; empty in token mode */
+            readonly slots: readonly components["schemas"]["SessionSlot"][];
+        };
+        readonly DoctorSessionList: {
+            readonly items: readonly components["schemas"]["DoctorSession"][];
+        };
         readonly Error: {
             /**
              * @description Stable error code from docs/ERRORS.md
@@ -1047,6 +1295,42 @@ export interface components {
             };
             content: {
                 readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description SCH_INVALID_BLOCK (422: a block's times, length, slot length or capacity cannot be
+         *     scheduled); SCH_OVERLAP (409: two blocks overlap, also across midnight and the week);
+         *     SCH_LEAVE_EXISTS (409: leave on that date already); REQ_VALIDATION_FAILED (422)
+         */
+        readonly ScheduleError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description The schedule after the change, with any booked sessions it kept */
+        readonly ScheduleChanged: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly "Cache-Control": components["headers"]["NoStore"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ScheduleChange"];
+            };
+        };
+        /** @description The exception, with any booked sessions it kept */
+        readonly ScheduleExceptionChanged: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly "Cache-Control": components["headers"]["NoStore"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ScheduleExceptionChange"];
             };
         };
         /** @description The patient after the change */
@@ -1127,6 +1411,8 @@ export interface components {
         readonly PatientPath: string;
         /** @description The clinic an ops request is about (ops users have no membership to infer). */
         readonly ClinicPath: string;
+        /** @description A doctor of the request's clinic. */
+        readonly DoctorPath: string;
         /** @description The single-use invitation secret from the acceptance link. */
         readonly InviteToken: string;
     };
@@ -1480,6 +1766,189 @@ export interface operations {
             readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["PermissionError"];
             readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly getDoctorSchedule: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description A doctor of the request's clinic. */
+                readonly doctor_id: components["parameters"]["DoctorPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The schedule */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly replaceDoctorSchedule: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A doctor of the request's clinic. */
+                readonly doctor_id: components["parameters"]["DoctorPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["ScheduleReplace"];
+            };
+        };
+        readonly responses: {
+            readonly 200: components["responses"]["ScheduleChanged"];
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ScheduleError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["ScheduleError"];
+        };
+    };
+    readonly addScheduleException: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A doctor of the request's clinic. */
+                readonly doctor_id: components["parameters"]["DoctorPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewScheduleException"];
+            };
+        };
+        readonly responses: {
+            readonly 201: components["responses"]["ScheduleExceptionChanged"];
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ScheduleError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["ScheduleError"];
+        };
+    };
+    readonly removeScheduleException: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A doctor of the request's clinic. */
+                readonly doctor_id: components["parameters"]["DoctorPath"];
+                readonly exception_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            readonly 200: components["responses"]["ScheduleExceptionChanged"];
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 422: components["responses"]["ScheduleError"];
+        };
+    };
+    readonly listSessions: {
+        readonly parameters: {
+            readonly query: {
+                readonly date: string;
+                readonly doctor_id?: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The date's sessions, by start time */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["DoctorSessionList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
             readonly 422: components["responses"]["AuthError"];
         };
     };
@@ -2065,6 +2534,38 @@ export interface operations {
             readonly 404: components["responses"]["PermissionError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly replaceOpsDoctorSchedule: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description The clinic an ops request is about (ops users have no membership to infer). */
+                readonly clinic_id: components["parameters"]["ClinicPath"];
+                /** @description A doctor of the request's clinic. */
+                readonly doctor_id: components["parameters"]["DoctorPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["ScheduleReplace"];
+            };
+        };
+        readonly responses: {
+            readonly 200: components["responses"]["ScheduleChanged"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ScheduleError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["ScheduleError"];
         };
     };
     readonly inviteOpsStaff: {
