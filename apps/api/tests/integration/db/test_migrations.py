@@ -21,7 +21,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0011"
+HEAD = "0012"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -352,6 +352,37 @@ def test_0011_adds_the_doctors_library_and_the_name_index(
             assert favs["uq_rx_favourites_doctor_id_name"]["unique"]
         command.downgrade(alembic_config, "0010")
         assert _tables(scratch_database_url) == M4_P2_TABLES
+    finally:
+        engine.dispose()
+
+
+def test_0012_gives_every_clinic_a5_prescriptions_and_allows_only_a5_or_a4(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    command.upgrade(alembic_config, "0011")
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO clinics (id, name, slug, timezone, status, specialties, "
+                    "patient_code_prefix, created_at, updated_at) VALUES (gen_random_uuid(), "
+                    "'Sample Clinic', 'migrated-clinic', 'Asia/Kolkata', 'ACTIVE', '{}', 'SC', "
+                    "now(), now())"
+                )
+            )
+
+        command.upgrade(alembic_config, "0012")
+
+        with engine.connect() as conn:
+            sizes = conn.execute(text("SELECT rx_paper_size FROM clinics")).scalars().all()
+            assert sizes == ["A5"]
+            checks = {c["name"] for c in inspect(conn).get_check_constraints("clinics")}
+            assert "ck_clinics_rx_paper_size" in checks
+
+        command.downgrade(alembic_config, "0011")
+        assert "rx_paper_size" not in _clinic_columns(scratch_database_url)
+        assert _tables(scratch_database_url) == M4_P3_TABLES
     finally:
         engine.dispose()
 

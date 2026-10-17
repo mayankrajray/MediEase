@@ -1,0 +1,55 @@
+/* Printed prescription (spec prescriptions R8; M4-P4). Fonts are vendored in this directory;
+   the renderer fetches nothing else. Latin and Devanagari are two families, Pango picking the
+   second for characters the first lacks: one family with unicode-range drew Devanagari
+   conjuncts with wrong glyphs (seen in M4-P4 with WeasyPrint 70.0). */
+
+@font-face { font-family: "RxLatin"; font-weight: normal; src: url(NotoSans-Regular.ttf); }
+@font-face { font-family: "RxLatin"; font-weight: bold; src: url(NotoSans-Bold.ttf); }
+@font-face { font-family: "RxDeva"; font-weight: normal; src: url(NotoSansDevanagari-Regular.ttf); }
+@font-face { font-family: "RxDeva"; font-weight: bold; src: url(NotoSansDevanagari-Bold.ttf); }
+
+@page {
+  margin: 12mm 11mm 16mm 11mm;
+  @bottom-left { font-family: "RxLatin", "RxDeva"; font-size: 7.5pt; color: #555; }
+  @bottom-right { font-family: "RxLatin", "RxDeva"; font-size: 7.5pt; color: #555; }
+}
+
+html { font-family: "RxLatin", "RxDeva"; font-size: 9.5pt; line-height: 1.35; color: #111; }
+body { margin: 0; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; font-weight: bold; }
+
+.letterhead {
+  display: flex; justify-content: space-between; gap: 6mm;
+  border-bottom: 1.2pt solid #111; padding-bottom: 2.5mm; margin-bottom: 2.5mm;
+}
+.letterhead h1 { font-size: 13pt; }
+.letterhead h2 { font-size: 10.5pt; }
+.letterhead .doctor { text-align: right; }
+.letterhead p { font-size: 8.5pt; }
+
+.patient {
+  display: flex; flex-wrap: wrap; column-gap: 5mm; row-gap: 0.8mm;
+  border-bottom: 0.5pt solid #999; padding-bottom: 2mm; margin-bottom: 3mm;
+}
+.label { font-weight: bold; }
+.patient .date { margin-left: auto; }
+
+.revision { font-weight: bold; margin-bottom: 2mm; }
+
+h3 { font-size: 10.5pt; margin: 2mm 0 1.5mm; }
+
+.medicine { break-inside: avoid; margin-bottom: 2.5mm; }
+.medicine .name { font-weight: bold; font-size: 10pt; }
+.medicine .form { font-weight: normal; }
+.details { border-collapse: collapse; margin: 0.6mm 0 0 4.5mm; }
+.details th { text-align: left; font-weight: bold; padding: 0.2mm 3mm 0.2mm 0; vertical-align: top;
+  white-space: nowrap; }
+.details td { padding: 0.2mm 0; vertical-align: top; }
+
+.advice .block { break-inside: avoid; margin-bottom: 1.5mm; }
+.advice ul { margin: 0.3mm 0 0 0; padding-left: 5mm; }
+.notes { white-space: pre-line; }
+.details td, .advice li, .notes { overflow-wrap: anywhere; }
+
+.follow-up { margin-top: 3mm; font-size: 10pt; }

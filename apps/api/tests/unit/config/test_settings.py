@@ -243,3 +243,27 @@ def test_token_lifetimes_are_bounded(
     name: str, value: str, set_env: SetEnv, valid_env: dict[str, str]
 ) -> None:
     assert _invalid_fields({**valid_env, name: value}, set_env) == {name}
+
+
+def test_m4_p4_blob_storage_defaults_to_the_local_volume(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    set_env(valid_env)
+    settings = load_settings()
+    assert settings.BLOB_STORAGE == "local"
+    assert settings.BLOB_LOCAL_DIR == "/var/lib/mediease/blobs"
+
+
+def test_m4_p4_s3_needs_a_bucket_and_an_absolute_endpoint(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    env = {**valid_env, "BLOB_STORAGE": "s3", "S3_ENDPOINT_URL": "minio:9000"}
+    assert _invalid_fields(env, set_env) == {"S3_BUCKET", "S3_ENDPOINT_URL"}
+    env = {**valid_env, "BLOB_STORAGE": "ftp", "S3_ENDPOINT_URL": ""}
+    assert _invalid_fields(env, set_env) == {"BLOB_STORAGE"}
+
+
+def test_m4_p4_s3_settings_load(set_env: SetEnv, valid_env: dict[str, str]) -> None:
+    set_env({**valid_env, "BLOB_STORAGE": "s3", "S3_BUCKET": " mediease-rx "})
+    settings = load_settings()
+    assert (settings.BLOB_STORAGE, settings.S3_BUCKET) == ("s3", "mediease-rx")

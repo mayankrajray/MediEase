@@ -2,7 +2,8 @@
 
 The application builds an ``RxDocument`` (every word already decided) and asks for its PDF. The
 adapter (WeasyPrint, in-house) lays it out; it never fetches anything over the network and never
-logs the document. The same document gives the same bytes, so a stored PDF can be compared.
+logs the document. Bytes may differ between two renders of one document, so identical downloads
+come from rendering once and storing the file (R18), not from the renderer.
 """
 
 from __future__ import annotations

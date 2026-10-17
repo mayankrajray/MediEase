@@ -14,7 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork
-from mediease_api.domain.clinics.clinic import ClinicStatus
+from mediease_api.domain.clinics.clinic import ClinicStatus, PaperSize
 from mediease_api.domain.identity.membership import MembershipStatus, Role
 from mediease_api.domain.identity.user import UserStatus
 from mediease_api.domain.shared.email import EmailAddress
@@ -40,6 +40,7 @@ def test_fr_org_01_clinic_round_trip_and_update(uow_factory: UowFactory) -> None
         assert uow.clinics.get_by_slug("no-such-clinic") is None
 
         clinic.activate(active_owner_count=1, now=LATER)
+        clinic.update_details(now=LATER, rx_paper_size=PaperSize.A4)
         uow.clinics.update(clinic)
         uow.commit()
 
@@ -47,6 +48,7 @@ def test_fr_org_01_clinic_round_trip_and_update(uow_factory: UowFactory) -> None
         stored = uow.clinics.get(clinic.id)
         assert stored is not None
         assert stored.status is ClinicStatus.ACTIVE
+        assert stored.rx_paper_size is PaperSize.A4  # M4-P4, migration 0012
         assert stored.updated_at == LATER
         assert stored.created_at.tzinfo is not None
 

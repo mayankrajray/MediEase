@@ -16,9 +16,9 @@ from collections.abc import Collection, Sequence
 from datetime import UTC, date, datetime, time
 from uuid import UUID
 
-from sqlalchemy import Select, delete, exists, func, or_, select, update
+from sqlalchemy import Select, delete, exists, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import aggregate_order_by, insert
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from mediease_api.adapters.db.models import (
@@ -48,7 +48,7 @@ from mediease_api.domain.appointments.status import (
     AppointmentStatus,
     CancelReason,
 )
-from mediease_api.domain.clinics.clinic import Clinic, ClinicStatus
+from mediease_api.domain.clinics.clinic import Clinic, ClinicStatus, PaperSize
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
 from mediease_api.domain.identity.access import ClinicAccess, StaffMember
@@ -56,6 +56,7 @@ from mediease_api.domain.identity.membership import ClinicMembership, Membership
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User, UserStatus
 from mediease_api.domain.patients.patient import Language, Patient, Sex
+from mediease_api.domain.prescriptions.errors import PdfBusy
 from mediease_api.domain.prescriptions.library import Favourite, NameTaken, Template
 from mediease_api.domain.prescriptions.prescription import (
     Advice,
@@ -120,6 +121,7 @@ def _clinic_from_row(row: ClinicRow) -> Clinic:
         patient_code_prefix=row.patient_code_prefix,
         next_patient_seq=row.next_patient_seq,
         booking_mode=BookingMode(row.booking_mode),
+        rx_paper_size=PaperSize(row.rx_paper_size),
     )
 
 
@@ -137,6 +139,7 @@ def _write_clinic(row: ClinicRow, clinic: Clinic) -> None:
     row.patient_code_prefix = clinic.patient_code_prefix
     row.next_patient_seq = clinic.next_patient_seq
     row.booking_mode = clinic.booking_mode.value
+    row.rx_paper_size = clinic.rx_paper_size.value
     row.updated_at = clinic.updated_at
 
 
@@ -1509,6 +1512,30 @@ class SqlAlchemyPrescriptionRepository(TenantScopedRepository[PrescriptionRow]):
         self._require_row(prescription_id)
         self._items.delete_for(prescription_id)
         self._delete_row(prescription_id)
+
+    def lock_for_render(self, prescription_id: UUID, *, wait_seconds: int) -> Prescription | None:
+        # SET LOCAL lasts until the transaction ends; an int, so no injection is possible.
+        self._session.execute(text(f"SET LOCAL lock_timeout = '{int(wait_seconds)}s'"))
+        try:
+            return self.get(prescription_id, for_update=True)
+        except OperationalError as exc:
+            if getattr(exc.orig, "sqlstate", None) == "55P03":  # lock_not_available
+                raise PdfBusy() from None
+            raise
+
+    def list_issued_for_patient(self, patient_id: UUID, *, limit: int) -> Sequence[Prescription]:
+        query = (
+            self._scoped_select()
+            .where(
+                PrescriptionRow.patient_id == patient_id,
+                PrescriptionRow.status == PrescriptionStatus.ISSUED.value,
+            )
+            .order_by(PrescriptionRow.issued_at.desc(), PrescriptionRow.id.desc())
+            .limit(limit)
+        )
+        rows = list(self._session.scalars(query))
+        items = self._items.for_prescriptions([r.id for r in rows])
+        return [_prescription_from_row(r, items[r.id]) for r in rows]
 
     def medicine_history(self, prefix: str, *, limit: int) -> Sequence[HistoryName]:
         key = func.lower(func.regexp_replace(PrescriptionItemRow.medicine_name, r"\s+", " ", "g"))
