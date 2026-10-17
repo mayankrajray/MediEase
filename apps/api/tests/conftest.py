@@ -61,6 +61,8 @@ _MANAGED_VARS = (
     "S3_BUCKET",
     "S3_REGION",
     "S3_ENDPOINT_URL",
+    "PATIENT_LINK_SIGNING_KEYS",
+    "PATIENT_LINK_TTL_DAYS",
 )
 
 # Synthetic, test-only secrets (>= 32 characters each).
@@ -77,6 +79,8 @@ _VALID_TEST_ENV = {
     "PUBLIC_BASE_URL": "https://test.mediease.example",
     "JWT_SIGNING_KEY": TEST_SIGNING_KEY,
     "AUDIT_IP_SALT": TEST_IP_SALT,
+    # A real-looking key, so deployed-environment rules can be tested by changing APP_ENV alone.
+    "PATIENT_LINK_SIGNING_KEYS": "t1:synthetic-link-key-for-tests-0123456789",  # gitleaks:allow
 }
 
 

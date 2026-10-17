@@ -267,3 +267,41 @@ def test_m4_p4_s3_settings_load(set_env: SetEnv, valid_env: dict[str, str]) -> N
     set_env({**valid_env, "BLOB_STORAGE": "s3", "S3_BUCKET": " mediease-rx "})
     settings = load_settings()
     assert (settings.BLOB_STORAGE, settings.S3_BUCKET) == ("s3", "mediease-rx")
+
+
+def test_m4_p5_patient_link_keys_default_to_a_development_key_outside_deployment(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    set_env({k: v for k, v in valid_env.items() if k != "PATIENT_LINK_SIGNING_KEYS"})
+    keys = load_settings().patient_link_keys()
+    assert list(keys) == ["dev"]
+    assert load_settings().PATIENT_LINK_TTL_DAYS == 90
+
+
+def test_m4_p5_patient_link_keys_are_ordered_pairs(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    good = "k2:" + "b" * 32 + ", k1:" + "a" * 32
+    set_env({**valid_env, "PATIENT_LINK_SIGNING_KEYS": good})
+    assert list(load_settings().patient_link_keys()) == ["k2", "k1"]
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["k1", "k1:short", "bad id:" + "a" * 32, "k1:" + "a" * 32 + ",k1:" + "b" * 32],
+)
+def test_m4_p5_malformed_patient_link_keys_are_refused(
+    set_env: SetEnv, valid_env: dict[str, str], value: str
+) -> None:
+    env = {**valid_env, "PATIENT_LINK_SIGNING_KEYS": value}
+    assert _invalid_fields(env, set_env) == {"PATIENT_LINK_SIGNING_KEYS"}
+
+
+def test_m4_p5_deployed_environments_need_real_patient_link_keys(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    deployed = {**valid_env, "APP_ENV": "production", "COOKIE_SECURE": "true"}
+    deployed["PATIENT_LINK_SIGNING_KEYS"] = ""
+    assert "PATIENT_LINK_SIGNING_KEYS" in _invalid_fields(deployed, set_env)
+    placeholder = {**deployed, "PATIENT_LINK_SIGNING_KEYS": "k1:change-me-" + "a" * 32}
+    assert "PATIENT_LINK_SIGNING_KEYS" in _invalid_fields(placeholder, set_env)

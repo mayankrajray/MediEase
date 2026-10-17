@@ -21,6 +21,7 @@ from mediease_api.adapters.db.repositories import (
     SqlAlchemyChecklistRepository,
     SqlAlchemyDoctorRepository,
     SqlAlchemyMembershipRepository,
+    SqlAlchemyPatientLinkRepository,
     SqlAlchemyPatientRepository,
     SqlAlchemyPrescriptionItemRepository,
     SqlAlchemyPrescriptionRepository,
@@ -36,6 +37,7 @@ from mediease_api.adapters.db.tenancy import TenancyViolation, TenantScopedRepos
 from mediease_api.domain.appointments.appointment import Appointment, history_entry
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
+from mediease_api.domain.links.link import PatientLink
 from mediease_api.domain.patients.patient import Patient
 from mediease_api.domain.prescriptions.library import Favourite, Template
 from mediease_api.domain.prescriptions.prescription import Advice, Prescription, PrescriptionItem
@@ -451,6 +453,17 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
             now=NOW,
         )
         staff_b.rx_templates.add(template)
+        link = PatientLink.create(
+            id=new_id(),
+            clinic_id=b.clinic_id,
+            patient_id=b.patient.id,
+            prescription_id=rx.id,
+            key_id="k1",
+            ttl_days=90,
+            created_by=b.owner.user_id,
+            now=NOW,
+        )
+        staff_b.patient_links.add(link)
         uow.commit()
 
     with uow_factory() as uow:
@@ -482,6 +495,13 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
         assert staff_a.rx_favourites.count_for_doctor(b.doctor.id) == 0
         assert staff_a.rx_templates.get(template.id) is None
         assert staff_a.rx_templates.list_for_doctor(b.doctor.id) == []
+        assert staff_a.patient_links.get(link.id) is None
+        assert staff_a.patient_links.get(link.id, for_update=True) is None
+        assert staff_a.patient_links.active_for_prescription(rx.id) is None
+        with pytest.raises(TenancyViolation):
+            staff_a.patient_links.add(link)
+        with pytest.raises(TenancyViolation):
+            staff_a.patient_links.update(link)
         assert staff_a.prescriptions.medicine_history("tab", limit=10) == []
         with pytest.raises(TenancyViolation):
             staff_a.rx_favourites.add(fav)
@@ -530,6 +550,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "prescription_items",
             "rx_favourites",
             "rx_templates",
+            "patient_links",
             "audit_events",
         }
     )
@@ -549,6 +570,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyPrescriptionItemRepository,
         SqlAlchemyRxFavouriteRepository,
         SqlAlchemyRxTemplateRepository,
+        SqlAlchemyPatientLinkRepository,
     } == set(TenantScopedRepository.__subclasses__())
 
 

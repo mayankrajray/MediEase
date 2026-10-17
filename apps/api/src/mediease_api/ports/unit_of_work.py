@@ -31,8 +31,10 @@ from mediease_api.ports.repositories import (
     DoctorRepository,
     FavouriteRepository,
     MembershipRepository,
+    PatientLinkRepository,
     PatientRepository,
     PrescriptionRepository,
+    RateLimitRepository,
     RefreshTokenRepository,
     ScheduleExceptionRepository,
     ScheduleRepository,
@@ -78,6 +80,8 @@ class TenantRepositories(Protocol):
     def rx_favourites(self) -> FavouriteRepository: ...
     @property
     def rx_templates(self) -> TemplateRepository: ...
+    @property
+    def patient_links(self) -> PatientLinkRepository: ...
 
 
 class UnitOfWork(Protocol):
@@ -91,6 +95,11 @@ class UnitOfWork(Protocol):
     def clinic_access(self) -> ClinicAccessRepository: ...
     @property
     def staff_invites(self) -> StaffInviteRepository: ...
+    @property
+    def rate_limits(self) -> RateLimitRepository:
+        """Public-route request counts (M4-P5); not tenant data."""
+        ...
+
     @property
     def audit(self) -> AuditWriter:
         """Appends audit events in this transaction, so a change is never unaudited (R11)."""

@@ -13,6 +13,7 @@ requires it").
 
 from __future__ import annotations
 
+import re
 import sys
 from enum import StrEnum
 from typing import Literal
@@ -33,6 +34,10 @@ _PLACEHOLDER = "change-me"
 _DATABASE_URL_PREFIX = "postgresql+psycopg://"
 
 _MIN_SIGNING_KEY_LENGTH = 32
+
+# M4-P5: patient link keys. The development key is used only when none is set in local or test.
+_LINK_KEY_ID = re.compile(r"[A-Za-z0-9_-]{1,16}")
+_DEV_LINK_KEY = "dev:change-me-local-only-patient-link-key-0001"
 
 
 class AppEnv(StrEnum):
@@ -110,6 +115,44 @@ class AppSettings(BaseSettings):
     S3_REGION: str = "ap-south-1"
     # Empty for AWS itself; the endpoint of another S3-compatible store otherwise.
     S3_ENDPOINT_URL: str = ""
+    # Patient link keys (M4-P5, spec R9): "kid:secret,kid:secret"; the first signs, all verify.
+    # Empty in local and test means a fixed development key; required when deployed.
+    PATIENT_LINK_SIGNING_KEYS: SecretStr = SecretStr("")
+    PATIENT_LINK_TTL_DAYS: int = Field(default=90, ge=1, le=90)
+
+    @field_validator("PATIENT_LINK_SIGNING_KEYS")
+    @classmethod
+    def _link_keys(cls, value: SecretStr, info: ValidationInfo) -> SecretStr:
+        env = _app_env(info)
+        raw = value.get_secret_value().strip()
+        if not raw:
+            if env is not None and env.is_deployed:
+                raise ValueError(f"is required when APP_ENV={env.value}")
+            return SecretStr(_DEV_LINK_KEY)
+        seen: set[str] = set()
+        for pair in raw.split(","):
+            kid, sep, secret = pair.strip().partition(":")
+            if not sep or not _LINK_KEY_ID.fullmatch(kid):
+                raise ValueError("must be kid:secret pairs; a kid is 1-16 letters, digits, - or _")
+            if kid in seen:
+                raise ValueError("names a key ID twice")
+            seen.add(kid)
+            placeholder = _PLACEHOLDER in secret
+            if placeholder and env is not AppEnv.LOCAL and env is not AppEnv.TEST:
+                raise ValueError(f"contains a '{_PLACEHOLDER}' placeholder; set real keys")
+            if not placeholder and len(secret) < _MIN_SIGNING_KEY_LENGTH:
+                raise ValueError(
+                    f"each secret must be at least {_MIN_SIGNING_KEY_LENGTH} characters"
+                )
+        return SecretStr(raw)
+
+    def patient_link_keys(self) -> dict[str, bytes]:
+        """The keys in order, the signing key first (``HmacLinkSigner``)."""
+        keys: dict[str, bytes] = {}
+        for pair in self.PATIENT_LINK_SIGNING_KEYS.get_secret_value().split(","):
+            kid, _, secret = pair.strip().partition(":")
+            keys[kid] = secret.encode("utf-8")
+        return keys
 
     @field_validator("LOG_LEVEL")
     @classmethod

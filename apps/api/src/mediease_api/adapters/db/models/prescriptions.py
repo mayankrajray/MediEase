@@ -65,6 +65,7 @@ class PrescriptionRow(TenantOwned, Timestamps, Base):
         CheckConstraint("version >= 1", name="version_positive"),
         CheckConstraint("(version = 1) = (supersedes_id IS NULL)", name="version_chain"),
         CheckConstraint("revision >= 1", name="revision_positive"),
+        CheckConstraint("layout_version >= 1", name="layout_version_positive"),
         # R5: an issued version carries everything that was printed and sent; a draft none of it.
         CheckConstraint(
             "status = 'DRAFT' OR (issued_at IS NOT NULL AND language IS NOT NULL"
@@ -97,6 +98,8 @@ class PrescriptionRow(TenantOwned, Timestamps, Base):
     link_delivery_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # M4-P3: the template the body came from; a plain ID (deleting a template touches nothing).
     template_id: Mapped[UUID | None] = mapped_column()
+    # M4-P5 (migration 0013): the printed layout fixed at issue.
+    layout_version: Mapped[int] = mapped_column(SmallInteger, server_default=text("1"))
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
 
 

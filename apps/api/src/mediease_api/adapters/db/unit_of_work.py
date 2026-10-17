@@ -26,8 +26,10 @@ from mediease_api.adapters.db.repositories import (
     SqlAlchemyClinicRepository,
     SqlAlchemyDoctorRepository,
     SqlAlchemyMembershipRepository,
+    SqlAlchemyPatientLinkRepository,
     SqlAlchemyPatientRepository,
     SqlAlchemyPrescriptionRepository,
+    SqlAlchemyRateLimitRepository,
     SqlAlchemyRefreshTokenRepository,
     SqlAlchemyRxFavouriteRepository,
     SqlAlchemyRxTemplateRepository,
@@ -70,6 +72,7 @@ class SqlAlchemyTenantRepositories:
         self._prescriptions = SqlAlchemyPrescriptionRepository(session, clinic_id)
         self._rx_favourites = SqlAlchemyRxFavouriteRepository(session, clinic_id)
         self._rx_templates = SqlAlchemyRxTemplateRepository(session, clinic_id)
+        self._patient_links = SqlAlchemyPatientLinkRepository(session, clinic_id)
 
     @property
     def clinic_id(self) -> UUID:
@@ -131,6 +134,10 @@ class SqlAlchemyTenantRepositories:
     def rx_templates(self) -> SqlAlchemyRxTemplateRepository:
         return self._rx_templates
 
+    @property
+    def patient_links(self) -> SqlAlchemyPatientLinkRepository:
+        return self._patient_links
+
 
 class _OpenUnit:
     """The session and platform repositories of one open unit of work."""
@@ -142,6 +149,7 @@ class _OpenUnit:
         self.refresh_tokens = SqlAlchemyRefreshTokenRepository(session)
         self.clinic_access = SqlAlchemyClinicAccessRepository(session)
         self.staff_invites = SqlAlchemyStaffInviteRepository(session)
+        self.rate_limits = SqlAlchemyRateLimitRepository(session)
         # Shares the session, so an audit row commits with the change (R11).
         self.audit = SqlAlchemyAuditWriter(session)
 
@@ -192,6 +200,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def staff_invites(self) -> SqlAlchemyStaffInviteRepository:
         return self._require_open().staff_invites
+
+    @property
+    def rate_limits(self) -> SqlAlchemyRateLimitRepository:
+        return self._require_open().rate_limits
 
     @property
     def audit(self) -> SqlAlchemyAuditWriter:
