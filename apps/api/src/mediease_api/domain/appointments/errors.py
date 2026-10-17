@@ -72,3 +72,30 @@ class AlreadyBooked(DomainError):
             appointment_id=str(appointment_id),
         )
         self.appointment_id = appointment_id
+
+
+class InvalidQueueTransition(DomainError):
+    """R9, AC3, D18: not allowed from the current status, or the screen saw another status."""
+
+    code = "QUE_INVALID_TRANSITION"
+
+    def __init__(self, current: str, to: str) -> None:
+        super().__init__("That status change isn't allowed.", **{"from": current, "to": to})
+
+
+class WrongTime(DomainError):
+    """D19: not the session's day (``not_today``), or a no-show too early (``not_started``)."""
+
+    code = "QUE_WRONG_TIME"
+
+    def __init__(self, reason: str) -> None:
+        super().__init__("The queue can't be changed for that time now.", reason=reason)
+
+
+class NoSession(DomainError):
+    """D21: the doctor has no open session left today for a walk-in."""
+
+    code = "QUE_NO_SESSION"
+
+    def __init__(self) -> None:
+        super().__init__("The doctor has no session left today.")
