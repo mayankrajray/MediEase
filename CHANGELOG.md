@@ -14,7 +14,13 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
-- M3-P2 (#36): booking, cancel and reschedule (FR-APT-03..05, FR-APT-07; spec R3-R8, D10-D16).
+- M3-P3 (#36): the daily queue (FR-QUE-01, 02, 04; spec R9-R11, D17-D22).
+  `POST /api/v1/appointments/{id}/transitions` takes `{from, to}`: `from` must be the current status,
+  so a stale tab cannot move a patient who has already moved (`409 QUE_INVALID_TRANSITION`, AC3).
+  Transitions happen on the session's day; a no-show once it has started (`409 QUE_WRONG_TIME`).
+  `POST /api/v1/queue/walk-ins` adds a walk-in to the running or next session today, arrived at
+  once (`409 QUE_NO_SESSION` when there is none). `GET /api/v1/queue` lists a day's sessions with
+  their appointments, patients and waits. Audit action `appointment.status_changed`; contract 0.11.0.- M3-P2 (#36): booking, cancel and reschedule (FR-APT-03..05, FR-APT-07; spec R3-R8, D10-D16).
   `POST /api/v1/appointments` books a patient into a session: the next token in token mode, a
   free slot in slot mode. A session row lock serialises bookings and partial unique indexes back
   them, so two parallel requests for the last place give one 201 and one 409. Tokens are never
