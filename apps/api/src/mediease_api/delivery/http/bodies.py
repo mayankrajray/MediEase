@@ -8,13 +8,19 @@ contract has one schema for each.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import time
 from typing import Any
 
 from mediease_api.application.patients.views import CandidateView, PatientView
+from mediease_api.application.scheduling.views import ScheduleView
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
 from mediease_api.domain.identity.access import StaffMember
+from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
+from mediease_api.domain.scheduling.exceptions import ScheduleException
+from mediease_api.domain.scheduling.mode import BookingMode
+from mediease_api.domain.scheduling.sessions import Session
 
 
 def items_body(bodies: Iterable[dict[str, Any]]) -> dict[str, Any]:
@@ -36,6 +42,7 @@ def clinic_body(clinic: Clinic) -> dict[str, Any]:
         "pincode": clinic.pincode,
         "specialties": list(clinic.specialties),
         "patient_code_prefix": clinic.patient_code_prefix,
+        "booking_mode": clinic.booking_mode.value,
     }
 
 
@@ -111,4 +118,77 @@ def candidate_body(candidate: CandidateView) -> dict[str, Any]:
         "code": candidate.code,
         "full_name": candidate.full_name,
         "age_years": candidate.age_years,
+    }
+
+
+def _hhmm(value: time) -> str:
+    return value.strftime("%H:%M")
+
+
+def _shape_body(shape: BlockShape) -> dict[str, Any]:
+    return {
+        "start_time": _hhmm(shape.start_time),
+        "end_time": _hhmm(shape.end_time),
+        # True when the block ends the next day (decision D2).
+        "overnight": shape.overnight,
+        "slot_minutes": shape.slot_minutes,
+        "capacity": shape.capacity,
+    }
+
+
+def block_body(block: WeeklyBlock) -> dict[str, Any]:
+    return {"id": str(block.id), "weekday": block.weekday, **_shape_body(block.shape)}
+
+
+def exception_body(exception: ScheduleException) -> dict[str, Any]:
+    shape = (
+        _shape_body(exception.shape)
+        if exception.shape is not None
+        else {
+            "start_time": None,
+            "end_time": None,
+            "overnight": False,
+            "slot_minutes": None,
+            "capacity": None,
+        }
+    )
+    return {
+        "id": str(exception.id),
+        "doctor_id": str(exception.doctor_id),
+        "on_date": exception.on_date.isoformat(),
+        "kind": exception.kind.value,
+        "note": exception.note,
+        **shape,
+    }
+
+
+def schedule_body(schedule: ScheduleView) -> dict[str, Any]:
+    return {
+        "doctor_id": str(schedule.doctor_id),
+        "booking_mode": schedule.booking_mode.value,
+        "blocks": [block_body(b) for b in schedule.blocks],
+        "exceptions": [exception_body(e) for e in schedule.exceptions],
+    }
+
+
+def session_body(session: Session) -> dict[str, Any]:
+    """A session; the slots in slot mode, the next token in token mode (R3, R4)."""
+    slots = session.mode is BookingMode.SLOTS
+    return {
+        "id": str(session.id),
+        "doctor_id": str(session.doctor_id),
+        "on_date": session.on_date.isoformat(),
+        "starts_at": session.starts_at.isoformat(),
+        "ends_at": session.ends_at.isoformat(),
+        "mode": session.mode.value,
+        "status": session.status.value,
+        "slot_minutes": session.slot_minutes,
+        "capacity": session.capacity,
+        "booked_count": session.booked_count,
+        "available": session.available,
+        "next_token": None if slots else session.next_token,
+        "slots": [
+            {"starts_at": start.isoformat(), "ends_at": end.isoformat()}
+            for start, end in session.slots()
+        ],
     }

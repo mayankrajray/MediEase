@@ -22,6 +22,9 @@ class Permission(StrEnum):
     STAFF_MANAGE = "STAFF_MANAGE"
     PATIENTS_MANAGE = "PATIENTS_MANAGE"
     APPOINTMENTS_MANAGE = "APPOINTMENTS_MANAGE"
+    # M3 (spec appointments D5): weekly schedules, leave and extra sessions. Ops set schedules
+    # during onboarding through their own route, not through this permission.
+    SCHEDULES_MANAGE = "SCHEDULES_MANAGE"
     QUEUE_MOVE = "QUEUE_MOVE"
     REMINDERS_SCHEDULE = "REMINDERS_SCHEDULE"
     CLINICAL_VIEW = "CLINICAL_VIEW"
@@ -45,6 +48,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
     | {
         Permission.CLINIC_MANAGE,
         Permission.STAFF_MANAGE,
+        Permission.SCHEDULES_MANAGE,
         Permission.CLINICAL_VIEW,
         Permission.USAGE_METRICS_VIEW,
     },

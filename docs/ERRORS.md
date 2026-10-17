@@ -102,6 +102,10 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 
 | Code | HTTP | Meaning | Likely cause | Where to look |
 |---|---|---|---|---|
+| `SCH_INVALID_BLOCK` | 422 | This block cannot be scheduled | A block or extra session shorter than 15 minutes or longer than 12 hours (an end at or before the start means the next day, so 13:00-10:00 is 21 hours), a slot length that does not divide it, or the value the booking mode needs missing (slot length for SLOTS, capacity for TOKENS). `details.reason` says which; `details.index` points into the request's `blocks` (spec R14, M3-P1) | The request body; the clinic's `booking_mode` |
+| `SCH_OVERLAP` | 409 | Two of this doctor's blocks overlap | Two weekly blocks overlap, also across midnight (an overnight block into the next morning) and from Sunday into Monday (`details.first`/`second` index the blocks); or an extra session overlaps what the rules plan that day, the day before or the day after (R15) | `GET /clinic/doctors/{id}/schedule`; the overnight flag on each block |
+| `SCH_LEAVE_EXISTS` | 409 | The doctor already has leave on that date | A second whole-day leave for the same doctor and date (R17) | The schedule's `exceptions` |
+| `SCH_MODE_INCOMPATIBLE` | 409 | Every current block needs a slot length (or capacity) for this booking mode | Changing `booking_mode` while a block in force or an upcoming extra lacks the new mode's value (R19); nothing changed | Give every block both values, then change the mode |
 | `APT_SLOT_TAKEN` | 409 | That slot was just booked | Concurrent booking (FR-APT-04) — expected under contention | DEBUGGING §5.5 if it happens without contention |
 | `APT_SESSION_FULL` | 409 | This session is full | Capacity reached | `sessions.booked_count` vs `capacity` |
 | `APT_SESSION_CLOSED` | 409 | Doctor not available then | Leave exception or closed session | `schedule_exceptions` |

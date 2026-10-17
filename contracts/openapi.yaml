@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.8.0
+  version: 0.9.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -41,6 +41,8 @@ tags:
       holds PATIENTS_MANAGE; ops users are refused (spec identity-and-tenancy R10). The clinic is the
       request's (X-Clinic-ID when the user has several), and another clinic's patient is 404 (NFR-08).
       Responses carry personal data and are never cached.
+  - name: scheduling
+    description: Doctor schedules, leave and extra sessions, and the sessions they generate (M3)
   - name: invites
     description: |
       Accepting a staff invitation (M1-P5). Public, because the invitee has no session yet: the
@@ -391,6 +393,214 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '415':
           $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+  /api/v1/clinic/doctors/{doctor_id}/schedule:
+    get:
+      tags: [scheduling]
+      operationId: getDoctorSchedule
+      summary: A doctor's weekly blocks and upcoming exceptions
+      description: |
+        FR-APT-01. Permission: DOCTORS_VIEW (every clinic role). The blocks in force from the
+        clinic's today, and leave or extra sessions from today up to 180 days ahead. Times are
+        the clinic's wall clock (HH:MM); `overnight` is true when a block ends the next day.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/DoctorPath'
+      responses:
+        '200':
+          description: The schedule
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+    put:
+      tags: [scheduling]
+      operationId: replaceDoctorSchedule
+      summary: Replace a doctor's weekly schedule
+      description: |
+        FR-APT-01; spec R14-R16, R20. Permission: SCHEDULES_MANAGE (owners). The blocks replace
+        the whole weekly schedule from the clinic's today; an empty list clears it. An end at or
+        before the start means the next day, and a block lasts 15 minutes to 12 hours, so
+        13:00-10:00 is refused (422 SCH_INVALID_BLOCK) while 23:00-01:00 is accepted. Blocks may
+        not overlap, also across midnight and from Sunday into Monday (409 SCH_OVERLAP). Slot mode
+        needs slot_minutes (dividing the block); token mode needs capacity. Future sessions that no
+        longer match are removed if nobody is booked; booked ones are kept and listed in
+        kept_sessions. Records schedule.changed. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/DoctorPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleReplace'
+      responses:
+        '200':
+          $ref: '#/components/responses/ScheduleChanged'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ScheduleError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/ScheduleError'
+  /api/v1/clinic/doctors/{doctor_id}/schedule-exceptions:
+    post:
+      tags: [scheduling]
+      operationId: addScheduleException
+      summary: Add a whole-day leave or an extra session on a date
+      description: |
+        FR-APT-01; spec R15, R17, R18. Permission: SCHEDULES_MANAGE (owners). The date is the
+        clinic's today up to 180 days ahead. LEAVE covers the whole day (send no times; one per
+        doctor and date, else 409 SCH_LEAVE_EXISTS): that day's generated sessions with nobody
+        booked are removed and booked ones are listed in kept_sessions. EXTRA is one block
+        validated like a weekly block; it may not overlap what the rules plan that day, the day
+        before or the day after (409 SCH_OVERLAP). Records schedule.exception_added. Needs
+        X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/DoctorPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewScheduleException'
+      responses:
+        '201':
+          $ref: '#/components/responses/ScheduleExceptionChanged'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ScheduleError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/ScheduleError'
+  /api/v1/clinic/doctors/{doctor_id}/schedule-exceptions/{exception_id}:
+    delete:
+      tags: [scheduling]
+      operationId: removeScheduleException
+      summary: Remove a leave or an extra session
+      description: |
+        Spec R17, R18. Permission: SCHEDULES_MANAGE (owners). Past exceptions are history and
+        cannot be removed (422). Removing an extra deletes its session if nobody is booked (a
+        booked one is listed in kept_sessions); removing a leave lets the day generate again.
+        Records schedule.exception_removed. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/DoctorPath'
+        - name: exception_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          $ref: '#/components/responses/ScheduleExceptionChanged'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/ScheduleError'
+  /api/v1/sessions:
+    get:
+      tags: [scheduling]
+      operationId: listSessions
+      summary: The sessions of one date
+      description: |
+        FR-APT-01, FR-APT-02; spec R1-R4. Permission: APPOINTMENTS_MANAGE (every clinic role).
+        A date from the clinic's today up to 180 days ahead first generates the sessions its
+        rules plan (idempotent: two screens asking at once still get one set); an earlier date
+        shows what was generated then, a later one is 422. Without doctor_id, every active
+        doctor. A session belongs to the clinic-local date it starts on, also when it runs past
+        midnight. Slot mode lists the slots; token mode gives the next token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: doctor_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The date's sessions, by start time
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoctorSessionList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
         '422':
           $ref: '#/components/responses/AuthError'
   /api/v1/clinic/staff:
@@ -1031,6 +1241,43 @@ paths:
           $ref: '#/components/responses/AuthError'
         '422':
           $ref: '#/components/responses/AuthError'
+  /api/v1/ops/clinics/{clinic_id}/doctors/{doctor_id}/schedule:
+    put:
+      tags: [ops]
+      operationId: replaceOpsDoctorSchedule
+      summary: Set a doctor's weekly schedule while onboarding
+      description: |
+        FR-APT-01, FR-OPS-01; spec D5. Ops only; the same body, rules and response as the
+        clinic's own endpoint (RUNBOOK §10 step 5). Records schedule.changed with actor OPS.
+        Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicPath'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/DoctorPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleReplace'
+      responses:
+        '200':
+          $ref: '#/components/responses/ScheduleChanged'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ScheduleError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/ScheduleError'
   /api/v1/ops/clinics/{clinic_id}/staff-invites:
     post:
       tags: [ops]
@@ -1242,6 +1489,14 @@ components:
       schema:
         type: string
         format: uuid
+    DoctorPath:
+      name: doctor_id
+      in: path
+      required: true
+      description: A doctor of the request's clinic.
+      schema:
+        type: string
+        format: uuid
     InviteToken:
       name: token
       in: path
@@ -1298,6 +1553,40 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    ScheduleError:
+      description: |
+        SCH_INVALID_BLOCK (422: a block's times, length, slot length or capacity cannot be
+        scheduled); SCH_OVERLAP (409: two blocks overlap, also across midnight and the week);
+        SCH_LEAVE_EXISTS (409: leave on that date already); REQ_VALIDATION_FAILED (422)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ScheduleChanged:
+      description: The schedule after the change, with any booked sessions it kept
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ScheduleChange'
+    ScheduleExceptionChanged:
+      description: The exception, with any booked sessions it kept
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ScheduleExceptionChange'
     PatientChanged:
       description: The patient after the change
       headers:
@@ -1493,6 +1782,7 @@ components:
         - STAFF_MANAGE
         - PATIENTS_MANAGE
         - APPOINTMENTS_MANAGE
+        - SCHEDULES_MANAGE
         - QUEUE_MOVE
         - REMINDERS_SCHEDULE
         - CLINICAL_VIEW
@@ -1513,6 +1803,7 @@ components:
         - pincode
         - specialties
         - patient_code_prefix
+        - booking_mode
       properties:
         id:
           type: string
@@ -1545,6 +1836,8 @@ components:
           type: string
           pattern: '^[A-Z]{2,4}$'
           description: Prefix of this clinic's patient codes, e.g. ME for ME-0142
+        booking_mode:
+          $ref: '#/components/schemas/BookingMode'
     Sex:
       type: string
       enum: [FEMALE, MALE, OTHER, UNDISCLOSED]
@@ -1937,6 +2230,10 @@ components:
           type: [string, 'null']
           maxLength: 4
           description: 2-4 upper-case letters for patient codes (ME-0142); derived from the name when omitted. Fixed once the clinic has patients.
+        booking_mode:
+          allOf:
+            - $ref: '#/components/schemas/BookingMode'
+          description: Defaults to TOKENS
     ClinicUpdate:
       type: object
       additionalProperties: false
@@ -1968,6 +2265,13 @@ components:
           maxItems: 20
           items:
             type: string
+        booking_mode:
+          description: |
+            Refused with 409 SCH_MODE_INCOMPATIBLE while a current block or upcoming extra lacks
+            what the new mode needs (spec R19); unbooked future sessions follow the new mode.
+          oneOf:
+            - $ref: '#/components/schemas/BookingMode'
+            - type: 'null'
     NewDoctor:
       type: object
       additionalProperties: false
@@ -2178,6 +2482,253 @@ components:
         same_as_row:
           type: integer
           description: The first row in the file with the same phone (or phone and name)
+    BookingMode:
+      type: string
+      enum: [SLOTS, TOKENS]
+      description: Fixed time slots, or numbered tokens per session (FR-APT-02)
+    LocalTime:
+      type: string
+      pattern: '^([01][0-9]|2[0-3]):[0-5][0-9](:00)?$'
+      description: Clinic wall-clock time, HH:MM
+    ScheduleBlockInput:
+      type: object
+      additionalProperties: false
+      required: [weekday, start_time, end_time]
+      properties:
+        weekday:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: 0 = Monday ... 6 = Sunday
+        start_time:
+          $ref: '#/components/schemas/LocalTime'
+        end_time:
+          allOf:
+            - $ref: '#/components/schemas/LocalTime'
+          description: At or before start_time means the next day; a block lasts at most 12 hours
+        slot_minutes:
+          type: [integer, 'null']
+          minimum: 5
+          maximum: 120
+          description: Needed in slot mode; must divide the block
+        capacity:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 500
+          description: Needed in token mode
+    ScheduleReplace:
+      type: object
+      additionalProperties: false
+      required: [blocks]
+      properties:
+        blocks:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/ScheduleBlockInput'
+    ScheduleBlock:
+      type: object
+      required: [id, weekday, start_time, end_time, overnight, slot_minutes, capacity]
+      properties:
+        id:
+          type: string
+          format: uuid
+        weekday:
+          type: integer
+          minimum: 0
+          maximum: 6
+        start_time:
+          type: string
+        end_time:
+          type: string
+        overnight:
+          type: boolean
+          description: True when the block ends the next day
+        slot_minutes:
+          type: [integer, 'null']
+        capacity:
+          type: [integer, 'null']
+    ScheduleExceptionKind:
+      type: string
+      enum: [LEAVE, EXTRA]
+    ScheduleException:
+      type: object
+      required:
+        - id
+        - doctor_id
+        - on_date
+        - kind
+        - note
+        - start_time
+        - end_time
+        - overnight
+        - slot_minutes
+        - capacity
+      properties:
+        id:
+          type: string
+          format: uuid
+        doctor_id:
+          type: string
+          format: uuid
+        on_date:
+          type: string
+          format: date
+        kind:
+          $ref: '#/components/schemas/ScheduleExceptionKind'
+        note:
+          type: [string, 'null']
+        start_time:
+          type: [string, 'null']
+        end_time:
+          type: [string, 'null']
+        overnight:
+          type: boolean
+        slot_minutes:
+          type: [integer, 'null']
+        capacity:
+          type: [integer, 'null']
+    NewScheduleException:
+      type: object
+      additionalProperties: false
+      required: [kind, on_date]
+      description: LEAVE takes no times; EXTRA needs start_time and end_time.
+      properties:
+        kind:
+          $ref: '#/components/schemas/ScheduleExceptionKind'
+        on_date:
+          type: string
+          format: date
+        start_time:
+          oneOf:
+            - $ref: '#/components/schemas/LocalTime'
+            - type: 'null'
+        end_time:
+          oneOf:
+            - $ref: '#/components/schemas/LocalTime'
+            - type: 'null'
+        slot_minutes:
+          type: [integer, 'null']
+          minimum: 5
+          maximum: 120
+        capacity:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 500
+        note:
+          type: [string, 'null']
+          maxLength: 200
+    Schedule:
+      type: object
+      required: [doctor_id, booking_mode, blocks, exceptions]
+      properties:
+        doctor_id:
+          type: string
+          format: uuid
+        booking_mode:
+          $ref: '#/components/schemas/BookingMode'
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduleBlock'
+        exceptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduleException'
+    ScheduleChange:
+      allOf:
+        - $ref: '#/components/schemas/Schedule'
+        - type: object
+          required: [kept_sessions]
+          properties:
+            kept_sessions:
+              type: array
+              description: Booked sessions the change did not touch, for the owner to reschedule
+              items:
+                $ref: '#/components/schemas/DoctorSession'
+    ScheduleExceptionChange:
+      type: object
+      required: [exception, kept_sessions]
+      properties:
+        exception:
+          $ref: '#/components/schemas/ScheduleException'
+        kept_sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/DoctorSession'
+    SessionSlot:
+      type: object
+      required: [starts_at, ends_at]
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+    DoctorSession:
+      type: object
+      description: One doctor's bookable block on one clinic-local date (not the sign-in session)
+      required:
+        - id
+        - doctor_id
+        - on_date
+        - starts_at
+        - ends_at
+        - mode
+        - status
+        - slot_minutes
+        - capacity
+        - booked_count
+        - available
+        - next_token
+        - slots
+      properties:
+        id:
+          type: string
+          format: uuid
+        doctor_id:
+          type: string
+          format: uuid
+        on_date:
+          type: string
+          format: date
+          description: The clinic-local date the session starts on
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        mode:
+          $ref: '#/components/schemas/BookingMode'
+        status:
+          type: string
+          enum: [OPEN, CLOSED, CANCELLED]
+        slot_minutes:
+          type: [integer, 'null']
+        capacity:
+          type: integer
+        booked_count:
+          type: integer
+        available:
+          type: integer
+        next_token:
+          type: [integer, 'null']
+          description: Token mode only
+        slots:
+          type: array
+          description: Slot mode only; empty in token mode
+          items:
+            $ref: '#/components/schemas/SessionSlot'
+    DoctorSessionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DoctorSession'
     Error:
       type: object
       required: [code, message, request_id]
