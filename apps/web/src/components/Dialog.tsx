@@ -4,7 +4,8 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
 
 /**
  * A centred modal on a native `<dialog>` (`showModal()`): focus stays inside, the page behind
- * is inert, Escape closes, and focus returns to what opened it. For confirmations and short
+ * is inert, Escape closes, a descendant marked data-autofocus takes the focus once it is open,
+ * and focus returns to what opened it. For confirmations and short
  * forms (M3-P5); side panels use `Drawer`. Render it only while open.
  */
 export function Dialog({
@@ -25,6 +26,11 @@ export function Dialog({
     if (dialog !== null && !dialog.open) {
       if (typeof dialog.showModal === "function") dialog.showModal();
       else dialog.setAttribute("open", "");
+      // Focus only once the dialog is open: children's effects run before this one, and a
+      // child's own focus() then does not reliably stick (it stopped doing so under jsdom
+      // 30.1.2). A field marked data-autofocus (the patient search, M3-P5) is where the
+      // person starts typing.
+      dialog.querySelector<HTMLElement>("[data-autofocus]")?.focus();
     }
     return () => opener?.focus();
   }, []);

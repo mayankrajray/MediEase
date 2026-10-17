@@ -269,7 +269,8 @@ describe("Create clinic wizard", () => {
     click("Create clinic and continue");
 
     const name = await screen.findByLabelText(/^Clinic name/);
-    expect(name).toHaveAccessibleDescription(/at least 1 character/);
+    // The field can appear a render before its problem is attached (the step changes first).
+    await waitFor(() => expect(name).toHaveAccessibleDescription(/at least 1 character/));
     expect(screen.getByLabelText("Pincode")).toHaveAccessibleDescription(/6 digits/);
     await waitFor(() => expect(name).toHaveFocus());
   });

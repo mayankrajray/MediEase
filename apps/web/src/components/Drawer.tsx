@@ -5,7 +5,8 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
 /**
  * A side panel on a native `<dialog>` opened with `showModal()`: the browser keeps
  * focus inside it, makes the page behind inert and closes it on Escape, with no
- * library. Focus returns to whatever opened it. Render it only while open.
+ * library. A descendant marked data-autofocus takes the focus once it is open; otherwise the
+ * browser's choice stands. Focus returns to whatever opened it. Render it only while open.
  */
 export function Drawer({
   title,
@@ -26,6 +27,11 @@ export function Drawer({
       // jsdom has no showModal; a real browser always does.
       if (typeof dialog.showModal === "function") dialog.showModal();
       else dialog.setAttribute("open", "");
+      // Focus only once the dialog is open: children's effects run before this one, and a
+      // child's own focus() then does not reliably stick (it stopped doing so under jsdom
+      // 30.1.2). A field marked data-autofocus (the patient search, M3-P5) is where the
+      // person starts typing.
+      dialog.querySelector<HTMLElement>("[data-autofocus]")?.focus();
     }
     return () => opener?.focus();
   }, []);

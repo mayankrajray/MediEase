@@ -31,6 +31,34 @@ Rules:
 
 ## Entries
 
+### 2026-10-18 — The booking drawer's patient search lost the focus in CI after a jsdom bump
+
+- **Milestone / area:** M3-P5 web (found on the M4 PR, #39) / modals, focus
+- **Symptom:** CI's web job failed on every M4 push from `ce61ec7`:
+  `Booking.test.tsx` "AC6 … two interactions in the drawer", `expect(…"Patient").toHaveFocus()`.
+  Locally the same suite passed again and again.
+- **Impact:** CI only; `main`'s own run after the M3 merge (`c44ad49`) is red for the same
+  reason. In a browser the search box could also open without the focus, which costs the front
+  desk the first of its three interactions (AC6).
+- **Reproduction:** `npm ci` in `apps/web` (jsdom 30.1.2 from the lockfile), then
+  `npx vitest --run`; the WSL clone still had jsdom 30.1.1 installed, which is why it passed there.
+- **Investigation:** Only the web job failed; the M4 branch changes no web code apart from
+  generated types. Comparing installed versions with `package-lock.json` showed jsdom 30.1.1 vs
+  30.1.2 and vitest 5.0.3 vs 5.0.4: Dependabot's bumps landed on `main` just before the M3 merge.
+  After `npm ci` the failure reproduced every time. Which jsdom change causes it was not traced.
+- **Root cause:** `PatientPicker` focused its input in its own effect, which React runs before
+  the parent `Drawer` effect that opens the `<dialog>`; that early `focus()` does not stick under
+  jsdom 30.1.2 (and is fragile in browsers, where `showModal()` moves the focus itself).
+- **Fix:** `Drawer` and `Dialog` focus a descendant marked `data-autofocus` once the dialog is
+  open; the patient search carries it. A wizard test that read an accessible description one
+  render early now waits for it. PR: #39.
+- **Guard:** `components/Modal.test.tsx` (a `data-autofocus` field has the focus once a Drawer or
+  Dialog is open); the AC6 booking test.
+- **Prevention / follow-up:** Run web tests after `npm ci` (as CI does) whenever the lockfile
+  changes on `main`, not against an older `node_modules`. In modals, set the starting focus with
+  `data-autofocus`, not from the child's own effect.
+- **Search keywords:** toHaveFocus, focus, dialog, showModal, Drawer, jsdom 30.1.2, Dependabot,
+  npm ci, CI only
 ### 2026-10-17 — Sign-in failed with "Something went wrong" over plain HTTP on a non-localhost host
 
 - **Milestone / area:** M2-P5 / web API client (found by the first CI Playwright run)
