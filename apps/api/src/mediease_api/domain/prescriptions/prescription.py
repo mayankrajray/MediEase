@@ -56,6 +56,9 @@ NAME_MAX = 200
 SHORT_MAX = 100  # form, strength, dose, quantity, custom frequency
 WARNINGS_MAX = 500
 ITEM_NOTES_MAX = 1000
+# The printed layout new issues get (M4-P5). Raise it with a new template in adapters/pdf, keeping
+# the old one, so a prescription issued before a layout change still prints as it was issued.
+CURRENT_LAYOUT = 1
 
 
 class PrescriptionStatus(StrEnum):
@@ -298,6 +301,8 @@ class Prescription:
     updated_at: datetime
     # M4-P3: the doctor's template the body came from (counted at issue, decision 3A).
     template_id: UUID | None = None
+    # M4-P5: the printed layout fixed at issue (`CURRENT_LAYOUT` then); drafts carry the current.
+    layout_version: int = CURRENT_LAYOUT
 
     # --- Creating -----------------------------------------------------------------------------
 
@@ -437,6 +442,7 @@ class Prescription:
         _check_follow_up(self.follow_up_date, today)
         self.status = PrescriptionStatus.ISSUED
         self.issued_at = now
+        self.layout_version = CURRENT_LAYOUT
         self.language = language
         self.doctor_snapshot = snapshot
         self.clinic_snapshot = ClinicSnapshot.of(clinic)

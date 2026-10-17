@@ -1,0 +1,74 @@
+"""The patient page's content (spec prescriptions R11, R12, R19, R20, §6, AC2; M4-P5)."""
+
+from __future__ import annotations
+
+from dataclasses import replace
+
+from mediease_api.domain.patients.patient import Language
+from mediease_api.domain.prescriptions.patient_view import PatientView, build_patient_view
+from mediease_api.domain.prescriptions.prescription import (
+    CURRENT_LAYOUT,
+    Prescription,
+    PrescriptionStatus,
+)
+from tests.builders import new_id
+from tests.unit.domain.test_prescriptions import NOW, draft, filled
+from tests.unit.domain.test_rx_document import issued
+
+TZ = "Asia/Kolkata"
+
+
+def view(chain: list[Prescription], language: Language = Language.EN) -> PatientView:
+    built = build_patient_view(chain, language=language, timezone=TZ)
+    assert built is not None
+    return built
+
+
+def fields(v: PatientView) -> dict[str, str]:
+    return {f.label: f.value for f in v.medicines[0].fields}
+
+
+def test_ac2_the_prd_sample_puts_the_dilution_under_how_to_give() -> None:
+    v = view([issued()])
+    assert v.medicines[0].name == "Syrup X"
+    assert list(fields(v)) == ["How much", "When to take", "How to give", "For how long", "Storage"]
+    assert fields(v)["How to give"] == "Shake well before use; Mix in 10 ml of water"
+    assert v.updated_note is None and v.version == 1
+    assert v.call_label == "Call the clinic" and v.clinic_phone_e164 is not None
+
+
+def test_r19_r20_hindi_labels_and_the_doctors_text_as_written() -> None:
+    rx = issued()
+    rx.items = (replace(rx.items[0], warnings="Do not give with milk"),)
+    v = view([rx], Language.HI)
+    assert v.medicines_heading == "दवाइयाँ"
+    assert fields(v)["कब लें"] == "दिन में दो बार, सुबह और रात, खाने के बाद"
+    assert fields(v)["सावधानी"] == "Do not give with milk"
+    assert v.medicines[0].name == "Syrup X"
+
+
+def test_r11_the_latest_issued_version_with_the_update_banner() -> None:
+    first = issued()
+    second = replace(issued(), version=2, id=new_id())
+    second.items = (replace(second.items[0], medicine_name="Syrup Y"),)
+    first.supersede(NOW)
+    v = view([first, second])
+    assert (v.version, v.medicines[0].name) == (2, "Syrup Y")
+    assert v.updated_note is not None and v.updated_note.startswith("Updated by your doctor on ")
+
+
+def test_a_chain_with_only_a_draft_has_no_page() -> None:
+    assert build_patient_view([filled(draft())], language=Language.EN, timezone=TZ) is None
+
+
+def test_the_page_leaves_out_the_patients_own_details() -> None:
+    rendered = repr(view([issued()]))
+    assert "patient" not in rendered.lower().replace("patientview", "").replace(
+        "patientmedicine", ""
+    )
+
+
+def test_m4_p5_issue_fixes_the_current_layout_version() -> None:
+    rx = issued()
+    assert rx.status is PrescriptionStatus.ISSUED
+    assert rx.layout_version == CURRENT_LAYOUT == 1
