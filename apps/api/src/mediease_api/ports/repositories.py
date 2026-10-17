@@ -378,6 +378,17 @@ class PrescriptionRepository(Protocol):
         """Remove a draft and its items (the database refuses anything else)."""
         ...
 
+    def lock_for_render(self, prescription_id: UUID, *, wait_seconds: int) -> Prescription | None:
+        """M4-P4, R18: the version locked for update, waiting at most `wait_seconds` for another
+        transaction's lock; longer raises `PdfBusy`. The wait limit then holds for the rest of
+        the transaction."""
+        ...
+
+    def list_issued_for_patient(self, patient_id: UUID, *, limit: int) -> Sequence[Prescription]:
+        """M4-P4 decision 2A: the patient's current versions (`ISSUED`; a superseded one never
+        is), newest issue first."""
+        ...
+
     def medicine_history(self, prefix: str, *, limit: int) -> Sequence[HistoryName]:
         """M4-P3, R7: medicine names on this clinic's issued (or superseded) prescriptions that
         start with ``prefix`` ignoring case, grouped ignoring case and spaces, with the distinct

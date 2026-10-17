@@ -24,7 +24,13 @@ from uuid import UUID
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.patients.patient import Language
-from mediease_api.domain.prescriptions.errors import DoctorIncomplete, Empty, NotDraft, Stale
+from mediease_api.domain.prescriptions.errors import (
+    DoctorIncomplete,
+    Empty,
+    NotDraft,
+    NotIssued,
+    Stale,
+)
 from mediease_api.domain.prescriptions.vocabulary import (
     Frequency,
     Preparation,
@@ -441,6 +447,13 @@ class Prescription:
             self.link_delivery = LinkDelivery.NOT_CONSENTED
         self.revision += 1
         self.updated_at = now
+
+    def attach_pdf(self, key: str) -> None:
+        """R18: the version's PDF was stored under `key`; set once (the database agrees)."""
+        if self.status is PrescriptionStatus.DRAFT:
+            raise NotIssued(self.status.value)
+        assert self.pdf_object_key is None, "a version's PDF is stored once"
+        self.pdf_object_key = key
 
     def supersede(self, now: datetime) -> None:
         """R6, R14: a newer version was issued; a pending link for this one is never sent."""

@@ -1,0 +1,11 @@
+{# The page box: paper size from the clinic (decision 3A), footer and page numbers. Values are
+   phrases from the phrasebook, quoted as CSS strings by css_string. #}
+@page {
+  size: {{ doc.paper_size.value }} portrait;
+  @bottom-left {
+    content: {{ doc.footer | css_string }};
+  }
+  @bottom-right {
+    content: {{ doc.page_label[0] | css_string }} counter(page) {{ doc.page_label[1] | css_string }} counter(pages) {{ doc.page_label[2] | css_string }};
+  }
+}

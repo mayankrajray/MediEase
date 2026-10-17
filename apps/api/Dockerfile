@@ -33,20 +33,31 @@ LABEL org.opencontainers.image.title="mediease-api" \
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH=/opt/venv/bin:$PATH
+    PATH=/opt/venv/bin:$PATH \
+    XDG_CACHE_HOME=/tmp
+# XDG_CACHE_HOME: fontconfig's cache goes to the /tmp tmpfs (the root filesystem is read-only).
 
 # Debian security fixes published after the pinned base image was built. The
 # base stays pinned; this only upgrades packages it already contains, and the CI
 # image scan fails if a fixed HIGH/CRITICAL vulnerability is still present.
+#
+# M4-P4: Pango, HarfBuzz and fontconfig for the in-house PDF renderer (WeasyPrint >= 70 needs
+# Pango >= 1.44; trixie ships 1.56). Fonts are vendored in the package, not installed here.
 RUN apt-get update \
  && apt-get upgrade --yes --no-install-recommends \
+ && apt-get install --yes --no-install-recommends \
+      libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fontconfig \
  && rm -rf /var/lib/apt/lists/*
 
 # Unprivileged runtime user (CLAUDE.md "Least privilege"). No home, no shell.
 # The base image's pip is removed: nothing installs packages at runtime.
 RUN groupadd --system app \
  && useradd --system --gid app --no-create-home --home-dir /app --shell /usr/sbin/nologin app \
- && python -m pip uninstall --yes --root-user-action ignore pip
+ && python -m pip uninstall --yes --root-user-action ignore pip \
+ && mkdir -p /var/lib/mediease/blobs \
+ && chown app:app /var/lib/mediease/blobs
+# Prescription PDFs (M4-P4, BLOB_STORAGE=local). Compose mounts the named volume blobs here;
+# a new volume copies this directory's owner, so the app user can write to it.
 
 WORKDIR /app
 COPY --from=build /opt/venv /opt/venv

@@ -50,6 +50,7 @@ class AppEnv(StrEnum):
 
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
+BlobBackend = Literal["local", "s3"]
 
 
 def _app_env(info: ValidationInfo) -> AppEnv | None:
@@ -100,6 +101,15 @@ class AppSettings(BaseSettings):
     ACCESS_TOKEN_TTL_SECONDS: int = Field(default=900, ge=60, le=3600)
     # Refresh token lifetime: 14 days by default (spec R4); 1 hour to 30 days allowed.
     REFRESH_TOKEN_TTL_SECONDS: int = Field(default=1_209_600, ge=3600, le=2_592_000)
+    # Generated files such as prescription PDFs (M4-P4, ADR-0012). `local`: a directory (the
+    # compose volume `blobs`); `s3`: an S3-compatible bucket, credentials from the standard
+    # AWS chain (environment or instance role), never from these settings.
+    BLOB_STORAGE: BlobBackend = "local"
+    BLOB_LOCAL_DIR: str = Field(default="/var/lib/mediease/blobs", min_length=1)
+    S3_BUCKET: str = ""
+    S3_REGION: str = "ap-south-1"
+    # Empty for AWS itself; the endpoint of another S3-compatible store otherwise.
+    S3_ENDPOINT_URL: str = ""
 
     @field_validator("LOG_LEVEL")
     @classmethod
@@ -169,6 +179,20 @@ class AppSettings(BaseSettings):
             raise ValueError(
                 f"contains a '{_PLACEHOLDER}' placeholder; set a real value for APP_ENV={env.value}"
             )
+        return value
+
+    @field_validator("S3_BUCKET")
+    @classmethod
+    def _bucket_for_s3(cls, value: str, info: ValidationInfo) -> str:
+        if info.data.get("BLOB_STORAGE") == "s3" and not value.strip():
+            raise ValueError("is required when BLOB_STORAGE=s3")
+        return value.strip()
+
+    @field_validator("S3_ENDPOINT_URL")
+    @classmethod
+    def _absolute_endpoint(cls, value: str) -> str:
+        if value and not value.startswith(("http://", "https://")):
+            raise ValueError("must be an absolute http(s) URL or empty")
         return value
 
     @field_validator("AUDIT_IP_SALT")

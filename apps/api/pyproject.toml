@@ -22,6 +22,12 @@ dependencies = [
     # (FR-AUTH-02). Both ship binary wheels / pure Python: no compiler needed.
     "argon2-cffi==25.1.0",
     "pyjwt==2.15.1",
+    # M4-P4 (ADR-0012). In-house prescription PDFs: WeasyPrint (BSD; needs Pango, installed in
+    # the image) with Jinja2 templates (already installed with Flask, now named because we use it
+    # directly), and boto3 for the S3-compatible blob store used in production from M6.
+    "weasyprint==70.0",
+    "jinja2==3.1.6",
+    "boto3==1.43.114",
 ]
 
 [project.optional-dependencies]
@@ -39,6 +45,11 @@ dev = [
     # A test that waits forever (a deadlock, a thread barrier nobody reaches) fails after
     # `timeout` seconds with every thread's stack, instead of hanging the run and CI.
     "pytest-timeout==2.4.0",
+    # M4-P4: an in-process S3 for the blob adapter (no network), PDF text extraction that
+    # understands WeasyPrint's font encoding (pdfium), and boto3 type stubs for mypy.
+    "moto[s3]==5.2.4",
+    "pypdfium2==5.14.0",
+    "types-boto3[s3]==1.43.114",
 ]
 
 [build-system]
@@ -47,6 +58,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# The PDF renderer's template, stylesheet and vendored fonts ship inside the package (M4-P4).
+[tool.setuptools.package-data]
+"mediease_api.adapters.pdf" = ["assets/*"]
 
 # --- Ruff: lint + format -----------------------------------------------------
 [tool.ruff]
@@ -76,6 +91,11 @@ disallow_untyped_defs = true
 [[tool.mypy.overrides]]
 module = ["mediease_api.domain.*", "mediease_api.application.*"]
 strict = true
+
+# WeasyPrint ships no type information; only adapters/pdf imports it.
+[[tool.mypy.overrides]]
+module = ["weasyprint", "weasyprint.*"]
+ignore_missing_imports = true
 
 # --- pytest ------------------------------------------------------------------
 [tool.pytest.ini_options]
@@ -113,7 +133,7 @@ forbidden_modules = [
     "mediease_api.application", "mediease_api.ports", "mediease_api.adapters",
     "mediease_api.delivery", "mediease_api.config", "mediease_api.bootstrap", "mediease_api.wsgi",
     "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
-    "structlog", "gunicorn", "ulid", "argon2", "jwt",
+    "structlog", "gunicorn", "ulid", "argon2", "jwt", "weasyprint", "jinja2", "boto3", "botocore",
 ]
 
 [[tool.importlinter.contracts]]

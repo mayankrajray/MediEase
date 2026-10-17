@@ -18,6 +18,12 @@ x-api-environment: &api-environment
   AUDIT_IP_SALT: ${AUDIT_IP_SALT:?set AUDIT_IP_SALT in .env}
   ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
   REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-1209600}
+  # M4-P4: prescription PDFs on the blobs volume (s3 from M6).
+  BLOB_STORAGE: ${BLOB_STORAGE:-local}
+  BLOB_LOCAL_DIR: /var/lib/mediease/blobs
+  S3_BUCKET: ${S3_BUCKET:-}
+  S3_REGION: ${S3_REGION:-ap-south-1}
+  S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
 
 # Least privilege for our own containers (CLAUDE.md): read-only root
 # filesystem, no Linux capabilities, no privilege escalation. Writable scratch
@@ -78,6 +84,9 @@ services:
     image: mediease-api:local
     environment: *api-environment
     tmpfs: ["/tmp"]
+    # Prescription PDFs, written once per version (ADR-0012); the only writable path besides /tmp.
+    volumes:
+      - blobs:/var/lib/mediease/blobs
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     depends_on:
@@ -135,3 +144,4 @@ services:
 
 volumes:
   pgdata:
+  blobs:

@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mediease_api.adapters.db.models.base import Base, Keyed, TenantOwned, Timestamps, enum_check
-from mediease_api.domain.clinics.clinic import ClinicStatus
+from mediease_api.domain.clinics.clinic import ClinicStatus, PaperSize
 from mediease_api.domain.scheduling.mode import BookingMode
 
 
@@ -21,6 +21,7 @@ class ClinicRow(Keyed, Timestamps, Base):
     __table_args__ = (
         enum_check("status", ClinicStatus),
         enum_check("booking_mode", BookingMode),
+        enum_check("rx_paper_size", PaperSize),
         CheckConstraint("patient_code_prefix ~ '^[A-Z]{2,4}$'", name="patient_code_prefix_format"),
         CheckConstraint("next_patient_seq >= 1", name="next_patient_seq_positive"),
     )
@@ -40,6 +41,8 @@ class ClinicRow(Keyed, Timestamps, Base):
     next_patient_seq: Mapped[int] = mapped_column(server_default=text("1"))
     # M3 (migration 0007): slot or token booking for the clinic's sessions.
     booking_mode: Mapped[str] = mapped_column(Text, server_default=text("'TOKENS'"))
+    # M4-P4 (migration 0012): prescription stationery, read when a version is first rendered.
+    rx_paper_size: Mapped[str] = mapped_column(Text, server_default=text("'A5'"))
 
 
 class DoctorRow(TenantOwned, Timestamps, Base):

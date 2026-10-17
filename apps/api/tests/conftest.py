@@ -55,6 +55,11 @@ _MANAGED_VARS = (
     "AUDIT_IP_SALT",
     "ACCESS_TOKEN_TTL_SECONDS",
     "REFRESH_TOKEN_TTL_SECONDS",
+    "BLOB_STORAGE",
+    "BLOB_LOCAL_DIR",
+    "S3_BUCKET",
+    "S3_REGION",
+    "S3_ENDPOINT_URL",
 )
 
 # Synthetic, test-only secrets (>= 32 characters each).
