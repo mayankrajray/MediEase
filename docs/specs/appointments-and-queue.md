@@ -4,8 +4,8 @@
 |---|---|
 | Requirements | FR-APT-01..07, FR-QUE-01..05 |
 | Milestone / phases | M3 / P1–P5 |
-| Status | Draft |
-| Last updated | 2026-09-15 |
+| Status | Approved (developer sign-off 2026-10-17: decisions D1–D9 in §12) |
+| Last updated | 2026-10-17 (approved; R1, R3, R4 made precise and R14–R20 added for schedules, exceptions and session generation) |
 
 ## 1. Context
 Seven of fourteen clinics book through WhatsApp and phone with no central view (A7–A13).
@@ -16,7 +16,12 @@ Owner, doctor, front desk: book, reschedule, cancel, transition, add walk-ins. O
 
 ## 3. Domain model
 - `DoctorSchedule`, `ScheduleException`, `Session` (materialised per date), `Appointment`.
-- Clinic `booking_mode`: `SLOTS` or `TOKENS`.
+- Clinic `booking_mode`: `SLOTS` or `TOKENS` (`TOKENS` for existing clinics).
+- A **weekly block** is a rule: a weekday (0 = Monday … 6 = Sunday), a clinic-local start and end
+  time, and `slot_minutes` (needed in slot mode) or `capacity` (needed in token mode). An end time
+  at or before the start time means the block ends the next day (D2).
+- A **session** is one instance of a rule on one clinic-local date, stored in UTC; bookings attach to
+  sessions, never to rules (D4).
 
 ```mermaid
 stateDiagram-v2
@@ -35,11 +40,15 @@ stateDiagram-v2
 
 ## 4. Behaviour
 - **R1** Sessions for a date are generated from schedules valid on that date, minus `LEAVE`
-  exceptions, plus `EXTRA` exceptions. Generation is idempotent (`UNIQUE (doctor_id, starts_at)`).
+  exceptions, plus `EXTRA` exceptions. Generation is lazy (the first read of a date creates its
+  sessions, D1) and idempotent (`UNIQUE (doctor_id, starts_at)`, `ON CONFLICT DO NOTHING`), so two
+  simultaneous reads create one set. Only dates from the clinic's today up to 180 days ahead are
+  generated; an earlier date shows the sessions it already has, a later one is a validation error.
 - **R2** Times are interpreted in the clinic timezone and stored in UTC. A session belongs to the
   clinic-local date on which it starts.
 - **R3** SLOTS mode: slots are `[starts_at, ends_at)` stepped by `slot_minutes`; one active
-  appointment per slot.
+  appointment per slot. The session's capacity is derived: block length ÷ `slot_minutes`, which must
+  divide it (D3). TOKENS mode: capacity is given explicitly.
 - **R4** TOKENS mode: a booking takes `next_token` and increments it; tokens are never reused within
   a session, including after cancellation.
 - **R5** Booking locks the session row (`SELECT … FOR UPDATE`), checks status, capacity and slot
@@ -60,6 +69,30 @@ stateDiagram-v2
 - **R12** The queue endpoint returns appointments ordered by slot/token with a strong `ETag`
   derived from the session's `updated_at` and appointment versions; clients poll every 5 seconds
   with `If-None-Match` and receive 304 when unchanged.
+- **R14** A block lasts 15 minutes to 12 hours (D2). A block whose end time is at or before its start
+  time ends the next day, so 23:00–01:00 is a two-hour block; but 13:00–10:00 would be 21 hours and
+  is refused with `SCH_INVALID_BLOCK`, as are a zero-length block, a slot length that does not divide
+  the block, and a block without the value the clinic's booking mode needs.
+- **R15** No two blocks of one doctor overlap, compared on the circle of the week, so an overnight
+  block on day N that spills past midnight conflicts with an early block on day N+1 (and Sunday into
+  Monday) → `SCH_OVERLAP`. An `EXTRA` exception is checked the same way against that date's
+  sessions, the previous day's overnight session and the other extras.
+- **R16** Replacing a schedule (`PUT`) takes effect from the clinic's today: earlier dates keep
+  their history. Future sessions that no longer match the rules are deleted if `booked_count = 0`
+  and regenerated on the next read; those with bookings are kept and returned as `kept_sessions`
+  for the owner to reschedule by hand. Nothing is ever cancelled automatically (D4, §8).
+- **R17** `LEAVE` covers a doctor's whole day; at most one per doctor and date
+  (`SCH_LEAVE_EXISTS`). Adding it deletes that day's already-generated sessions with
+  `booked_count = 0` and keeps and returns those with bookings; removing it lets the day regenerate.
+  A part-day absence is a `LEAVE` plus an `EXTRA` for the hours the doctor does work.
+- **R18** `EXTRA` adds one block on one date, validated like R14. Removing it deletes its unbooked
+  session and returns a booked one in `kept_sessions`. Exceptions are for today or later only.
+- **R19** Changing the clinic's booking mode is refused with `SCH_MODE_INCOMPATIBLE` while any active
+  doctor's current blocks or future extras lack the value the new mode needs; otherwise unbooked
+  future sessions are regenerated in the new mode and booked ones keep theirs.
+- **R20** Schedule changes and generation are serialised per doctor: a change locks the doctor row
+  (`FOR UPDATE`) and generation takes a shared lock, so a read never builds sessions from a rule
+  that is being replaced.
 - **R13** Starting a consultation (`IN_CONSULTATION`) creates or opens the visit (M4 dependency;
   in M3 only the transition happens).
 
@@ -76,6 +109,7 @@ See API.md "Schedules, appointments, queue".
 ## 7. Events and side effects
 | Trigger | Audit | Job | Analytics |
 |---|---|---|---|
+| Schedule replaced / exception added or removed | `schedule.changed` / `schedule.exception_added` / `schedule.exception_removed` | — | — |
 | Book | `appointment.booked` | `send_booking_confirmation` (M5) | `appointment_created` |
 | Transition | `appointment.status_changed` | — | `queue_status_changed` |
 | Cancel / reschedule | `appointment.cancelled` / `appointment.rescheduled` | cancellation notice (P1) | — |
@@ -87,6 +121,10 @@ See API.md "Schedules, appointments, queue".
 | Leave added for a day with bookings | Exception saved; affected appointments listed for manual rescheduling (no auto-cancel) |
 | Session crossing midnight IST | Belongs to the start date (R2) |
 | DST | Not applicable to `Asia/Kolkata`; code still uses timezone-aware arithmetic |
+| 13:00–10:00 entered by mistake | 21 hours: `422 SCH_INVALID_BLOCK` (R14) |
+| Sunday 22:00–02:00 and Monday 01:00–05:00 | `409 SCH_OVERLAP` (R15) |
+| Leave on a day whose sessions were generated | Unbooked sessions removed; booked ones returned (R17) |
+| Inactive doctor | No sessions are generated; existing ones are kept |
 | Two tabs transitioning the same appointment | Second request gets `QUE_INVALID_TRANSITION` if the state already moved |
 
 ## 9. Acceptance criteria
@@ -104,7 +142,8 @@ See API.md "Schedules, appointments, queue".
   queue screen.
 
 ## 10. Observability
-Events: `appointment.booked`, `appointment.booking_rejected` (`error_code`),
+Events: `schedule.changed`, `schedule.exception_added`, `schedule.exception_removed`,
+`appointment.booked`, `appointment.booking_rejected` (`error_code`),
 `queue.transition_rejected`, `session.generated` (count). Metrics: booking conflicts per hour,
 p95 booking latency.
 
@@ -112,5 +151,18 @@ p95 booking latency.
 Patient self-booking (M7 public page), appointment reminders (FR-APT-08, P1), live patient token
 link (FR-QUE-06, P1), automatic no-show job (M5).
 
-## 12. Open questions
-- Should overbooking be allowed by default in slot mode? (Default off; owner setting.)
+## 12. Decisions
+Resolved at approval (2026-10-17):
+- **D1** Sessions are generated lazily on the first read of a date, idempotently (R1).
+- **D2** An end at or before the start means next day, bounded by a 12-hour maximum block (R14).
+- **D3** Slot-mode capacity is derived from the block and the slot length; token mode states it (R3).
+- **D4** Editing a schedule regenerates unbooked future sessions and keeps booked ones, returning
+  them; leave behaves the same on its date (R16, R17).
+- **D5** A `SCHEDULES_MANAGE` permission for the owner; ops set schedules through an ops route during
+  onboarding (RUNBOOK §10 step 5), with no clinical access.
+- **D6** Overbooking is off in M3: no setting, `booked_count <= capacity` in the database. The open
+  question is closed for M3; walk-ins in slot mode take a free slot or are refused (R11).
+- **D7** Overlaps are checked across midnight and across the week (R15).
+- **D8** `LEAVE` is whole-day only in M3 (R17).
+- **D9** Schedule routes live under the doctor resource, `/api/v1/clinic/doctors/{id}/schedule`, like
+  the other doctor endpoints; sessions are `/api/v1/sessions`.

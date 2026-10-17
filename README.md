@@ -5,9 +5,8 @@ India: booking, a live daily queue, a searchable patient record, a digital presc
 can re-read, and follow-up reminders that actually arrive.
 
 > **Status:** Milestone 0 (Foundation) and Milestone 1 (Identity, tenancy and audit) complete (M1
-> merged in PR #20); Milestone 2 (Patients) in progress — patient registration, lookup,
-> duplicate-phone flow, consent and opt-out, and ops CSV import are in the API; the web screens
-> (M2-P5) are next. See [TASKS.md](TASKS.md).
+> merged in PR #20); Milestone 2 (Patients) complete (PR #22); Milestone 3 (Appointments and daily queue) in
+> progress — doctor schedules and sessions (M3-P1) first. See [TASKS.md](TASKS.md).
 
 ---
 

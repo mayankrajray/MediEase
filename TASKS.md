@@ -11,13 +11,13 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M2 — Patients** (issue #21, branch `m2/21-patients`, one PR for the milestone) |
-| Active phase | **M2-P5 — ✅ implemented 17 Oct 2026** (decisions 1A–6A, 4B): header patient search, registration drawer with the duplicate-phone flow, patient profile with edit, consent, opt-out and opt-in, the wizard's code prefix, the first Playwright journey. **M2 is complete** and PR #22 is ready for review; M3 starts after the maintainer merges it |
-| Design notes | `docs/milestones/M2-patients.md` |
-| Approved plan | `NEXT_STEPS_PLAN.md` (M2 phases, workflow, progress log) |
+| Active milestone | **M3 — Appointments and daily queue** (issue #36, branch `m3/36-appointments-and-queue`, one PR for the milestone) |
+| Active phase | **M3-P1 — approved 17 Oct 2026, in implementation:** doctor schedules (overnight blocks up to 12 h), whole-day leave and extra sessions, sessions generated per clinic-local date in slot or token mode. M2 merged in PR #22 |
+| Design notes | `docs/milestones/M3-appointments-and-queue.md` |
+| Approved plan | `NEXT_STEPS_PLAN.md` (M3 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §9). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | None for M2. Follow-up outside M2: #30 (an import over 2 MB through the web origin can answer 500 instead of 413) |
+| Open decisions | None. Follow-up outside M3: #30 (an import over 2 MB through the web origin can answer 500 instead of 413) |
 | Last updated | 17 Oct 2026 |
 
 
@@ -88,14 +88,14 @@ duplicates surfaced; 10k-patient lookup p95 < 500 ms.
 | M2-P4 | Ops CSV import with dry-run report | ✅ |
 | M2-P5 | Web: patient search bar (global), registration drawer, patient profile | ✅ |
 
-## M3 — Appointments and daily queue  `☐`
+## M3 — Appointments and daily queue  `▶ ACTIVE`
 
-**Covers:** FR-APT-01..07, FR-QUE-01..05. **Exit:** front desk books in ≤ 3 interactions;
+**Covers:** FR-APT-01..07, FR-QUE-01..05. **Spec:** `docs/specs/appointments-and-queue.md` (Approved 17 Oct 2026). **Issue:** #36, one branch and one PR for all phases (ADR-0011). **Exit:** front desk books in ≤ 3 interactions;
 concurrent double-booking test passes; queue refreshes on all screens within 5 s.
 
 | Phase | Scope | Status |
 |---|---|---|
-| M3-P1 | Doctor schedules, sessions, exceptions; slot and token generation (clinic timezone aware) | ☐ |
+| M3-P1 | Doctor schedules, sessions, exceptions; slot and token generation (clinic timezone aware) | ▶ |
 | M3-P2 | Booking, reschedule, cancel with row-level locking and capacity checks | ☐ |
 | M3-P3 | Queue state machine and transitions; walk-ins | ☐ |
 | M3-P4 | Live queue updates (polling with ETag first; SSE only if polling proves insufficient — ADR required) | ☐ |
