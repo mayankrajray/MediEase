@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M3 — Appointments and daily queue** (issue #36, branch `m3/36-appointments-and-queue`, one PR for the milestone) |
-| Active phase | **M3-P3 — implemented 17 Oct 2026, awaiting the developer's confirmation:** queue transitions with a stale-screen guard, walk-ins, the day's queue read; contract 0.11.0. **Next: M3-P4** (live queue: ETag and 304), designed once P3 is confirmed |
+| Active phase | **M3-P4 — approved 17 Oct 2026 (1A–4A), in implementation:** the live queue (a strong ETag on `GET /api/v1/queue`, 304 when unchanged, a 5-second polling module for the web). M3-P1 to P3 done and confirmed |
 | Design notes | `docs/milestones/M3-appointments-and-queue.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M3 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |

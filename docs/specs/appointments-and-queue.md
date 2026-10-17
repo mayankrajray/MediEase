@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-APT-01..07, FR-QUE-01..05 |
 | Milestone / phases | M3 / P1–P5 |
-| Status | Approved (developer sign-off 2026-10-17: decisions D1–D9 for M3-P1 and D10–D16 for M3-P2, D17–D22 for M3-P3 in §12) |
+| Status | Approved (developer sign-off 2026-10-17: decisions D1–D9 for M3-P1 and D10–D16 for M3-P2, D17–D22 for M3-P3, D23–D26 for M3-P4 in §12) |
 | Last updated | 2026-10-17 (approved; R1, R3, R4 made precise and R14–R20 added for schedules, exceptions and session generation; M3-P2 decisions D10–D16, R5's confirmation job from M5) |
 
 ## 1. Context
@@ -194,3 +194,9 @@ Resolved at M3-P3 design (2026-10-17; the developer approved the recommended opt
 - **D21** A walk-in joins the doctor's open session running now, else the next one today, or the
   named one of today's; none is `QUE_NO_SESSION`. It is `ARRIVED` at once, source `WALK_IN`.
 - **D22** The queue read arrives in P3 without caching; P4 adds the `ETag` and 304 (R12).
+Resolved at M3-P4 approval (2026-10-17):
+- **D23** The queue's strong `ETag` is a hash of the serialised body, so any visible change changes it.
+- **D24** `wait_minutes` stays in the body; while patients wait the tag changes at most once a minute.
+- **D25** The web gets a polling module in P4 (5 s, `If-None-Match`, paused while hidden, 30 s
+  back-off after errors); P5's board builds on it.
+- **D26** Only the queue carries an `ETag` in M3; the queue stays `no-store`.
