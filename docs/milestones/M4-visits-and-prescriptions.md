@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; the M4-P1 design proposed, awaiting the developer's approval |
+| Status | In progress — M4 opened 17 Oct 2026; the M4-P1 design approved the same day with 1A–6A, in implementation |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -13,7 +13,7 @@
 
 | Phase | Builds | Design |
 |---|---|---|
-| P1 | Visit record, history, 24-hour lock and addenda | Below (proposed) |
+| P1 | Visit record, history, 24-hour lock and addenda | Below (approved) |
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | At its start |
 | P3 | Favourites, templates, clinic-history autocomplete | At its start |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | At its start |
@@ -24,7 +24,7 @@
 
 ## M4-P1 — Visit record, history, 24-hour lock and addenda
 
-**Status: proposed 17 Oct 2026, awaiting approval.** API only; the consultation screen is P6.
+**Status: approved by the developer 17 Oct 2026 with 1A–6A (every recommendation); in implementation.** API only; the consultation screen is P6.
 Covers FR-VIS-01, 02, 03, 05; spec R1–R3, R16, R17; AC6, AC7 (for visits), AC9.
 
 ### Concepts
