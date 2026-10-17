@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -259,7 +260,11 @@ CHEAP_HASHER = Argon2PasswordHasher(time_cost=1, memory_cost_kib=8, parallelism=
 DEMO_PASSWORD = "synthetic-Passw0rd-for-tests"  # gitleaks:allow (synthetic test value)
 
 
-def make_db_app(database_url: str, *, cookie_secure: bool = False) -> Flask:
+# PDFs written by tests (M4-P4) go here; removed when the test run ends.
+_BLOBS = tempfile.TemporaryDirectory(prefix="mediease-test-blobs-")
+
+
+def make_db_app(database_url: str, *, cookie_secure: bool = False, **adapters: Any) -> Flask:
     # APP_ENV=local: the compose db's password is a change-me placeholder.
     settings = AppSettings(
         APP_ENV=AppEnv.LOCAL,
@@ -267,8 +272,9 @@ def make_db_app(database_url: str, *, cookie_secure: bool = False) -> Flask:
         COOKIE_SECURE=cookie_secure,
         JWT_SIGNING_KEY=SecretStr(TEST_SIGNING_KEY),
         AUDIT_IP_SALT=SecretStr(TEST_IP_SALT),
+        BLOB_LOCAL_DIR=_BLOBS.name,
     )
-    return create_app(settings, password_hasher=CHEAP_HASHER)
+    return create_app(settings, password_hasher=CHEAP_HASHER, **adapters)
 
 
 @pytest.fixture

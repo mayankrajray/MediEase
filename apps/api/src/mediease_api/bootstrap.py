@@ -21,10 +21,13 @@ from mediease_api.adapters.db.engine import build_engine
 from mediease_api.adapters.db.readiness import SqlAlchemyDatabaseCheck
 from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork, build_session_factory
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
+from mediease_api.adapters.pdf.weasy import WeasyPrintRenderer
 from mediease_api.adapters.security.argon2_hasher import Argon2PasswordHasher
 from mediease_api.adapters.security.ip_hash import HmacIpHasher
 from mediease_api.adapters.security.jwt_tokens import JwtAccessTokenIssuer
 from mediease_api.adapters.security.refresh_secrets import Sha256RefreshTokenSecrets
+from mediease_api.adapters.storage.local import LocalBlobStorage
+from mediease_api.adapters.storage.s3 import S3BlobStorage
 from mediease_api.application.appointments.book import BookAppointment
 from mediease_api.application.appointments.cancel import CancelAppointment
 from mediease_api.application.appointments.queries import GetAppointment, ListPatientAppointments
@@ -62,6 +65,7 @@ from mediease_api.application.prescriptions.library import (
     SaveTemplate,
     SuggestMedicines,
 )
+from mediease_api.application.prescriptions.pdf import DownloadPrescriptionPdf, ListPrintable
 from mediease_api.application.prescriptions.use_cases import (
     CreateDraft,
     DiscardDraft,
@@ -102,8 +106,10 @@ from mediease_api.delivery.http.visits import create_visits_blueprint
 from mediease_api.delivery.middleware import register_request_middleware
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
+from mediease_api.ports.pdf import PdfRendererPort
 from mediease_api.ports.readiness import DatabaseCheck
 from mediease_api.ports.security import AccessTokenIssuer, PasswordHasher
+from mediease_api.ports.storage import BlobStoragePort
 from mediease_api.ports.unit_of_work import UnitOfWork
 
 logger = structlog.get_logger(__name__)
@@ -129,6 +135,9 @@ class _UseCases:
     access_tokens: AccessTokenIssuer
     sessions: SessionIssuer
     dummy_password_hash: str
+    # M4-P4 (ADR-0012): built once; both are safe to share between requests.
+    pdf_renderer: PdfRendererPort
+    blob_storage: BlobStoragePort
 
     def sign_in(self) -> SignIn:
         return SignIn(
@@ -306,6 +315,18 @@ class _UseCases:
     def revise_prescription(self) -> RevisePrescription:
         return RevisePrescription(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    def download_prescription_pdf(self) -> DownloadPrescriptionPdf:
+        return DownloadPrescriptionPdf(
+            uow=self._uow(),
+            clock=self.clock,
+            ids=self.ids,
+            renderer=self.pdf_renderer,
+            storage=self.blob_storage,
+        )
+
+    def list_printable(self) -> ListPrintable:
+        return ListPrintable(uow=self._uow())
+
     def list_favourites(self) -> ListFavourites:
         return ListFavourites(uow=self._uow(), clock=self.clock, ids=self.ids)
 
@@ -340,6 +361,20 @@ class _UseCases:
         return SqlAlchemyUnitOfWork(self.session_factory)
 
 
+def build_blob_storage(settings: AppSettings) -> BlobStoragePort:
+    """ADR-0012: a local directory, or an S3-compatible bucket (credentials from the AWS chain)."""
+    if settings.BLOB_STORAGE == "s3":
+        import boto3  # only the s3 backend needs it loaded
+
+        client = boto3.client(
+            "s3",
+            region_name=settings.S3_REGION,
+            endpoint_url=settings.S3_ENDPOINT_URL or None,
+        )
+        return S3BlobStorage(client, settings.S3_BUCKET)
+    return LocalBlobStorage(settings.BLOB_LOCAL_DIR)
+
+
 def build_password_hasher() -> PasswordHasher:
     """Production Argon2id parameters (also used by ``make seed``)."""
     return Argon2PasswordHasher()
@@ -370,12 +405,14 @@ def create_app(
     database_check: DatabaseCheck | None = None,
     password_hasher: PasswordHasher | None = None,
     clock: ClockPort | None = None,
+    pdf_renderer: PdfRendererPort | None = None,
+    blob_storage: BlobStoragePort | None = None,
 ) -> Flask:
     """Build and wire the Flask application from validated settings.
 
     The keyword arguments replace adapters in tests: a fake readiness check, a
-    cheap password hasher, a fixed clock. Building the engine opens no
-    connection, so this stays side-effect free.
+    cheap password hasher, a fixed clock, a counting PDF renderer or another store.
+    Building the engine opens no connection, so this stays side-effect free.
     """
     configure_logging(settings)
 
@@ -409,6 +446,8 @@ def create_app(
         # One real hash of a random password, so unknown accounts cost the
         # same verification as real ones (spec R2).
         dummy_password_hash=hasher.hash(secrets.token_urlsafe(32)),
+        pdf_renderer=pdf_renderer or WeasyPrintRenderer(),
+        blob_storage=blob_storage or build_blob_storage(settings),
     )
 
     # static_folder=None: the API serves JSON only, so there is no static route

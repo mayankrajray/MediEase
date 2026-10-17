@@ -12,7 +12,10 @@ from moto import mock_aws
 
 from mediease_api.adapters.storage.local import LocalBlobStorage
 from mediease_api.adapters.storage.s3 import S3BlobStorage
+from mediease_api.bootstrap import build_blob_storage
+from mediease_api.config.settings import load_settings
 from mediease_api.ports.storage import BlobStoragePort
+from tests.conftest import SetEnv
 
 KEY = "rx/0190a8e2-0000-7000-8000-000000000001/0190a8e2-0000-7000-8000-000000000002/v1.pdf"
 BAD_KEYS = [
@@ -140,3 +143,13 @@ def test_s3_prefix_is_prepended() -> None:
             KEY, b"x", content_type="application/pdf"
         )
         assert client.get_object(Bucket="mediease-b", Key=f"staging/{KEY}")["Body"].read() == b"x"
+
+
+def test_the_composition_root_picks_the_configured_store(
+    set_env: SetEnv, valid_env: dict[str, str], tmp_path: Path
+) -> None:
+    set_env({**valid_env, "BLOB_LOCAL_DIR": str(tmp_path)})
+    assert isinstance(build_blob_storage(load_settings()), LocalBlobStorage)
+    set_env({**valid_env, "BLOB_STORAGE": "s3", "S3_BUCKET": "mediease-rx"})
+    with mock_aws():
+        assert isinstance(build_blob_storage(load_settings()), S3BlobStorage)

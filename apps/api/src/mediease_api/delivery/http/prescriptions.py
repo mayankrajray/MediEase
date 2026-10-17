@@ -8,9 +8,12 @@
 | ``DELETE /api/v1/prescriptions/{rx_id}`` | ``CLINICAL_WRITE`` (and the visit's doctor) |
 | ``POST /api/v1/prescriptions/{rx_id}/issue`` | ``CLINICAL_WRITE`` (and the visit's doctor) |
 | ``POST /api/v1/prescriptions/{rx_id}/revise`` | ``CLINICAL_WRITE`` (and the visit's doctor) |
+| ``GET /api/v1/prescriptions/{rx_id}/pdf`` | ``RX_PRINT`` (superseded: + ``CLINICAL_VIEW``) |
+| ``GET /api/v1/patients/{patient_id}/prescriptions`` | ``RX_PRINT`` (M4-P4; no content) |
 
-Front desk holds neither permission (spec §2). Clinical content: never logged or cached, and
-validation errors name the field and the rule, never the value (R17).
+Front desk holds neither clinical permission (spec §2); it may print (``RX_PRINT``, spec D6).
+Clinical content: never logged or cached, and validation errors name the field and the rule,
+never the value (R17).
 """
 
 from __future__ import annotations
@@ -22,6 +25,11 @@ from uuid import UUID
 from flask import Blueprint, Response, jsonify
 from pydantic import BaseModel, ConfigDict, Field
 
+from mediease_api.application.prescriptions.pdf import (
+    PDF_CONTENT_TYPE,
+    DownloadPrescriptionPdf,
+    ListPrintable,
+)
 from mediease_api.application.prescriptions.use_cases import (
     CreateDraft,
     DiscardDraft,
@@ -33,7 +41,7 @@ from mediease_api.application.prescriptions.use_cases import (
     RevisePrescription,
 )
 from mediease_api.delivery.http.access import clinic, current_context
-from mediease_api.delivery.http.bodies import prescription_body
+from mediease_api.delivery.http.bodies import items_body, prescription_body, printable_body
 from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.prescriptions import prescription as limits
@@ -58,6 +66,8 @@ class PrescriptionUseCases(Protocol):
     def discard_prescription(self) -> DiscardDraft: ...
     def issue_prescription(self) -> IssuePrescription: ...
     def revise_prescription(self) -> RevisePrescription: ...
+    def download_prescription_pdf(self) -> DownloadPrescriptionPdf: ...
+    def list_printable(self) -> ListPrintable: ...
 
 
 class PreparationRequest(BaseModel):
@@ -155,7 +165,7 @@ def create_prescriptions_blueprint(use_cases: PrescriptionUseCases) -> Blueprint
 
     @bp.after_request
     def _no_store(response: Response) -> Response:
-        response.headers["Cache-Control"] = "no-store"
+        response.headers.setdefault("Cache-Control", "no-store")
         return response
 
     @bp.post("/visits/<uuid:visit_id>/prescriptions")
@@ -209,5 +219,21 @@ def create_prescriptions_blueprint(use_cases: PrescriptionUseCases) -> Blueprint
     def revise_prescription(rx_id: UUID) -> tuple[Response, int]:
         view = use_cases.revise_prescription().execute(current_context(), rx_id=rx_id)
         return jsonify(prescription_body(view)), 201
+
+    @bp.get(f"{one}/pdf")
+    @clinic(Permission.RX_PRINT)
+    def prescription_pdf(rx_id: UUID) -> Response:
+        pdf = use_cases.download_prescription_pdf().execute(current_context(), rx_id=rx_id)
+        response = Response(pdf.data, mimetype=PDF_CONTENT_TYPE)
+        # Streamed to the authorised caller only; never cached, never a public or signed URL.
+        response.headers["Cache-Control"] = "private, no-store"
+        response.headers["Content-Disposition"] = f'inline; filename="{pdf.filename}"'
+        return response
+
+    @bp.get("/patients/<uuid:patient_id>/prescriptions")
+    @clinic(Permission.RX_PRINT)
+    def list_printable(patient_id: UUID) -> Response:
+        rows = use_cases.list_printable().execute(current_context(), patient_id=patient_id)
+        return jsonify(items_body(printable_body(r) for r in rows))
 
     return bp
