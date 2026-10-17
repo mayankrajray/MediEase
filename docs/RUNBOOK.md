@@ -104,6 +104,13 @@ to at least 32 characters, e.g. the value from `.env.example` or
    the clinic whether stale reminders should be cancelled.
 **Monthly drill:** restore the latest backup to a scratch instance and record the time taken.
 
+**Prescription PDFs (M4-P4).** They are not in the database but in the blob store (local: the
+compose volume `blobs`; production from M6: the S3-compatible bucket). Back it up with the
+database. A restored database pointing at a file that is missing is not fatal: the next download
+renders that version again from its frozen row under the same key (`rx.pdf_missing` in the logs),
+so a lost store costs re-renders, never content. Never delete or overwrite an object by hand; the
+store is write-once by design.
+
 ### 6. Dead or stuck jobs (M5)
 1. Ops console → Jobs → Dead, or DEBUGGING §5.6 queries.
 2. Read `last_error_code` in ERRORS.md and fix the cause first.

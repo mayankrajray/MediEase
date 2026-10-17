@@ -35,6 +35,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0009` | `visits` and append-only `visit_addenda` (trigger `VIS_ADDENDUM_APPEND_ONLY`) | M4-P1 |
 | `0010` | `prescriptions` and `prescription_items`, immutable once issued (triggers, `RX_NOT_DRAFT`) | M4-P2 |
 | `0011` | `rx_favourites`, `rx_templates`; `prescription_items.favourite_id`, `prescriptions.template_id`; the medicine-name prefix index | M4-P3 |
+| `0012` | `clinics.rx_paper_size` (`A5` for existing clinics; `A5` \| `A4`) | M4-P4 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -95,6 +96,7 @@ set by the application). *P1* = created by migration `0002`.
 | patient_code_prefix | text not null | *M2-P1* 2–4 upper-case letters (`ck_clinics_patient_code_prefix_format`), e.g. `ME` → `ME-0142`. Derived from the name at creation unless ops sets it; fixed once the clinic has patients |
 | next_patient_seq | integer not null default 1 | *M2-P1* Incremented under a row lock on the clinic (`ck_clinics_next_patient_seq_positive`); a code is never reused |
 | booking_mode | text not null default `'TOKENS'` | `SLOTS` \| `TOKENS` (M3-P1, migration `0007`); changing it is refused while a current block lacks the new mode's value (R19) |
+| rx_paper_size | text not null default `'A5'` | `A5` \| `A4` (M4-P4, migration `0012`): prescription paper, read when a version is first rendered |
 | plan | text not null default `PILOT` | Billing (post-pilot) — `PILOT` \| `STARTER` \| `CLINIC` |
 
 ### `users`
@@ -403,7 +405,7 @@ One version of a visit's prescription chain (spec R4-R6, R14; decisions 1A-6A).
 | issued_at | timestamptz null | |
 | doctor_snapshot | jsonb null | Name, qualification, registration number and council, specialty **as printed** |
 | clinic_snapshot | jsonb null | Name, address, city, state, pincode, phone **as printed** (5A) |
-| pdf_object_key | text null | Set once by P4 (ADR-0012) |
+| pdf_object_key | text null | `rx/{clinic_id}/{id}/v{version}.pdf`, set once at the first download (M4-P4, ADR-0012); the file is in blob storage |
 | link_delivery | text null | `PENDING` \| `NOT_CONSENTED` \| `SUPERSEDED` \| `SENT` \| `EXPIRED` (R14, R15; the last two are M5's) |
 | link_delivery_requested_at | timestamptz null | = `issued_at` when `PENDING`; M5 sends only within 24 h of it |
 | created_by | uuid FK users | |
@@ -413,7 +415,15 @@ CHECKs: an issued or superseded version has `issued_at`, `language`, both snapsh
 `link_delivery`; a draft has none of them and no PDF. **Immutable once issued** (trigger
 `prescriptions_immutable`, `RX_NOT_DRAFT`): only `status` ISSUED → SUPERSEDED, `pdf_object_key`
 once, `link_delivery` PENDING → SUPERSEDED/SENT/EXPIRED and `updated_at` may change; a non-draft
-cannot be deleted; `TRUNCATE` is refused. Index `(clinic_id, patient_id, issued_at DESC)`.
+cannot be deleted; `TRUNCATE` is refused. Index `(clinic_id, patient_id, issued_at DESC)`, which
+also serves front desk's list of a patient's printable versions (M4-P4).
+
+**Blob storage (M4-P4, ADR-0012).** Rendered PDFs are not in the database: they are objects in
+the blob store (`BLOB_STORAGE=local`: the compose volume `blobs` at `/var/lib/mediease/blobs`;
+`s3` from M6), written once under the key above and never replaced. A version's PDF uses the
+clinic's `rx_paper_size` at its first render; changing the setting never alters a stored file.
+Backups must include the blob store (RUNBOOK); a missing file is rendered again from the frozen
+row under the same key.
 
 ### `prescription_items` (migration `0010`, M4-P2)
 `id, clinic_id, prescription_id, position (UNIQUE per prescription, from 1), medicine_name

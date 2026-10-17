@@ -14,6 +14,19 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M4-P4 (#38): printable prescription PDFs, front desk printing included (FR-RX-04, 06; spec R8,
+  R16, R18, R20, D6, AC8, AC10; decisions 1A-5A; ADR-0012). `GET /api/v1/prescriptions/{id}/pdf`
+  renders a version on its first download, in-house with WeasyPrint and vendored Noto Sans and
+  Noto Sans Devanagari fonts, stores it write-once in blob storage (local `blobs` volume; an
+  S3-compatible adapter tested against an in-process fake, wired in M6) and serves the stored
+  file afterwards, so concurrent first downloads cause one render. The PDF has the letterhead,
+  the doctor's registration, the patient, every line with its instructions, advice, the follow-up
+  and the footer, on A5 or A4 (new clinic setting `rx_paper_size`). Labels and dosage phrases come
+  from an English and Hindi phrasebook (the Hindi to be reviewed by a clinician, L-07); the doctor's
+  text prints as written. New permission `RX_PRINT` (every role): front desk prints the current
+  version and finds it with `GET /api/v1/patients/{id}/prescriptions` (no content). New codes
+  `RX_NOT_ISSUED`, `RX_PDF_BUSY`, `RX_PDF_FAILED`; audit `prescription.pdf_downloaded`. The API
+  image gains Pango, HarfBuzz and fontconfig. Migration `0012`, contract 0.16.0.
 - M4-P3 (#38): favourites, templates and medicine suggestions (FR-RX-05, FR-RX-10; spec R7, AC5;
   decisions 1A-5A). Each doctor keeps favourites (one line with its usual instructions) and
   templates (lines, advice, a follow-up interval), named uniquely and saved with a `revision`.
@@ -273,6 +286,9 @@ first production release.
   that is still being set up. Web only; the API is unchanged.
 
 ### Fixed
+- Web (#38): the booking drawer's patient search lost the focus after the jsdom 30.1.2 bump, failing
+  CI's web job on `main` and the M4 PR. `Drawer` and `Dialog` now focus a field marked
+  `data-autofocus` once the dialog is open (DEBUG_JOURNAL 2026-10-18).
 - Web tests that checked where focus moved before the effect that moves it had run, which failed
   about one run in four under load (SignInForm, AcceptInviteForm, the Create clinic wizard).
 - CI (#21): the secrets scan failed on `main` after the M1 merge and on PR #22. The reviewed

@@ -31,6 +31,30 @@ Rules:
 
 ## Entries
 
+### 2026-10-18 — Hindi prescription PDFs lost spaces between some words
+
+- **Milestone / area:** M4-P4 / PDF renderer
+- **Symptom:** A rendered Hindi PDF, viewed as an image, showed "खोलने के7 दिन" and a footer
+  "MediEase द्वाराडिजिटल रूप सेतैयार". All tests passed: they read text back from the PDF, and
+  extraction does not show word gaps reliably.
+- **Impact:** Local only, before the phase was confirmed. Patients would have received Hindi
+  prescriptions with joined words.
+- **Reproduction:** Render a Hindi prescription and look at the page (not the extracted text).
+- **Investigation:** Rendering the same strings with each family order showed the body fault
+  only with Noto Sans (Latin) first. The footer still failed with Devanagari first; its text is a
+  CSS `content` string, and our escaping writes `\00094d`-style escapes with no terminator.
+- **Root cause:** Two: with Latin first, a space after a Devanagari vowel sign was laid out from
+  the Latin face and collapsed; and CSS consumes one whitespace after a hex escape, so the real
+  space after an escaped vowel sign vanished.
+- **Fix:** The print stylesheet puts the prescription's own script first; each CSS escape ends
+  with its own space. Commit: `ac4752b` — PR: #39
+- **Guard:** `tests/unit/adapters/test_pdf_renderer.py::test_css_strings_keep_the_space_after_an_escaped_character`
+  and `::test_the_prescriptions_own_script_takes_the_first_font`.
+- **Prevention / follow-up:** Look at a rendered page of every new layout in both languages;
+  text extraction is not proof of what a patient sees. The Hindi wording itself still awaits a
+  clinician's review (L-07).
+- **Search keywords:** Devanagari, Hindi, PDF, WeasyPrint, space, matra, CSS escape, font order
+
 ### 2026-10-18 — The booking drawer's patient search lost the focus in CI after a jsdom bump
 
 - **Milestone / area:** M3-P5 web (found on the M4 PR, #39) / modals, focus

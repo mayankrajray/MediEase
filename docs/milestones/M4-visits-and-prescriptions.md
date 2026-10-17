@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A) 18 Oct 2026, in implementation |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A) and implemented 18 Oct 2026, awaiting confirmation |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -16,7 +16,7 @@
 | P1 | Visit record, history, 24-hour lock and addenda | Below (done, confirmed) |
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (done, confirmed) |
 | P3 | Favourites, templates, clinic-history autocomplete | Below (done, confirmed) |
-| P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (approved 1A-5A) |
+| P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (implemented) |
 | P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | At its start |
 | P6 | Web consultation screen, keyboard-first Rx builder | At its start |
 
@@ -466,7 +466,7 @@ Taken while implementing:
 
 ## M4-P4 — PDF rendering and blob storage
 
-**Status: approved by the developer 18 Oct 2026 (1A-5A, every recommendation).** API, the API image and compose; printing from
+**Status: approved by the developer 18 Oct 2026 with 1A-5A (every recommendation); implemented the same day (result at the end of this section), awaiting the developer's confirmation.** API, the API image and compose; printing from
 the screens is P6. Covers FR-RX-04, FR-RX-06 (the printable PDF); spec R8, R16, R18, R20, D1, D3,
 D6; ADR-0012; AC8, AC10.
 
@@ -592,3 +592,32 @@ portrait by default; long prescriptions paginate (more than 15 lines is tested).
 | 3 | Paper size | **A** a clinic setting (A5 default, A4), applied when a version is first rendered and fixed in the file · **B** chosen per download | **A**: one stored file per version (render once); clinics print on one stationery |
 | 4 | Hindi wording | **A** ship the English and Hindi phrasebook now, the Hindi marked for review by a native-speaking clinician at a pilot clinic (L-07) before patients see it · **B** English-only PDFs until reviewed | **A**: R20 and AC10 need it, and the review fits L-07; wording is data, so a correction is a one-line change |
 | 5 | The S3-compatible adapter | **A** build and test it now (boto3, `moto` in-process), wired in M6 · **B** port and local adapter now, S3 in M6 | **A**: as ADR-0012 and your refinement ask ("ready for prod"); it is small and tested without the network |
+
+### Result (18 Oct 2026)
+
+API, image and compose, as designed. `make lint typecheck contract-check` clean; `make test`: API
+**1233 tests** at 98.81% (phrasebook completeness, the printed document, the WeasyPrint renderer
+with real fonts, both blob stores, migration `0012`, 11 over HTTP on PostgreSQL including AC8,
+the contract and the tenancy cases), web 346. `make up` rebuilt the API image (468 MB) and
+applied `0012`; `make seed` and `make smoke` passed. On the stack, all five verify steps passed:
+front desk listed the issued version without content, was refused the prescription itself (403),
+and downloaded its PDF (`private, no-store`; letterhead, registration, "Mix in 10 ml of water",
+footer, A5); the file was on the `blobs` volume and a second download gave the same bytes; a
+draft was 409 `RX_NOT_ISSUED`; a Hindi prescription printed Hindi labels and the free text as
+typed; after `rx_paper_size: A4` the earlier PDF stayed A5 and a new one was A4.
+
+Taken while implementing:
+- PDF text is read back with pdfium (`pypdfium2`); `pypdf` cannot decode WeasyPrint's font
+  encoding. pdfium still reorders some Devanagari (the pre-base vowel sign) although the page is
+  drawn correctly, so the AC10 test checks the HTML exactly and the PDF for strings that read back
+  cleanly. Pages were also checked by eye.
+- Latin and Devanagari are two font families, the prescription's own script first. One family
+  with `unicode-range` drew conjuncts with the wrong glyphs, and Latin first collapsed spaces
+  inside Hindi runs; the footer also lost spaces to CSS escapes (`ac4752b`, DEBUG_JOURNAL).
+- Two renders of one document read the same but are not always byte-identical (font naming
+  inside WeasyPrint), so identical downloads rest on render-once and the stored file, as designed.
+- A stored key whose file is missing is rendered again under the lock with the same key and
+  logged (`rx.pdf_missing`), so a lost volume heals on the next download.
+- Listing printable versions is not audited (no clinical content is read); each download is.
+- WSL lacks `libharfbuzz-subset0`, so local renders use fontTools for font subsetting; the image
+  and CI install it.

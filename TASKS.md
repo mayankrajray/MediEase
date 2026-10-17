@@ -12,13 +12,13 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M4 — Visits and digital prescriptions** (issue #38, branch `m4/38-visits-and-prescriptions`, one PR for the milestone). M3 merged in PR #37 on 17 Oct 2026 |
-| Active phase | **M4-P4 — PDF rendering and blob storage (ADR-0012):** design proposed 18 Oct 2026, awaiting the developer's approval (decisions 1–5). M4-P1 to P3 done and confirmed; draft PR #39 |
+| Active phase | **M4-P4 — PDF rendering and blob storage (ADR-0012):** approved by the developer 18 Oct 2026 (1A–5A) and implemented the same day; awaiting the developer's confirmation. M4-P1 to P3 done and confirmed; draft PR #39 |
 | Design notes | `docs/milestones/M4-visits-and-prescriptions.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M4 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
 | Open decisions | None open; front desk printing answered by the developer 18 Oct 2026 (M4-P4 design). Follow-up outside M4: #30 (an import over 2 MB through the web origin can answer 500 instead of 413) |
-| Last updated | 17 Oct 2026 |
+| Last updated | 18 Oct 2026 |
 
 
 ---
