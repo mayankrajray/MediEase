@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A), implemented and accepted by the developer the same day; M3-P3 designed, approved (recommended options) and implemented the same day, awaiting the developer's confirmation |
-| Spec | `docs/specs/appointments-and-queue.md` (Approved 2026-10-17, D1–D22) |
+| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A), implemented and accepted by the developer the same day; M3-P3 implemented and confirmed by the developer the same day; M3-P4 approved (1A–4A) and in implementation |
+| Spec | `docs/specs/appointments-and-queue.md` (Approved 2026-10-17, D1–D26) |
 | Covers | FR-APT-01..07, FR-QUE-01..05 |
 | Issue / branch / PR | #36 · `m3/36-appointments-and-queue` · one PR for the whole milestone (ADR-0011) |
 | Exit criterion | Front desk books in ≤ 3 interactions; the concurrent double-booking test passes; the queue refreshes on every open screen within 5 s |
@@ -14,8 +14,8 @@
 |---|---|---|
 | P1 | Doctor schedules, exceptions, sessions generated per clinic-local date; slot and token mode | Below |
 | P2 | Booking, reschedule, cancel under a session row lock | Below (done) |
-| P3 | Queue state machine, transitions, walk-ins | Below (implemented) |
-| P4 | Live queue (ETag polling) | Designed at its start |
+| P3 | Queue state machine, transitions, walk-ins | Below (done) |
+| P4 | Live queue (ETag polling) | Below (approved) |
 | P5 | Web: queue board, booking flow, schedule settings | Designed at its start |
 
 ---
@@ -455,3 +455,90 @@ Taken while implementing:
 - A walk-in records two history rows (`→ BOOKED`, `BOOKED → ARRIVED`) and one `appointment.booked`
   audit row with source `WALK_IN`.
 - The session list and the queue share one generate-and-list step (`sessions_for_date`).
+
+
+---
+
+## M3-P4 — Live queue (ETag polling)
+
+**Status: approved by the developer 17 Oct 2026 with 1A–4A (spec D23–D26).** The recommended
+options, marked **(rec.)**, are the ones chosen. Covers FR-QUE-03 (API side and the client polling module); spec R12. AC4 (two browsers
+within 5 s) is proved end to end by P5's Playwright journey on the queue board.
+
+### Concepts
+
+1. **Poll cheaply, not push.** Every open queue screen asks `GET /api/v1/queue` every 5 seconds
+   with `If-None-Match: <last ETag>`. Unchanged → `304 Not Modified` with no body; changed → 200
+   with the queue and a new `ETag`. No websockets, no new infrastructure (R12).
+2. **A strong ETag means byte-identical.** The tag must change whenever any byte of the body would,
+   including a patient's corrected name and the minute-by-minute `wait_minutes`. Otherwise a
+   screen would keep a stale row for ever.
+3. **Same filters, same tag.** The tag covers the response for one `date`, `doctor_id` and
+   `include_cancelled`, so two screens on different doctors never confuse each other's tags.
+4. **Privacy stays as it is.** The queue holds names, so it remains `Cache-Control: no-store`:
+   browsers and proxies keep no copy. The client holds the last body in memory and sends the tag
+   itself.
+
+### Decisions for you
+
+| # | Question | Options |
+|---|---|---|
+| 1 | How the ETag is computed | **A (rec.)** SHA-256 of the serialised JSON body (first 32 hex characters, quoted). Correct by construction: anything in the body is in the tag. The queries still run on every poll (a few indexed reads per screen every 5 s, measured in the tests). **B** A version tuple from `max(updated_at)` and counts of sessions, appointments and patients: cheaper, but every new field must be remembered in the tuple, and `wait_minutes` would need a minute bucket. |
+| 2 | `wait_minutes` changing every minute | **A (rec.)** Keep it in the body: an arrived patient makes the tag change at most once a minute, so a screen gets at most one 200 a minute while patients wait. **B** Drop it and let the screen count from `arrived_at` (a contract change). |
+| 3 | Where the polling lives on the web side | **A (rec.)** A small `lib/api/poll.ts` (`pollQueue`) and a `useQueue` hook in `features/queue/`: polls every 5 s with `If-None-Match`, keeps the last body on 304, pauses while the tab is hidden and polls at once when it comes back, backs off to 30 s after errors. Unit-tested with fake timers; P5 builds the board on it. **B** Leave all web work to P5. |
+| 4 | Other polled reads | **A (rec.)** Only the queue in M3. `GET /sessions` stays without a tag. **B** The same ETag on `GET /sessions`. |
+
+Fixed rather than asked:
+- `If-None-Match: *` and lists of tags are honoured as HTTP says; a weak tag (`W/"..."`) never
+  matches, since the tag is strong.
+- The web proxy (`next.config` rewrites) passes `ETag` and `If-None-Match` through; P4 checks this
+  through the web origin in `make smoke`.
+
+### API (contract 0.12.0)
+
+| Method | Path | Change |
+|---|---|---|
+| GET | `/api/v1/queue` | Adds `ETag` to 200; takes `If-None-Match`; answers `304` with `ETag`, `Cache-Control: no-store`, `X-Request-ID` and no body when it matches |
+
+No new error codes, no migration, no new permission.
+
+### Files
+
+| Layer | Files |
+|---|---|
+| Delivery | `delivery/http/etag.py` (strong tag of a body, `If-None-Match` matching), `delivery/http/appointments.py` (`get_queue`) |
+| Contract / docs | `openapi.yaml` 0.12.0 + web types; `API.md` (polling), `ARCHITECTURE.md` (request flow note), `DEBUGGING.md` ("the queue does not refresh"), CHANGELOG |
+| Web (3A) | `lib/api/poll.ts`, `features/queue/useQueue.ts`, their tests |
+| Smoke | `scripts/smoke.sh`: a conditional `GET /api/v1/queue` through the web origin returns 304 |
+
+### Tests
+
+- **Unit:** tag stability (same body, same tag), quoting, `If-None-Match` parsing (`*`, lists, weak
+  tags never match).
+- **HTTP on PostgreSQL:** 200 with `ETag`; the same request with it → 304, empty body, headers kept;
+  the tag changes after a booking, a transition, a cancel, a patient's name correction and, for an
+  arrived patient, a minute later (clock moved); different filters give different tags; another
+  clinic's tag never matches (it is computed from this clinic's body).
+- **Contract:** 200 and 304 against `openapi.yaml`.
+- **Web:** polling cadence, 304 keeps the data, hidden tab pauses, error back-off.
+
+### Verify
+
+```bash
+make up && make seed
+# as desk@sample-clinic.example:
+#   curl -i .../api/v1/queue                                  -> 200, ETag: "…"
+#   curl -i -H 'If-None-Match: "…"' .../api/v1/queue          -> 304, no body
+#   add a walk-in, then the same conditional request          -> 200, a new ETag
+#   the same through http://localhost:3000 (the web origin)   -> 304 too
+make lint typecheck test && make smoke
+```
+
+### Risks
+
+| Risk | Mitigation |
+|---|---|
+| Polling load | 5 s per open screen; a 304 is a few indexed reads and no body; the tests count queries per poll |
+| A stale screen | The tag is the body's hash, so any visible change changes it |
+| The proxy dropping the headers | `make smoke` checks a 304 through the web origin |
+| Names in a cache | `no-store` stays; the client keeps the body in memory only |
