@@ -31,6 +31,74 @@ Rules:
 
 ## Entries
 
+### 2026-10-03 — Secrets scan failed on `main` after the M1 rebase merge
+
+- **Milestone / area:** M1 → M2 / CI, gitleaks
+- **Symptom:** The CI "Secrets scan" job (`gitleaks (full history)`) reported `leaks found: 1` on
+  the `main` push after PR #20 merged, on the first M2 pushes (PR #22), and later on every
+  Dependabot PR based on `main`.
+- **Impact:** CI only; no secret involved. `main` and Dependabot PRs show a red check.
+- **Reproduction:** On a clone of `main`, run the pinned image from `ci.yml`:
+  `docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd… git /repo --redact --no-banner --exit-code 1`.
+- **Investigation:** The finding is
+  `1324cff…:apps/api/tests/conftest.py:generic-api-key:230`, the synthetic test password reviewed
+  as a false positive in M1-P2 (`8a270d8`). `.gitleaksignore` on `main` names the same line at
+  `244905a`, its SHA on the M1 branch.
+- **Root cause:** gitleaks fingerprints include the commit SHA. Rebase-merging PR #20 gave the
+  commit a new SHA on `main` (`1324cff`), so the reviewed fingerprint stopped matching.
+- **Fix:** `b994ed3` adds the `1324cff` fingerprint (and keeps the old one). It is on
+  `m2/21-patients` and reaches `main` with PR #22. Verified 17 Oct 2026 with the pinned image:
+  `main` alone reports 1 leak; `main` with the M2 `.gitleaksignore` reports none.
+- **Guard:** the CI Secrets scan job.
+- **Prevention / follow-up:** For a new false positive, prefer an inline `gitleaks:allow` (it
+  survives rebases) over a SHA fingerprint; after a rebase merge, re-run the scan on `main` and
+  re-point any branch fingerprints. The `1324cff` entry is now stable because that commit is on
+  `main`. Never widen the gitleaks rules instead.
+- **Search keywords:** gitleaks, secrets scan, leaks found, fingerprint, rebase merge, SHA,
+  gitleaksignore, Dependabot red
+
+### 2026-10-03 — An API test run hung for half an hour (consent race test)
+
+- **Milestone / area:** M2-P3 / tests, concurrency
+- **Symptom:** `make test-api` stopped making progress and ran for about 30 minutes with no output.
+- **Impact:** Local only, during M2-P3.
+- **Reproduction:** A two-thread race test whose second thread is started only after the first
+  finishes, with both waiting on a `threading.Barrier(2)` without a timeout.
+- **Investigation:** The hang was in the new opt-out-versus-consent race test
+  (`tests/integration/test_patient_consent_http.py`): the first thread waited at the barrier for a
+  second thread that was never started until the first returned.
+- **Root cause:** The test started its racing threads one after the other instead of together,
+  and nothing bounded a wait in a test.
+- **Fix:** The race test starts both threads before joining them (shipped with M2-P3, `958945b`).
+  `3cf05cc` gives the barriers in both race tests a timeout, adds `pytest-timeout==2.4.0`
+  (dev only, `timeout = 120`, `timeout_method = "thread"`, prints every thread's stack) and a
+  `timeout-minutes` limit (5–20 minutes) to every CI job.
+- **Guard:** `pytest-timeout` in `apps/api/pyproject.toml`; `timeout-minutes` in `ci.yml`.
+- **Prevention / follow-up:** Race tests start every thread before any of them waits, and every
+  barrier, join or queue wait in a test has a timeout.
+- **Search keywords:** hang, hung, stuck, pytest, barrier, thread, race, timeout, deadlock
+
+### 2026-10-03 — Accepting an invitation could replace an existing account's password (R13)
+
+- **Milestone / area:** M1-P5 (found while building M1-P6) / invitations, security
+- **Symptom:** Building the invitation page showed that accepting an invitation always set the
+  password it was given, even when the invited email or phone already had an account.
+- **Impact:** Local only, found before M1 merged. Whoever held an invite link for an existing
+  account could take it over, including its memberships in other clinics.
+- **Reproduction:** A user with a password in clinic A is invited to clinic B; accepting B's link
+  with any new password succeeded and replaced theirs.
+- **Investigation:** The accept use case had one path for new and existing accounts.
+- **Root cause:** Acceptance treated the invitation token as proof of the account, but it only
+  proves access to the link.
+- **Fix:** For an existing account, acceptance needs that account's current password, never
+  changes it, and shares the sign-in lockout (spec identity-and-tenancy R13, contract 0.5.1).
+  Commits `047c0bb` (API) and `b5f2e9d` (web page asks for the current password).
+- **Guard:** `tests/integration/test_onboarding_http.py::test_r13_the_invite_link_alone_cannot_take_over_an_existing_account`
+  and the other `test_r13_*` tests there; `AcceptInviteForm.test.tsx`.
+- **Prevention / follow-up:** A token that grants access to an account is reviewed for what it
+  proves (the link) versus what it unlocks (the account).
+- **Search keywords:** invitation, accept, takeover, password overwritten, existing account, R13
+
 ### 2026-10-02 — `/ready` took 4 s to report a stopped database (`READY_DB_UNAVAILABLE`)
 
 - **Milestone / area:** M0-P3 / readiness, compose networking

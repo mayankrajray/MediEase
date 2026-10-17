@@ -1,28 +1,28 @@
-# NEXT_STEPS_PLAN.md — Approved plan for M1 (Identity, tenancy and audit)
+# NEXT_STEPS_PLAN.md — Approved plan for M2 (Patients)
 
 | Field | Value |
 |---|---|
-| Status | M1 spec and design approved by the developer on 2 Oct 2026 |
-| Scope | Milestone 1 in phase detail; M2–M6 as a roadmap only. The M0 plan is in git history (closed 2 Oct 2026, PRs #5–#15) |
+| Status | M2 spec and design approved by the developer on 3 Oct 2026 |
+| Scope | Milestone 2 in phase detail; M3–M6 as a roadmap only. The M0 plan is in git history (closed 2 Oct 2026, PRs #5–#15); the M1 plan is in git history (merged 3 Oct 2026, PR #20) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
-| Design notes | `docs/milestones/M1-identity-tenancy-audit.md` |
+| Design notes | `docs/milestones/M2-patients.md` |
 | Workflow rules | `CLAUDE.md` → "Git Workflow"; `CONTRIBUTING.md`; ADR-0010, ADR-0011 |
 
 ---
 
 ## 1. Problem statement
 
-M0 delivered the foundation (typed settings, logging, `/health`, `/ready`, migrations, web shell,
-hardened containers, CI gates) but no product behaviour. Every later milestone needs to know *who*
-is acting and *for which clinic*, and must be unable to leak one clinic's data to another. M1
-builds identity, tenancy and audit (PRD §8.1, FR-AUD) so M2 can register patients safely.
+M0 delivered the foundation, M1 the identity and tenancy layer. M2 builds the patient registry
+(PRD §4, FR-PAT): register, find and update patients; surface duplicate phones instead of
+silently creating a second record; record consent separately from registration; and let ops
+import a clinic's existing list. Without M2, M3 appointments have nobody to book for.
 
 ## 2. Requirements
 
-- Spec: `docs/specs/identity-and-tenancy.md` (Approved). Its acceptance criteria AC1–AC6 become
-  tests in the phase that implements them.
-- **M1 exit:** an ops user onboards a clinic with an owner, doctor and front desk; each signs in
-  and sees only their clinic; the tenancy test suite proves isolation.
+- Spec: `docs/specs/patients.md` (Approved 3 Oct 2026 with decisions D1–D6). Its acceptance
+  criteria AC1–AC7 become tests in the phase that implements them.
+- **M2 exit:** register, find and update patients; a shared phone is surfaced, not silently
+  duplicated; lookup over 10,000 patients has p95 < 500 ms.
 - Follow `CLAUDE.md`: one phase at a time, design approved before code, `make lint typecheck test`
   green and the developer's confirmation before the next phase.
 - NFR-14 from M1-P1: ≥ 80% coverage on `domain/` + `application/` (the ≥ 90% whole-package gate
@@ -33,15 +33,15 @@ builds identity, tenancy and audit (PRD §8.1, FR-AUD) so M2 can register patien
 ## 3. Delivery workflow (ADR-0011)
 
 ```
-Milestone issue #19 → branch m1/19-identity-tenancy-audit (from origin/main)
+Milestone issue #21 → branch m2/21-patients (from origin/main)
   → per phase: design → approval → logical commits → make lint typecheck test
     → developer confirms → push (with permission) to the same branch
-  → one PR for the milestone: draft until P6 is done and the exit criteria hold
+  → one PR for the milestone: draft until P5 is done and the exit criteria hold
   → CI green → review + CODEOWNERS approval → maintainer rebase-merges
 ```
 
-- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #19`; the last
-  commit of M1 carries `Closes #19`.
+- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #21`; the last
+  commit of M2 carries `Closes #21`.
 - Agents never push to `main`, push to the milestone branch only with permission, and never merge.
 
 ### 3.1 Open prerequisites
@@ -50,27 +50,23 @@ Milestone issue #19 → branch m1/19-identity-tenancy-audit (from origin/main)
 |---|---|---|
 | W-5 | Branch protection / CODEOWNERS enforcement on `main` | **Open:** not available for a private repo on GitHub Free (HTTP 403). Needs GitHub Pro/Team or a public repo |
 | — | `@akhtarjamal10` write access, so their CODEOWNERS entry takes effect | Open |
-| — | Dependabot PRs #16–#18 (web toolchain majors) | Open; outside M1, reviewed separately |
+| — | Dependabot PRs #18 (TypeScript 7) and #28 (ESLint 10) | **Closed / ignored:** majors ignored in `.github/dependabot.yml` until `openapi-typescript` / `eslint-config-next` support them; the others are green once PR #22 lands the gitleaks fingerprint on main |
 
 ## 4. Phase breakdown
 
 Details, file lists and test plans per phase are in the design notes. Each phase is designed with
-`/plan-phase` at its start; only P1 is designed in full now.
+`/plan-phase` at its start; P1–P4 are implemented and confirmed, P5 is designed at its start.
 
 | Phase | Objective | Requirements | Verify |
 |---|---|---|---|
-| P1 | Domain model (Clinic, User, ClinicMembership, Doctor, Role), migration `0002`, tenancy-scoped repository base, unit of work, UUIDv7 IDs, coverage gate on `domain/` + `application/` | FR-ORG-01..03 (model), NFR-08, NFR-14; spec I1–I3, R9 (domain rule) | `make lint typecheck test`; `make up` applies `0002`; tenancy tests prove scoped repositories cannot reach another clinic |
-| P2 | Argon2id hashing, sign-in (email or phone), refresh rotation with family revocation, sign-out, lockout | FR-AUTH-01, 02, 04; R1–R5; AC1, AC2 | Sign-in/refresh/sign-out via `curl`; lockout after 5 failures returns 423 |
-| P3 | Access policy on every route (default deny) → `RequestContext`; session, user and membership re-checked per request; clinic resolution; permission matrix; `GET /api/v1/me` and read-only clinic endpoints (clinic, doctors, staff) | FR-AUTH-03, FR-ORG-04 (next request), NFR-08; R6–R8, R10; AC3, AC4 | Cross-clinic request → 404; deactivated user → `AUTH_ACCOUNT_DISABLED`; front desk on staff list → `PERM_DENIED` |
-| P4 | Append-only audit events in the same transaction; database-enforced immutability (triggers, with a least-privilege role in M6-P1); `v_clinic_activity`; the audited staff role change | FR-AUD-01, 02; R11; AC5, AC6 | Role change writes one `staff.role_changed`; `UPDATE audit_events` refused |
-| P5 | Ops onboarding API (clinic → doctors → owner invite), single-use staff invites + acceptance (so every role can sign in), owner staff and doctor management, clinic settings, onboarding checklist | FR-OPS-01, 04, FR-ORG-01, 02, 04; R9, R12 | Onboard a clinic end to end through the API; the invited owner sets a password and signs in; last owner cannot be demoted or deactivated |
-| P6 | Web: sign-in, clinic switcher, empty dashboard shell | FR-AUTH-01, R6; spec §6 | Sign in as each role in the browser; switcher only for multi-clinic users |
-| P7 | Web: ops clinics list and the Create clinic wizard (added 3 Oct 2026) | FR-OPS-01, 04, FR-ORG-01, 02, 04; spec §6 | An ops user creates a clinic, adds a doctor and invites the owner from the browser; the owner accepts and the clinic turns Active |
+| P1 | Patient domain (phone normalisation, guardian model, age, consent, clinic-scoped code) + migration `0006` + indexes + tenancy-scoped repository + the 10,000-patient lookup test | FR-PAT-01, 03, 04, 05, 06; spec I1–I4, R1 (domain), R3, R4, R5 (classification), R9; AC4 | `make lint typecheck test` (lookup test p95 < 500 ms); `make up` applies `0006`; tenancy tests prove scoped repositories cannot reach another clinic |
+| P2 | Register / edit / lookup endpoints; the duplicate-phone flow; `patient_code_prefix` on clinic creation | FR-PAT-01, 02, 03, 04; spec R1–R3, R5, R7, R9, R10; AC1, AC2, AC3, AC6, AC7 | Register by hand, lookup by phone and code, duplicate 409 with candidates, `confirm_new` takes the next code; two-thread race and audit rows with no names or phones |
+| P3 | Consent, language preference, opt-out and opt-in | FR-PAT-05, 06; spec R6; AC5 | Consent → opt-out → consent refused → opt-in; the audit rows with flags and `given_by`; idempotent opt-out; the race test |
+| P4 | Ops CSV import with a dry-run report | FR-PAT-08, FR-OPS-02; spec R8 | Dry run, commit, re-run imports nothing; 5,000 rows well inside the limit; no names or phones in the report, logs or audit; ops only |
+| P5 | Web: global search, registration drawer, profile | FR-PAT-01, 02, 03, 04, 05, 06; spec §6 | To be designed |
 
-## 5. Roadmap after M1 (one line each)
+## 5. Roadmap after M2 (one line each)
 
-- **M2 Patients** — registration, duplicate-phone flow, consent, CSV import, search
-  (p95 < 500 ms at 10k patients). Needs `patients.md` `Approved`.
 - **M3 Appointments and queue** — schedules, concurrency-safe booking, queue state machine,
   ETag polling.
 - **M4 Visits and prescriptions** — immutable versioned Rx, PDF, signed patient links, bilingual

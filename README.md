@@ -4,9 +4,10 @@ A WhatsApp-native clinic operating system for independent clinics with one to fo
 India: booking, a live daily queue, a searchable patient record, a digital prescription patients
 can re-read, and follow-up reminders that actually arrive.
 
-> **Status:** Milestone 0 (Foundation) complete; Milestone 1 (Identity, tenancy and audit) in
-> progress — domain model, sign-in, authorisation on every route, the audit log, ops onboarding
-> and the web sign-in with clinic switcher are in; awaiting review. See [TASKS.md](TASKS.md).
+> **Status:** Milestone 0 (Foundation) and Milestone 1 (Identity, tenancy and audit) complete (M1
+> merged in PR #20); Milestone 2 (Patients) in progress — patient registration, lookup,
+> duplicate-phone flow, consent and opt-out, and ops CSV import are in the API; the web screens
+> (M2-P5) are next. See [TASKS.md](TASKS.md).
 
 ---
 
