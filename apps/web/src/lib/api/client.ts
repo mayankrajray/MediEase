@@ -4,7 +4,7 @@
  * - Types come from `schema.d.ts`, generated from contracts/openapi.yaml.
  * - Every request carries an `X-Request-ID`, so a problem a user reports with
  *   "Ref: <id>" can be found in the API logs (NFR-12).
- * - Unsafe requests (POST) carry `X-CSRF-Token`, copied from the readable
+ * - Unsafe requests (POST, PUT, PATCH) carry `X-CSRF-Token`, copied from the readable
  *   `me_csrf` cookie (double-submit, ADR-0006). The session tokens themselves
  *   are HttpOnly: this code never sees them.
  * - A clinic request can name its clinic (`clinicId` -> `X-Clinic-ID`, spec R6).
@@ -28,7 +28,7 @@ export const WEB_API_BAD_RESPONSE = "WEB_API_BAD_RESPONSE";
 const DEFAULT_TIMEOUT_MS = 5_000;
 
 type ErrorBody = components["schemas"]["Error"];
-type Method = "get" | "post";
+type Method = "get" | "post" | "put" | "patch";
 
 type PathWith<M extends Method> = {
   [P in keyof paths]: paths[P] extends { readonly [K in M]: object } ? P : never;
@@ -38,6 +38,10 @@ type PathWith<M extends Method> = {
 export type GetPath = PathWith<"get">;
 /** Paths in the contract that support POST. */
 export type PostPath = PathWith<"post">;
+/** Paths in the contract that support PUT. */
+export type PutPath = PathWith<"put">;
+/** Paths in the contract that support PATCH. */
+export type PatchPath = PathWith<"patch">;
 
 type JsonOf<R> = R extends { readonly content: { readonly "application/json": infer B } } ? B : never;
 
@@ -70,6 +74,14 @@ export type GetResponse<P extends GetPath> = SuccessBody<OperationOf<P, "get">>;
 export type PostResponse<P extends PostPath> = SuccessBody<OperationOf<P, "post">>;
 /** The JSON request body for `POST path`; `undefined` when the operation takes none. */
 export type PostBody<P extends PostPath> = JsonRequestBody<OperationOf<P, "post">>;
+/** The success body for `PUT path`. */
+export type PutResponse<P extends PutPath> = SuccessBody<OperationOf<P, "put">>;
+/** The JSON request body for `PUT path`. */
+export type PutBody<P extends PutPath> = JsonRequestBody<OperationOf<P, "put">>;
+/** The success body for `PATCH path`. */
+export type PatchResponse<P extends PatchPath> = SuccessBody<OperationOf<P, "patch">>;
+/** The JSON request body for `PATCH path`. */
+export type PatchBody<P extends PatchPath> = JsonRequestBody<OperationOf<P, "patch">>;
 
 export interface ApiResult<T> {
   readonly data: T;
@@ -86,6 +98,10 @@ export interface RequestOptions {
   readonly clinicId?: string;
   /** Values for `{placeholders}` in the path, e.g. `{ token }`. Each is URL-encoded. */
   readonly pathParams?: Readonly<Record<string, string>>;
+  /** Query string values, e.g. `{ q }`. Each is URL-encoded; undefined values are left out. */
+  readonly query?: Readonly<Record<string, string | undefined>>;
+  /** Cancels the request, e.g. when a newer search replaces it. Combined with the timeout. */
+  readonly signal?: AbortSignal;
   /** Injected in tests; defaults to the global fetch. */
   readonly fetchImpl?: typeof fetch;
 }
@@ -145,8 +161,24 @@ export async function apiPost<P extends PostPath>(
   return (await send("POST", path, body, options)) as ApiResult<PostResponse<P>>;
 }
 
+export async function apiPut<P extends PutPath>(
+  path: P,
+  body: PutBody<P>,
+  options: RequestOptions = {},
+): Promise<ApiResult<PutResponse<P>>> {
+  return (await send("PUT", path, body, options)) as ApiResult<PutResponse<P>>;
+}
+
+export async function apiPatch<P extends PatchPath>(
+  path: P,
+  body: PatchBody<P>,
+  options: RequestOptions = {},
+): Promise<ApiResult<PatchResponse<P>>> {
+  return (await send("PATCH", path, body, options)) as ApiResult<PatchResponse<P>>;
+}
+
 async function send(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PUT" | "PATCH",
   template: string,
   body: unknown,
   options: RequestOptions,
@@ -156,7 +188,7 @@ async function send(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   // Outside the try below: a configuration or programming error must surface as
   // itself, not be mistaken for the API being unreachable.
-  const url = `${apiBaseUrl()}${fillPath(template, options.pathParams)}`;
+  const url = `${apiBaseUrl()}${fillPath(template, options.pathParams)}${queryString(options.query)}`;
 
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -165,7 +197,7 @@ async function send(
   if (options.clinicId !== undefined) {
     headers[CLINIC_HEADER] = options.clinicId;
   }
-  if (method === "POST") {
+  if (method !== "GET") {
     const csrf = readCsrfToken();
     if (csrf !== undefined) {
       headers[CSRF_HEADER] = csrf;
@@ -185,9 +217,16 @@ async function send(
       ...(payload === undefined ? {} : { body: payload }),
       credentials: "same-origin",
       cache: "no-store",
-      signal: AbortSignal.timeout(timeoutMs),
+      signal:
+        options.signal === undefined
+          ? AbortSignal.timeout(timeoutMs)
+          : AbortSignal.any([options.signal, AbortSignal.timeout(timeoutMs)]),
     });
   } catch (cause) {
+    // A caller that cancelled its own request gets the abort back as is, not "unreachable".
+    if (options.signal?.aborted === true) {
+      throw cause;
+    }
     const reason = isTimeout(cause) ? "timeout" : "network";
     throw new ApiError(WEB_API_UNREACHABLE, "The API could not be reached.", 0, sentRequestId, {
       reason,
@@ -232,6 +271,16 @@ function fillPath(template: string, params: RequestOptions["pathParams"]): strin
     return encodeURIComponent(value);
   });
   return path;
+}
+
+function queryString(query: RequestOptions["query"]): string {
+  if (query === undefined) return "";
+  const params = new URLSearchParams();
+  for (const [name, value] of Object.entries(query)) {
+    if (value !== undefined) params.set(name, value);
+  }
+  const text = params.toString();
+  return text === "" ? "" : `?${text}`;
 }
 
 async function readJson(response: Response): Promise<unknown> {
