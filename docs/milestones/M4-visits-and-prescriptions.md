@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; the M4-P1 design approved the same day with 1A–6A, in implementation |
+| Status | In progress — M4 opened 17 Oct 2026; the M4-P1 design approved the same day with 1A–6A and implemented; awaiting the developer's confirmation |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -13,7 +13,7 @@
 
 | Phase | Builds | Design |
 |---|---|---|
-| P1 | Visit record, history, 24-hour lock and addenda | Below (approved) |
+| P1 | Visit record, history, 24-hour lock and addenda | Below (implemented) |
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | At its start |
 | P3 | Favourites, templates, clinic-history autocomplete | At its start |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | At its start |
@@ -24,7 +24,7 @@
 
 ## M4-P1 — Visit record, history, 24-hour lock and addenda
 
-**Status: approved by the developer 17 Oct 2026 with 1A–6A (every recommendation); in implementation.** API only; the consultation screen is P6.
+**Status: approved by the developer 17 Oct 2026 with 1A–6A (every recommendation); implemented the same day (result at the end of this section), awaiting the developer's confirmation.** API only; the consultation screen is P6.
 Covers FR-VIS-01, 02, 03, 05; spec R1–R3, R16, R17; AC6, AC7 (for visits), AC9.
 
 ### Concepts
@@ -143,3 +143,30 @@ doctor's visit; `VIS_LOCKED` and `VIS_ALREADY_EXISTS` already exist there.
 | 4 | Two tabs editing one visit | **A** `revision` with `409 VIS_STALE` · **B** last write wins | **A**: a lost clinical edit is silent and serious |
 | 5 | Walk-ins (FR-VIS-01 "or directly") | **A** a walk-in goes through M3's *Add walk-in* first, so every visit has an appointment (`appointment_id not null`) · **B** allow visits with no appointment | **A**: walk-in already takes one interaction and puts the patient on the board; one path for history, PDFs and analytics |
 | 6 | Database guard for the lock | **A** application only (domain + clock); trigger for addenda only · **B** also a trigger refusing clinical `UPDATE` after `locked_at` | **A**: the trigger would compare against the database clock, which the tests' fake clock cannot move; P2's prescription trigger has no such dependency (status, not time) |
+
+### Result (17 Oct 2026)
+
+API only, as designed. `make lint typecheck contract-check` clean (Ruff, import-linter 4/4,
+mypy, ESLint, tsc, generated types current); `make test`: API **1078 tests** at 99.05% (41 more
+than M3: domain rules, visits over HTTP on PostgreSQL, the contract, repository and HTTP tenancy
+cases for the new routes, the migration), web 344. `make up` applied
+`0009`; `make seed` and `make smoke` passed. The verify steps on the stack, as the seeded
+doctor and front desk: start 201 and again 409 `VIS_ALREADY_EXISTS` with the same `visit_id`;
+`PATCH` 200 (revision 2) and a stale one 409 `VIS_STALE`; front desk 403 `PERM_DENIED`; complete
+200 with the appointment `COMPLETED` and `locked_at = completed_at + 24 h`; after moving the
+completion 25 hours back, `PATCH` 409 `VIS_LOCKED` and an addendum 201; `UPDATE visit_addenda`
+refused with `VIS_ADDENDUM_APPEND_ONLY`; the visit's audit rows `visit.started, visit.updated,
+visit.completed, visit.viewed, visit.addendum_added` with no clinical text in any metadata.
+
+Taken while implementing:
+- `VIS_NOT_YOURS` is checked before "already exists", so starting someone else's visit does not
+  reveal that one exists. A caller without an active doctor profile is never a visit's doctor.
+- Completing on a later day than the session (D19) completes the visit but leaves the
+  appointment where it is; the queue cannot move outside the session's day.
+- Clinical cross-clinic cases run as each clinic's doctor (an owner would be refused with 403
+  before the scope is reached); `GET /visits/{id}` and the history run as the owner, who reads.
+- The history list pages by `before=<visit id>` (keyset on `started_at, id`), `next_before` in
+  the response.
+- The test reset lifts the addenda trigger the same deliberate way as `audit_events`.
+- Not done here: the consultation screen and a visits section on the patient profile (P6);
+  prescriptions in the history (P2).
