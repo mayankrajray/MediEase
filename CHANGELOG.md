@@ -14,6 +14,7 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M3 (#36) complete: appointments and the daily queue, P1-P5 below, merged in PR #37 (17 Oct 2026).
 - M3-P5 (#36): the appointment and queue screens (FR-APT-01, 03, 05; FR-QUE-01, 03, 04; D27-D32).
   `/queue` is the live board: one doctor's day (a doctor sees their own), refreshed every 5 s,
   rows in token or slot order with the next step as one click (*Arrived*, *Start*, *Complete*)
@@ -21,17 +22,20 @@ first production release.
   *Add walk-in* one patient pick. Each action is reported with the patient and the time.
   `/settings/schedule` (owners) edits weekly hours, leave, extra sessions and the booking mode,
   and lists booked sessions a change kept. The patient profile lists their appointments. Two new
-  Playwright journeys: AC6 and AC4.- M3-P4 (#36): the live queue (FR-QUE-03; spec R12, D23-D26). `GET /api/v1/queue` sends a strong
+  Playwright journeys: AC6 and AC4.
+- M3-P4 (#36): the live queue (FR-QUE-03; spec R12, D23-D26). `GET /api/v1/queue` sends a strong
   `ETag` (a hash of the body) and answers a matching `If-None-Match` with a bodiless `304`, through
   the web origin too. The web app gets `apiGetConditional`, a polling module (every 5 s, paused
   while the tab is hidden, 30 s after an error) and a `useQueue` hook for P5's queue board. The
-  queue stays `no-store`. Contract 0.12.0; a Playwright check of the 304 through the web origin.- M3-P3 (#36): the daily queue (FR-QUE-01, 02, 04; spec R9-R11, D17-D22).
+  queue stays `no-store`. Contract 0.12.0; a Playwright check of the 304 through the web origin.
+- M3-P3 (#36): the daily queue (FR-QUE-01, 02, 04; spec R9-R11, D17-D22).
   `POST /api/v1/appointments/{id}/transitions` takes `{from, to}`: `from` must be the current status,
   so a stale tab cannot move a patient who has already moved (`409 QUE_INVALID_TRANSITION`, AC3).
   Transitions happen on the session's day; a no-show once it has started (`409 QUE_WRONG_TIME`).
   `POST /api/v1/queue/walk-ins` adds a walk-in to the running or next session today, arrived at
   once (`409 QUE_NO_SESSION` when there is none). `GET /api/v1/queue` lists a day's sessions with
-  their appointments, patients and waits. Audit action `appointment.status_changed`; contract 0.11.0.- M3-P2 (#36): booking, cancel and reschedule (FR-APT-03..05, FR-APT-07; spec R3-R8, D10-D16).
+  their appointments, patients and waits. Audit action `appointment.status_changed`; contract 0.11.0.
+- M3-P2 (#36): booking, cancel and reschedule (FR-APT-03..05, FR-APT-07; spec R3-R8, D10-D16).
   `POST /api/v1/appointments` books a patient into a session: the next token in token mode, a
   free slot in slot mode. A session row lock serialises bookings and partial unique indexes back
   them, so two parallel requests for the last place give one 201 and one 409. Tokens are never
@@ -41,7 +45,8 @@ first production release.
   `GET /api/v1/patients/{id}/appointments` a patient's appointments. Sessions a leave or schedule
   change leaves with bookings are now `CLOSED` to new ones (or resized when only the capacity
   changed), and slots show `available`. New codes `APT_ALREADY_BOOKED`, and the existing `APT_*`
-  codes are now raised. Migration `0008`, contract 0.10.0. No confirmation message until M5.- M3-P1 (#36): doctor schedules and sessions (FR-APT-01, FR-APT-02; spec appointments R1-R4,
+  codes are now raised. Migration `0008`, contract 0.10.0. No confirmation message until M5.
+- M3-P1 (#36): doctor schedules and sessions (FR-APT-01, FR-APT-02; spec appointments R1-R4,
   R14-R20). The owner sets a doctor's weekly blocks with `PUT /api/v1/clinic/doctors/{id}/schedule`
   (ops during onboarding with `PUT /api/v1/ops/clinics/{id}/doctors/{id}/schedule`). Times are the
   clinic's wall clock. An end at or before the start is the next day, and a block lasts 15

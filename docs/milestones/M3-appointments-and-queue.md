@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A), implemented and accepted by the developer the same day; M3-P3 implemented and confirmed by the developer the same day; M3-P4 implemented and confirmed the same day; M3-P5 approved (1A–6A) and implemented the same day; the milestone awaits the developer's review (PR #37) |
+| Status | Done — P1–P5 implemented and confirmed 17 Oct 2026; merged in PR #37 |
 | Spec | `docs/specs/appointments-and-queue.md` (Approved 2026-10-17, D1–D32) |
 | Covers | FR-APT-01..07, FR-QUE-01..05 |
 | Issue / branch / PR | #36 · `m3/36-appointments-and-queue` · one PR for the whole milestone (ADR-0011) |
