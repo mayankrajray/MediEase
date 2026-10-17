@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; the M4-P2 design approved the same day with 1A–6A and implemented; awaiting the developer's confirmation |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 designed next |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -14,7 +14,7 @@
 | Phase | Builds | Design |
 |---|---|---|
 | P1 | Visit record, history, 24-hour lock and addenda | Below (done, confirmed) |
-| P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (implemented) |
+| P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (done, confirmed) |
 | P3 | Favourites, templates, clinic-history autocomplete | At its start |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | At its start |
 | P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | At its start |
@@ -175,7 +175,7 @@ Taken while implementing:
 
 ## M4-P2 — Prescription domain: items, instructions, versions, immutability
 
-**Status: approved by the developer 17 Oct 2026 with 1A–6A (every recommendation); implemented the same day (result at the end of this section), awaiting the developer's confirmation.** API only; the builder screen is P6, the PDF
+**Status: approved by the developer 17 Oct 2026 with 1A–6A (every recommendation); implemented the same day (result at the end of this section) and confirmed by the developer.** API only; the builder screen is P6, the PDF
 P4, the patient page P5. Covers FR-RX-01, 02, 03, 06 (the issue step), 09; spec R4–R6, R14,
 R17, R20 (language at issue); AC1, AC4, AC7 (for prescriptions).
 
