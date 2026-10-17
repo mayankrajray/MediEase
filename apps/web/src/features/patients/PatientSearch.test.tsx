@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetRefreshState } from "@/lib/auth/refresh";
@@ -35,11 +35,13 @@ describe("patient search in the header (FR-PAT-04)", () => {
   it("spec §6: / focuses the search from anywhere, but not while typing in a field", async () => {
     mockApi(workspaceRoutes);
     const box = await search();
-    await act(async () => {}); // the shortcut listener is added in an effect
-
-    fireEvent.keyDown(document.body, { key: "/" });
+    // The shortcut listener is added in an effect, which can run after the box appears under a
+    // loaded parallel run; press again until it is listening.
+    await waitFor(() => {
+      fireEvent.keyDown(document.body, { key: "/" });
+      expect(document.activeElement).toBe(box);
+    });
     expect(box.isConnected).toBe(true);
-    expect(document.activeElement).toBe(box);
 
     const other = document.createElement("input");
     document.body.append(other);
