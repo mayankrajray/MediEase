@@ -272,7 +272,7 @@ class UpdateClinic:
                 check_mode_supported(uow, clinic, cmd.booking_mode, today)
                 clinic.change_booking_mode(cmd.booking_mode, now=now)
                 uow.clinics.update(clinic)
-                reconcile_clinic(uow, clinic, today)
+                reconcile_clinic(uow, clinic, today, now)
             uow.clinics.update(clinic)
             record_event(
                 uow,
