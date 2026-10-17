@@ -95,6 +95,8 @@ class PrescriptionRow(TenantOwned, Timestamps, Base):
     pdf_object_key: Mapped[str | None] = mapped_column(Text)
     link_delivery: Mapped[str | None] = mapped_column(Text)
     link_delivery_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # M4-P3: the template the body came from; a plain ID (deleting a template touches nothing).
+    template_id: Mapped[UUID | None] = mapped_column()
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
 
 
@@ -104,6 +106,12 @@ class PrescriptionItemRow(TenantOwned, Base):
     __tablename__ = "prescription_items"
     __table_args__ = (
         UniqueConstraint("prescription_id", "position"),
+        # M4-P3: start-of-name suggestions ignoring case (the M2 pattern, no extension).
+        Index(
+            "ix_prescription_items_clinic_id_medicine_name",
+            "clinic_id",
+            text("lower(medicine_name) text_pattern_ops"),
+        ),
         enum_check("frequency", Frequency),
         enum_check("timing", Timing),
         CheckConstraint("position >= 1", name="position_positive"),
@@ -141,3 +149,5 @@ class PrescriptionItemRow(TenantOwned, Base):
     storage: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
     warnings: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
+    # M4-P3: the favourite the line came from; a plain ID, as template_id.
+    favourite_id: Mapped[UUID | None] = mapped_column()

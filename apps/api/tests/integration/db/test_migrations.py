@@ -21,7 +21,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0010"
+HEAD = "0011"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -31,6 +31,7 @@ M3_P1_TABLES = sorted([*M2_P1_TABLES, "doctor_schedules", "schedule_exceptions",
 M3_P2_TABLES = sorted([*M3_P1_TABLES, "appointment_status_history", "appointments"])
 M4_P1_TABLES = sorted([*M3_P2_TABLES, "visit_addenda", "visits"])
 M4_P2_TABLES = sorted([*M4_P1_TABLES, "prescription_items", "prescriptions"])
+M4_P3_TABLES = sorted([*M4_P2_TABLES, "rx_favourites", "rx_templates"])
 
 
 @pytest.fixture
@@ -337,9 +338,27 @@ def test_0010_adds_prescriptions_guarded_by_triggers(
         engine.dispose()
 
 
+def test_0011_adds_the_doctors_library_and_the_name_index(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    command.upgrade(alembic_config, "0011")
+    assert _tables(scratch_database_url) == M4_P3_TABLES
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            items = {i["name"] for i in inspect(conn).get_indexes("prescription_items")}
+            assert "ix_prescription_items_clinic_id_medicine_name" in items
+            favs = {i["name"]: i for i in inspect(conn).get_indexes("rx_favourites")}
+            assert favs["uq_rx_favourites_doctor_id_name"]["unique"]
+        command.downgrade(alembic_config, "0010")
+        assert _tables(scratch_database_url) == M4_P2_TABLES
+    finally:
+        engine.dispose()
+
+
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M4_P2_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M4_P3_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
