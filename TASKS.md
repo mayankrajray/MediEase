@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M4 — Visits and digital prescriptions** (issue #38, branch `m4/38-visits-and-prescriptions`, one PR for the milestone). M3 merged in PR #37 on 17 Oct 2026 |
-| Active phase | **M4-P2 — prescription domain:** design being prepared 17 Oct 2026. M4-P1 (visits) done and confirmed by the developer; draft PR open |
+| Active phase | **M4-P2 — prescription domain:** design proposed 17 Oct 2026, awaiting the developer's approval (decisions 1–6). M4-P1 (visits) done and confirmed; draft PR #39 |
 | Design notes | `docs/milestones/M4-visits-and-prescriptions.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M4 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
