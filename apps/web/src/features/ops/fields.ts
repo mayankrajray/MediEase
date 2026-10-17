@@ -1,7 +1,5 @@
 /** Small, pure helpers for the ops forms. */
 
-import { ApiError } from "@/lib/api/client";
-
 const MAX_SLUG_LENGTH = 63;
 const MAX_SPECIALTIES = 20;
 
@@ -31,33 +29,4 @@ export function parseSpecialties(text: string): string[] {
 export function emptyToNull(value: string): string | null {
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
-}
-
-/**
- * Field-level problems from a `REQ_VALIDATION_FAILED` (`details.fields[]`), keyed by
- * field name. The API never echoes submitted values, so the reasons are safe to show.
- */
-export function fieldErrors(error: unknown): Readonly<Record<string, string>> {
-  if (!(error instanceof ApiError) || error.code !== "REQ_VALIDATION_FAILED") {
-    return {};
-  }
-  const fields: unknown = error.details["fields"];
-  if (!Array.isArray(fields)) {
-    return {};
-  }
-  const result: Record<string, string> = {};
-  for (const entry of fields as unknown[]) {
-    if (
-      typeof entry === "object" &&
-      entry !== null &&
-      "field" in entry &&
-      typeof entry.field === "string" &&
-      "reason" in entry &&
-      typeof entry.reason === "string" &&
-      !(entry.field in result)
-    ) {
-      result[entry.field] = entry.reason;
-    }
-  }
-  return result;
 }
