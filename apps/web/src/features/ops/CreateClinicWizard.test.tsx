@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SessionProvider } from "@/features/auth/SessionProvider";
@@ -130,7 +130,9 @@ describe("Create clinic wizard", () => {
     click("Create clinic and continue");
 
     // Step 2: the elapsed time comes from the checklist's started_at.
-    expect(await screen.findByRole("heading", { name: /Step 2 of 3/ })).toHaveFocus();
+    const step2 = await screen.findByRole("heading", { name: /Step 2 of 3/ });
+    await act(async () => {}); // the focus moves in an effect after the step renders
+    expect(step2).toHaveFocus();
     expect(await screen.findByText("12 min")).toBeInTheDocument();
     expect(screen.getByText(/1\. Clinic/)).toHaveTextContent("(done)");
     expect(screen.getByText(/2\. Doctors/)).toHaveAttribute("aria-current", "step");
@@ -162,7 +164,9 @@ describe("Create clinic wizard", () => {
     click("Continue to owner invitation");
 
     // Step 3: invite the owner; the link appears once and can be copied.
-    expect(await screen.findByRole("heading", { name: /Step 3 of 3/ })).toHaveFocus();
+    const step3 = await screen.findByRole("heading", { name: /Step 3 of 3/ });
+    await act(async () => {}); // the focus moves in an effect after the step renders
+    expect(step3).toHaveFocus();
     type("Full name (required)", "Sample Owner Person");
     expect(screen.getByLabelText("Role")).toHaveValue("OWNER");
     type("Email", "owner@sample-clinic.example");
