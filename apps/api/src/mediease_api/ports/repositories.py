@@ -37,6 +37,7 @@ from mediease_api.domain.scheduling.exceptions import ScheduleException
 from mediease_api.domain.scheduling.sessions import Session
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.domain.visits.visit import Visit, VisitAddendum
 
 
 class RowLock(StrEnum):
@@ -313,5 +314,33 @@ class AppointmentHistoryRepository(Protocol):
     def add(self, change: StatusChange) -> None: ...
 
     def list_for_appointment(self, appointment_id: UUID) -> Sequence[StatusChange]:
+        """Oldest first."""
+        ...
+
+
+class VisitRepository(Protocol):
+    """This clinic's visits (M4-P1). Clinical content: never logged by callers."""
+
+    def add(self, visit: Visit) -> None: ...
+
+    def update(self, visit: Visit) -> None: ...
+
+    def get(self, visit_id: UUID, *, for_update: bool = False) -> Visit | None: ...
+
+    def get_for_appointment(self, appointment_id: UUID) -> Visit | None: ...
+
+    def list_for_patient(
+        self, patient_id: UUID, *, limit: int, before: tuple[datetime, UUID] | None = None
+    ) -> Sequence[Visit]:
+        """Newest first by ``(started_at, id)``; ``before`` continues after that position."""
+        ...
+
+
+class VisitAddendumRepository(Protocol):
+    """Append-only addenda (R3); there is no update or delete."""
+
+    def add(self, addendum: VisitAddendum) -> None: ...
+
+    def list_for_visit(self, visit_id: UUID) -> Sequence[VisitAddendum]:
         """Oldest first."""
         ...

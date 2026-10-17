@@ -32,6 +32,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0006` | `clinics.patient_code_prefix` (backfilled from each clinic's name) and `next_patient_seq`; the `patients` table with its lookup indexes | M2-P1 |
 | `0007` | `clinics.booking_mode` (`TOKENS` for existing clinics); `doctor_schedules`, `schedule_exceptions`, `sessions` | M3-P1 |
 | `0008` | `appointments` and `appointment_status_history` | M3-P2 |
+| `0009` | `visits` and append-only `visit_addenda` (trigger `VIS_ADDENDUM_APPEND_ONLY`) | M4-P1 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -358,21 +359,31 @@ Index: `(clinic_id, doctor_id, status)`, `(clinic_id, patient_id, created_at des
 
 ## M4 — Visits and prescriptions
 
-### `visits`
+### `visits` (migration `0009`, M4-P1)
+The clinical record of one appointment (spec prescriptions R1-R3; M4-P1 decisions 1A-6A).
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
-| clinic_id, patient_id, doctor_id | uuid FK | |
-| appointment_id | uuid FK null unique | |
-| chief_complaint, findings, diagnosis, notes | text | **Clinical** — never logged |
-| vitals | jsonb | `{bp_systolic, bp_diastolic, pulse, temp_c, weight_kg, height_cm, spo2}` |
-| status | text | `OPEN` \| `COMPLETED` |
-| completed_at | timestamptz null | |
-| locked_at | timestamptz null | completed_at + 24 h (FR-VIS-05) |
+| clinic_id, patient_id, doctor_id | uuid FK | `doctor_id` is the session's doctor, the only writer |
+| appointment_id | uuid FK not null, unique | One visit per appointment; walk-ins come through the queue first (5A) |
+| status | text | `OPEN` \| `COMPLETED` (CHECK) |
+| chief_complaint (≤ 500), findings (≤ 5,000), diagnosis (≤ 1,000), notes (≤ 5,000) | text null | **Clinical** — never logged or audited; length CHECKs |
+| vitals | jsonb not null default `{}` | Recorded keys only: `bp_systolic`, `bp_diastolic` (mmHg), `pulse` (/min), `temp_c`, `weight_kg`, `height_cm`, `spo2` (%), `resp_rate` (/min); bounds catch typing errors only |
+| revision | integer not null default 1 | +1 per change; a `PATCH` must send the one it saw (`VIS_STALE`, 4A) |
+| started_at | timestamptz | |
+| completed_at | timestamptz null | Set ⇔ `COMPLETED` (CHECK) |
+| locked_at | timestamptz null | Exactly `completed_at + 24 h` (CHECK). Locked is decided by the application's clock (6A) |
+| created_by | uuid FK users | |
+| created_at, updated_at | timestamptz | |
 
-### `visit_addenda`
-`id, clinic_id, visit_id, author_user_id, body text, created_at`
+Index `ix_visits_clinic_id_patient_id_started_at (clinic_id, patient_id, started_at DESC, id DESC)`
+serves the history (newest first, keyset pages).
 
+### `visit_addenda` (migration `0009`, M4-P1)
+`id, clinic_id, visit_id, author_user_id, body text (1–5,000), created_at`; index
+`(visit_id, created_at)`. **Append-only:** triggers refuse `UPDATE`, `DELETE` and `TRUNCATE`
+(`VIS_ADDENDUM_APPEND_ONLY`), like `audit_events`. Tests reset it the same deliberate way.
 ### `prescriptions`
 | Column | Type | Notes |
 |---|---|---|
