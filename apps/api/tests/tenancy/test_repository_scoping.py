@@ -22,6 +22,8 @@ from mediease_api.adapters.db.repositories import (
     SqlAlchemyDoctorRepository,
     SqlAlchemyMembershipRepository,
     SqlAlchemyPatientRepository,
+    SqlAlchemyPrescriptionItemRepository,
+    SqlAlchemyPrescriptionRepository,
     SqlAlchemyScheduleExceptionRepository,
     SqlAlchemyScheduleRepository,
     SqlAlchemySessionRepository,
@@ -33,6 +35,7 @@ from mediease_api.domain.appointments.appointment import Appointment, history_en
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
 from mediease_api.domain.patients.patient import Patient
+from mediease_api.domain.prescriptions.prescription import Advice, Prescription, PrescriptionItem
 from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
 from mediease_api.domain.scheduling.exceptions import ScheduleException
 from mediease_api.domain.scheduling.mode import BookingMode
@@ -415,6 +418,16 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
             id=new_id(), author_user_id=b.owner.user_id, body="seen again", now=LATER
         )
         staff_b.visit_addenda.add(addendum)
+        rx = Prescription.first_draft(visit, id=new_id(), created_by=b.owner.user_id, now=NOW)
+        rx.replace_body(
+            items=[PrescriptionItem.create(id=new_id(), position=1, medicine_name="Tab Y")],
+            advice=Advice(),
+            follow_up_date=None,
+            seen_revision=1,
+            today=NOW.date(),
+            now=NOW,
+        )
+        staff_b.prescriptions.add(rx)
         uow.commit()
 
     with uow_factory() as uow:
@@ -430,6 +443,17 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
             staff_a.visits.update(visit)
         with pytest.raises(TenancyViolation):
             staff_a.visit_addenda.add(addendum)
+        assert staff_a.prescriptions.get(rx.id) is None
+        assert staff_a.prescriptions.get(rx.id, for_update=True) is None
+        assert staff_a.prescriptions.list_for_visits([visit.id]) == []
+        with pytest.raises(TenancyViolation):
+            staff_a.prescriptions.add(rx)
+        with pytest.raises(TenancyViolation):
+            staff_a.prescriptions.update(rx)
+        with pytest.raises(TenancyViolation):
+            staff_a.prescriptions.replace_items(rx)
+        with pytest.raises(NotFound):
+            staff_a.prescriptions.delete(rx.id)
 
     with uow_factory() as uow:
         staff_b = uow.tenant(b.clinic_id)
@@ -437,6 +461,8 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
         assert staff_b.visits.get_for_appointment(appointment.id) == visit
         assert staff_b.visits.list_for_patient(b.patient.id, limit=10) == [visit]
         assert staff_b.visit_addenda.list_for_visit(visit.id) == [addendum]
+        assert staff_b.prescriptions.get(rx.id) == rx
+        assert staff_b.prescriptions.list_for_visit(visit.id) == [rx]
 
 
 def test_every_tenant_table_has_a_scoped_repository() -> None:
@@ -463,6 +489,8 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "appointment_status_history",
             "visits",
             "visit_addenda",
+            "prescriptions",
+            "prescription_items",
             "audit_events",
         }
     )
@@ -478,6 +506,8 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyAppointmentHistoryRepository,
         SqlAlchemyVisitRepository,
         SqlAlchemyVisitAddendumRepository,
+        SqlAlchemyPrescriptionRepository,
+        SqlAlchemyPrescriptionItemRepository,
     } == set(TenantScopedRepository.__subclasses__())
 
 

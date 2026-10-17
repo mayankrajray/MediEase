@@ -10,6 +10,7 @@ from mediease_api.adapters.db.models.base import Base
 from mediease_api.adapters.db.models.clinics import ClinicRow, DoctorRow, OnboardingChecklistRow
 from mediease_api.adapters.db.models.identity import ClinicMembershipRow, RefreshTokenRow, UserRow
 from mediease_api.adapters.db.models.patients import PatientRow
+from mediease_api.adapters.db.models.prescriptions import PrescriptionItemRow, PrescriptionRow
 from mediease_api.adapters.db.models.scheduling import (
     DoctorScheduleRow,
     ScheduleExceptionRow,
@@ -28,6 +29,8 @@ __all__ = [
     "DoctorScheduleRow",
     "OnboardingChecklistRow",
     "PatientRow",
+    "PrescriptionItemRow",
+    "PrescriptionRow",
     "RefreshTokenRow",
     "ScheduleExceptionRow",
     "SessionRow",
