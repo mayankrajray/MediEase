@@ -179,8 +179,11 @@ curl -s -b jar -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: text/csv' \
    Use `--data-binary`, not `-d` (which strips the line breaks). Invalid rows are never imported;
    rows matching an existing patient by phone and name are skipped, so running the same file again
    is harmless; rows that only share a phone (families) are imported and listed under `duplicates`
-   for the front desk to review. Over 2 MB or 5,000 rows: split the file. Consent is "not asked"
-   for every imported patient: the front desk records it at the next visit.
+   for the front desk to review. Over 2 MB or 5,000 rows: split the file. Send imports to the API
+   origin (`:8000` locally): over 2 MB it always answers `413 REQ_REQUEST_ENTITY_TOO_LARGE`,
+   while through the web origin (`:3000`) an oversized file can occasionally surface as a 500 from
+   the proxy (issue #30). Consent is "not asked" for every imported patient: the front desk
+   records it at the next visit.
 7. Book one real appointment; issue one real prescription; confirm the patient link opens.
 8. Record consent practice: the clinic's own patient notice is displayed at the front desk.
 **Confirm:** `GET /api/v1/ops/clinics/$CLINIC` shows the checklist with `clinic_created_at`,
