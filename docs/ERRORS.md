@@ -113,7 +113,9 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 | `APT_IN_PAST` | 422 | That time has already passed | Token mode: the session has ended; slot mode: the slot has ended (D12) | Clock, the clinic timezone (§5.4) |
 | `APT_NOT_MODIFIABLE` | 409 | This appointment cannot be cancelled/rescheduled now | Cancel from a status other than `BOOKED`/`ARRIVED` or after the session ended (D14); reschedule from anything but `BOOKED` (D15). `details.status` and `details.action` say which | `appointments.status`; the appointment's `history` |
 | `APT_ALREADY_BOOKED` | 409 | This patient is already booked in this session | One active appointment per patient per session (D13), also a double-click; `details.appointment_id` is the existing one | `GET /appointments/{id}`; the patient's `/appointments` |
-| `QUE_INVALID_TRANSITION` | 409 | That status change isn't allowed | e.g. `COMPLETED → ARRIVED` | State machine in spec; `details.from/to` |
+| `QUE_INVALID_TRANSITION` | 409 | That status change isn't allowed | Not an edge of the state machine (e.g. `COMPLETED → ARRIVED`, AC3), or the screen's `from` is no longer the status: another tab moved the patient first (D18). `details.from` is the real status, `details.to` the one asked | The appointment's `history`; refresh the queue |
+| `QUE_WRONG_TIME` | 409 | The queue can't be changed for that time now | `details.reason`: `not_today` (not the session's clinic-local date, and not a running overnight session) or `not_started` (a no-show before the session or slot began) (D19) | Clinic timezone (§5.4); the session's `starts_at` |
+| `QUE_NO_SESSION` | 409 | The doctor has no session left today | A walk-in with no open session running or still to start today, or a named `session_id` that is not today's or has ended (D21) | `GET /queue` for today; add an extra session |
 
 ## Visits and prescriptions (M4)
 

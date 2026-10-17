@@ -687,6 +687,13 @@ class SqlAlchemyPatientRepository(TenantScopedRepository[PatientRow]):
         )
         return [_patient_from_row(row) for row in self._session.scalars(query)]
 
+    def get_many(self, patient_ids: Collection[UUID]) -> Sequence[Patient]:
+        ids = sorted(set(patient_ids))
+        if not ids:
+            return []
+        query = self._scoped_select().where(PatientRow.id.in_(ids))
+        return [_patient_from_row(row) for row in self._session.scalars(query)]
+
     def search_by_name_prefix(self, prefix: str, *, limit: int) -> Sequence[Patient]:
         query = (
             self._scoped_select()
@@ -1051,20 +1058,24 @@ class SqlAlchemyAppointmentRepository(TenantScopedRepository[AppointmentRow]):
         return _appointment_from_row(row) if row else None
 
     def list_active_for_sessions(self, session_ids: Collection[UUID]) -> Sequence[Appointment]:
+        return self._in_sessions(session_ids, active_only=True)
+
+    def list_for_sessions(self, session_ids: Collection[UUID]) -> Sequence[Appointment]:
+        return self._in_sessions(session_ids, active_only=False)
+
+    def _in_sessions(
+        self, session_ids: Collection[UUID], *, active_only: bool
+    ) -> list[Appointment]:
         ids = sorted(set(session_ids))
         if not ids:
             return []
-        query = (
-            self._scoped_select()
-            .where(
-                AppointmentRow.session_id.in_(ids),
-                AppointmentRow.status != AppointmentStatus.CANCELLED.value,
-            )
-            .order_by(
-                AppointmentRow.session_id,
-                AppointmentRow.slot_start,
-                AppointmentRow.token_number,
-            )
+        query = self._scoped_select().where(AppointmentRow.session_id.in_(ids))
+        if active_only:
+            query = query.where(AppointmentRow.status != AppointmentStatus.CANCELLED.value)
+        query = query.order_by(
+            AppointmentRow.session_id,
+            AppointmentRow.slot_start,
+            AppointmentRow.token_number,
         )
         return [_appointment_from_row(row) for row in self._session.scalars(query)]
 

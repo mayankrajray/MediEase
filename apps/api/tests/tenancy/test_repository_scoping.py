@@ -313,6 +313,8 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_appointments_or_their_history(
         assert staff_a.appointments.get(appointment.id) is None
         assert staff_a.appointments.get(appointment.id, for_update=True) is None
         assert staff_a.appointments.list_active_for_sessions([session.id]) == []
+        assert staff_a.appointments.list_for_sessions([session.id]) == []
+        assert staff_a.patients.get_many([b.patient.id]) == []
         assert not staff_a.appointments.exists_for_session(session.id)
         assert staff_a.appointments.list_for_patient(b.patient.id, limit=10) == []
         assert staff_a.appointment_history.list_for_appointment(appointment.id) == []

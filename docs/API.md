@@ -262,9 +262,9 @@ Responses carry personal data and are `Cache-Control: no-store`. The clinic is t
 | POST | `/api/v1/appointments/{id}/reschedule` | Move to another session or slot (201, new appointment) — **M3-P2** | FR-APT-05 |
 | POST | `/api/v1/appointments/{id}/cancel` | Cancel with a reason — **M3-P2** | FR-APT-05 |
 | GET | `/api/v1/patients/{id}/appointments` | A patient's appointments, newest first (≤ 50) — **M3-P2** | FR-APT-05 |
-| GET | `/api/v1/queue?doctor_id=&date=` | Queue (supports `ETag` / `If-None-Match`) | FR-QUE-01/03 |
-| POST | `/api/v1/appointments/{id}/transitions` | `{ "to": "ARRIVED" }` | FR-QUE-02 |
-| POST | `/api/v1/queue/walk-ins` | Add walk-in to today | FR-QUE-04 |
+| GET | `/api/v1/queue?date=&doctor_id=&include_cancelled=` | The day's sessions with appointments, patients and waits — **M3-P3** (`ETag`/304 in P4) | FR-QUE-01/03 |
+| POST | `/api/v1/appointments/{id}/transitions` | `{ "from": "BOOKED", "to": "ARRIVED" }` (`QUEUE_MOVE`) — **M3-P3** | FR-QUE-02 |
+| POST | `/api/v1/queue/walk-ins` | Add a walk-in to today, arrived at once (`QUEUE_MOVE`) — **M3-P3** | FR-QUE-04 |
 
 M3-P1 rules (spec appointments R1–R4, R14–R20; contract 0.9.0):
 
@@ -295,6 +295,20 @@ M3-P2 rules (spec R3–R8, D10–D16; contract 0.10.0; all routes `APPOINTMENTS_
 - **Sessions** now carry `status` (`CLOSED` after a leave or change left them booked: no new
   bookings, existing ones can still move) and each slot's `available`.
 - No confirmation message yet: it arrives with M5's jobs and messaging (D16).
+
+M3-P3 rules (spec R9–R11, D17–D22; contract 0.11.0):
+
+- **Transitions** `{from, to}`: `BOOKED → ARRIVED | NO_SHOW`, `ARRIVED → IN_CONSULTATION | NO_SHOW`,
+  `IN_CONSULTATION → COMPLETED`, `NO_SHOW → ARRIVED`. `from` must be the current status, so a stale
+  tab gets `409 QUE_INVALID_TRANSITION` with the real one. Only on the session's day (or while an
+  overnight session runs); a no-show once the session or slot has started (`409 QUE_WRONG_TIME`).
+  Cancel stays `POST .../cancel`.
+- **Walk-ins** `{doctor_id, patient_id, session_id?, slot_start?, reason?}` join the session running
+  now, else the next one today (`409 QUE_NO_SESSION` if none): the next token, or the earliest free
+  slot that has not ended. Source `WALK_IN`, status `ARRIVED`.
+- **Queue** `GET /api/v1/queue`: `date` defaults to the clinic's today; sessions in start order, each
+  with its active appointments by token or slot, the patient's code, name and age, and
+  `wait_minutes`. Not cached; P4 adds the `ETag`.
 
 ### Visits and prescriptions (M4)
 

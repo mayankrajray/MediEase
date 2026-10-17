@@ -388,6 +388,76 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/appointments/{appointment_id}/transitions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Move an appointment along the queue
+         * @description FR-QUE-02; spec R9, AC3, D18, D19. BOOKED -> ARRIVED | NO_SHOW, ARRIVED -> IN_CONSULTATION |
+         *     NO_SHOW, IN_CONSULTATION -> COMPLETED, NO_SHOW -> ARRIVED. `from` must be the current
+         *     status (else 409 QUE_INVALID_TRANSITION with the real `from`). Only on the session's
+         *     clinic-local date (or while an overnight session runs); NO_SHOW once the session or slot
+         *     has started (409 QUE_WRONG_TIME). Records appointment.status_changed. Needs X-CSRF-Token.
+         */
+        readonly post: operations["transitionAppointment"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/queue/walk-ins": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Add a walk-in to today's queue
+         * @description FR-QUE-04; spec R11, D21. Joins the doctor's open session running now, else the next one
+         *     today, or the named session_id of today's (409 QUE_NO_SESSION when there is none): the next
+         *     token, or in slot mode slot_start or the earliest free slot that has not ended (409
+         *     APT_SESSION_FULL when none). Source WALK_IN, status ARRIVED at once. Records
+         *     appointment.booked. Needs X-CSRF-Token.
+         */
+        readonly post: operations["addWalkIn"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/queue": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A day's queue
+         * @description FR-QUE-01; D22. The date's sessions (generated as GET /sessions does) with their active
+         *     appointments in token or slot order, each with the patient's code, name and age and the
+         *     minutes waited. date defaults to the clinic's today. Permission APPOINTMENTS_MANAGE.
+         */
+        readonly get: operations["getQueue"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/clinic/staff": {
         readonly parameters: {
             readonly query?: never;
@@ -1433,6 +1503,42 @@ export interface components {
         readonly AppointmentList: {
             readonly items: readonly components["schemas"]["Appointment"][];
         };
+        readonly AppointmentTransition: {
+            readonly from: components["schemas"]["AppointmentStatus"];
+            readonly to: components["schemas"]["AppointmentStatus"];
+        };
+        readonly NewWalkIn: {
+            /** Format: uuid */
+            readonly doctor_id: string;
+            /** Format: uuid */
+            readonly patient_id: string;
+            /** Format: uuid */
+            readonly session_id?: string | null;
+            /** Format: date-time */
+            readonly slot_start?: string | null;
+            readonly reason?: string | null;
+        };
+        readonly QueuePatient: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly code: string;
+            readonly full_name: string;
+            readonly age_years: number;
+            readonly sex: string;
+        };
+        readonly QueueEntry: components["schemas"]["Appointment"] & {
+            readonly patient: components["schemas"]["QueuePatient"];
+            /** @description Since arrival while ARRIVED; arrival to start once started */
+            readonly wait_minutes: number | null;
+        };
+        readonly QueueSession: components["schemas"]["DoctorSession"] & {
+            readonly appointments: readonly components["schemas"]["QueueEntry"][];
+        };
+        readonly Queue: {
+            /** Format: date */
+            readonly on_date: string;
+            readonly sessions: readonly components["schemas"]["QueueSession"][];
+        };
         readonly Error: {
             /**
              * @description Stable error code from docs/ERRORS.md
@@ -1524,6 +1630,21 @@ export interface components {
          *     the session's slots); APT_IN_PAST (422); REQ_VALIDATION_FAILED (422)
          */
         readonly AppointmentError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description QUE_INVALID_TRANSITION (409: not allowed from the current status, or the screen saw
+         *     another one; details.from is the real status, details.to the one asked); QUE_WRONG_TIME
+         *     (409: details.reason not_today or not_started); QUE_NO_SESSION (409: no session left
+         *     today); and the booking codes of AppointmentError for a walk-in
+         */
+        readonly QueueError: {
             headers: {
                 readonly "X-Request-ID": components["headers"]["RequestId"];
                 readonly [name: string]: unknown;
@@ -2387,6 +2508,137 @@ export interface operations {
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly transitionAppointment: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description An appointment of the request's clinic. */
+                readonly appointment_id: components["parameters"]["AppointmentPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["AppointmentTransition"];
+            };
+        };
+        readonly responses: {
+            /** @description Moved */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Appointment"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["QueueError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AppointmentError"];
+        };
+    };
+    readonly addWalkIn: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewWalkIn"];
+            };
+        };
+        readonly responses: {
+            /** @description Added and arrived */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Appointment"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["QueueError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AppointmentError"];
+        };
+    };
+    readonly getQueue: {
+        readonly parameters: {
+            readonly query?: {
+                readonly date?: string;
+                readonly doctor_id?: string;
+                readonly include_cancelled?: "true" | "false";
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The day's queue */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Queue"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 422: components["responses"]["AuthError"];
         };
     };
     readonly listStaff: {
