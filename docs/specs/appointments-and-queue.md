@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-APT-01..07, FR-QUE-01..05 |
 | Milestone / phases | M3 / P1–P5 |
-| Status | Approved (developer sign-off 2026-10-17: decisions D1–D9 for M3-P1 and D10–D16 for M3-P2, D17–D22 for M3-P3, D23–D26 for M3-P4 in §12) |
+| Status | Approved (developer sign-off 2026-10-17: decisions D1–D9 for M3-P1 and D10–D16 for M3-P2, D17–D22 for M3-P3, D23–D26 for M3-P4, D27–D32 for M3-P5 in §12) |
 | Last updated | 2026-10-17 (approved; R1, R3, R4 made precise and R14–R20 added for schedules, exceptions and session generation; M3-P2 decisions D10–D16, R5's confirmation job from M5) |
 
 ## 1. Context
@@ -200,3 +200,14 @@ Resolved at M3-P4 approval (2026-10-17):
 - **D25** The web gets a polling module in P4 (5 s, `If-None-Match`, paused while hidden, 30 s
   back-off after errors); P5's board builds on it.
 - **D26** Only the queue carries an `ETag` in M3; the queue stays `no-store`.
+Resolved at M3-P5 approval (2026-10-17):
+- **D27** The board opens on the doctor's own day for a doctor, else the doctor last chosen on the
+  device, with a doctor picker.
+- **D28** Previous / next day and a date field; transitions only on the session's day (D19).
+- **D29** *Arrived*, *Start*, *Complete* are single clicks with a status message naming the patient
+  and time; *No-show* asks for confirmation; *Cancel* asks for the reason. Confirming every step
+  was considered and not adopted (confirmation fatigue; the mistakes are recoverable).
+- **D30** *Add walk-in* on today's board: patient search, then one click (D21 picks the session).
+- **D31** `/settings/schedule` for owners: weekly blocks, leave and extra sessions, booking mode,
+  and the booked sessions a change kept.
+- **D32** The patient profile lists the patient's appointments, with *Book* for that patient.

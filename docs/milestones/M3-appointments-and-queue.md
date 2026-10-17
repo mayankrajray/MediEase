@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A), implemented and accepted by the developer the same day; M3-P3 implemented and confirmed by the developer the same day; M3-P4 approved (1A–4A) and implemented the same day, awaiting the developer's confirmation |
-| Spec | `docs/specs/appointments-and-queue.md` (Approved 2026-10-17, D1–D26) |
+| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A), implemented and accepted by the developer the same day; M3-P3 implemented and confirmed by the developer the same day; M3-P4 implemented and confirmed the same day; M3-P5 designed and approved (1A–6A), implementation next |
+| Spec | `docs/specs/appointments-and-queue.md` (Approved 2026-10-17, D1–D32) |
 | Covers | FR-APT-01..07, FR-QUE-01..05 |
 | Issue / branch / PR | #36 · `m3/36-appointments-and-queue` · one PR for the whole milestone (ADR-0011) |
 | Exit criterion | Front desk books in ≤ 3 interactions; the concurrent double-booking test passes; the queue refreshes on every open screen within 5 s |
@@ -15,8 +15,8 @@
 | P1 | Doctor schedules, exceptions, sessions generated per clinic-local date; slot and token mode | Below |
 | P2 | Booking, reschedule, cancel under a session row lock | Below (done) |
 | P3 | Queue state machine, transitions, walk-ins | Below (done) |
-| P4 | Live queue (ETag polling) | Below (implemented) |
-| P5 | Web: queue board, booking flow, schedule settings | Designed at its start |
+| P4 | Live queue (ETag polling) | Below (done) |
+| P5 | Web: queue board, booking flow, schedule settings | Below (approved) |
 
 ---
 
@@ -568,3 +568,107 @@ Taken while implementing:
   the anonymous case.
 - `useQueue` keys its state by the filters, so a screen never shows one doctor's queue under
   another's filter; React's lint forbids resetting state inside the effect.
+
+
+---
+
+## M3-P5 — Screens: queue board, booking, schedule settings
+
+**Status: approved by the developer 17 Oct 2026 with 1A–6A (spec D27–D32).** The recommended options,
+marked **(rec.)**, are the ones chosen. Covers FR-APT-03 (≤ 3 interactions, AC6), FR-QUE-01, FR-QUE-03 (AC4 in two browsers),
+FR-QUE-04 and the screens for FR-APT-01, FR-APT-05; spec §6 UI notes. Web only: the API is done.
+It closes M3, so its last commit carries `Closes #36`.
+
+### Concepts
+
+1. **The queue is the front desk's home page.** `/queue` is already where every role lands. It
+   becomes the live board: one doctor's day, rows in token or slot order, each with the patient's
+   code, name, age, status and wait, built on `useQueue` (P4). A change made on one screen shows on
+   the others within 5 seconds (AC4).
+2. **Single clicks for the common path, a menu for the rest** (spec §6). Each row shows the one
+   next step as a button: *Arrived*, *Start*, *Complete*. *No-show*, *Cancel* and *Reschedule* sit
+   in a row menu. Every action sends the status the row showed (`{from, to}`, D18); a 409 because
+   another screen moved first refreshes the row and says so.
+3. **Booking in three interactions** (AC6), from the board: *Book* opens a drawer with the patient
+   search focused → (1) pick the patient → (2) pick a slot (slot mode; the earliest free one is
+   preselected) or accept the next token (token mode, preselected) → (3) *Confirm*. Typing in the
+   search does not count as an interaction; the Playwright journey counts the clicks.
+4. **Times in the clinic's zone, never the browser's** (apps/web/CLAUDE.md). One formatter
+   (`lib/format/time.ts`) turns the API's UTC instants into the clinic's wall clock.
+5. **Hiding is convenience, the API is the guard.** Buttons a role cannot use are not shown, but
+   every refusal from the API is handled and shown with its message and request ID.
+
+### Decisions for you
+
+| # | Question | Options |
+|---|---|---|
+| 1 | Which doctor the board shows first | **A (rec.)** A doctor sees their own day; others see the doctor they last chose on this device (local storage), else the first active one; a doctor picker above the board. **B** Always the first doctor. **C** All doctors on one board. |
+| 2 | Other dates on the board | **A (rec.)** Previous / next day and a date field. Other days are read-only for transitions (the API refuses them, D19), but booking, cancel and reschedule work on future days. **B** Today only; other days through booking only. |
+| 3 | Confirming actions | **A (rec.)** *Arrived*, *Start*, *Complete* are one click (spec §6). *No-show* asks for confirmation, since there is no undo (D20); *Cancel* opens a dialog for the reason (D14); *Reschedule* opens the booking drawer on the target session. **B** Confirm every action. |
+| 4 | Walk-ins | **A (rec.)** An *Add walk-in* button on today's board: the same patient search, then one click; the API picks the session and slot (D21). **B** Walk-ins through the booking drawer with source WALK_IN. |
+| 5 | Schedule settings | **A (rec.)** `/settings/schedule` for owners (`SCHEDULES_MANAGE`): per doctor, a weekly list of blocks (add, edit, remove, then *Save* sends the whole week, R16), the upcoming leave and extra sessions (add, remove), and the clinic's booking mode (`CLINIC_MANAGE`). After any change, booked sessions the change kept are listed for the owner to reschedule (D4, D10). **B** The weekly blocks only; leave and extras stay API-only until M7. |
+| 6 | A patient's appointments | **A (rec.)** A section on the patient profile listing their appointments (date, doctor, token or slot, status), with *Book* for that patient. **B** Not in M3. |
+
+On 3A the developer asked whether *Arrived*, *Start* and *Complete* should also ask for
+confirmation, since there is no undo, and left it to whether that is standard and better for the
+user. It is not applied: confirmations are for rare, destructive actions; on the steps pressed
+dozens of times a day they train people to click *Yes* without reading, which also weakens the
+confirmations that matter (*No-show*). Spec §6 asks for single clicks, and the mistakes are
+recoverable: a wrong arrival can be marked no-show (or cancelled), and a no-show who turns up is
+marked arrived again. Mis-clicks are guarded instead by:
+- one next-step button per row, whose accessible name includes the patient ("Mark Asha Rao
+  arrived"), with space between rows;
+- a status message after every action naming the patient, the new status and the time ("Asha Rao
+  marked arrived at 10:42"), announced to screen readers, so a slip is seen at once;
+- confirmation kept for *No-show*, and a reason required for *Cancel*.
+
+Fixed rather than asked:
+- English only in M3 (the i18n layer arrives later, as for patients).
+- New shared primitives go in `components/` (a `Dialog`, a row `Menu`) with keyboard support and
+  focus management; the 1366 × 768 front-desk screen is the design target.
+- The nav gains *Schedule* for roles holding `SCHEDULES_MANAGE`.
+
+### Files
+
+| Area | Files |
+|---|---|
+| Board | `features/queue/{QueueBoard,QueueRow,DoctorPicker,DayNav,WalkInDialog}.tsx`, `features/queue/actions.ts`; `app/(clinic)/(workspace)/queue/page.tsx` (replaces `EmptyQueue`) |
+| Booking | `features/appointments/{BookDrawer,SlotPicker,CancelDialog,RescheduleDrawer,PatientAppointments}.tsx`, `features/appointments/api.ts` |
+| Schedule | `features/schedule/{ScheduleEditor,BlockRow,ExceptionsList,BookingModeSetting,KeptSessions}.tsx`; `app/(clinic)/(workspace)/settings/schedule/page.tsx`; `features/shell/nav.ts` |
+| Shared | `components/{Dialog,Menu}.tsx`, `lib/format/time.ts` |
+| E2E | `e2e/booking-three-interactions.spec.ts` (AC6), `e2e/queue-two-browsers.spec.ts` (AC4) |
+| Docs | `docs/TESTING.md` (the journeys), `docs/RUNBOOK.md` §1 (what to try after `make seed`), M3 notes, CHANGELOG; the M3 exit criterion checked off |
+
+### Tests
+
+- **Component (Vitest + Testing Library):** board rows and the next-step button per status; a 409
+  from another screen refreshing the row; the booking drawer's preselection in both modes; slot
+  availability; cancel reasons (OTHER needs a note); walk-in errors (`QUE_NO_SESSION`); schedule
+  editor validation messages from `SCH_*` codes and the kept-sessions list; clinic-zone time
+  formatting at the Kolkata midnight edges; keyboard paths and focus return for dialogs and menus.
+- **E2E (Playwright, seed data):** AC6 books in at most 3 interactions from the board; AC4 two
+  browser contexts on the board, one marks *Arrived*, the other shows it within 5 s. Both create
+  their own session for today (an extra session running now), so they pass at any hour.
+- `make lint typecheck test`, `make smoke`, `make e2e`.
+
+### Verify
+
+```bash
+make up && make seed
+# Front desk (desk@sample-clinic.example) on http://localhost:3000/queue:
+#   Book -> pick Asha Rao -> Confirm: token 1 on the board (3 interactions)
+#   a second browser as the doctor: Arrived on one, the other shows it within 5 s
+#   Start, Complete; No-show asks first; Cancel needs a reason
+# Owner (owner@...) on /settings/schedule: change Monday's hours with a booking that day ->
+#   the kept session is listed; add leave; switch booking mode
+make lint typecheck test && make smoke && make e2e
+```
+
+### Risks
+
+| Risk | Mitigation |
+|---|---|
+| Phase size (three screen areas) | Built and committed as three areas (board, booking, schedule), each with its tests; the phase is reported once |
+| Time-zone mistakes in the browser | One formatter, given the clinic's zone; tested at both midnight edges, run with `TZ=America/New_York` in CI as the API is |
+| Flaky timing in AC4 | The journey waits on the row's text with a 5-second timeout, not on sleeps |
+| A stale row acting on the wrong status | `{from, to}` from the row; the 409 refreshes it |
