@@ -197,6 +197,8 @@ def test_r5_issuing_freezes_the_prescription_with_what_is_printed(world: World, 
     again = _send(doctor, "POST", f"/api/v1/prescriptions/{rx['id']}/issue", {"revision": 3})
     assert (again.status_code, _code(again)) == (409, "RX_NOT_DRAFT")
     [(_, meta)] = _audit(db, "prescription.issued")
+    link_id = meta.pop("link_id")  # M4-P5 decision 1A: version 1 creates the chain's link
+    assert link_id
     assert meta == {
         "visit_id": visit["id"],
         "version": "1",

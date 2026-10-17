@@ -11,6 +11,7 @@ from __future__ import annotations
 import secrets
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 
 import structlog
 from flask import Flask
@@ -25,6 +26,7 @@ from mediease_api.adapters.pdf.weasy import WeasyPrintRenderer
 from mediease_api.adapters.security.argon2_hasher import Argon2PasswordHasher
 from mediease_api.adapters.security.ip_hash import HmacIpHasher
 from mediease_api.adapters.security.jwt_tokens import JwtAccessTokenIssuer
+from mediease_api.adapters.security.link_signer import HmacLinkSigner
 from mediease_api.adapters.security.refresh_secrets import Sha256RefreshTokenSecrets
 from mediease_api.adapters.storage.local import LocalBlobStorage
 from mediease_api.adapters.storage.s3 import S3BlobStorage
@@ -49,6 +51,15 @@ from mediease_api.application.clinics.onboard_clinic import (
 )
 from mediease_api.application.clinics.queries import GetClinic, GetDoctor, ListDoctors, ListStaff
 from mediease_api.application.identity.accept_invite import AcceptInvite, DescribeInvite
+from mediease_api.application.links.use_cases import (
+    DescribeLink,
+    GetLink,
+    LinkTokens,
+    ReplaceLink,
+    ResetLink,
+    VerifyChallenge,
+    ViewPrescription,
+)
 from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics
 from mediease_api.application.patients.consent import OptIn, OptOut, RecordConsent
 from mediease_api.application.patients.import_patients import ImportPatients
@@ -99,6 +110,7 @@ from mediease_api.delivery.http.ops import create_ops_blueprint
 from mediease_api.delivery.http.patients import create_patients_blueprint
 from mediease_api.delivery.http.platform import create_platform_blueprint
 from mediease_api.delivery.http.prescriptions import create_prescriptions_blueprint
+from mediease_api.delivery.http.public_links import create_public_links_blueprint
 from mediease_api.delivery.http.request_info import register_request_info
 from mediease_api.delivery.http.rx_library import create_rx_library_blueprint
 from mediease_api.delivery.http.scheduling import create_scheduling_blueprint
@@ -138,6 +150,9 @@ class _UseCases:
     # M4-P4 (ADR-0012): built once; both are safe to share between requests.
     pdf_renderer: PdfRendererPort
     blob_storage: BlobStoragePort
+    # M4-P5: patient link tokens (the signer holds the keys) and their lifetime.
+    link_tokens: LinkTokens
+    link_ttl_days: int
 
     def sign_in(self) -> SignIn:
         return SignIn(
@@ -310,7 +325,49 @@ class _UseCases:
         return DiscardDraft(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def issue_prescription(self) -> IssuePrescription:
-        return IssuePrescription(uow=self._uow(), clock=self.clock, ids=self.ids)
+        return IssuePrescription(
+            uow=self._uow(),
+            clock=self.clock,
+            ids=self.ids,
+            link_key_id=self.link_tokens.current_key_id,
+            link_ttl_days=self.link_ttl_days,
+        )
+
+    def describe_link(self) -> DescribeLink:
+        return DescribeLink(
+            uow=self._uow(), clock=self.clock, ids=self.ids, tokens=self.link_tokens
+        )
+
+    def verify_link(self) -> VerifyChallenge:
+        return VerifyChallenge(
+            uow=self._uow(), clock=self.clock, ids=self.ids, tokens=self.link_tokens
+        )
+
+    def view_link_prescription(self) -> ViewPrescription:
+        return ViewPrescription(
+            uow=self._uow(), clock=self.clock, ids=self.ids, tokens=self.link_tokens
+        )
+
+    def _staff_link(self, kind: type[GetLink] | type[ResetLink] | type[ReplaceLink]) -> Any:
+        return kind(
+            uow=self._uow(),
+            clock=self.clock,
+            ids=self.ids,
+            tokens=self.link_tokens,
+            ttl_days=self.link_ttl_days,
+        )
+
+    def get_patient_link(self) -> GetLink:
+        link: GetLink = self._staff_link(GetLink)
+        return link
+
+    def reset_patient_link(self) -> ResetLink:
+        link: ResetLink = self._staff_link(ResetLink)
+        return link
+
+    def replace_patient_link(self) -> ReplaceLink:
+        link: ReplaceLink = self._staff_link(ReplaceLink)
+        return link
 
     def revise_prescription(self) -> RevisePrescription:
         return RevisePrescription(uow=self._uow(), clock=self.clock, ids=self.ids)
@@ -448,6 +505,8 @@ def create_app(
         dummy_password_hash=hasher.hash(secrets.token_urlsafe(32)),
         pdf_renderer=pdf_renderer or WeasyPrintRenderer(),
         blob_storage=blob_storage or build_blob_storage(settings),
+        link_tokens=LinkTokens(HmacLinkSigner(settings.patient_link_keys())),
+        link_ttl_days=settings.PATIENT_LINK_TTL_DAYS,
     )
 
     # static_folder=None: the API serves JSON only, so there is no static route
@@ -479,7 +538,10 @@ def create_app(
     app.register_blueprint(create_scheduling_blueprint(use_cases))
     app.register_blueprint(create_appointments_blueprint(use_cases))
     app.register_blueprint(create_visits_blueprint(use_cases))
-    app.register_blueprint(create_prescriptions_blueprint(use_cases))
+    app.register_blueprint(
+        create_prescriptions_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
+    )
+    app.register_blueprint(create_public_links_blueprint(use_cases))
     app.register_blueprint(create_rx_library_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)

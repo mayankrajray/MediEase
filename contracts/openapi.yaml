@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.16.0
+  version: 0.17.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -12,6 +12,10 @@ servers:
   - url: http://localhost:3000
     description: Local web origin (browser path, proxied to the API)
 tags:
+  - name: patient-links
+    description: |
+      Public patient prescription links (M4-P5, FR-RX-07, FR-RX-08). No session: the
+      token and the last 4 digits of the patient's phone are the authority.
   - name: platform
     description: Liveness and readiness (M0)
   - name: auth
@@ -2467,6 +2471,244 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '404':
           $ref: '#/components/responses/PermissionError'
+  /api/v1/prescriptions/{rx_id}/link:
+    get:
+      tags: [prescriptions]
+      operationId: getPatientLink
+      summary: The prescription chain's patient link, for the QR code and copy button
+      description: |
+        M4-P5 decisions 1A, 6A; spec R9. One link per chain, made when version 1 is issued
+        (and here for chains issued before M4-P5, recording patient_link.created); any version's
+        ID names the chain. IDs, expiry, lock state and open count only, never content. 409
+        RX_NOT_ISSUED while the chain has only a draft. Permission RX_PRINT.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PrescriptionPath'
+      responses:
+        '200':
+          description: The chain's link
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkInfo'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/PrescriptionError'
+  /api/v1/prescriptions/{rx_id}/link/reset:
+    post:
+      tags: [prescriptions]
+      operationId: resetPatientLink
+      summary: Unlock a patient link after five wrong last-4 answers
+      description: |
+        Spec R10, decision 6A. 409 LINK_NOT_LOCKED when it is not locked. Records
+        patient_link.reset. Permission RX_PRINT. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/PrescriptionPath'
+      responses:
+        '200':
+          description: The chain's link
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkInfo'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/PrescriptionError'
+  /api/v1/prescriptions/{rx_id}/link/replace:
+    post:
+      tags: [prescriptions]
+      operationId: replacePatientLink
+      summary: Revoke the chain's patient link and make a new one
+      description: |
+        Decision 6A: for an expired, forwarded or lost link. The old token answers 410
+        LINK_REVOKED from now on. Records patient_link.replaced. Permission RX_PRINT. Needs
+        X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/PrescriptionPath'
+      responses:
+        '200':
+          description: The chain's link
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkInfo'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/PrescriptionError'
+  /api/v1/public/links/{token}:
+    get:
+      tags: [patient-links]
+      operationId: describePatientLink
+      summary: What the patient page shows before the last-4 check
+      description: |
+        Spec R9, R12; FR-RX-08. No session. The clinic's name, the patient's saved language and
+        whether the link is locked; nothing clinical. 404 LINK_INVALID for any token that is not
+        exactly one of ours; 410 LINK_EXPIRED or LINK_REVOKED; 429 LINK_RATE_LIMITED.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/LinkToken'
+      responses:
+        '200':
+          description: The link is usable
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkSummary'
+        '404':
+          $ref: '#/components/responses/LinkError'
+        '410':
+          $ref: '#/components/responses/LinkError'
+        '429':
+          $ref: '#/components/responses/LinkRateLimited'
+  /api/v1/public/links/{token}/verify:
+    post:
+      tags: [patient-links]
+      operationId: verifyPatientLink
+      summary: The last-4 check; returns a 30-minute view token
+      description: |
+        Spec R10, R13; FR-RX-08; AC3. The last 4 digits of the patient's phone. Wrong: 401
+        LINK_CHALLENGE_FAILED with details.attempts_left; the fifth wrong answer, and every
+        attempt after it, is 423 LINK_LOCKED until clinic staff reset it. Right: records
+        patient_link.opened and returns a view token for this link only (30 minutes), which the
+        patient page keeps in its own HttpOnly cookie and sends as X-Link-View.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/LinkToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientLinkChallenge'
+      responses:
+        '200':
+          description: Opened
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkView'
+        '401':
+          $ref: '#/components/responses/LinkError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+        '423':
+          $ref: '#/components/responses/LinkError'
+        '404':
+          $ref: '#/components/responses/LinkError'
+        '410':
+          $ref: '#/components/responses/LinkError'
+        '429':
+          $ref: '#/components/responses/LinkRateLimited'
+  /api/v1/public/links/{token}/prescription:
+    get:
+      tags: [patient-links]
+      operationId: viewLinkedPrescription
+      summary: The patient page's content (the latest issued version)
+      description: |
+        Spec R11, R12, R19, R20; FR-RX-07; AC2, AC10. Needs X-Link-View from verify, else 401
+        LINK_CHALLENGE_REQUIRED. The chain's latest issued version, with updated_note when older
+        versions exist; labels and structured phrases in lang (default: the patient's saved
+        language), everything the doctor wrote exactly as written. No patient details.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/LinkToken'
+        - name: X-Link-View
+          in: header
+          required: false
+          description: The view token from verify
+          schema:
+            type: string
+            maxLength: 200
+        - name: lang
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Language'
+      responses:
+        '200':
+          description: The page
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientPrescriptionPage'
+        '401':
+          $ref: '#/components/responses/LinkError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+        '423':
+          $ref: '#/components/responses/LinkError'
+        '404':
+          $ref: '#/components/responses/LinkError'
+        '410':
+          $ref: '#/components/responses/LinkError'
+        '429':
+          $ref: '#/components/responses/LinkRateLimited'
   /api/v1/rx-favourites:
     get:
       tags: [rx-library]
@@ -2937,6 +3179,14 @@ components:
       schema:
         type: string
         maxLength: 128
+    LinkToken:
+      name: token
+      in: path
+      required: true
+      description: The patient link token (spec R9); never logged.
+      schema:
+        type: string
+        maxLength: 200
   responses:
     SessionStarted:
       description: Session started or renewed; me_access, me_refresh and me_csrf are set
@@ -3044,10 +3294,37 @@ components:
         visit's chain); RX_DRAFT_EXISTS (409, details.prescription_id); RX_NOT_LATEST (409,
         details.latest_id); VIS_LOCKED (409: version 1 after the visit's lock); RX_EMPTY (422);
         RX_DOCTOR_INCOMPLETE (422, details.fields); REQ_VALIDATION_FAILED (422, field and rule);
-        RX_NOT_ISSUED (409, details.status: a draft is never printed, M4-P4)
+        RX_NOT_ISSUED (409, details.status: a draft is never printed, M4-P4);
+        LINK_NOT_LOCKED (409: resetting a link that is not locked, M4-P5)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    LinkError:
+      description: |
+        LINK_INVALID (404: not one of our tokens); LINK_EXPIRED, LINK_REVOKED (410: ask the
+        clinic for a new link); LINK_CHALLENGE_FAILED (401, details.attempts_left);
+        LINK_CHALLENGE_REQUIRED (401: verify first, or the view ended); LINK_LOCKED (423: five
+        wrong answers; the clinic can reset it)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    LinkRateLimited:
+      description: LINK_RATE_LIMITED (too many requests for this link this minute)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+        Retry-After:
+          description: Seconds until the next minute
+          schema:
+            type: string
       content:
         application/json:
           schema:
@@ -3921,6 +4198,143 @@ components:
           $ref: '#/components/schemas/BookingMode'
         rx_paper_size:
           $ref: '#/components/schemas/PaperSize'
+    PatientLinkInfo:
+      type: object
+      additionalProperties: false
+      description: What the clinic sees about a patient link (M4-P5 decision 6A); no content.
+      required: [id, url, expires_at, locked, open_count, last_opened_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          description: PUBLIC_BASE_URL/p/<token>, for the QR code and copy button
+        expires_at:
+          type: string
+          format: date-time
+        locked:
+          type: boolean
+        open_count:
+          type: integer
+          minimum: 0
+        last_opened_at:
+          type: [string, 'null']
+          format: date-time
+    PatientLinkSummary:
+      type: object
+      additionalProperties: false
+      required: [clinic_name, language, locked, challenge_required]
+      properties:
+        clinic_name:
+          type: string
+        language:
+          $ref: '#/components/schemas/Language'
+        locked:
+          type: boolean
+        challenge_required:
+          type: boolean
+    PatientLinkChallenge:
+      type: object
+      additionalProperties: false
+      required: [phone_last4]
+      properties:
+        phone_last4:
+          type: string
+          pattern: '^[0-9]{4}$'
+    PatientLinkView:
+      type: object
+      additionalProperties: false
+      required: [view_token, view_expires_at]
+      properties:
+        view_token:
+          type: string
+          maxLength: 200
+        view_expires_at:
+          type: string
+          format: date-time
+    PageField:
+      type: object
+      additionalProperties: false
+      required: [label, value]
+      properties:
+        label:
+          type: string
+        value:
+          type: string
+    PatientPrescriptionPage:
+      type: object
+      additionalProperties: false
+      description: |
+        The patient page (spec §6, R11, R20): every string final; labels in the page's language,
+        the doctor's text as written. No patient details.
+      required: [language, version, clinic_name, clinic_phone_e164, call_label, doctor_name,
+        doctor_lines, issued_on, updated_note, medicines_heading, medicines, advice_heading,
+        advice, advice_notes, follow_up]
+      properties:
+        language:
+          $ref: '#/components/schemas/Language'
+        version:
+          type: integer
+          minimum: 1
+        clinic_name:
+          type: string
+        clinic_phone_e164:
+          type: [string, 'null']
+        call_label:
+          type: string
+        doctor_name:
+          type: string
+        doctor_lines:
+          type: array
+          items:
+            type: string
+        issued_on:
+          $ref: '#/components/schemas/PageField'
+        updated_note:
+          type: [string, 'null']
+        medicines_heading:
+          type: string
+        medicines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [number, name, form_strength, fields]
+            properties:
+              number:
+                type: integer
+              name:
+                type: string
+              form_strength:
+                type: [string, 'null']
+              fields:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PageField'
+        advice_heading:
+          type: string
+        advice:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [heading, entries]
+            properties:
+              heading:
+                type: string
+              entries:
+                type: array
+                items:
+                  type: string
+        advice_notes:
+          oneOf:
+            - $ref: '#/components/schemas/PageField'
+            - type: 'null'
+        follow_up:
+          oneOf:
+            - $ref: '#/components/schemas/PageField'
+            - type: 'null'
     PaperSize:
       type: string
       enum: [A5, A4]

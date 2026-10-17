@@ -10,6 +10,7 @@
 | ``POST /api/v1/prescriptions/{rx_id}/revise`` | ``CLINICAL_WRITE`` (and the visit's doctor) |
 | ``GET /api/v1/prescriptions/{rx_id}/pdf`` | ``RX_PRINT`` (superseded: + ``CLINICAL_VIEW``) |
 | ``GET /api/v1/patients/{patient_id}/prescriptions`` | ``RX_PRINT`` (M4-P4; no content) |
+| ``GET /api/v1/prescriptions/{rx_id}/link`` (+ ``/reset``, ``/replace``) | ``RX_PRINT`` (M4-P5) |
 
 Front desk holds neither clinical permission (spec §2); it may print (``RX_PRINT``, spec D6).
 Clinical content: never logged or cached, and validation errors name the field and the rule,
@@ -25,6 +26,7 @@ from uuid import UUID
 from flask import Blueprint, Response, jsonify
 from pydantic import BaseModel, ConfigDict, Field
 
+from mediease_api.application.links.use_cases import GetLink, ReplaceLink, ResetLink
 from mediease_api.application.prescriptions.pdf import (
     PDF_CONTENT_TYPE,
     DownloadPrescriptionPdf,
@@ -41,7 +43,12 @@ from mediease_api.application.prescriptions.use_cases import (
     RevisePrescription,
 )
 from mediease_api.delivery.http.access import clinic, current_context
-from mediease_api.delivery.http.bodies import items_body, prescription_body, printable_body
+from mediease_api.delivery.http.bodies import (
+    items_body,
+    patient_link_body,
+    prescription_body,
+    printable_body,
+)
 from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.prescriptions import prescription as limits
@@ -68,6 +75,9 @@ class PrescriptionUseCases(Protocol):
     def revise_prescription(self) -> RevisePrescription: ...
     def download_prescription_pdf(self) -> DownloadPrescriptionPdf: ...
     def list_printable(self) -> ListPrintable: ...
+    def get_patient_link(self) -> GetLink: ...
+    def reset_patient_link(self) -> ResetLink: ...
+    def replace_patient_link(self) -> ReplaceLink: ...
 
 
 class PreparationRequest(BaseModel):
@@ -159,7 +169,9 @@ def item_input(i: int, item: ItemRequest, at: str | None = None) -> ItemInput:
     )
 
 
-def create_prescriptions_blueprint(use_cases: PrescriptionUseCases) -> Blueprint:
+def create_prescriptions_blueprint(
+    use_cases: PrescriptionUseCases, *, public_base_url: str
+) -> Blueprint:
     bp = Blueprint("prescriptions", __name__, url_prefix="/api/v1")
     one = "/prescriptions/<uuid:rx_id>"
 
@@ -235,5 +247,24 @@ def create_prescriptions_blueprint(use_cases: PrescriptionUseCases) -> Blueprint
     def list_printable(patient_id: UUID) -> Response:
         rows = use_cases.list_printable().execute(current_context(), patient_id=patient_id)
         return jsonify(items_body(printable_body(r) for r in rows))
+
+    # M4-P5 decision 6A: the chain's patient link for the QR code, and its two repairs.
+    @bp.get(f"{one}/link")
+    @clinic(Permission.RX_PRINT)
+    def get_patient_link(rx_id: UUID) -> Response:
+        info = use_cases.get_patient_link().execute(current_context(), rx_id=rx_id)
+        return jsonify(patient_link_body(info, public_base_url))
+
+    @bp.post(f"{one}/link/reset")
+    @clinic(Permission.RX_PRINT)
+    def reset_patient_link(rx_id: UUID) -> Response:
+        info = use_cases.reset_patient_link().execute(current_context(), rx_id=rx_id)
+        return jsonify(patient_link_body(info, public_base_url))
+
+    @bp.post(f"{one}/link/replace")
+    @clinic(Permission.RX_PRINT)
+    def replace_patient_link(rx_id: UUID) -> Response:
+        info = use_cases.replace_patient_link().execute(current_context(), rx_id=rx_id)
+        return jsonify(patient_link_body(info, public_base_url))
 
     return bp

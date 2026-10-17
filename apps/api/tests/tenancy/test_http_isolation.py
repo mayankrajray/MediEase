@@ -66,6 +66,13 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/patients/<uuid:patient_id>/prescriptions": lambda w: (
         f"{_patient_url(w)}/prescriptions"
     ),
+    "/api/v1/prescriptions/<uuid:rx_id>/link": lambda w: (
+        f"{_prescription_url(w, issued=True)}/link"
+    ),
+    "/api/v1/prescriptions/<uuid:rx_id>/link/reset": lambda w: f"{_locked_link_url(w)}/reset",
+    "/api/v1/prescriptions/<uuid:rx_id>/link/replace": lambda w: (
+        f"{_prescription_url(w, issued=True)}/link/replace"
+    ),
     "/api/v1/rx-favourites/<uuid:favourite_id>": lambda w: _library_url(w, "rx-favourites"),
     "/api/v1/rx-templates/<uuid:template_id>": lambda w: _library_url(w, "rx-templates"),
 }
@@ -101,6 +108,8 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
     "/api/v1/visits/<uuid:visit_id>/prescriptions": ("POST", {}),
     "/api/v1/prescriptions/<uuid:rx_id>/issue": ("POST", {"revision": 2}),
     "/api/v1/prescriptions/<uuid:rx_id>/revise": ("POST", {}),
+    "/api/v1/prescriptions/<uuid:rx_id>/link/reset": ("POST", {}),
+    "/api/v1/prescriptions/<uuid:rx_id>/link/replace": ("POST", {}),
     "/api/v1/rx-favourites/<uuid:favourite_id>": (
         "PUT",
         {"revision": 1, "name": "Tab Y usual", "item": {"medicine_name": "Tab Y"}},
@@ -221,6 +230,18 @@ def _prescription_url(world: World, *, issued: bool = False) -> str:
     if issued:
         resp = doctor.post(f"{url}/issue", json={"revision": 2}, headers=headers)
         assert resp.status_code == 200, resp.get_json()
+    return url
+
+
+def _locked_link_url(world: World) -> str:
+    """Clinic B's prescription link after five wrong answers, so a reset is valid for B."""
+    rx = _prescription_url(world, issued=True)
+    client, _ = _owner_of_b(world)
+    url = f"{rx}/link"
+    token = client.get(url).get_json()["url"].rsplit("/p/", 1)[1]
+    for _ in range(5):
+        world.anonymous().post(f"/api/v1/public/links/{token}/verify", json={"phone_last4": "0000"})
+    assert client.get(url).get_json()["locked"] is True
     return url
 
 

@@ -25,6 +25,7 @@ import structlog
 
 from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor, RequestContext
+from mediease_api.application.links.use_cases import new_link
 from mediease_api.application.scheduling.schedules import load_clinic
 from mediease_api.application.visits.use_cases import callers_doctor_id, load_visit
 from mediease_api.domain.audit.actions import AuditAction
@@ -260,7 +261,24 @@ class DiscardDraft(_UseCase):
 
 
 class IssuePrescription(_UseCase):
-    """R4, R5, R14, R20: freeze the draft; a revision supersedes the version before it."""
+    """R4, R5, R14, R20: freeze the draft; a revision supersedes the version before it.
+
+    Issuing version 1 also creates the chain's patient link (M4-P5 decision 1A); revisions
+    reuse it, so a link already shown or sent always opens the latest version.
+    """
+
+    def __init__(
+        self,
+        *,
+        uow: UnitOfWork,
+        clock: ClockPort,
+        ids: IdPort,
+        link_key_id: str,
+        link_ttl_days: int,
+    ) -> None:
+        super().__init__(uow=uow, clock=clock, ids=ids)
+        self._link_key_id = link_key_id
+        self._link_ttl_days = link_ttl_days
 
     def execute(self, ctx: RequestContext, *, rx_id: UUID, seen_revision: int) -> PrescriptionView:
         with self._uow as uow:
@@ -300,6 +318,17 @@ class IssuePrescription(_UseCase):
                 "language": rx.language.value,
                 "link_delivery": rx.link_delivery.value,
             }
+            if rx.version == 1 and tenant.patient_links.active_for_prescription(rx.id) is None:
+                link = new_link(
+                    tenant,
+                    rx,
+                    ids=self._ids,
+                    key_id=self._link_key_id,
+                    ttl_days=self._link_ttl_days,
+                    created_by=ctx.user_id,
+                    now=now,
+                )
+                metadata["link_id"] = str(link.id)
             if older is not None:
                 metadata["supersedes_id"] = str(older.id)
             self._audit(uow, ctx, AuditAction.PRESCRIPTION_ISSUED, rx, **metadata)
