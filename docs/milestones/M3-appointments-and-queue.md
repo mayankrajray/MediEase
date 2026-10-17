@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) and in implementation |
+| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) and implemented the same day, awaiting the developer's confirmation |
 | Spec | `docs/specs/appointments-and-queue.md` (Approved 2026-10-17, D1–D9) |
 | Covers | FR-APT-01..07, FR-QUE-01..05 |
 | Issue / branch / PR | #36 · `m3/36-appointments-and-queue` · one PR for the whole milestone (ADR-0011) |
@@ -22,7 +22,7 @@
 
 ## M3-P1 — Doctor schedules, exceptions and sessions
 
-**Status: approved by the developer 17 Oct 2026 with 1A–6A and three refinements** (a maximum block
+**Status: approved by the developer 17 Oct 2026 with 1A–6A and three refinements; implemented the same day, awaiting confirmation (result at the end of this section).** (a maximum block
 length so a daytime inversion still fails; cross-day overlap; leave on already-generated dates).
 Covers FR-APT-01, FR-APT-02; spec R1–R4 (the token counter's home), R14–R20, AC5.
 
@@ -128,3 +128,46 @@ make lint typecheck test && make smoke && make e2e
 | Lazy generation racing itself or a change | The unique constraint with `ON CONFLICT DO NOTHING`; the per-doctor lock (R20); a two-thread test |
 | A change silently dropping a booking | Booked sessions are never deleted; they come back in `kept_sessions` |
 | Generation writes on every read | Only missing sessions are inserted; a date that is already complete costs one indexed read |
+### Result (17 Oct 2026)
+
+`make lint typecheck test` on the Linux clone: ruff, format, import-linter (4 contracts kept) and
+mypy (129 files) clean; API **911 tests** (64 new: domain, HTTP on PostgreSQL, contract, tenancy,
+migration, seed) at 99.08% package and 99% `domain/` + `application/` coverage; web 31 files and
+314 tests, ESLint and tsc clean against the regenerated types; the contract validates (0.9.0) and
+`gen:api:check` is clean. `make up` rebuilt both images and applied `0007` to the existing local
+database; `make seed` gave both seeded doctors their Monday-Saturday schedule; `make smoke` passed.
+
+The verify steps on the stack, as the sample clinic's owner, for the Monday ten days ahead:
+- The seeded schedule (6 blocks, TOKENS) generated one session at 04:30 UTC with 12 places and
+  token 1.
+- Replacing it with 23:00-01:00 returned `overnight: true` and `kept_sessions: []`. The Monday's
+  10:00 session was gone, and the new one ran 17:30-19:30 UTC, still dated Monday (AC5).
+- 13:00-10:00 was `422 SCH_INVALID_BLOCK` (index 0, the 12-hour reason). Sunday 22:00-02:00 with
+  Monday 01:00-05:00 was `409 SCH_OVERLAP` (blocks 0 and 1).
+- A leave on that Monday left it with no sessions.
+- The front desk's PUT was `403 PERM_DENIED`, while the front desk could still read sessions.
+- The audit rows hold counts, kinds, dates and the doctor ID, never the note.
+
+The demo schedule was put back afterwards.
+
+The developer's three refinements are each proved by a test:
+- The 12-hour bound: `test_r14_a_daytime_inversion_is_refused_and_a_night_shift_accepted`.
+- Cross-day overlap: `test_r15_d7_an_overnight_block_cannot_spill_into_the_next_mornings_block`,
+  `test_r15_an_extra_cannot_overlap_the_previous_nights_block` and the week-circle domain tests.
+- Leave on generated dates:
+  `test_r17_leave_on_a_generated_date_removes_unbooked_and_keeps_booked_sessions`. Bookings are
+  stood in for by setting `booked_count`, until P2 books for real.
+
+Concurrent generation: two clients reading one new date at once leave exactly the two planned
+sessions (`test_r1_two_screens_reading_one_new_date_create_one_set`).
+
+Taken while implementing:
+- The new session schema is `DoctorSession` in the contract, because `Session` already names the
+  sign-in session.
+- A multi-row `INSERT ... ON CONFLICT` reports `rowcount` as -1 through psycopg, so the generator
+  counts the rows from `RETURNING` instead.
+- `TenantScopedRepository` gained `_delete_row` (scoped by clinic, `NotFound` otherwise), the first
+  tenant delete.
+- The booking-mode change lives in `UpdateClinic` with the other clinic settings, and is audited
+  as `clinic.updated` with the field name.
+- Slots carry only their times in P1; availability per slot arrives with bookings in P2.
