@@ -262,7 +262,7 @@ Responses carry personal data and are `Cache-Control: no-store`. The clinic is t
 | POST | `/api/v1/appointments/{id}/reschedule` | Move to another session or slot (201, new appointment) — **M3-P2** | FR-APT-05 |
 | POST | `/api/v1/appointments/{id}/cancel` | Cancel with a reason — **M3-P2** | FR-APT-05 |
 | GET | `/api/v1/patients/{id}/appointments` | A patient's appointments, newest first (≤ 50) — **M3-P2** | FR-APT-05 |
-| GET | `/api/v1/queue?date=&doctor_id=&include_cancelled=` | The day's sessions with appointments, patients and waits — **M3-P3** (`ETag`/304 in P4) | FR-QUE-01/03 |
+| GET | `/api/v1/queue?date=&doctor_id=&include_cancelled=` | The day's sessions with appointments, patients and waits — **M3-P3**; `ETag` / `If-None-Match` / 304 — **M3-P4** | FR-QUE-01/03 |
 | POST | `/api/v1/appointments/{id}/transitions` | `{ "from": "BOOKED", "to": "ARRIVED" }` (`QUEUE_MOVE`) — **M3-P3** | FR-QUE-02 |
 | POST | `/api/v1/queue/walk-ins` | Add a walk-in to today, arrived at once (`QUEUE_MOVE`) — **M3-P3** | FR-QUE-04 |
 
@@ -309,6 +309,12 @@ M3-P3 rules (spec R9–R11, D17–D22; contract 0.11.0):
 - **Queue** `GET /api/v1/queue`: `date` defaults to the clinic's today; sessions in start order, each
   with its active appointments by token or slot, the patient's code, name and age, and
   `wait_minutes`. Not cached; P4 adds the `ETag`.
+
+M3-P4 live queue (spec R12, D23–D26; contract 0.12.0): `GET /api/v1/queue` answers 200 with a
+strong `ETag` (a SHA-256 of the body). Send it back as `If-None-Match` and an unchanged queue is a
+bodiless `304` with the same tag. Screens poll every 5 seconds through `lib/api/poll.ts`; the
+response stays `Cache-Control: no-store`, so nothing holding names is cached. `If-None-Match` is
+compared weakly, as RFC 9110 requires (`*`, lists and `W/` tags work).
 
 ### Visits and prescriptions (M4)
 

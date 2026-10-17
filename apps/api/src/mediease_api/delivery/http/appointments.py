@@ -44,6 +44,7 @@ from mediease_api.delivery.http.bodies import (
     items_body,
     queue_body,
 )
+from mediease_api.delivery.http.etag import conditional_json
 from mediease_api.delivery.http.scheduling import _date_arg_optional, _uuid_arg
 from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.appointments.appointment import CANCEL_NOTE_MAX, REASON_MAX
@@ -240,6 +241,7 @@ def create_appointments_blueprint(use_cases: AppointmentUseCases) -> Blueprint:
             doctor_id=_uuid_arg("doctor_id"),
             include_cancelled=request.args.get("include_cancelled") == "true",
         )
-        return jsonify(queue_body(queue))
+        # R12, D23: screens poll with If-None-Match and get 304 while nothing changed.
+        return conditional_json(queue_body(queue))
 
     return bp

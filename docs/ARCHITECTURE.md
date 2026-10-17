@@ -216,6 +216,15 @@ Locking the **session row** serialises bookings for that doctor-session, which m
 under concurrency without application-level locks. A partial unique index on
 `(session_id, slot_start) WHERE status NOT IN ('CANCELLED')` is the second line of defence.
 
+### 5.1a The live queue (FR-QUE-03, M3-P4)
+Every open queue screen polls `GET /api/v1/queue` every 5 seconds through the web origin with
+`If-None-Match: <last ETag>` (`lib/api/poll.ts`). The API builds the queue as usual, hashes the
+JSON body into a strong `ETag` and answers `304` with no body when it matches, so a change made on
+one screen reaches the others within one interval while an idle queue costs no payload. The
+response is `no-store` (it holds names); the client keeps the last body in memory. Push
+(websockets, server-sent events) waits until polling is measured to be too slow or too costly
+(§13).
+
 ### 5.2 Issuing a prescription and delivering the link (FR-RX-06/07/08)
 
 ```mermaid

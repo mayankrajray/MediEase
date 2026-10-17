@@ -71,3 +71,21 @@ def test_adr_0008_transitions_walk_ins_and_the_queue_match_the_contract(
         _send(owner, "GET", "/api/v1/queue", query={"include_cancelled": "true"}),
         200,
     )
+
+
+def test_adr_0008_r12_the_queue_etag_and_304_match_the_contract(
+    openapi: OpenAPI,  # noqa: F811
+    world: World,
+) -> None:
+    owner = world.client_for(world.a.owner)
+    running_session(owner, world.a.doctor.id)
+    first = _send(owner, "GET", "/api/v1/queue")
+    _expect(openapi, first, 200)
+    tag = first.headers["ETag"]
+    owner.environ_base["HTTP_IF_NONE_MATCH"] = tag
+    try:
+        unchanged = _send(owner, "GET", "/api/v1/queue")
+    finally:
+        del owner.environ_base["HTTP_IF_NONE_MATCH"]
+    assert unchanged.status_code == 304 and unchanged.headers["ETag"] == tag
+    _check(openapi, unchanged)

@@ -448,6 +448,9 @@ export interface paths {
          * @description FR-QUE-01; D22. The date's sessions (generated as GET /sessions does) with their active
          *     appointments in token or slot order, each with the patient's code, name and age and the
          *     minutes waited. date defaults to the clinic's today. Permission APPOINTMENTS_MANAGE.
+         *     FR-QUE-03, R12, D23 (M3-P4): the 200 carries a strong ETag, a hash of the body; send it
+         *     back in If-None-Match (compared weakly, as RFC 9110 says) and an unchanged queue is a
+         *     bodiless 304. Screens poll every 5 seconds. Still no-store: nothing is cached.
          */
         readonly get: operations["getQueue"];
         readonly put?: never;
@@ -1762,6 +1765,8 @@ export interface components {
     };
     requestBodies: never;
     headers: {
+        /** @description Strong entity tag of the body (a quoted hash), for If-None-Match */
+        readonly ETag: string;
         /** @description Correlation ID for this request; quote it when reporting a problem. */
         readonly RequestId: string;
         /** @description Always "no-store" — identity, permissions and clinic data are never cached. */
@@ -2617,6 +2622,8 @@ export interface operations {
                  *     value that is not one of the caller's clinics gets the same 400, never a 404.
                  */
                 readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description The ETag of the queue the screen already has */
+                readonly "If-None-Match"?: string;
             };
             readonly path?: never;
             readonly cookie?: never;
@@ -2628,11 +2635,22 @@ export interface operations {
                 headers: {
                     readonly "X-Request-ID": components["headers"]["RequestId"];
                     readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly ETag: components["headers"]["ETag"];
                     readonly [name: string]: unknown;
                 };
                 content: {
                     readonly "application/json": components["schemas"]["Queue"];
                 };
+            };
+            /** @description Unchanged since the ETag sent; no body */
+            readonly 304: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly ETag: components["headers"]["ETag"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
             };
             readonly 400: components["responses"]["PermissionError"];
             readonly 401: components["responses"]["AuthError"];
