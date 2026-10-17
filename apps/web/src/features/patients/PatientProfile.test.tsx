@@ -26,7 +26,8 @@ afterEach(() => {
 
 function renderProfile() {
   renderInWorkspace(<PatientProfile patientId={PATIENT_ID} />);
-  return screen.findByRole("heading", { level: 1 });
+  // The first render of the file is the slowest under a full parallel run; 5 s as elsewhere.
+  return screen.findByRole("heading", { level: 1 }, { timeout: 5000 });
 }
 
 const consent = () => screen.getByRole("region", { name: "Messages" });
