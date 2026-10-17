@@ -23,6 +23,11 @@ export const CLN_SUSPENDED = "CLN_SUSPENDED";
 
 const ClinicContext = createContext<ClinicDetails | null>(null);
 
+/** The active clinic once it has loaded, or null (for the shell, which also shows while it loads). */
+export function useOptionalClinic(): ClinicDetails | null {
+  return useContext(ClinicContext);
+}
+
 /** The active clinic as the API describes it (name, status and timezone). */
 export function useClinic(): ClinicDetails {
   const clinic = useContext(ClinicContext);
@@ -44,15 +49,19 @@ type Load =
  * (with `X-Clinic-ID` when they have several), which exercises the real
  * tenancy path, surfaces a suspended clinic, and provides the clinic timezone
  * (`/me` does not carry it). Mount it with `key={clinic_id}` so switching clinic
- * starts afresh and nothing from the previous clinic is shown.
+ * starts afresh and nothing from the previous clinic is shown. `frame` wraps every state
+ * (the dashboard shell), so the shell can use the clinic once it is ready while the
+ * switcher keeps working when it is not.
  */
 export function ClinicGate({
   membership,
   sendClinicHeader,
+  frame = (body) => body,
   children,
 }: {
   membership: Membership;
   sendClinicHeader: boolean;
+  frame?: (body: ReactNode) => ReactNode;
   children: ReactNode;
 }) {
   const session = useSession();
@@ -85,13 +94,16 @@ export function ClinicGate({
     };
   }, [clinicId, sendClinicHeader, attempt, endSession, clearClinic]);
 
+  let body: ReactNode;
   switch (load.status) {
     case "ready":
-      return <ClinicContext.Provider value={load.clinic}>{children}</ClinicContext.Provider>;
+      body = children;
+      break;
     case "suspended":
-      return <SuspendedNotice clinicName={membership.clinic_name} error={load.error} />;
+      body = <SuspendedNotice clinicName={membership.clinic_name} error={load.error} />;
+      break;
     case "failed":
-      return (
+      body = (
         <ErrorNotice
           error={load.error}
           onRetry={() => {
@@ -100,13 +112,22 @@ export function ClinicGate({
           }}
         />
       );
+      break;
     case "stale":
-      return null;
+      body = null;
+      break;
     case "loading":
-      return (
+      body = (
         <p role="status" className="text-slate-700">
           Loading {membership.clinic_name}…
         </p>
       );
+      break;
   }
+
+  return (
+    <ClinicContext.Provider value={load.status === "ready" ? load.clinic : null}>
+      {frame(body)}
+    </ClinicContext.Provider>
+  );
 }
