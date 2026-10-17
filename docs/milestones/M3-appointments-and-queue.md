@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A), implemented and accepted by the developer the same day; M3-P3 implemented and confirmed by the developer the same day; M3-P4 approved (1A–4A) and in implementation |
+| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A), implemented and accepted by the developer the same day; M3-P3 implemented and confirmed by the developer the same day; M3-P4 approved (1A–4A) and implemented the same day, awaiting the developer's confirmation |
 | Spec | `docs/specs/appointments-and-queue.md` (Approved 2026-10-17, D1–D26) |
 | Covers | FR-APT-01..07, FR-QUE-01..05 |
 | Issue / branch / PR | #36 · `m3/36-appointments-and-queue` · one PR for the whole milestone (ADR-0011) |
@@ -15,7 +15,7 @@
 | P1 | Doctor schedules, exceptions, sessions generated per clinic-local date; slot and token mode | Below |
 | P2 | Booking, reschedule, cancel under a session row lock | Below (done) |
 | P3 | Queue state machine, transitions, walk-ins | Below (done) |
-| P4 | Live queue (ETag polling) | Below (approved) |
+| P4 | Live queue (ETag polling) | Below (implemented) |
 | P5 | Web: queue board, booking flow, schedule settings | Designed at its start |
 
 ---
@@ -542,3 +542,29 @@ make lint typecheck test && make smoke
 | A stale screen | The tag is the body's hash, so any visible change changes it |
 | The proxy dropping the headers | `make smoke` checks a 304 through the web origin |
 | Names in a cache | `no-store` stays; the client keeps the body in memory only |
+### Result (17 Oct 2026)
+
+`make lint typecheck test` on the Linux clone: ruff, format, import-linter (4 contracts kept) and
+mypy (145 files) clean; API **1037 tests** (13 new) at 98.99% package coverage; web ESLint and tsc
+clean and the web suite green, with 8 new tests (`poll.test.ts`, `useQueue.test.tsx`, two in
+`client.test.ts`); contract 0.12.0 validates and `contract-check` is clean. `make up`, `make seed`,
+`make smoke` (now also: `/api/v1/queue` stays 401 without a session, even with `If-None-Match: *`)
+and `make e2e` (2 journeys, the new `live-queue-etag.spec.ts` included) passed on the rebuilt
+stack.
+
+The verify steps by hand, as the sample clinic's front desk: the queue answered 200 with a
+32-hex-character `ETag`; the same request with it was 304 with an empty body, directly on :8000
+and through the web origin on :3000; after a walk-in the old tag got 200 and a new tag. The walk-in
+joined the extra session left by P3's check and remains in the local demo data.
+
+Taken while implementing:
+- `If-None-Match` is compared **weakly**, as RFC 9110 §13.1.2 requires, so `W/"tag"` matches too.
+  The design said a weak tag "never matches"; that was wrong and is not what was built.
+- The design's risk table said the tests count queries per poll. They do not: a 304 still runs the
+  queue's queries (D23 accepts this). Measuring the load belongs to the pilot's monitoring, not a
+  unit test.
+- `make smoke` runs before `make seed` in CI, so the authenticated 304 through the web origin is
+  checked by Playwright (`e2e/live-queue-etag.spec.ts`), which runs after the seed; smoke checks
+  the anonymous case.
+- `useQueue` keys its state by the filters, so a screen never shows one doctor's queue under
+  another's filter; React's lint forbids resetting state inside the effect.

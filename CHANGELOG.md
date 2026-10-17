@@ -14,7 +14,11 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
-- M3-P3 (#36): the daily queue (FR-QUE-01, 02, 04; spec R9-R11, D17-D22).
+- M3-P4 (#36): the live queue (FR-QUE-03; spec R12, D23-D26). `GET /api/v1/queue` sends a strong
+  `ETag` (a hash of the body) and answers a matching `If-None-Match` with a bodiless `304`, through
+  the web origin too. The web app gets `apiGetConditional`, a polling module (every 5 s, paused
+  while the tab is hidden, 30 s after an error) and a `useQueue` hook for P5's queue board. The
+  queue stays `no-store`. Contract 0.12.0; a Playwright check of the 304 through the web origin.- M3-P3 (#36): the daily queue (FR-QUE-01, 02, 04; spec R9-R11, D17-D22).
   `POST /api/v1/appointments/{id}/transitions` takes `{from, to}`: `from` must be the current status,
   so a stale tab cannot move a patient who has already moved (`409 QUE_INVALID_TRANSITION`, AC3).
   Transitions happen on the session's day; a no-show once it has started (`409 QUE_WRONG_TIME`).
