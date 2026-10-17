@@ -1,47 +1,46 @@
-# NEXT_STEPS_PLAN.md — Approved plan for M2 (Patients)
+# NEXT_STEPS_PLAN.md — Approved plan for M3 (Appointments and daily queue)
 
 | Field | Value |
 |---|---|
-| Status | M2 spec and design approved by the developer on 3 Oct 2026 |
-| Scope | Milestone 2 in phase detail; M3–M6 as a roadmap only. The M0 plan is in git history (closed 2 Oct 2026, PRs #5–#15); the M1 plan is in git history (merged 3 Oct 2026, PR #20) |
+| Status | M3 spec approved by the developer on 17 Oct 2026 (D1–D9); M3-P1 design approved the same day |
+| Scope | Milestone 3 in phase detail; M4–M6 as a roadmap only. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22, merged 17 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
-| Design notes | `docs/milestones/M2-patients.md` |
+| Design notes | `docs/milestones/M3-appointments-and-queue.md` |
 | Workflow rules | `CLAUDE.md` → "Git Workflow"; `CONTRIBUTING.md`; ADR-0010, ADR-0011 |
 
 ---
 
 ## 1. Problem statement
 
-M0 delivered the foundation, M1 the identity and tenancy layer. M2 builds the patient registry
-(PRD §4, FR-PAT): register, find and update patients; surface duplicate phones instead of
-silently creating a second record; record consent separately from registration; and let ops
-import a clinic's existing list. Without M2, M3 appointments have nobody to book for.
+M2 gave clinics a patient registry. M3 lets them run their day: doctors' weekly schedules and
+exceptions become bookable sessions in the clinic's own time zone, in either slot or token mode;
+front desk books without double-booking (FR-APT-04); and every screen sees the same live queue
+(FR-QUE). Seven of fourteen Phase 1 clinics coordinate this over WhatsApp and phone today
+(PRD §2.2, P1).
 
 ## 2. Requirements
 
-- Spec: `docs/specs/patients.md` (Approved 3 Oct 2026 with decisions D1–D6). Its acceptance
-  criteria AC1–AC7 become tests in the phase that implements them.
-- **M2 exit:** register, find and update patients; a shared phone is surfaced, not silently
-  duplicated; lookup over 10,000 patients has p95 < 500 ms.
+- Spec: `docs/specs/appointments-and-queue.md` (Approved 17 Oct 2026 with D1–D9). Its acceptance
+  criteria AC1–AC6 become tests in the phase that implements them.
+- **M3 exit:** front desk books in ≤ 3 interactions; the concurrent double-booking test passes;
+  the queue refreshes on every open screen within 5 s.
 - Follow `CLAUDE.md`: one phase at a time, design approved before code, `make lint typecheck test`
   green and the developer's confirmation before the next phase.
-- NFR-14 from M1-P1: ≥ 80% coverage on `domain/` + `application/` (the ≥ 90% whole-package gate
-  from M0 stays).
-- Local resources: the WSL VM runs at its 8 GB limit; run `make down` whenever the stack is not in
-  use.
+- Coverage gates stay: ≥ 90% API package, ≥ 80% `domain/` + `application/` (NFR-14).
+- Local resources: the WSL VM runs at its 8 GB limit; run `make down` whenever the stack is idle.
 
 ## 3. Delivery workflow (ADR-0011)
 
 ```
-Milestone issue #21 → branch m2/21-patients (from origin/main)
+Milestone issue #36 → branch m3/36-appointments-and-queue (from origin/main)
   → per phase: design → approval → logical commits → make lint typecheck test
     → developer confirms → push (with permission) to the same branch
   → one PR for the milestone: draft until P5 is done and the exit criteria hold
   → CI green → review + CODEOWNERS approval → maintainer rebase-merges
 ```
 
-- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #21`; the last
-  commit of M2 carries `Closes #21`.
+- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #36`; the last
+  commit of M3 carries `Closes #36`.
 - Agents never push to `main`, push to the milestone branch only with permission, and never merge.
 
 ### 3.1 Open prerequisites
@@ -50,32 +49,29 @@ Milestone issue #21 → branch m2/21-patients (from origin/main)
 |---|---|---|
 | W-5 | Branch protection / CODEOWNERS enforcement on `main` | **Open:** not available for a private repo on GitHub Free (HTTP 403). Needs GitHub Pro/Team or a public repo |
 | — | `@akhtarjamal10` write access, so their CODEOWNERS entry takes effect | Open |
-| — | Dependabot PRs #18 (TypeScript 7) and #28 (ESLint 10) | **Closed / ignored:** majors ignored in `.github/dependabot.yml` until `openapi-typescript` / `eslint-config-next` support them; the others are green once PR #22 lands the gitleaks fingerprint on main |
+| — | #30: an import over 2 MB through the web origin can answer 500 instead of 413 | Open; outside M3 |
 
 ## 4. Phase breakdown
 
 Details, file lists and test plans per phase are in the design notes. Each phase is designed with
-`/plan-phase` at its start; P1–P5 are implemented; M2 is complete.
+`/plan-phase` at its start; P1 is designed in full now.
 
 | Phase | Objective | Requirements | Verify |
 |---|---|---|---|
-| P1 | Patient domain (phone normalisation, guardian model, age, consent, clinic-scoped code) + migration `0006` + indexes + tenancy-scoped repository + the 10,000-patient lookup test | FR-PAT-01, 03, 04, 05, 06; spec I1–I4, R1 (domain), R3, R4, R5 (classification), R9; AC4 | `make lint typecheck test` (lookup test p95 < 500 ms); `make up` applies `0006`; tenancy tests prove scoped repositories cannot reach another clinic |
-| P2 | Register / edit / lookup endpoints; the duplicate-phone flow; `patient_code_prefix` on clinic creation | FR-PAT-01, 02, 03, 04; spec R1–R3, R5, R7, R9, R10; AC1, AC2, AC3, AC6, AC7 | Register by hand, lookup by phone and code, duplicate 409 with candidates, `confirm_new` takes the next code; two-thread race and audit rows with no names or phones |
-| P3 | Consent, language preference, opt-out and opt-in | FR-PAT-05, 06; spec R6; AC5 | Consent → opt-out → consent refused → opt-in; the audit rows with flags and `given_by`; idempotent opt-out; the race test |
-| P4 | Ops CSV import with a dry-run report | FR-PAT-08, FR-OPS-02; spec R8 | Dry run, commit, re-run imports nothing; 5,000 rows well inside the limit; no names or phones in the report, logs or audit; ops only |
-| P5 | Web: global search, registration drawer, profile | FR-PAT-01, 02, 03, 04, 05, 06; spec §6 | Approved (1A–6A, 4B) and implemented 17 Oct 2026; `make e2e` runs the duplicate-phone journey |
+| P1 | Weekly schedules (overnight blocks up to 12 h), whole-day leave and extra sessions, sessions generated lazily per clinic-local date, slot and token mode, `SCHEDULES_MANAGE`, migration `0007` | FR-APT-01, 02; spec R1–R4, R14–R20; AC5 | `make lint typecheck test`; sessions for a date generated once under concurrency; 13:00–10:00 refused, 23:00–01:00 accepted; cross-midnight overlap refused; leave keeps booked sessions |
+| P2 | Booking, reschedule and cancel under a session row lock; capacity and slot checks; status history and audit | FR-APT-03, 04, 05, 07; spec R5–R8; AC1, AC2 | Two parallel bookings for one place: one 201, one 409 |
+| P3 | Queue state machine and transitions; walk-ins | FR-QUE-01, 02, 04, 05; spec R9–R11, R13; AC3 | Invalid transition 409 `QUE_INVALID_TRANSITION` |
+| P4 | Live queue with ETag polling | FR-QUE-03; spec R12; AC4 | Two browsers see a change within 5 s; 304 when unchanged |
+| P5 | Web: today's queue board, booking flow, schedule settings; the booking journey in Playwright | FR-APT-03, FR-QUE-01; spec §6; AC6 | Booking in ≤ 3 interactions in `make e2e` |
 
-## 5. Roadmap after M2 (one line each)
+## 5. Roadmap after M3 (one line each)
 
-- **M3 Appointments and queue** — schedules, concurrency-safe booking, queue state machine,
-  ETag polling.
 - **M4 Visits and prescriptions** — immutable versioned Rx, PDF, signed patient links, bilingual
   360-px page.
 - **M5 Messaging and reminders** — job table + worker, WhatsApp adapter + webhooks, reminder rules,
   STOP opt-out.
 - **M6 Pilot hardening** — India-region deployment, backups + restore drill, security review,
   two pilot clinics.
-
 ## 6. Parallel non-code track
 
 L-01 (Meta Business + WhatsApp number) and L-02 (template approval) are on the critical path for
@@ -115,3 +111,4 @@ M5; L-03, L-05 and L-07 should be under way. Details in `TASKS.md`.
 | 17 Oct 2026 | Dependabot #18 (TypeScript 7) and #28 (ESLint 10) closed with "ignore this major version"; `typescript`, `eslint` and `@types/node` majors ignored in `.github/dependabot.yml` (`dc242c1`). Documentation drift fixed in one `docs:` commit (`4f16cab`). `main`'s secrets scan stays red until PR #22 lands `b994ed3` (the developer's choice) | #21 | Committed locally |
 | 17 Oct 2026 | M2-P5 design (web search combobox, registration drawer with the duplicate-phone flow, profile with consent and opt-out, PATCH/PUT in the API client, the wizard's code prefix) proposed with decisions 1–6, including the first Playwright spec for the duplicate-phone journey (4B recommended) | #21 / PR #22 | Awaiting the developer's approval |
 | 17 Oct 2026 | M2-P5 approved with every recommendation (1A–6A, 4B) and implemented: header patient search, results page, registration drawer with the duplicate-phone flow, profile with edit, consent, opt-out and opt-in, the wizard's code prefix, PUT/PATCH in the web client, the first Playwright journey (`make e2e`, CI `smoke` job). `make lint typecheck test` green (API 847 at 99.09%; web 314), `make smoke` 24/24, the journey 3/3 in Chromium. Follow-up #30 opened for the 413-through-proxy finding. **M2 complete**; PR #22 marked ready for review | #21 / PR #22 | Done; awaiting review and the maintainer's merge |
+| 17 Oct 2026 | M2 rebase-merged by the maintainer (PR #22); `main`'s CI green again (the gitleaks fingerprint). M3 opened: issue #36, branch `m3/36-appointments-and-queue` from the new `origin/main`; `appointments-and-queue.md` Approved with D1–D9; M3-P1 design approved with 1A–6A and the developer's refinements (12-hour maximum block, cross-day overlap, leave on generated dates) | #36 | M3-P1 in implementation |
