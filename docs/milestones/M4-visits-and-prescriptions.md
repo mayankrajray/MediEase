@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; the M4-P3 design approved the same day with 1A–5A, in implementation |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; the M4-P3 design approved the same day with 1A–5A and implemented; awaiting the developer's confirmation |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -15,7 +15,7 @@
 |---|---|---|
 | P1 | Visit record, history, 24-hour lock and addenda | Below (done, confirmed) |
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (done, confirmed) |
-| P3 | Favourites, templates, clinic-history autocomplete | Below (approved) |
+| P3 | Favourites, templates, clinic-history autocomplete | Below (implemented) |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | At its start |
 | P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | At its start |
 | P6 | Web consultation screen, keyboard-first Rx builder | At its start |
@@ -331,7 +331,7 @@ Taken while implementing:
 
 ## M4-P3 — Favourites, templates and clinic-history autocomplete
 
-**Status: approved by the developer 18 Oct 2026 with 1A–5A (every recommendation); in implementation.** API only; the builder uses it in P6. Covers
+**Status: approved by the developer 18 Oct 2026 with 1A–5A (every recommendation); implemented the same day (result at the end of this section), awaiting the developer's confirmation.** API only; the builder uses it in P6. Covers
 FR-RX-05, FR-RX-10; spec R7; AC5.
 
 ### Concepts
@@ -437,3 +437,27 @@ because only a prescribing doctor needs them; owners who are not doctors and fro
 | 3 | How is "use" counted for ranking favourites? | **A** at issue, from the `favourite_id` / `template_id` the draft carries · **B** a separate "applied" call from the builder · **C** no counts, alphabetical | **A**: counts what was really prescribed, no extra call, no double counting |
 | 4 | Audit | **A** changes to favourites and templates audited with IDs only; suggestions and lists not audited · **B** audit the lists and suggestions too | **A**: no patient record is read, and suggestions are asked per keystroke |
 | 5 | Matching | **A** from the start of the name, case-insensitive (the M2 index pattern, no extension) · **B** any word in the name (needs the `pg_trgm` extension) | **A**: doctors type names from the start; B can follow if pilots ask, with its own ADR for the extension |
+
+### Result (18 Oct 2026)
+
+API only, as designed. `make lint typecheck contract-check` clean; `make test`: API **1146 tests**
+at 98.89% (domain rules for favourites, templates and ranking; 8 over HTTP on PostgreSQL including
+AC5 and the performance check; the contract; repository and HTTP tenancy cases; the migration),
+web 344. `make up` applied `0011`; `make seed` and `make smoke` passed. On the stack as the seeded
+doctor: a favourite 201 and the same name in capitals 409 `RX_NAME_TAKEN`; a prescription issued
+with that favourite's line left its `use_count` at 1; `q=syr` gave the favourite first, `q=Dru`
+nothing (AC5); front desk 403; a template with two lines, and a stale replace 409 `RX_STALE`.
+Suggestions over 20,000 issued lines answered within the 150 ms p95 budget in the suite.
+
+Taken while implementing:
+- Favourite and template names collapse inner spaces when saved, so the database's
+  `lower(name)` index and the domain agree that "Fever  syrup" and "fever syrup" are one name.
+- A name that is both a favourite and in the history is shown once, as the favourite.
+- Repeated lines from one favourite in one prescription count as one use; a deleted or another
+  doctor's favourite or template named by a draft counts nothing and is otherwise ignored.
+- Suggestions ask the database for twice the limit and rank in the domain, so favourites can
+  displace history without a second query.
+- The new index uses the M2 `text_pattern_ops` form, so Alembic's model comparison prints the same
+  harmless "operator clause" warning it already prints for the patient-name index.
+- A test left a database connection open and the table reset waited for it; every test now
+  closes its connections (`with db.connect()`).

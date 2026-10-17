@@ -14,6 +14,13 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M4-P3 (#38): favourites, templates and medicine suggestions (FR-RX-05, FR-RX-10; spec R7, AC5;
+  decisions 1A-5A). Each doctor keeps favourites (one line with its usual instructions) and
+  templates (lines, advice, a follow-up interval), named uniquely and saved with a `revision`.
+  `GET /api/v1/medicine-suggestions?q=` suggests the doctor's favourites, then medicine names this
+  clinic has issued, ranked by distinct visits; nothing else is ever suggested. Draft lines carry the
+  favourite and the draft the template they came from; issuing counts each use once. New codes
+  `RX_NAME_TAKEN`, `RX_LIBRARY_FULL`. Migration `0011`, contract 0.15.0.
 - M4-P2 (#38): prescriptions (FR-RX-01..03, 06, 09; spec R4-R6, R14, R17, R20; decisions 1A-6A).
   A visit has one prescription chain: the doctor creates a draft, saves it whole with its
   `revision` (medicines with dose, frequency and timing codes, preparation and storage phrases,
