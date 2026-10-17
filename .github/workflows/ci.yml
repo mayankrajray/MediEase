@@ -177,17 +177,36 @@ jobs:
           done
 
   smoke:
-    name: Stack — fresh-clone smoke test
+    name: Stack — smoke test and browser journeys
     needs: detect
     if: needs.detect.outputs.api == 'true' && needs.detect.outputs.web == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       # The M0 exit criterion, exactly as a developer runs it on a fresh clone.
       - run: cp .env.example .env
       - run: make up
       - run: make smoke
+      # Browser journeys (docs/TESTING.md §3) on the same stack, with synthetic seed data.
+      # Playwright runs in its official image (make e2e); the host only needs node_modules.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: apps/web/.nvmrc
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: make install-web
+      - run: make seed
+      - run: make e2e
+      - name: Keep the Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
       - name: Show service state and logs
         if: failure()
         run: |

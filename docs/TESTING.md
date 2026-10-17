@@ -35,7 +35,7 @@ Tool choices are confirmed and pinned in the milestone that introduces them.
 | Journey | From |
 |---|---|
 | Sign in → switch clinic → see today's queue | M1/M3 |
-| Register patient with existing phone → choose existing | M2 |
+| Register patient with existing phone → choose existing (`e2e/patients-duplicate-phone.spec.ts`) | M2 |
 | Book slot → mark arrived → start consultation → issue Rx → print PDF | M4 |
 | Open patient link on a 360-px viewport → wrong last-4 → correct last-4 → view Rx | M4 |
 | Issue Rx with follow-up → reminder scheduled → worker sends via console adapter → status updates | M5 |
@@ -65,7 +65,11 @@ A PR merges only when all pass:
 7. Coverage ≥ 80% on `domain/` and `application/` (NFR-14), plus ≥ 90% on the whole API package
    (`make test-api`, CI "API" job; from M1-P1)
 
-End-to-end tests run on every PR once the stack exists (M3+), and nightly against staging (M6+).
+End-to-end tests run on every PR from M2-P5: the CI `smoke` job seeds the stack and runs `make e2e`,
+which runs Playwright (Chromium, 1366×768) in its official image on the compose network, so no
+browser is installed on the host. Locally: `make up && make seed && make install-web && make e2e`;
+the report and traces of a failure are in `apps/web/playwright-report/` and `test-results/`.
+Nightly runs against staging start in M6.
 
 ## 6. Phase verification template
 
