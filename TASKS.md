@@ -11,13 +11,13 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M3 — Appointments and daily queue** (issue #36, branch `m3/36-appointments-and-queue`, one PR for the milestone) |
-| Active phase | **M3-P5 — implemented 17 Oct 2026; M3 complete, awaiting the developer's review (PR #37):** the live queue board, booking in ≤ 3 interactions, walk-ins, cancel and reschedule, schedule settings, a patient's appointments. Exit criterion met (AC1, AC4, AC6) |
-| Design notes | `docs/milestones/M3-appointments-and-queue.md` |
-| Approved plan | `NEXT_STEPS_PLAN.md` (M3 phases, workflow, progress log) |
+| Active milestone | **M4 — Visits and digital prescriptions** (issue #38, branch `m4/38-visits-and-prescriptions`, one PR for the milestone). M3 merged in PR #37 on 17 Oct 2026 |
+| Active phase | **M4-P1 — visit record, history, 24-hour lock and addenda:** design proposed 17 Oct 2026, awaiting the developer's approval |
+| Design notes | `docs/milestones/M4-visits-and-prescriptions.md` |
+| Approved plan | `NEXT_STEPS_PLAN.md` (M4 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
-| Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §9). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | None. Follow-up outside M3: #30 (an import over 2 MB through the web origin can answer 500 instead of 413) |
+| Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
+| Open decisions | M4-P1 design decisions 1–6 (`docs/milestones/M4-visits-and-prescriptions.md`). Follow-up outside M4: #30 (an import over 2 MB through the web origin can answer 500 instead of 413) |
 | Last updated | 17 Oct 2026 |
 
 
@@ -88,27 +88,27 @@ duplicates surfaced; 10k-patient lookup p95 < 500 ms.
 | M2-P4 | Ops CSV import with dry-run report | ✅ |
 | M2-P5 | Web: patient search bar (global), registration drawer, patient profile | ✅ |
 
-## M3 — Appointments and daily queue  `▶ ACTIVE`
+## M3 — Appointments and daily queue  `✅`
 
-**Covers:** FR-APT-01..07, FR-QUE-01..05. **Spec:** `docs/specs/appointments-and-queue.md` (Approved 17 Oct 2026). **Issue:** #36, one branch and one PR for all phases (ADR-0011). **Exit:** front desk books in ≤ 3 interactions;
+**Covers:** FR-APT-01..07, FR-QUE-01..05. **Spec:** `docs/specs/appointments-and-queue.md` (Approved 17 Oct 2026). **Issue:** #36, one branch and one PR for all phases (ADR-0011), merged in PR #37 on 17 Oct 2026. **Exit:** front desk books in ≤ 3 interactions;
 concurrent double-booking test passes; queue refreshes on all screens within 5 s.
 
 | Phase | Scope | Status |
 |---|---|---|
-| M3-P1 | Doctor schedules, sessions, exceptions; slot and token generation (clinic timezone aware) | ▶ |
-| M3-P2 | Booking, reschedule, cancel with row-level locking and capacity checks | ☐ |
-| M3-P3 | Queue state machine and transitions; walk-ins | ☐ |
-| M3-P4 | Live queue updates (polling with ETag first; SSE only if polling proves insufficient — ADR required) | ☐ |
-| M3-P5 | Web: today's queue board, booking flow, schedule settings | ☐ |
+| M3-P1 | Doctor schedules, sessions, exceptions; slot and token generation (clinic timezone aware) | ✅ |
+| M3-P2 | Booking, reschedule, cancel with row-level locking and capacity checks | ✅ |
+| M3-P3 | Queue state machine and transitions; walk-ins | ✅ |
+| M3-P4 | Live queue updates (polling with ETag first; SSE only if polling proves insufficient — ADR required) | ✅ |
+| M3-P5 | Web: today's queue board, booking flow, schedule settings | ✅ |
 
-## M4 — Visits and digital prescriptions  `☐`
+## M4 — Visits and digital prescriptions  `▶ ACTIVE`
 
-**Covers:** FR-VIS-01..03, FR-VIS-05, FR-RX-01..10. **Exit:** doctor issues an Rx from the queue;
+**Covers:** FR-VIS-01..03, FR-VIS-05, FR-RX-01..10. **Spec:** `docs/specs/prescriptions.md` (Approved 17 Oct 2026, D1-D5). **ADR:** 0012. **Issue:** #38, one branch and one PR for all phases (ADR-0011). **Exit:** doctor issues an Rx from the queue;
 PDF prints correctly; patient link passes the 360-px acceptance test.
 
 | Phase | Scope | Status |
 |---|---|---|
-| M4-P1 | Visit record, history view, 24-hour lock and addenda | ☐ |
+| M4-P1 | Visit record, history view, 24-hour lock and addenda | ▶ |
 | M4-P2 | Prescription domain: items, instructions, versioning, immutability | ☐ |
 | M4-P3 | Favourites and Rx templates; clinic-history autocomplete (no external drug data) | ☐ |
 | M4-P4 | PDF rendering port + adapter; letterhead with registration number | ☐ |

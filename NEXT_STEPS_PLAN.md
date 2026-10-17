@@ -1,46 +1,48 @@
-# NEXT_STEPS_PLAN.md — Approved plan for M3 (Appointments and daily queue)
+# NEXT_STEPS_PLAN.md — Approved plan for M4 (Visits and digital prescriptions)
 
 | Field | Value |
 |---|---|
-| Status | M3 spec approved by the developer on 17 Oct 2026 (D1–D9); M3-P1 done and confirmed the same day (draft PR #37); M3-P2 approved (1A–7A, D10–D16) and in implementation |
-| Scope | Milestone 3 in phase detail; M4–M6 as a roadmap only. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22, merged 17 Oct 2026) |
+| Status | M4 opened 17 Oct 2026 after M3 merged (PR #37). `docs/specs/prescriptions.md` Approved with D1–D5 and the developer's refinements; ADR-0012 accepted; the M4-P1 design proposed and awaiting approval |
+| Scope | Milestone 4 in phase detail; M5–M6 as a roadmap only. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37, merged 17 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
-| Design notes | `docs/milestones/M3-appointments-and-queue.md` |
+| Design notes | `docs/milestones/M4-visits-and-prescriptions.md` |
 | Workflow rules | `CLAUDE.md` → "Git Workflow"; `CONTRIBUTING.md`; ADR-0010, ADR-0011 |
 
 ---
 
 ## 1. Problem statement
 
-M2 gave clinics a patient registry. M3 lets them run their day: doctors' weekly schedules and
-exceptions become bookable sessions in the clinic's own time zone, in either slot or token mode;
-front desk books without double-booking (FR-APT-04); and every screen sees the same live queue
-(FR-QUE). Seven of fourteen Phase 1 clinics coordinate this over WhatsApp and phone today
-(PRD §2.2, P1).
+M3 runs the clinic's day up to *Start*. M4 is what happens in the room and after it: the doctor
+records the visit with the patient's history beside it, and issues a prescription the patient can
+read again at home, in their language, on a cheap phone. Medicine instructions explained once and
+forgotten (A14), dosage and dilution confusion for parents (A3) and prescription clarity (A6) are
+the product's wedge (PRD §8.6).
 
 ## 2. Requirements
 
-- Spec: `docs/specs/appointments-and-queue.md` (Approved 17 Oct 2026 with D1–D9). Its acceptance
-  criteria AC1–AC6 become tests in the phase that implements them.
-- **M3 exit:** front desk books in ≤ 3 interactions; the concurrent double-booking test passes;
-  the queue refreshes on every open screen within 5 s.
-- Follow `CLAUDE.md`: one phase at a time, design approved before code, `make lint typecheck test`
-  green and the developer's confirmation before the next phase.
+- Spec: `docs/specs/prescriptions.md` (Approved 17 Oct 2026, D1–D5). AC1–AC7 become tests in the
+  phase that implements them.
+- ADR-0012: PDF rendering (WeasyPrint, vendored Noto fonts) and blob storage (local volume, S3-
+  compatible) in-house behind ports; no third-party document or media service.
+- **M4 exit:** a doctor issues a prescription from the queue; the PDF prints correctly; the
+  patient link passes the 360-px acceptance test (AC2).
+- Clinical content (C3) never reaches logs, audit metadata, analytics, error messages or job
+  payloads (NFR-07, AC7). Reads of clinical records are audited once per logical view (D4).
 - Coverage gates stay: ≥ 90% API package, ≥ 80% `domain/` + `application/` (NFR-14).
 - Local resources: the WSL VM runs at its 8 GB limit; run `make down` whenever the stack is idle.
 
 ## 3. Delivery workflow (ADR-0011)
 
 ```
-Milestone issue #36 → branch m3/36-appointments-and-queue (from origin/main)
+Milestone issue #38 → branch m4/38-visits-and-prescriptions (from origin/main at c44ad49)
   → per phase: design → approval → logical commits → make lint typecheck test
     → developer confirms → push (with permission) to the same branch
-  → one PR for the milestone: draft until P5 is done and the exit criteria hold
+  → one PR for the milestone: draft after P1, ready when P6 is done and the exit criteria hold
   → CI green → review + CODEOWNERS approval → maintainer rebase-merges
 ```
 
-- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #36`; the last
-  commit of M3 carries `Closes #36`.
+- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #38`; the last
+  commit of M4 carries `Closes #38`.
 - Agents never push to `main`, push to the milestone branch only with permission, and never merge.
 
 ### 3.1 Open prerequisites
@@ -49,35 +51,31 @@ Milestone issue #36 → branch m3/36-appointments-and-queue (from origin/main)
 |---|---|---|
 | W-5 | Branch protection / CODEOWNERS enforcement on `main` | **Open:** not available for a private repo on GitHub Free (HTTP 403). Needs GitHub Pro/Team or a public repo |
 | — | `@akhtarjamal10` write access, so their CODEOWNERS entry takes effect | Open |
-| — | #30: an import over 2 MB through the web origin can answer 500 instead of 413 | Open; outside M3 |
+| L-07 | Pilot clinics' current Rx formats | Open; M4 builds to the spec and PRD §8.6 sample and adjusts later (D3) |
+| L-04 | Counsel review of the prescription format | Open; a gate for M6, not M4 (D3) |
+| — | #30: an import over 2 MB through the web origin can answer 500 instead of 413 | Open; outside M4 |
 
 ## 4. Phase breakdown
 
-Details, file lists and test plans per phase are in the design notes. Each phase is designed with
-`/plan-phase` at its start; P1 is designed in full now.
+Details, file lists and test plans per phase are in the design notes; each phase is designed at its
+start. P1 is proposed in full now.
 
 | Phase | Objective | Requirements | Verify |
 |---|---|---|---|
-| P1 | Weekly schedules (overnight blocks up to 12 h), whole-day leave and extra sessions, sessions generated lazily per clinic-local date, slot and token mode, `SCHEDULES_MANAGE`, migration `0007` | FR-APT-01, 02; spec R1–R4, R14–R20; AC5 | `make lint typecheck test`; sessions for a date generated once under concurrency; 13:00–10:00 refused, 23:00–01:00 accepted; cross-midnight overlap refused; leave keeps booked sessions |
-| P2 | Booking, reschedule and cancel under a session row lock; capacity and slot checks; status history and audit | FR-APT-03, 04, 05, 07; spec R5–R8; AC1, AC2 | Two parallel bookings for one place: one 201, one 409 |
-| P3 | Queue state machine and transitions; walk-ins | FR-QUE-01, 02, 04, 05; spec R9–R11, R13; AC3 | Invalid transition 409 `QUE_INVALID_TRANSITION` |
-| P4 | Live queue with ETag polling | FR-QUE-03; spec R12; AC4 | Two browsers see a change within 5 s; 304 when unchanged |
-| P5 | Web: today's queue board, booking flow, schedule settings; the booking journey in Playwright | FR-APT-03, FR-QUE-01; spec §6; AC6 | Booking in ≤ 3 interactions in `make e2e` |
+| P1 | Visits from an in-consultation appointment, clinical notes and vitals, history newest first, 24-hour lock with addenda, read audit at the view boundary, migration `0009` | FR-VIS-01..03, 05; spec R1–R3, R15–R16; AC6 | `make lint typecheck test`; edit after lock 409 `VIS_LOCKED` and an addendum 201; one audit row per screen load; sentinel clinical text absent from logs and audit |
+| P2 | Prescriptions: draft, items with structured instructions, advice, issue (atomic), versions and supersede, immutability trigger, pending delivery marker | FR-RX-01..03, 06, 09; R4–R6, R14, R17; AC1, AC4 | Issued Rx `PUT` 409 `RX_NOT_DRAFT`; direct SQL `UPDATE` refused by the trigger |
+| P3 | Favourites and templates; autocomplete from the clinic's own history only | FR-RX-05, 10; R7; AC5 | "Dru" never suggests a medicine the clinic has not used |
+| P4 | `PdfRendererPort` + WeasyPrint adapter, `BlobStoragePort` + local and S3-compatible adapters, render-once under a row lock, A5/A4, Hindi | FR-RX-04, 06; R8, R18; ADR-0012 | Two concurrent first downloads: one render; Devanagari renders; PDF text checked |
+| P5 | Signed patient links, last-4 challenge and lock, view cookie, open audit, bilingual 360-px page, `scripts/inspect_link_token.py` | FR-RX-04, 07, 08; R9–R13, R19; AC2, AC3 | Sixth attempt 423 `LINK_LOCKED`; Playwright at 360 px; page < 200 KB |
+| P6 | Web: consultation screen from the queue (history + notes + keyboard-first Rx builder, issue preview, QR/copy link) | FR-VIS-02, 03, FR-RX-01..05; §6 | `make e2e`: Start → consult → issue → PDF → patient link |
 
-## 5. Roadmap after M3 (one line each)
+## 5. Roadmap after M4 (one line each)
 
-- **M4 Visits and prescriptions** — immutable versioned Rx, PDF, signed patient links, bilingual
-  360-px page.
 - **M5 Messaging and reminders** — job table + worker, WhatsApp adapter + webhooks, reminder rules,
-  STOP opt-out.
-- **M6 Pilot hardening** — India-region deployment, backups + restore drill, security review,
-  two pilot clinics.
-## 6. Parallel non-code track
-
-L-01 (Meta Business + WhatsApp number) and L-02 (template approval) are on the critical path for
-M5; L-03, L-05 and L-07 should be under way. Details in `TASKS.md`.
-
-## 7. Progress log
+  STOP opt-out; sends pending Rx links issued within the last 24 hours only (D2).
+- **M6 Pilot hardening** — India-region deployment (S3-compatible storage wired), backups + restore
+  drill, security review, counsel's format review (L-04), two pilot clinics.
+## 6. Progress log
 
 | Date | Task | Issue / PR | State |
 |---|---|---|---|
@@ -121,3 +119,4 @@ M5; L-03, L-05 and L-07 should be under way. Details in `TASKS.md`.
 | 17 Oct 2026 | M3-P4 — body-hash ETag and 304 on the queue, the 5-second polling module and `useQueue`, contract 0.12.0. `make lint typecheck test` green (API 1037 at 98.99%; web green), `make smoke`, `make e2e` (304 through the web origin), the verify steps by hand | #36 | Confirmed by the developer; pushed |
 | 17 Oct 2026 | M3-P4 confirmed and pushed. M3-P5 designed and approved with 1A–6A (spec D27–D32); the developer's question on confirming every queue step answered (not adopted: confirmation fatigue; status messages and per-patient button names instead) | #36 | Implemented |
 | 17 Oct 2026 | M3-P5 — the screens: queue board, booking drawer, walk-ins, cancel/reschedule, schedule settings, patient appointments. Web lint, tsc and 344 tests green; `make smoke`; `make e2e` 4 journeys (AC6, AC4) three runs in a row. M3 exit criterion met | #36 | Implemented; M3 awaits the developer's review |
+| 17 Oct 2026 | M3 rebase-merged by the maintainer (PR #37; CI 7/7). M4 opened: issue #38, branch `m4/38-visits-and-prescriptions` from the new `origin/main`; `prescriptions.md` Approved with D1–D5 and the developer's refinements (render-once PDF cache keyed by clinic, prescription and version; pending-delivery freshness guard for M5; read audit at the logical view; free text never translated); ADR-0012 accepted; the M4-P1 design proposed | #38 | Awaiting the developer's approval of the M4-P1 design |

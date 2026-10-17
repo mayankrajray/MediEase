@@ -6,7 +6,7 @@ can re-read, and follow-up reminders that actually arrive.
 
 > **Status:** Milestone 0 (Foundation) and Milestone 1 (Identity, tenancy and audit) complete (M1
 > merged in PR #20); Milestone 2 (Patients) complete (PR #22); Milestone 3 (Appointments and daily queue)
-> implemented (P1-P5: schedules, booking, the live queue and its screens), awaiting review in PR #37. See [TASKS.md](TASKS.md).
+> complete (PR #37); Milestone 4 (Visits and digital prescriptions) in progress - visits (M4-P1) first. See [TASKS.md](TASKS.md).
 
 ---
 
