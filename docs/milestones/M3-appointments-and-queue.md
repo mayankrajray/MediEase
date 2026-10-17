@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A), implemented and accepted by the developer the same day; M3-P3 implemented and confirmed by the developer the same day; M3-P4 implemented and confirmed the same day; M3-P5 designed and approved (1A–6A), implementation next |
+| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A), implemented and accepted by the developer the same day; M3-P3 implemented and confirmed by the developer the same day; M3-P4 implemented and confirmed the same day; M3-P5 approved (1A–6A) and implemented the same day; the milestone awaits the developer's review (PR #37) |
 | Spec | `docs/specs/appointments-and-queue.md` (Approved 2026-10-17, D1–D32) |
 | Covers | FR-APT-01..07, FR-QUE-01..05 |
 | Issue / branch / PR | #36 · `m3/36-appointments-and-queue` · one PR for the whole milestone (ADR-0011) |
@@ -16,7 +16,7 @@
 | P2 | Booking, reschedule, cancel under a session row lock | Below (done) |
 | P3 | Queue state machine, transitions, walk-ins | Below (done) |
 | P4 | Live queue (ETag polling) | Below (done) |
-| P5 | Web: queue board, booking flow, schedule settings | Below (approved) |
+| P5 | Web: queue board, booking flow, schedule settings | Below (implemented) |
 
 ---
 
@@ -672,3 +672,30 @@ make lint typecheck test && make smoke && make e2e
 | Time-zone mistakes in the browser | One formatter, given the clinic's zone; tested at both midnight edges, run with `TZ=America/New_York` in CI as the API is |
 | Flaky timing in AC4 | The journey waits on the row's text with a 5-second timeout, not on sleeps |
 | A stale row acting on the wrong status | `{from, to}` from the row; the 409 refreshes it |
+### Result (17 Oct 2026)
+
+Web only. `make lint typecheck` clean (ESLint, tsc); web suite **344 tests** in 36 files (new:
+`QueueBoard.test.tsx` 8, `Booking.test.tsx` 5, `ScheduleSettings.test.tsx` 5, time formatting at
+the Kolkata midnight edges, the nav). `make up`, `make seed`, `make smoke` passed, and `make e2e`
+passed **4 journeys** three runs in a row on the same database: AC6 (Book → patient → Confirm, 3
+interactions), AC4 (the doctor's board showed *Arrived* within one poll, under 6 s), the 304
+through the web origin and the M2 patient journey. Screenshots of `/queue` and
+`/settings/schedule` at 1366 × 768 were checked by eye.
+
+The exit criterion is met: front desk books in ≤ 3 interactions (AC6); the concurrent
+double-booking test passes (AC1, P2); the queue refreshes on every open screen within one 5-second
+poll (AC4).
+
+Taken while implementing:
+- The safeguards for single-click steps are built as designed: the button names the patient
+  ("Mark Asha Rao arrived"), a status message after each action says who, what and when, No-show
+  asks first and Cancel needs a reason; a 409 from another screen refreshes the board and says
+  who moved the patient.
+- `useQueue` now refreshes an expired session like every other call and has `refresh()`, so the
+  board asks again at once after an action instead of waiting for the next poll.
+- The web client gained `apiDelete` / `sessionDelete` (removing an exception) and `useNow`, a
+  minute clock: React's lint forbids reading the clock during render.
+- AC4 is asserted at 6 s, not 5 s: the worst case is one 5-second interval plus the request.
+- The seeded doctor works in both sample clinics, so the AC4 journey chooses *Sample Clinic* on
+  the clinic chooser.
+- The journeys leave extra sessions and synthetic patients in the local demo data.

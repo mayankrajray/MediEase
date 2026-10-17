@@ -36,6 +36,13 @@ Tool choices are confirmed and pinned in the milestone that introduces them.
 |---|---|
 | Sign in → switch clinic → see today's queue | M1/M3 |
 | Register patient with existing phone → choose existing (`e2e/patients-duplicate-phone.spec.ts`) | M2 |
+| Book from the queue in ≤ 3 interactions (AC6, `e2e/booking-three-interactions.spec.ts`) | M3 |
+| Two browsers on the queue: arrived on one shows on the other within one poll (AC4, `e2e/queue-two-browsers.spec.ts`) | M3 |
+| Unchanged queue is a 304 through the web origin (R12, `e2e/live-queue-etag.spec.ts`) | M3 |
+
+The M3 journeys add a session of the sample doctor running now (an extra session) and a fresh
+synthetic patient through the API first (`e2e/queue-support.ts`), so they pass at any hour and
+on a database that has been used before.
 | Book slot → mark arrived → start consultation → issue Rx → print PDF | M4 |
 | Open patient link on a 360-px viewport → wrong last-4 → correct last-4 → view Rx | M4 |
 | Issue Rx with follow-up → reminder scheduled → worker sends via console adapter → status updates | M5 |

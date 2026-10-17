@@ -55,7 +55,9 @@ demo password above (local only; `--password` overrides it):
 | (no clinic) | `ops@mediease.example` |
 
 Every seeded doctor gets a Monday–Saturday 10:00–13:00 schedule (15-minute slots, 12 tokens), once,
-so `GET /api/v1/sessions?date=<a weekday>` has sessions to show. `sample-clinic` also gets six synthetic patients, once (while it has none): Asha, Arun and Meera Rao
+so `GET /api/v1/sessions?date=<a weekday>` has sessions to show. On `/queue` (M3-P5) the front desk books with *Book*,
+adds walk-ins and moves patients through the day; the owner edits hours, leave and extra sessions
+on `/settings/schedule`. Outside 10:00–13:00 add an extra session there to have a session running now. `sample-clinic` also gets six synthetic patients, once (while it has none): Asha, Arun and Meera Rao
 share the phone `+919000000101` (Meera is 6 and registered with Asha as guardian), Bina Shah is
 known only by age, Chetan Verma prefers Hindi, and Deepa Nair is an adult on her own number. Try
 `GET /api/v1/patients?q=9000000101` or register a new person on that number to see the duplicate

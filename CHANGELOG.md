@@ -14,7 +14,14 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
-- M3-P4 (#36): the live queue (FR-QUE-03; spec R12, D23-D26). `GET /api/v1/queue` sends a strong
+- M3-P5 (#36): the appointment and queue screens (FR-APT-01, 03, 05; FR-QUE-01, 03, 04; D27-D32).
+  `/queue` is the live board: one doctor's day (a doctor sees their own), refreshed every 5 s,
+  rows in token or slot order with the next step as one click (*Arrived*, *Start*, *Complete*)
+  and *No-show*, *Cancel*, *Reschedule* in a menu. *Book* takes at most three interactions (AC6);
+  *Add walk-in* one patient pick. Each action is reported with the patient and the time.
+  `/settings/schedule` (owners) edits weekly hours, leave, extra sessions and the booking mode,
+  and lists booked sessions a change kept. The patient profile lists their appointments. Two new
+  Playwright journeys: AC6 and AC4.- M3-P4 (#36): the live queue (FR-QUE-03; spec R12, D23-D26). `GET /api/v1/queue` sends a strong
   `ETag` (a hash of the body) and answers a matching `If-None-Match` with a bodiless `304`, through
   the web origin too. The web app gets `apiGetConditional`, a polling module (every 5 s, paused
   while the tab is hidden, 30 s after an error) and a `useQueue` hook for P5's queue board. The

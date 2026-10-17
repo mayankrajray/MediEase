@@ -6,5 +6,5 @@ requests) and sends anyone else to `/sign-in`.
 
 - `select-clinic/` — the chooser for people in several clinics (M1-P6).
 - `(workspace)/` — pages that need a working clinic, framed in the dashboard shell; its layout is
-  `WorkspaceGuard`. Today: `queue/` (landing, empty until M3). Later: `patients/`, `visits/[id]/`,
+  `WorkspaceGuard`. Today: `queue/` (landing: the live queue board, M3-P5), `settings/schedule/` (owners, M3-P5). Later: `patients/`, `visits/[id]/`,
   `follow-ups/`, `settings/`.
