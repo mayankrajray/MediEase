@@ -56,6 +56,13 @@ grep -qE '^HTTP/[0-9.]+ 307' <<<"$redirect" && grep -qi '^location: .*/sign-in?n
   && pass "/queue without a session redirects to /sign-in?next=/queue" || fail "/queue redirect: $redirect"
 grep -qi "^content-security-policy:.*'nonce-" <<<"$redirect" \
   && pass "the redirect also sends a CSP" || fail "redirect CSP header"
+# The patient screens (M2-P5) are clinic pages too: no session, no patient page.
+redirect=$(curl -sS -m 15 -D - -o /dev/null "$WEB/patients?q=rao")
+grep -qE '^HTTP/[0-9.]+ 307' <<<"$redirect" && grep -qi '^location: .*/sign-in?next=%2Fpatients' <<<"$redirect" \
+  && pass "/patients without a session redirects to /sign-in" || fail "/patients redirect: $redirect"
+# The patient API refuses anonymous callers through the web origin (FR-AUTH-03).
+status=$(curl -sS -m 15 -o /dev/null -w '%{http_code}' "$WEB/api/v1/patients?q=rao")
+[ "$status" = "401" ] && pass "/api/v1/patients without a session is 401" || fail "/api/v1/patients anonymous: $status"
 
 echo "Least privilege"
 for svc in api web; do
