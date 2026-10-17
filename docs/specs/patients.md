@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-PAT-01..06, FR-PAT-08, FR-MSG-05 (opt-out state), NFR-08 |
 | Milestone / phases | M2 / P1–P5 |
-| Status | Approved (developer sign-off 2026-10-03: minors' contact of record is the guardian's phone; the recommendations in §12 accepted) |
+| Status | Implemented (M2, 17 Oct 2026: every acceptance criterion has a passing test). Approved (developer sign-off 2026-10-03: minors' contact of record is the guardian's phone; the recommendations in §12 accepted) |
 | Last updated | 2026-10-05 (R8 records the M2-P4 import decisions 1A and 2A); 2026-10-03 (approved; decisions D1–D6 recorded in §12; R2 made race-free, R3/R4/R9 tightened, age model and lookup rules specified) |
 
 ## 1. Context

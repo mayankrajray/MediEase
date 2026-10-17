@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M2-P1 to P4 confirmed (P3 on 5 Oct 2026 after a re-check; P4 on 17 Oct 2026 after a re-check); M2-P5 designed 17 Oct 2026, awaiting approval |
+| Status | In progress — M2-P1 to P4 confirmed (P3 on 5 Oct 2026 after a re-check; P4 on 17 Oct 2026 after a re-check); M2-P5 approved (1A–6A, 4B) and implemented 17 Oct 2026. **M2 complete**; PR #22 ready for review |
 | Spec | `docs/specs/patients.md` (Approved 2026-10-03) |
 | Covers | FR-PAT-01..06, FR-PAT-08, FR-MSG-05 (opt-out state), NFR-08 |
 | Issue / branch / PR | #21 · `m2/21-patients` · one PR for the whole milestone (ADR-0011) |
@@ -16,7 +16,7 @@
 | P2 | Register / edit / lookup endpoints, the duplicate-phone flow, `patient_code_prefix` on clinic creation | Below (M2-P2 section) |
 | P3 | Consent, language preference, opt-out and opt-in | Below (M2-P3 section) |
 | P4 | Ops CSV import with a dry-run report | Below (M2-P4 section) |
-| P5 | Web: global search, registration drawer, profile | Below (M2-P5 section, proposed) |
+| P5 | Web: global search, registration drawer, profile | Below (M2-P5 section) |
 
 Each phase is designed, approved, implemented, verified and confirmed before the next starts.
 
@@ -24,7 +24,7 @@ Each phase is designed, approved, implemented, verified and confirmed before the
 
 ## M2-P5 — Web: patient search, registration drawer, patient profile
 
-**Status: proposed 17 Oct 2026, awaiting the developer's approval (decisions 1–6 below).** Covers
+**Status: approved by the developer 17 Oct 2026 with every recommendation (1A, 2A, 3A, 4B, 5A, 6A) and implemented the same day (result at the end of this section).** Covers
 FR-PAT-01..06 on the web; spec patients §6, R2, R3, R6, R10, AC1, AC5, AC6; the wizard's
 `patient_code_prefix` field deferred from M2-P2 (R4, D2). **Web only:** no API, contract or
 migration change. Every endpoint exists (P2, P3) and the generated `schema.d.ts` already holds
@@ -168,6 +168,34 @@ make lint typecheck test && make smoke   # (+ make e2e with decision 4B)
 | The client hint and the API disagree on "under 18" | The hint uses the clinic's date; the API error lands on the same field anyway |
 | Candidate names linger after the drawer closes | They live only in drawer state, cleared on close; never in storage, URL or logs |
 | Playwright is flaky in CI (4B) | Seeded data, role-based locators, no sleeps, traces kept on failure; a flaky spec is fixed the same day (TESTING.md §2) |
+
+### Result (17 Oct 2026)
+
+Commits on `m2/21-patients`: shared form pieces moved to `components/` and `lib/api/field-errors.ts`
+(6A); PUT, PATCH, query strings and cancellable requests in the API client, with `maskPhone` and
+`formatPhone`; the patient feature (search, results page, registration drawer with the
+duplicate-phone flow, profile with edit and the Messages panel); the wizard's code prefix; the first
+Playwright journey with `make e2e` and the CI step; two `make smoke` checks.
+
+Checks on the Linux clone (WSL, Docker integration on): `make lint typecheck` clean (ruff, format,
+import-linter 4 contracts kept, mypy 114 files, ESLint, tsc); API 847 passed at 99.09%; web 31 files
+and 314 tests; `gen:api:check` clean; `make up` rebuilt the images with P5 and `make smoke` passed 24
+of 24 (two new: `/patients` without a session redirects to sign-in, `/api/v1/patients` without one
+is 401). The duplicate-phone journey passed 3 of 3 runs in a real Chromium browser (Edge, 1366×768)
+against the seeded stack: sign in as the front desk, register on the Rao family's phone, see the
+three candidates, use Asha Rao, register again as a new family member (a new `SC-` code, the phone
+in full on the profile), find the new member in the header search with the phone masked.
+
+Taken while implementing:
+- `ClinicGate` now wraps the shell instead of sitting inside it (`frame`), so the header can read
+  the clinic's time zone for the under-18 hint once the clinic has loaded, while the switcher still
+  shows when the clinic fails to load.
+- Three older web tests asserted focus before the effect that moves it had run and failed about
+  one run in four once the suite doubled; they now flush effects first (`test(web)` commit).
+- `make e2e` uses the official Playwright image on the compose network. That image could not be
+  downloaded here (the connection dropped during the 2 GB pull), so locally the spec ran through
+  Playwright's own runner with the installed Edge. The image path is exercised by the CI `smoke` job.
+- ESLint ignores `playwright-report/` and `test-results/`, which a failed run leaves behind.
 
 ---
 

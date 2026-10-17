@@ -12,12 +12,12 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M2 — Patients** (issue #21, branch `m2/21-patients`, one PR for the milestone) |
-| Active phase | **M2-P5 — designed 17 Oct 2026, awaiting the developer's approval:** web patient search, registration drawer with the duplicate-phone flow, patient profile with consent and opt-out, the wizard's code-prefix field (design in the M2 notes, decisions 1–6). M2-P1 to P4 are confirmed (P4 re-checked 17 Oct 2026). Draft PR #22 is open |
+| Active phase | **M2-P5 — ✅ implemented 17 Oct 2026** (decisions 1A–6A, 4B): header patient search, registration drawer with the duplicate-phone flow, patient profile with edit, consent, opt-out and opt-in, the wizard's code prefix, the first Playwright journey. **M2 is complete** and PR #22 is ready for review; M3 starts after the maintainer merges it |
 | Design notes | `docs/milestones/M2-patients.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M2 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §9). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | M2-P5 design decisions 1–6 (`docs/milestones/M2-patients.md`), including whether the duplicate-phone journey gets the first Playwright spec |
+| Open decisions | None for M2. Follow-up outside M2: #30 (an import over 2 MB through the web origin can answer 500 instead of 413) |
 | Last updated | 17 Oct 2026 |
 
 
@@ -75,7 +75,7 @@ only their clinic; the tenancy test suite proves isolation.
 | M1-P6 | Web: sign-in, clinic switcher (for multi-clinic users), empty dashboard shell | ✅ |
 | M1-P7 | Web: ops clinics list and the Create clinic wizard (clinic → doctors → owner invite, elapsed time; spec §6) | ✅ |
 
-## M2 — Patients  `▶ ACTIVE`
+## M2 — Patients  `✅`
 
 **Covers:** FR-PAT-01..06, FR-PAT-08. **Spec:** `docs/specs/patients.md` (Approved 3 Oct 2026). **Issue:** #21, one branch and one PR for all phases (ADR-0011). **Exit:** register, find and update patients; phone
 duplicates surfaced; 10k-patient lookup p95 < 500 ms.
@@ -86,7 +86,7 @@ duplicates surfaced; 10k-patient lookup p95 < 500 ms.
 | M2-P2 | Register / edit / lookup endpoints; duplicate-phone flow | ✅ |
 | M2-P3 | Consent and language preference; opt-out state | ✅ |
 | M2-P4 | Ops CSV import with dry-run report | ✅ |
-| M2-P5 | Web: patient search bar (global), registration drawer, patient profile | ▶ |
+| M2-P5 | Web: patient search bar (global), registration drawer, patient profile | ✅ |
 
 ## M3 — Appointments and daily queue  `☐`
 
@@ -173,3 +173,5 @@ drill completed; security checklist signed; two pilot clinics onboarded.
 | M0-P4 — Next.js shell, generated API client, `/status`, nonce CSP and security headers | 2 Oct 2026 | #12 / PR #13 |
 | M0-P5 — hardened images, web container, full compose, CI gates (images, smoke, security, boundaries, coverage) | 2 Oct 2026 | #14 |
 | **M0 — Foundation** (exit criteria met: fresh clone → `make up` → all healthy; CI green) | 2 Oct 2026 | #6, #8, #10, #12, #14 |
+| M1 — Identity, tenancy and audit (merged in PR #20) | 3 Oct 2026 | #19 |
+| **M2 — Patients** (exit criteria met: register, find and update patients; shared phones surfaced; 10,000-patient lookup p95 well under 500 ms) | 17 Oct 2026 | #21 / PR #22 |
