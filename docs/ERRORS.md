@@ -121,8 +121,13 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 
 | Code | HTTP | Meaning | Likely cause | Where to look |
 |---|---|---|---|---|
-| `VIS_LOCKED` | 409 | Visit is locked; add an addendum | Edit after 24 h (FR-VIS-05) | `visits.locked_at` |
-| `VIS_ALREADY_EXISTS` | 409 | Visit already started | Second start for same appointment | `visits.appointment_id` |
+| `VIS_LOCKED` | 409 | This visit is locked; add an addendum | An edit from 24 h after completion (FR-VIS-05, AC6); `details.locked_at` | `visits.locked_at`; the server clock |
+| `VIS_ALREADY_EXISTS` | 409 | This consultation already has a visit | A second start for the same appointment (two clicks, two tabs); `details.visit_id` is the existing one: open it | `visits.appointment_id` |
+| `VIS_NOT_STARTABLE` | 409 | Start the consultation on the queue first | The appointment is not `IN_CONSULTATION` (decision 1A); `details.status` | The appointment's `history` |
+| `VIS_NOT_YOURS` | 403 | Only the visit's doctor can change it | A doctor (or owner-doctor) writing another doctor's visit, or a caller with no active doctor profile (spec §2, 3A) | `doctors.user_id`; the visit's `doctor_id` |
+| `VIS_STALE` | 409 | This visit was changed elsewhere; reload it and try again | The `PATCH` sent an older `revision`: another tab saved first (4A); `details.revision` is the current one | Reload the visit |
+| `VIS_NOT_COMPLETED` | 409 | Edit the visit directly until it is completed | An addendum on an open visit (R3) | `visits.status` |
+| `VIS_ADDENDUM_APPEND_ONLY` | — (database) | — | An `UPDATE`, `DELETE` or `TRUNCATE` of `visit_addenda` (migration 0009); never from the app | The statement's author; RUNBOOK for deliberate corrections |
 | `RX_NOT_DRAFT` | 409 | Prescription already issued; revise instead | Edit after issue (FR-RX-09) | `prescriptions.status` |
 | `RX_EMPTY` | 422 | Add at least one medicine or advice | Issue with no content | Draft body |
 | `RX_DOCTOR_INCOMPLETE` | 422 | Doctor profile missing registration details | Registration number/qualification empty | Doctor settings (FR-ORG-02) |

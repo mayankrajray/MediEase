@@ -894,10 +894,246 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/visits": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Start the visit for an appointment in consultation
+         * @description FR-VIS-01; spec R1, M4-P1 decisions 1A and 5A. The appointment must be IN_CONSULTATION
+         *     (409 VIS_NOT_STARTABLE, details.status) and the caller its doctor (403 VIS_NOT_YOURS). One
+         *     visit per appointment: 409 VIS_ALREADY_EXISTS with details.visit_id. Records
+         *     visit.started. Permission CLINICAL_WRITE. Needs X-CSRF-Token.
+         */
+        readonly post: operations["startVisit"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/visits/{visit_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The consultation view - the visit, the patient and their last 10 visits
+         * @description FR-VIS-02, FR-VIS-03; spec R2, R16, AC9. One response for the consultation screen, and one
+         *     visit.viewed audit row for it. history is the patient's previous visits, newest first.
+         *     Permission CLINICAL_VIEW.
+         */
+        readonly get: operations["getConsultation"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        /**
+         * Change the visit's notes or vitals
+         * @description FR-VIS-02; spec R3, M4-P1 decision 4A. Only the fields sent change; null clears one,
+         *     vitals replaces the whole set. revision is the one the screen has: 409 VIS_STALE
+         *     (details.revision, the current one) when another tab saved first; 409 VIS_LOCKED
+         *     (details.locked_at) 24 hours after completion. Records visit.updated with the changed
+         *     field names only. Permission CLINICAL_WRITE, the visit's doctor. Needs X-CSRF-Token.
+         */
+        readonly patch: operations["updateVisit"];
+        readonly trace?: never;
+    };
+    readonly "/api/v1/visits/{visit_id}/complete": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Complete the visit (and its appointment)
+         * @description FR-VIS-05; spec R3, M4-P1 decision 2A. Sets completed_at and locked_at = completed_at +
+         *     24 h, and moves the appointment IN_CONSULTATION -> COMPLETED when it is still there on the
+         *     session's day. Completing again changes nothing. Records visit.completed (and
+         *     appointment.status_changed). Permission CLINICAL_WRITE, the visit's doctor. Needs
+         *     X-CSRF-Token.
+         */
+        readonly post: operations["completeVisit"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/visits/{visit_id}/addenda": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Add an addendum to a completed visit
+         * @description FR-VIS-05; spec R3, AC6, M4-P1 decision 3A. Allowed on a completed visit, locked or not
+         *     (409 VIS_NOT_COMPLETED on an open one). Addenda never change. Records
+         *     visit.addendum_added. Permission CLINICAL_WRITE, the visit's doctor. Needs X-CSRF-Token.
+         */
+        readonly post: operations["addVisitAddendum"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/patients/{patient_id}/visits": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A patient's visits, newest first
+         * @description FR-VIS-03; spec R2, R16. Pages of limit (1-50, default 10); pass next_before back as before
+         *     for the next page. One patient.visits_viewed audit row per page. Permission CLINICAL_VIEW.
+         */
+        readonly get: operations["listPatientVisits"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        readonly NewVisit: {
+            /** Format: uuid */
+            readonly appointment_id: string;
+        };
+        /**
+         * @description Optional numbers; the unit is fixed by the key. Bounds only catch typing errors and are not
+         *     clinical ranges. Whole numbers for blood pressure, pulse, SpO2 and respiratory rate.
+         */
+        readonly Vitals: {
+            /** @description mmHg */
+            readonly bp_systolic?: number | null;
+            /** @description mmHg */
+            readonly bp_diastolic?: number | null;
+            /** @description per minute */
+            readonly pulse?: number | null;
+            /** @description degrees Celsius */
+            readonly temp_c?: number | null;
+            readonly weight_kg?: number | null;
+            readonly height_cm?: number | null;
+            /** @description percent */
+            readonly spo2?: number | null;
+            /** @description per minute */
+            readonly resp_rate?: number | null;
+        };
+        readonly VisitChange: {
+            /** @description The revision the screen shows (409 VIS_STALE otherwise) */
+            readonly revision: number;
+            readonly chief_complaint?: string | null;
+            readonly findings?: string | null;
+            readonly diagnosis?: string | null;
+            readonly notes?: string | null;
+            readonly vitals?: components["schemas"]["Vitals"] | null;
+        };
+        readonly NewVisitAddendum: {
+            readonly body: string;
+        };
+        readonly VisitAddendum: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly visit_id: string;
+            /** Format: uuid */
+            readonly author_user_id: string;
+            readonly body: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /** @enum {string} */
+        readonly VisitStatus: "OPEN" | "COMPLETED";
+        /** @description Clinical content (C3). Never cached, never logged. */
+        readonly Visit: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly patient_id: string;
+            /** Format: uuid */
+            readonly doctor_id: string;
+            /** Format: uuid */
+            readonly appointment_id: string;
+            readonly status: components["schemas"]["VisitStatus"];
+            readonly chief_complaint: string | null;
+            readonly findings: string | null;
+            readonly diagnosis: string | null;
+            readonly notes: string | null;
+            /** @description The recorded vitals only (see Vitals for the keys) */
+            readonly vitals: {
+                readonly [key: string]: number;
+            };
+            readonly revision: number;
+            /** Format: date-time */
+            readonly started_at: string;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+            /**
+             * Format: date-time
+             * @description completed_at + 24 h; from then on only addenda
+             */
+            readonly locked_at: string | null;
+            /** @description Whether the visit was locked when this response was made */
+            readonly is_locked: boolean;
+            /** @description Oldest first */
+            readonly addenda: readonly components["schemas"]["VisitAddendum"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        readonly VisitSummary: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly doctor_id: string;
+            /** Format: uuid */
+            readonly appointment_id: string;
+            readonly status: components["schemas"]["VisitStatus"];
+            /** Format: date-time */
+            readonly started_at: string;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+            readonly chief_complaint: string | null;
+            readonly diagnosis: string | null;
+        };
+        readonly Consultation: {
+            readonly visit: components["schemas"]["Visit"];
+            readonly patient: components["schemas"]["Patient"];
+            /** @description The patient's previous visits (at most 10), newest first */
+            readonly history: readonly components["schemas"]["VisitSummary"][];
+        };
+        readonly VisitPage: {
+            readonly items: readonly components["schemas"]["VisitSummary"][];
+            /**
+             * Format: uuid
+             * @description Pass as before for the next page; null on the last page
+             */
+            readonly next_before: string | null;
+        };
         readonly HealthStatus: {
             /** @constant */
             readonly status: "ok";
@@ -1656,6 +1892,34 @@ export interface components {
                 readonly "application/json": components["schemas"]["ErrorEnvelope"];
             };
         };
+        /**
+         * @description VIS_ALREADY_EXISTS (409, details.visit_id); VIS_NOT_STARTABLE (409, details.status: start
+         *     the consultation on the queue first); VIS_STALE (409, details.revision: another tab saved
+         *     first); VIS_LOCKED (409, details.locked_at: add an addendum); VIS_NOT_COMPLETED (409);
+         *     REQ_VALIDATION_FAILED (422, the field and the rule, never the value)
+         */
+        readonly VisitError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description PERM_DENIED (403: front desk, or an owner who is not a doctor writing); VIS_NOT_YOURS (403:
+         *     a doctor writing another doctor's visit); CLN_SUSPENDED (403)
+         */
+        readonly VisitPermissionError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
         /** @description The schedule after the change, with any booked sessions it kept */
         readonly ScheduleChanged: {
             headers: {
@@ -1760,6 +2024,8 @@ export interface components {
         readonly DoctorPath: string;
         /** @description An appointment of the request's clinic. */
         readonly AppointmentPath: string;
+        /** @description A visit of the request's clinic. */
+        readonly VisitPath: string;
         /** @description The single-use invitation secret from the acceptance link. */
         readonly InviteToken: string;
     };
@@ -3427,6 +3693,265 @@ export interface operations {
                     readonly "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
+        };
+    };
+    readonly startVisit: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewVisit"];
+            };
+        };
+        readonly responses: {
+            /** @description Started */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Visit"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["VisitError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["VisitError"];
+        };
+    };
+    readonly getConsultation: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description A visit of the request's clinic. */
+                readonly visit_id: components["parameters"]["VisitPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The consultation */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Consultation"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly updateVisit: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A visit of the request's clinic. */
+                readonly visit_id: components["parameters"]["VisitPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["VisitChange"];
+            };
+        };
+        readonly responses: {
+            /** @description The visit after the change */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Visit"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["VisitError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["VisitError"];
+        };
+    };
+    readonly completeVisit: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A visit of the request's clinic. */
+                readonly visit_id: components["parameters"]["VisitPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Completed */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Visit"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly addVisitAddendum: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A visit of the request's clinic. */
+                readonly visit_id: components["parameters"]["VisitPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewVisitAddendum"];
+            };
+        };
+        readonly responses: {
+            /** @description Added */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["VisitAddendum"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["VisitError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["VisitError"];
+        };
+    };
+    readonly listPatientVisits: {
+        readonly parameters: {
+            readonly query?: {
+                readonly limit?: number;
+                /** @description A visit ID from next_before */
+                readonly before?: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description A patient of the request's clinic. */
+                readonly patient_id: components["parameters"]["PatientPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description A page of visits */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["VisitPage"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 422: components["responses"]["AuthError"];
         };
     };
 }

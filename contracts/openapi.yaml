@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.12.0
+  version: 0.13.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -54,6 +54,13 @@ tags:
       The daily queue (M3-P3, FR-QUE-01/02/04): status transitions, walk-ins and the day's read.
       Every clinic role holds QUEUE_MOVE. A transition names the status the screen showed, so a
       stale tab cannot move a patient who has already moved. Live refresh (ETag, 304) is M3-P4.
+  - name: visits
+    description: |
+      Visits (M4-P1, FR-VIS-01..03, 05): the clinical record of one consultation. Reads need
+      CLINICAL_VIEW (doctors, owners), writes CLINICAL_WRITE and being the visit's doctor; front
+      desk gets 403 PERM_DENIED. Read-only 24 hours after completion, then addenda. Every read
+      that returns clinical content records one audit row for the whole view (spec R16).
+      Responses are never cached.
   - name: invites
     description: |
       Accepting a staff invitation (M1-P5). Public, because the invitee has no session yet: the
@@ -1829,6 +1836,275 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/visits:
+    post:
+      tags: [visits]
+      operationId: startVisit
+      summary: Start the visit for an appointment in consultation
+      description: |
+        FR-VIS-01; spec R1, M4-P1 decisions 1A and 5A. The appointment must be IN_CONSULTATION
+        (409 VIS_NOT_STARTABLE, details.status) and the caller its doctor (403 VIS_NOT_YOURS). One
+        visit per appointment: 409 VIS_ALREADY_EXISTS with details.visit_id. Records
+        visit.started. Permission CLINICAL_WRITE. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewVisit'
+      responses:
+        '201':
+          description: Started
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Visit'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/VisitError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/VisitError'
+  /api/v1/visits/{visit_id}:
+    get:
+      tags: [visits]
+      operationId: getConsultation
+      summary: The consultation view - the visit, the patient and their last 10 visits
+      description: |
+        FR-VIS-02, FR-VIS-03; spec R2, R16, AC9. One response for the consultation screen, and one
+        visit.viewed audit row for it. history is the patient's previous visits, newest first.
+        Permission CLINICAL_VIEW.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/VisitPath'
+      responses:
+        '200':
+          description: The consultation
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Consultation'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+    patch:
+      tags: [visits]
+      operationId: updateVisit
+      summary: Change the visit's notes or vitals
+      description: |
+        FR-VIS-02; spec R3, M4-P1 decision 4A. Only the fields sent change; null clears one,
+        vitals replaces the whole set. revision is the one the screen has: 409 VIS_STALE
+        (details.revision, the current one) when another tab saved first; 409 VIS_LOCKED
+        (details.locked_at) 24 hours after completion. Records visit.updated with the changed
+        field names only. Permission CLINICAL_WRITE, the visit's doctor. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/VisitPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitChange'
+      responses:
+        '200':
+          description: The visit after the change
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Visit'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/VisitError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/VisitError'
+  /api/v1/visits/{visit_id}/complete:
+    post:
+      tags: [visits]
+      operationId: completeVisit
+      summary: Complete the visit (and its appointment)
+      description: |
+        FR-VIS-05; spec R3, M4-P1 decision 2A. Sets completed_at and locked_at = completed_at +
+        24 h, and moves the appointment IN_CONSULTATION -> COMPLETED when it is still there on the
+        session's day. Completing again changes nothing. Records visit.completed (and
+        appointment.status_changed). Permission CLINICAL_WRITE, the visit's doctor. Needs
+        X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/VisitPath'
+      responses:
+        '200':
+          description: Completed
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Visit'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/visits/{visit_id}/addenda:
+    post:
+      tags: [visits]
+      operationId: addVisitAddendum
+      summary: Add an addendum to a completed visit
+      description: |
+        FR-VIS-05; spec R3, AC6, M4-P1 decision 3A. Allowed on a completed visit, locked or not
+        (409 VIS_NOT_COMPLETED on an open one). Addenda never change. Records
+        visit.addendum_added. Permission CLINICAL_WRITE, the visit's doctor. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/VisitPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewVisitAddendum'
+      responses:
+        '201':
+          description: Added
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitAddendum'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/VisitError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/VisitError'
+  /api/v1/patients/{patient_id}/visits:
+    get:
+      tags: [visits]
+      operationId: listPatientVisits
+      summary: A patient's visits, newest first
+      description: |
+        FR-VIS-03; spec R2, R16. Pages of limit (1-50, default 10); pass next_before back as before
+        for the next page. One patient.visits_viewed audit row per page. Permission CLINICAL_VIEW.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: before
+          in: query
+          required: false
+          description: A visit ID from next_before
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: A page of visits
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitPage'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/AuthError'
 components:
   securitySchemes:
     sessionCookie:
@@ -1895,6 +2171,14 @@ components:
       in: path
       required: true
       description: An appointment of the request's clinic.
+      schema:
+        type: string
+        format: uuid
+    VisitPath:
+      name: visit_id
+      in: path
+      required: true
+      description: A visit of the request's clinic.
       schema:
         type: string
         format: uuid
@@ -1986,6 +2270,30 @@ components:
         another one; details.from is the real status, details.to the one asked); QUE_WRONG_TIME
         (409: details.reason not_today or not_started); QUE_NO_SESSION (409: no session left
         today); and the booking codes of AppointmentError for a walk-in
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    VisitError:
+      description: |
+        VIS_ALREADY_EXISTS (409, details.visit_id); VIS_NOT_STARTABLE (409, details.status: start
+        the consultation on the queue first); VIS_STALE (409, details.revision: another tab saved
+        first); VIS_LOCKED (409, details.locked_at: add an addendum); VIS_NOT_COMPLETED (409);
+        REQ_VALIDATION_FAILED (422, the field and the rule, never the value)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    VisitPermissionError:
+      description: |
+        PERM_DENIED (403: front desk, or an owner who is not a doctor writing); VIS_NOT_YOURS (403:
+        a doctor writing another doctor's visit); CLN_SUSPENDED (403)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -2085,6 +2393,159 @@ components:
       schema:
         type: string
   schemas:
+    NewVisit:
+      type: object
+      additionalProperties: false
+      required: [appointment_id]
+      properties:
+        appointment_id:
+          type: string
+          format: uuid
+    Vitals:
+      type: object
+      additionalProperties: false
+      description: |
+        Optional numbers; the unit is fixed by the key. Bounds only catch typing errors and are not
+        clinical ranges. Whole numbers for blood pressure, pulse, SpO2 and respiratory rate.
+      properties:
+        bp_systolic: {type: [number, 'null'], minimum: 40, maximum: 300, description: mmHg}
+        bp_diastolic: {type: [number, 'null'], minimum: 20, maximum: 200, description: mmHg}
+        pulse: {type: [number, 'null'], minimum: 20, maximum: 250, description: per minute}
+        temp_c: {type: [number, 'null'], minimum: 25, maximum: 45, description: degrees Celsius}
+        weight_kg: {type: [number, 'null'], minimum: 0.3, maximum: 400}
+        height_cm: {type: [number, 'null'], minimum: 20, maximum: 260}
+        spo2: {type: [number, 'null'], minimum: 50, maximum: 100, description: percent}
+        resp_rate: {type: [number, 'null'], minimum: 4, maximum: 80, description: per minute}
+    VisitChange:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+          description: The revision the screen shows (409 VIS_STALE otherwise)
+        chief_complaint: {type: [string, 'null'], maxLength: 500}
+        findings: {type: [string, 'null'], maxLength: 5000}
+        diagnosis: {type: [string, 'null'], maxLength: 1000}
+        notes: {type: [string, 'null'], maxLength: 5000}
+        vitals:
+          oneOf:
+            - $ref: '#/components/schemas/Vitals'
+            - type: 'null'
+    NewVisitAddendum:
+      type: object
+      additionalProperties: false
+      required: [body]
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+    VisitAddendum:
+      type: object
+      required: [id, visit_id, author_user_id, body, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        visit_id: {type: string, format: uuid}
+        author_user_id: {type: string, format: uuid}
+        body: {type: string}
+        created_at: {type: string, format: date-time}
+    VisitStatus:
+      type: string
+      enum: [OPEN, COMPLETED]
+    Visit:
+      type: object
+      description: Clinical content (C3). Never cached, never logged.
+      required:
+        - id
+        - patient_id
+        - doctor_id
+        - appointment_id
+        - status
+        - chief_complaint
+        - findings
+        - diagnosis
+        - notes
+        - vitals
+        - revision
+        - started_at
+        - completed_at
+        - locked_at
+        - is_locked
+        - addenda
+        - created_at
+        - updated_at
+      properties:
+        id: {type: string, format: uuid}
+        patient_id: {type: string, format: uuid}
+        doctor_id: {type: string, format: uuid}
+        appointment_id: {type: string, format: uuid}
+        status:
+          $ref: '#/components/schemas/VisitStatus'
+        chief_complaint: {type: [string, 'null']}
+        findings: {type: [string, 'null']}
+        diagnosis: {type: [string, 'null']}
+        notes: {type: [string, 'null']}
+        vitals:
+          type: object
+          description: The recorded vitals only (see Vitals for the keys)
+          additionalProperties: {type: number}
+        revision: {type: integer, minimum: 1}
+        started_at: {type: string, format: date-time}
+        completed_at: {type: [string, 'null'], format: date-time}
+        locked_at:
+          type: [string, 'null']
+          format: date-time
+          description: completed_at + 24 h; from then on only addenda
+        is_locked:
+          type: boolean
+          description: Whether the visit was locked when this response was made
+        addenda:
+          type: array
+          description: Oldest first
+          items:
+            $ref: '#/components/schemas/VisitAddendum'
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    VisitSummary:
+      type: object
+      required: [id, doctor_id, appointment_id, status, started_at, completed_at, chief_complaint, diagnosis]
+      properties:
+        id: {type: string, format: uuid}
+        doctor_id: {type: string, format: uuid}
+        appointment_id: {type: string, format: uuid}
+        status:
+          $ref: '#/components/schemas/VisitStatus'
+        started_at: {type: string, format: date-time}
+        completed_at: {type: [string, 'null'], format: date-time}
+        chief_complaint: {type: [string, 'null']}
+        diagnosis: {type: [string, 'null']}
+    Consultation:
+      type: object
+      required: [visit, patient, history]
+      properties:
+        visit:
+          $ref: '#/components/schemas/Visit'
+        patient:
+          $ref: '#/components/schemas/Patient'
+        history:
+          type: array
+          description: The patient's previous visits (at most 10), newest first
+          items:
+            $ref: '#/components/schemas/VisitSummary'
+    VisitPage:
+      type: object
+      required: [items, next_before]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisitSummary'
+        next_before:
+          type: [string, 'null']
+          format: uuid
+          description: Pass as before for the next page; null on the last page
     HealthStatus:
       type: object
       required: [status]

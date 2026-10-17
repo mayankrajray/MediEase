@@ -214,7 +214,7 @@ is a documented `make psql` procedure (RUNBOOK §18), and the owner-facing view 
 | PUT | `/api/v1/patients/{patient_id}/consent` | Record consent (`whatsapp`, `sms`, both required) | FR-PAT-05/06 | Implemented (M2-P3) |
 | POST | `/api/v1/patients/{patient_id}/opt-out` | Stop all messages (idempotent) | FR-MSG-05 | Implemented (M2-P3) |
 | POST | `/api/v1/patients/{patient_id}/opt-in` | Undo an opt-out, with the consent given on the way back | FR-PAT-05, FR-MSG-05 | Implemented (M2-P3) |
-| GET | `/api/v1/patients/{patient_id}/timeline` | Appointments, visits, Rx, reminders | FR-VIS-03 | M4 |
+| GET | `/api/v1/patients/{patient_id}/timeline` | Appointments, visits, Rx, reminders | FR-VIS-03 | M4 (visits alone: `/patients/{id}/visits`, M4-P1) |
 
 Every clinic role holds `PATIENTS_MANAGE`, which guards all seven; ops users are refused (R10).
 Responses carry personal data and are `Cache-Control: no-store`. The clinic is the request's
@@ -318,21 +318,28 @@ compared weakly, as RFC 9110 requires (`*`, lists and `W/` tags work).
 
 ### Visits and prescriptions (M4)
 
-| Method | Path | Purpose | Req |
-|---|---|---|---|
-| POST | `/api/v1/visits` | Start visit (from appointment or walk-in) | FR-VIS-01 |
-| GET/PATCH | `/api/v1/visits/{visit_id}` | Clinical record | FR-VIS-02 |
-| POST | `/api/v1/visits/{visit_id}/complete` | Complete | FR-VIS-05 |
-| POST | `/api/v1/visits/{visit_id}/addenda` | Addendum after lock | FR-VIS-05 |
-| POST | `/api/v1/visits/{visit_id}/prescriptions` | Create draft | FR-RX-01 |
-| PUT | `/api/v1/prescriptions/{rx_id}` | Replace draft body | FR-RX-01..03 |
-| POST | `/api/v1/prescriptions/{rx_id}/issue` | Issue (immutable) → PDF + link jobs | FR-RX-06 |
-| POST | `/api/v1/prescriptions/{rx_id}/revise` | New version superseding | FR-RX-09 |
-| GET | `/api/v1/prescriptions/{rx_id}/pdf` | The PDF, rendered once per version (spec R18, ADR-0012) | FR-RX-06 |
-| GET/POST/DELETE | `/api/v1/rx-favourites` | Favourites | FR-RX-05 |
-| GET/POST/DELETE | `/api/v1/rx-templates` | Templates | FR-RX-05 |
-| GET | `/api/v1/medicine-suggestions?q=` | From this clinic's history only | FR-RX-10 |
+| Method | Path | Purpose | Req | State |
+|---|---|---|---|---|
+| POST | `/api/v1/visits` | Start the visit of an `IN_CONSULTATION` appointment (`CLINICAL_WRITE`, its doctor) | FR-VIS-01 | Implemented (M4-P1) |
+| GET | `/api/v1/visits/{visit_id}` | The consultation view: visit, addenda, patient, last 10 visits (`CLINICAL_VIEW`) | FR-VIS-02, 03 | Implemented (M4-P1) |
+| PATCH | `/api/v1/visits/{visit_id}` | Notes and vitals with the `revision` seen (`CLINICAL_WRITE`, its doctor) | FR-VIS-02 | Implemented (M4-P1) |
+| POST | `/api/v1/visits/{visit_id}/complete` | Complete; also completes the appointment | FR-VIS-05 | Implemented (M4-P1) |
+| POST | `/api/v1/visits/{visit_id}/addenda` | Addendum on a completed visit | FR-VIS-05 | Implemented (M4-P1) |
+| GET | `/api/v1/patients/{patient_id}/visits?limit=&before=` | A patient's visits, newest first, keyset pages (`CLINICAL_VIEW`) | FR-VIS-03 | Implemented (M4-P1) || POST | `/api/v1/visits/{visit_id}/prescriptions` | Create draft | FR-RX-01 | M4-P2 |
+| PUT | `/api/v1/prescriptions/{rx_id}` | Replace draft body | FR-RX-01..03 | M4-P2 |
+| POST | `/api/v1/prescriptions/{rx_id}/issue` | Issue (immutable), pending-delivery marker (spec R5, R14) | FR-RX-06 | M4-P2 |
+| POST | `/api/v1/prescriptions/{rx_id}/revise` | New version superseding | FR-RX-09 | M4-P2 |
+| GET | `/api/v1/prescriptions/{rx_id}/pdf` | The PDF, rendered once per version (spec R18, ADR-0012) | FR-RX-06 | M4-P4 |
+| GET/POST/DELETE | `/api/v1/rx-favourites` | Favourites | FR-RX-05 | M4-P3 |
+| GET/POST/DELETE | `/api/v1/rx-templates` | Templates | FR-RX-05 | M4-P3 |
+| GET | `/api/v1/medicine-suggestions?q=` | From this clinic's history only | FR-RX-10 | M4-P3 |
 
+M4-P1 rules (spec prescriptions R1-R3, R16, R17; decisions 1A-6A; contract 0.13.0): reads need
+`CLINICAL_VIEW` (doctors, owners), writes `CLINICAL_WRITE` and being the visit's doctor, so front
+desk gets `403 PERM_DENIED` on every visit route. Responses are `no-store`. Each read that returns
+clinical content writes **one** audit row for the whole view (`visit.viewed`,
+`patient.visits_viewed`); writes are audited by their own action with the names of changed fields,
+never their values. Locked 24 hours after completion (`409 VIS_LOCKED`); then addenda.
 ### Patient links (M4) — public, no session
 
 | Method | Path | Purpose | Req |
