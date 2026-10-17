@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | M4 opened 17 Oct 2026 after M3 merged (PR #37). `docs/specs/prescriptions.md` Approved with D1–D5 and the developer's refinements; ADR-0012 accepted; M4-P1 done and confirmed (draft PR #39); M4-P1 and M4-P2 done and confirmed; the M4-P3 design approved (1A–5A) and in implementation |
+| Status | M4 opened 17 Oct 2026 after M3 merged (PR #37). `docs/specs/prescriptions.md` Approved with D1–D5 and the developer's refinements; ADR-0012 accepted; M4-P1 done and confirmed (draft PR #39); M4-P1 and M4-P2 done and confirmed; M4-P3 implemented, awaiting the developer's confirmation |
 | Scope | Milestone 4 in phase detail; M5–M6 as a roadmap only. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37, merged 17 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
 | Design notes | `docs/milestones/M4-visits-and-prescriptions.md` |
@@ -127,3 +127,4 @@ start. P1 is proposed in full now.
 | 18 Oct 2026 | M4-P2 — prescriptions: one chain per visit, whole-draft saves with a revision guard, issue with doctor and clinic snapshots, language and pending-delivery marker, revise and supersede, immutability in the domain and in database triggers, migration `0010`, contract 0.14.0. `make lint typecheck contract-check test` green (API 1121 at 99.01%; web 344); `make smoke`; the verify steps on the stack as designed | #38 | Implemented; awaiting the developer's confirmation |
 | 18 Oct 2026 | M4-P2 confirmed by the developer and pushed to PR #39. M4-P3 (favourites, templates, autocomplete) designed next | #38 | P2 done |
 | 18 Oct 2026 | M4-P3 design approved by the developer with every recommendation (1A–5A): each doctor's own favourites and templates; suggestions from the clinic's issued prescriptions ranked by distinct visits; use counted at issue; changes audited with IDs only; start-of-name matching with the M2 index pattern | #38 | In implementation |
+| 18 Oct 2026 | M4-P3 — each doctor's favourites and templates, medicine suggestions from the clinic's issued prescriptions (AC5), use counted at issue, migration `0011`, contract 0.15.0. `make lint typecheck contract-check test` green (API 1146 at 98.89%; web 344); `make smoke`; the verify steps on the stack as designed | #38 | Implemented; awaiting the developer's confirmation |
