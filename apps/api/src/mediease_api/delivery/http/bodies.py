@@ -15,6 +15,7 @@ from mediease_api.application.appointments.queue import QueueView
 from mediease_api.application.appointments.views import AppointmentDetail, AppointmentView
 from mediease_api.application.patients.views import CandidateView, PatientView
 from mediease_api.application.scheduling.views import ScheduleView
+from mediease_api.application.visits.use_cases import ConsultationView, VisitView
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
@@ -23,6 +24,7 @@ from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
 from mediease_api.domain.scheduling.exceptions import ScheduleException
 from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.scheduling.sessions import Session
+from mediease_api.domain.visits.visit import Visit, VisitAddendum
 
 
 def items_body(bodies: Iterable[dict[str, Any]]) -> dict[str, Any]:
@@ -277,4 +279,65 @@ def queue_body(queue: QueueView) -> dict[str, Any]:
             }
             for q in queue.sessions
         ],
+    }
+
+
+# --- Visits (M4-P1). Clinical content: CLINICAL_VIEW routes only, never logged. ------------------
+
+
+def addendum_body(addendum: VisitAddendum) -> dict[str, Any]:
+    return {
+        "id": str(addendum.id),
+        "visit_id": str(addendum.visit_id),
+        "author_user_id": str(addendum.author_user_id),
+        "body": addendum.body,
+        "created_at": addendum.created_at.isoformat(),
+    }
+
+
+def visit_body(view: VisitView) -> dict[str, Any]:
+    """The full record; ``is_locked`` is as of the response (R3)."""
+    v = view.visit
+    return {
+        "id": str(v.id),
+        "patient_id": str(v.patient_id),
+        "doctor_id": str(v.doctor_id),
+        "appointment_id": str(v.appointment_id),
+        "status": v.status.value,
+        "chief_complaint": v.chief_complaint,
+        "findings": v.findings,
+        "diagnosis": v.diagnosis,
+        "notes": v.notes,
+        "vitals": v.vitals.as_json(),
+        "revision": v.revision,
+        "started_at": v.started_at.isoformat(),
+        "completed_at": _iso(v.completed_at),
+        "locked_at": _iso(v.locked_at),
+        "is_locked": view.is_locked,
+        "addenda": [addendum_body(a) for a in view.addenda],
+        "created_at": v.created_at.isoformat(),
+        "updated_at": v.updated_at.isoformat(),
+    }
+
+
+def visit_summary_body(visit: Visit) -> dict[str, Any]:
+    """One line of a patient's history (R2): when, who, why and what was found."""
+    return {
+        "id": str(visit.id),
+        "doctor_id": str(visit.doctor_id),
+        "appointment_id": str(visit.appointment_id),
+        "status": visit.status.value,
+        "started_at": visit.started_at.isoformat(),
+        "completed_at": _iso(visit.completed_at),
+        "chief_complaint": visit.chief_complaint,
+        "diagnosis": visit.diagnosis,
+    }
+
+
+def consultation_body(view: ConsultationView) -> dict[str, Any]:
+    """The consultation screen in one response (R16: one read, one audit row)."""
+    return {
+        "visit": visit_body(view.visit),
+        "patient": patient_body(view.patient),
+        "history": [visit_summary_body(v) for v in view.history],
     }

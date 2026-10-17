@@ -52,6 +52,17 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/appointments/<uuid:appointment_id>/transitions": lambda w: (
         f"{_appointment_url(w, today=True)}/transitions"
     ),
+    "/api/v1/visits/<uuid:visit_id>": lambda w: _visit_url(w),
+    "/api/v1/visits/<uuid:visit_id>/complete": lambda w: f"{_visit_url(w)}/complete",
+    "/api/v1/visits/<uuid:visit_id>/addenda": lambda w: f"{_visit_url(w, completed=True)}/addenda",
+    "/api/v1/patients/<uuid:patient_id>/visits": lambda w: f"{_patient_url(w)}/visits",
+}
+
+# Clinical writes need CLINICAL_WRITE and the visit's doctor (prescriptions spec §2), so these
+# rules are tried by each clinic's doctor instead of its owner (an owner would get a 403 first).
+AS_DOCTOR = {
+    "/api/v1/visits/<uuid:visit_id>/complete",
+    "/api/v1/visits/<uuid:visit_id>/addenda",
 }
 
 # Methods a cross-tenant case must use (default GET), with the body to send: fixed, or built
@@ -68,6 +79,8 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
         lambda w: {"session_id": _session_of_b(w, days=32)},
     ),
     "/api/v1/clinic/staff/<uuid:membership_id>": ("PATCH", {"role": "DOCTOR"}),
+    "/api/v1/visits/<uuid:visit_id>/complete": ("POST", {}),
+    "/api/v1/visits/<uuid:visit_id>/addenda": ("POST", {"body": "seen again"}),
     "/api/v1/patients/<uuid:patient_id>/consent": ("PUT", {"whatsapp": True, "sms": False}),
     "/api/v1/patients/<uuid:patient_id>/opt-out": ("POST", {}),
     "/api/v1/patients/<uuid:patient_id>/opt-in": ("POST", {"whatsapp": True, "sms": False}),
@@ -144,6 +157,31 @@ def _appointment_url(world: World, *, today: bool = False) -> str:
     return f"/api/v1/appointments/{booked.get_json()['id']}"
 
 
+def _visit_url(world: World, *, completed: bool = False) -> str:
+    """Clinic B's visit, started by B's doctor in a session running now."""
+    client, headers = _owner_of_b(world)
+    appointment = _appointment_url(world, today=True)
+    for seen, to in (("BOOKED", "ARRIVED"), ("ARRIVED", "IN_CONSULTATION")):
+        moved = client.post(
+            f"{appointment}/transitions", json={"from": seen, "to": to}, headers=headers
+        )
+        assert moved.status_code == 200, moved.get_json()
+    doctor = world.client_for(world.b.doctor_user)
+    csrf = doctor.get_cookie("me_csrf", path="/")
+    assert csrf is not None
+    doctor_headers = {"X-CSRF-Token": csrf.value}
+    started = doctor.post(
+        "/api/v1/visits",
+        json={"appointment_id": appointment.rsplit("/", 1)[1]},
+        headers=doctor_headers,
+    )
+    assert started.status_code == 201, started.get_json()
+    url = f"/api/v1/visits/{started.get_json()['id']}"
+    if completed:
+        assert doctor.post(f"{url}/complete", headers=doctor_headers).status_code == 200
+    return url
+
+
 def _staff_url(world: World) -> str:
     """Clinic B's front-desk membership, which clinic A must not be able to reach."""
     owner_of_b = world.client_for(world.b.owner)
@@ -200,7 +238,8 @@ def test_nfr_08_every_clinic_route_with_an_id_has_a_cross_tenant_case(world: Wor
 @pytest.mark.parametrize("rule", sorted(CROSS_TENANT_CASES))
 def test_ac3_nfr_08_another_clinics_resource_is_404(world: World, rule: str) -> None:
     url = CROSS_TENANT_CASES[rule](world)
-    owner_of_a = world.client_for(world.a.owner)
+    doctor = rule in AS_DOCTOR
+    owner_of_a = world.client_for(world.a.doctor_user if doctor else world.a.owner)
     method, wanted = CROSS_TENANT_WRITES.get(rule, ("GET", {}))
     body = wanted(world) if callable(wanted) else wanted
 
@@ -208,7 +247,8 @@ def test_ac3_nfr_08_another_clinics_resource_is_404(world: World, rule: str) -> 
     assert resp.status_code == 404, resp.get_json()
     assert resp.get_json()["error"]["code"] == "REQ_NOT_FOUND"
     # The same URL works for its own clinic, so the 404 is the scope, not the route.
-    assert _call(world.client_for(world.b.owner), method, url, body).status_code in (200, 201)
+    own = world.client_for(world.b.doctor_user if doctor else world.b.owner)
+    assert _call(own, method, url, body).status_code in (200, 201)
 
 
 def _call(client: FlaskClient, method: str, url: str, body: dict[str, object]) -> TestResponse:

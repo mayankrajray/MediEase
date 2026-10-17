@@ -53,3 +53,11 @@ class AuditAction(StrEnum):
     APPOINTMENT_RESCHEDULED = "appointment.rescheduled"
     # M3-P3: the queue. Metadata: from, to, session and doctor IDs.
     APPOINTMENT_STATUS_CHANGED = "appointment.status_changed"
+    # M4-P1: visits (spec prescriptions R16, R17). Metadata: IDs, revisions, counts and the names of
+    # changed fields, never their values. Reads are one row per logical view, never per entity.
+    VISIT_STARTED = "visit.started"
+    VISIT_UPDATED = "visit.updated"
+    VISIT_COMPLETED = "visit.completed"
+    VISIT_ADDENDUM_ADDED = "visit.addendum_added"
+    VISIT_VIEWED = "visit.viewed"
+    PATIENT_VISITS_VIEWED = "patient.visits_viewed"

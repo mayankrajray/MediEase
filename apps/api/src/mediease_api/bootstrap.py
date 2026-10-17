@@ -55,6 +55,14 @@ from mediease_api.application.patients.update_patient import UpdatePatient
 from mediease_api.application.scheduling.exceptions import AddException, RemoveException
 from mediease_api.application.scheduling.schedules import GetSchedule, ReplaceSchedule
 from mediease_api.application.scheduling.sessions import ListSessions
+from mediease_api.application.visits.use_cases import (
+    AddAddendum,
+    CompleteVisit,
+    GetConsultation,
+    ListPatientVisits,
+    StartVisit,
+    UpdateVisit,
+)
 from mediease_api.config.logging import configure_logging
 from mediease_api.config.settings import AppSettings
 from mediease_api.delivery.errors import register_error_handlers
@@ -70,6 +78,7 @@ from mediease_api.delivery.http.patients import create_patients_blueprint
 from mediease_api.delivery.http.platform import create_platform_blueprint
 from mediease_api.delivery.http.request_info import register_request_info
 from mediease_api.delivery.http.scheduling import create_scheduling_blueprint
+from mediease_api.delivery.http.visits import create_visits_blueprint
 from mediease_api.delivery.middleware import register_request_middleware
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -241,6 +250,24 @@ class _UseCases:
     def get_queue(self) -> GetQueue:
         return GetQueue(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    def start_visit(self) -> StartVisit:
+        return StartVisit(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def get_consultation(self) -> GetConsultation:
+        return GetConsultation(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def update_visit(self) -> UpdateVisit:
+        return UpdateVisit(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def complete_visit(self) -> CompleteVisit:
+        return CompleteVisit(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def add_addendum(self) -> AddAddendum:
+        return AddAddendum(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def list_patient_visits(self) -> ListPatientVisits:
+        return ListPatientVisits(uow=self._uow(), clock=self.clock, ids=self.ids)
+
     def list_clinics(self) -> ListClinics:
         return ListClinics(uow=self._uow())
 
@@ -350,6 +377,7 @@ def create_app(
     app.register_blueprint(create_patients_blueprint(use_cases))
     app.register_blueprint(create_scheduling_blueprint(use_cases))
     app.register_blueprint(create_appointments_blueprint(use_cases))
+    app.register_blueprint(create_visits_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 
