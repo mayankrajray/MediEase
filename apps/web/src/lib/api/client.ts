@@ -11,6 +11,8 @@
  * - Every failure becomes an `ApiError` with a stable `code`: the API's own
  *   code from its error envelope, or a `WEB_*` code when the API could not be
  *   reached or did not answer in the contract's shape (docs/ERRORS.md).
+ * - `apiGetConditional` sends `If-None-Match` and turns a 304 into `notModified`
+ *   (the live queue polls with it, M3-P4).
  */
 
 import { readCsrfToken } from "./csrf";
@@ -86,6 +88,8 @@ export type PatchBody<P extends PatchPath> = JsonRequestBody<OperationOf<P, "pat
 export interface ApiResult<T> {
   readonly data: T;
   readonly status: number;
+  /** The response's `ETag`, when it sent one (the queue, M3-P4). */
+  readonly etag?: string;
   /** The request ID the API echoed (or the one we sent, if it echoed none). */
   readonly requestId: string;
 }
@@ -163,6 +167,33 @@ export async function apiGet<P extends GetPath>(
  * `body` is `undefined` for operations that take none (refresh, sign-out); it is
  * required otherwise, and typed from the contract.
  */
+/** A conditional GET: unchanged since `etag` → `notModified`, else the new body and its tag. */
+export type ConditionalResult<T> =
+  | { readonly notModified: true; readonly etag: string; readonly requestId: string }
+  | {
+      readonly notModified: false;
+      readonly data: T;
+      readonly etag: string | undefined;
+      readonly requestId: string;
+    };
+
+export async function apiGetConditional<P extends GetPath>(
+  path: P,
+  etag: string | undefined,
+  options: RequestOptions = {},
+): Promise<ConditionalResult<GetResponse<P>>> {
+  const result = await send("GET", path, undefined, options, etag);
+  if (result.status === 304) {
+    return { notModified: true, etag: result.etag ?? etag ?? "", requestId: result.requestId };
+  }
+  return {
+    notModified: false,
+    data: result.data as GetResponse<P>,
+    etag: result.etag,
+    requestId: result.requestId,
+  };
+}
+
 export async function apiPost<P extends PostPath>(
   path: P,
   body: PostBody<P>,
@@ -192,6 +223,7 @@ async function send(
   template: string,
   body: unknown,
   options: RequestOptions,
+  ifNoneMatch?: string,
 ): Promise<ApiResult<unknown>> {
   const sentRequestId = options.requestId ?? newRequestId();
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -206,6 +238,9 @@ async function send(
   };
   if (options.clinicId !== undefined) {
     headers[CLINIC_HEADER] = options.clinicId;
+  }
+  if (ifNoneMatch !== undefined) {
+    headers["If-None-Match"] = ifNoneMatch;
   }
   if (method !== "GET") {
     const csrf = readCsrfToken();
@@ -244,9 +279,14 @@ async function send(
   }
 
   const requestId = response.headers.get(REQUEST_ID_HEADER) ?? sentRequestId;
+  const etag = response.headers.get("ETag") ?? undefined;
 
   if (response.status === 204) {
     return { data: undefined, status: 204, requestId };
+  }
+  if (response.status === 304) {
+    // Not modified: no body by definition; the caller keeps what it has.
+    return { data: undefined, status: 304, requestId, ...(etag === undefined ? {} : { etag }) };
   }
 
   const parsed = await readJson(response);
@@ -255,7 +295,7 @@ async function send(
     if (parsed === undefined) {
       throw badResponse(response.status, requestId);
     }
-    return { data: parsed, status: response.status, requestId };
+    return { data: parsed, status: response.status, requestId, ...(etag === undefined ? {} : { etag }) };
   }
 
   const envelope = asErrorBody(parsed);

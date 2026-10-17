@@ -63,6 +63,9 @@ grep -qE '^HTTP/[0-9.]+ 307' <<<"$redirect" && grep -qi '^location: .*/sign-in?n
 # The patient API refuses anonymous callers through the web origin (FR-AUTH-03).
 status=$(curl -sS -m 15 -o /dev/null -w '%{http_code}' "$WEB/api/v1/patients?q=rao")
 [ "$status" = "401" ] && pass "/api/v1/patients without a session is 401" || fail "/api/v1/patients anonymous: $status"
+# The live queue (M3-P4) too, even with a tag: a 304 is never a way round sign-in.
+status=$(curl -sS -m 15 -o /dev/null -w '%{http_code}' -H 'If-None-Match: *' "$WEB/api/v1/queue")
+[ "$status" = "401" ] && pass "/api/v1/queue without a session is 401, also with If-None-Match" || fail "/api/v1/queue anonymous: $status"
 
 echo "Least privilege"
 for svc in api web; do

@@ -10,6 +10,7 @@ import {
   CSRF_HEADER,
   apiBaseUrl,
   apiGet,
+  apiGetConditional,
   apiPatch,
   apiPost,
   apiPut,
@@ -413,5 +414,35 @@ describe("newRequestId", () => {
 
   it("uses randomUUID where the browser has it", () => {
     expect(newRequestId()).toMatch(UUID_V4);
+  });
+});
+
+describe("apiGetConditional (M3-P4)", () => {
+  it("R12: sends If-None-Match and turns a 304 into notModified with the tag", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const fetchImpl = fakeFetch(new Response(null, { status: 304, headers: { ETag: '"abc"' } }));
+
+    const result = await apiGetConditional("/api/v1/queue", '"abc"', { fetchImpl });
+
+    expect(result).toMatchObject({ notModified: true, etag: '"abc"' });
+    const [, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(new Headers(init?.headers).get("If-None-Match")).toBe('"abc"');
+  });
+
+  it("returns a new body with its ETag, and sends no If-None-Match the first time", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    const response = jsonResponse(200, { on_date: "2026-10-19", sessions: [] });
+    response.headers.set("ETag", '"def"');
+    const fetchImpl = fakeFetch(response);
+
+    const result = await apiGetConditional("/api/v1/queue", undefined, { fetchImpl });
+
+    expect(result).toMatchObject({
+      notModified: false,
+      etag: '"def"',
+      data: { on_date: "2026-10-19", sessions: [] },
+    });
+    const [, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(new Headers(init?.headers).has("If-None-Match")).toBe(false);
   });
 });
