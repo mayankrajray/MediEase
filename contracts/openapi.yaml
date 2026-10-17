@@ -3757,6 +3757,7 @@ components:
         - CLINICAL_VIEW
         - CLINICAL_WRITE
         - USAGE_METRICS_VIEW
+        - RX_PRINT
     Clinic:
       type: object
       required:

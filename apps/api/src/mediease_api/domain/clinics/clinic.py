@@ -36,6 +36,13 @@ class ClinicStatus(StrEnum):
     SUSPENDED = "SUSPENDED"
 
 
+class PaperSize(StrEnum):
+    """The clinic's prescription stationery (M4-P4 decision 3A); A5 unless the clinic chooses A4."""
+
+    A5 = "A5"
+    A4 = "A4"
+
+
 class ClinicOwnerRequired(DomainError):
     """I1: a clinic cannot be active without an active owner."""
 
@@ -69,6 +76,9 @@ class Clinic:
     # M3 (spec appointments R3, R4): how the clinic's sessions are booked. Changing it is a use case
     # (R19), because every current block must support the new mode.
     booking_mode: BookingMode = BookingMode.TOKENS
+    # M4-P4 (decision 3A): applied when a prescription version is first rendered, then fixed in
+    # its stored PDF, so changing it never alters a printed prescription.
+    rx_paper_size: PaperSize = PaperSize.A5
 
     @classmethod
     def create(
@@ -87,6 +97,7 @@ class Clinic:
         specialties: tuple[str, ...] = (),
         patient_code_prefix: str | None = None,
         booking_mode: BookingMode = BookingMode.TOKENS,
+        rx_paper_size: PaperSize = PaperSize.A5,
     ) -> Clinic:
         """A new clinic in ``ONBOARDING`` (FR-ORG-01).
 
@@ -115,6 +126,7 @@ class Clinic:
             ),
             next_patient_seq=1,
             booking_mode=booking_mode,
+            rx_paper_size=rx_paper_size,
         )
 
     def allocate_patient_code(self, *, now: datetime) -> str:
@@ -155,6 +167,7 @@ class Clinic:
         state: str | None = None,
         pincode: str | None = None,
         specialties: tuple[str, ...] | None = None,
+        rx_paper_size: PaperSize | None = None,
     ) -> None:
         """Change the clinic's own details (FR-ORG-01, M1-P5).
 
@@ -171,6 +184,7 @@ class Clinic:
             "state": optional_text(state, "state", max_length=100),
             "pincode": _validate_pincode(pincode),
             "specialties": _clean_specialties(specialties) if specialties is not None else None,
+            "rx_paper_size": rx_paper_size,
         }
         self.updated_at = require_utc(now, "now")
         if validated_name is not None:

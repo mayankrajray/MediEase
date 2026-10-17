@@ -29,6 +29,9 @@ class Permission(StrEnum):
     REMINDERS_SCHEDULE = "REMINDERS_SCHEDULE"
     CLINICAL_VIEW = "CLINICAL_VIEW"
     CLINICAL_WRITE = "CLINICAL_WRITE"
+    # M4-P4 (spec prescriptions D6): print an issued prescription. Every role, front desk too,
+    # without seeing its content on screen; only the latest version unless CLINICAL_VIEW (1A).
+    RX_PRINT = "RX_PRINT"
     USAGE_METRICS_VIEW = "USAGE_METRICS_VIEW"
 
 
@@ -40,6 +43,7 @@ _EVERY_ROLE = frozenset(
         Permission.APPOINTMENTS_MANAGE,
         Permission.QUEUE_MOVE,
         Permission.REMINDERS_SCHEDULE,
+        Permission.RX_PRINT,
     }
 )
 
@@ -54,7 +58,8 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
     },
     Role.DOCTOR: _EVERY_ROLE
     | {Permission.CLINICAL_VIEW, Permission.CLINICAL_WRITE, Permission.USAGE_METRICS_VIEW},
-    # Front desk sees only a "prescription issued" flag, never clinical content.
+    # Front desk sees only a "prescription issued" flag, never clinical content on screen; it may
+    # print an issued prescription (RX_PRINT, spec D6).
     Role.FRONT_DESK: _EVERY_ROLE,
 }
 

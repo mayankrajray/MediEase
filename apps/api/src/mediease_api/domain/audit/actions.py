@@ -69,6 +69,9 @@ class AuditAction(StrEnum):
     PRESCRIPTION_ISSUED = "prescription.issued"
     PRESCRIPTION_REVISED = "prescription.revised"
     PRESCRIPTION_VIEWED = "prescription.viewed"
+    # M4-P4: one row per PDF download (R16, spec D6). Metadata: visit, version, paper size, the
+    # caller's role and whether this download rendered it; never content.
+    PRESCRIPTION_PDF_DOWNLOADED = "prescription.pdf_downloaded"
     # M4-P3: a doctor's favourites and templates. Metadata: none (the entity ID says which);
     # never a name or a medicine. Lists and suggestions are not audited (decision 4A).
     RX_FAVOURITE_CREATED = "rx_favourite.created"
