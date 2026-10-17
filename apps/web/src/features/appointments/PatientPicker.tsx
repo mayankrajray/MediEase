@@ -32,6 +32,8 @@ export function PatientPicker({
   const input = useRef<HTMLInputElement>(null);
   const id = useId();
 
+  // Outside a modal this focuses at once; inside Drawer/Dialog, data-autofocus does it again
+  // after the modal opens, which is what sticks.
   useEffect(() => input.current?.focus(), []);
 
   useEffect(() => {
@@ -63,6 +65,7 @@ export function PatientPicker({
       <input
         id={id}
         ref={input}
+        data-autofocus
         type="search"
         autoComplete="off"
         spellCheck={false}
