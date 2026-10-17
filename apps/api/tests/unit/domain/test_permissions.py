@@ -27,6 +27,7 @@ MATRIX: dict[P, set[Role]] = {
     P.CLINICAL_VIEW: {OWN, DOC},
     P.CLINICAL_WRITE: {DOC},
     P.USAGE_METRICS_VIEW: {OWN, DOC},
+    P.RX_PRINT: {OWN, DOC, DESK},
 }
 
 

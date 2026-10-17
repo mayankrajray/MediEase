@@ -1672,7 +1672,7 @@ export interface components {
         /** @enum {string} */
         readonly MembershipStatus: "INVITED" | "ACTIVE" | "DEACTIVATED";
         /** @enum {string} */
-        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "SCHEDULES_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW";
+        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "SCHEDULES_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW" | "RX_PRINT";
         readonly Clinic: {
             /** Format: uuid */
             readonly id: string;

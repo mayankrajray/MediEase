@@ -77,3 +77,31 @@ class NotLatest(DomainError):
 
     def __init__(self, latest_id: UUID) -> None:
         super().__init__("Revise the latest version.", latest_id=str(latest_id))
+
+
+class NotIssued(DomainError):
+    """M4-P4, spec D6: only an issued version is printed; a draft never is."""
+
+    code = "RX_NOT_ISSUED"
+
+    def __init__(self, status: str) -> None:
+        super().__init__("Only an issued prescription can be printed.", status=status)
+
+
+class PdfBusy(DomainError):
+    """R18: another download is rendering this version; ``retry_after_seconds`` says when."""
+
+    code = "RX_PDF_BUSY"
+    retry_after_seconds = 2
+
+    def __init__(self) -> None:
+        super().__init__("The prescription is being prepared. Try again in a moment.")
+
+
+class PdfFailed(DomainError):
+    """R18: rendering or storing failed; nothing was kept, so the next download tries again."""
+
+    code = "RX_PDF_FAILED"
+
+    def __init__(self, stage: str) -> None:
+        super().__init__("The prescription could not be prepared. Try again.", stage=stage)
