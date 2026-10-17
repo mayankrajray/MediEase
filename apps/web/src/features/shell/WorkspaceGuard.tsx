@@ -40,14 +40,13 @@ export function WorkspaceGuard({ children }: { children: ReactNode }) {
     return <NoAccess />;
   }
   return (
-    <AppShell membership={clinic.membership}>
-      <ClinicGate
-        key={clinic.membership.clinic_id}
-        membership={clinic.membership}
-        sendClinicHeader={clinic.sendClinicHeader}
-      >
-        {children}
-      </ClinicGate>
-    </AppShell>
+    <ClinicGate
+      key={clinic.membership.clinic_id}
+      membership={clinic.membership}
+      sendClinicHeader={clinic.sendClinicHeader}
+      frame={(body) => <AppShell membership={clinic.membership}>{body}</AppShell>}
+    >
+      {children}
+    </ClinicGate>
   );
 }

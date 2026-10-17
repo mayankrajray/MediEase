@@ -5,6 +5,8 @@ import { vi } from "vitest";
 export interface Recorded {
   readonly method: string;
   readonly path: string;
+  /** The query string, e.g. `search.get("q")`; not part of the route key. */
+  readonly search: URLSearchParams;
   readonly headers: Headers;
   readonly body: unknown;
 }
@@ -49,6 +51,7 @@ export function mockApi(routes: Record<string, Route | readonly (() => Response)
     const call: Recorded = {
       method,
       path: url.pathname,
+      search: url.searchParams,
       headers: new Headers(init?.headers),
       body: typeof rawBody === "string" ? (JSON.parse(rawBody) as unknown) : undefined,
     };
