@@ -14,7 +14,16 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
-- M3 (#36) complete: appointments and the daily queue, P1-P5 below, merged in PR #37 (17 Oct 2026).
+- M4-P1 (#38): visits (FR-VIS-01..03, 05; spec prescriptions R1-R3, R16, R17; decisions 1A-6A).
+  The doctor starts the visit of an appointment in consultation (`POST /api/v1/visits`), records
+  the chief complaint, findings, diagnosis, notes and vitals (`PATCH` with the `revision` seen,
+  `409 VIS_STALE` otherwise) and completes it, which also completes the appointment. 24 hours
+  after completion the visit is locked (`409 VIS_LOCKED`) and takes addenda only; addenda are
+  append-only in the database. `GET /api/v1/visits/{id}` returns the consultation view (visit,
+  addenda, patient, last 10 visits) and `GET /api/v1/patients/{id}/visits` the history in pages.
+  Doctors and owners read, only the visit's doctor writes, front desk sees nothing. Each clinical
+  read writes one audit row for the view; no clinical text reaches logs or audit metadata.
+  Migration `0009`, contract 0.13.0.- M3 (#36) complete: appointments and the daily queue, P1-P5 below, merged in PR #37 (17 Oct 2026).
 - M3-P5 (#36): the appointment and queue screens (FR-APT-01, 03, 05; FR-QUE-01, 03, 04; D27-D32).
   `/queue` is the live board: one doctor's day (a doctor sees their own), refreshed every 5 s,
   rows in token or slot order with the next step as one click (*Arrived*, *Start*, *Complete*)
