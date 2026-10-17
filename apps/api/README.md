@@ -17,6 +17,33 @@ M1-P2: sign-in, refresh rotation with reuse detection, sign-out and lockout
 (`/api/v1/auth/*`), Argon2id and JWT adapters, CSRF double submit, migration `0003`, and
 `make seed` (synthetic demo users, local only).
 
+M1-P3: authorisation on every route (access policy, default deny), per-request re-check of
+session/user/membership, clinic resolution, permission matrix, `GET /api/v1/me` and read-only
+clinic endpoints.
+
+M1-P4: append-only `audit_events` (migration `0004`) with database-enforced immutability
+(triggers), `v_clinic_activity`, audited staff role change.
+
+M1-P5: ops onboarding (`POST /api/v1/ops/clinics`, doctors, staff invites), single-use
+invitations and acceptance, owner staff and doctor management, migration `0005` (invitation
+columns, `onboarding_checklists`).
+
+M1-P6: web sign-in, clinic switcher, dashboard shell (merged; see M1 notes).
+
+M1-P7: web ops console with Create clinic wizard (merged; see M1 notes).
+
+M2-P1: patient domain, clinic code allocation, migration `0006`, tenancy-scoped repository,
+lookup indexes, 10,000-patient performance test.
+
+M2-P2: register/edit/lookup endpoints, duplicate-phone flow with candidates, audit without
+personal data, clinic-local ages, `patient_code_prefix`, contract 0.6.0.
+
+M2-P3: consent recording, opt-out and opt-in as separate actions, row lock, audit as evidence,
+`whatsapp_allowed`/`sms_allowed`, contract 0.7.0.
+
+M2-P4: ops CSV patient import (`POST /api/v1/ops/clinics/{id}/patient-imports`), dry run by
+default, batched inserts, contract 0.8.0.
+
 ## Layout
 
 | Path | Layer | May import |
