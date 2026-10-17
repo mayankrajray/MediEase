@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M3 — Appointments and daily queue** (issue #36, branch `m3/36-appointments-and-queue`, one PR for the milestone) |
-| Active phase | **M3-P5 — approved 17 Oct 2026 (1A–6A, D27–D32), implementation next:** the screens (live queue board, booking in ≤ 3 interactions, walk-ins, cancel and reschedule, schedule settings, a patient's appointments). M3-P1 to P4 done and confirmed |
+| Active phase | **M3-P5 — implemented 17 Oct 2026; M3 complete, awaiting the developer's review (PR #37):** the live queue board, booking in ≤ 3 interactions, walk-ins, cancel and reschedule, schedule settings, a patient's appointments. Exit criterion met (AC1, AC4, AC6) |
 | Design notes | `docs/milestones/M3-appointments-and-queue.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M3 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
