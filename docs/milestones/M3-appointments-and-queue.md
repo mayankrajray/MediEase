@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A), implemented and accepted by the developer the same day; M3-P3 designed and approved (recommended options) the same day, in implementation |
+| Status | In progress — M3-P1 approved 17 Oct 2026 (1A–6A plus the developer's refinements) implemented and confirmed by the developer the same day; M3-P2 approved (1A–7A), implemented and accepted by the developer the same day; M3-P3 designed, approved (recommended options) and implemented the same day, awaiting the developer's confirmation |
 | Spec | `docs/specs/appointments-and-queue.md` (Approved 2026-10-17, D1–D22) |
 | Covers | FR-APT-01..07, FR-QUE-01..05 |
 | Issue / branch / PR | #36 · `m3/36-appointments-and-queue` · one PR for the whole milestone (ADR-0011) |
@@ -14,7 +14,7 @@
 |---|---|---|
 | P1 | Doctor schedules, exceptions, sessions generated per clinic-local date; slot and token mode | Below |
 | P2 | Booking, reschedule, cancel under a session row lock | Below (done) |
-| P3 | Queue state machine, transitions, walk-ins | Below (approved) |
+| P3 | Queue state machine, transitions, walk-ins | Below (implemented) |
 | P4 | Live queue (ETag polling) | Designed at its start |
 | P5 | Web: queue board, booking flow, schedule settings | Designed at its start |
 
@@ -368,7 +368,7 @@ live refresh (ETag, 304) is P4.
 
 | # | Question | Chosen |
 |---|---|---|
-| D17 | Who moves the queue | Every role, with `QUE_MOVE` (spec §2); the history and audit say who. M4 may restrict `IN_CONSULTATION` once it opens a visit |
+| D17 | Who moves the queue | Every role, with `QUEUE_MOVE` (spec §2); the history and audit say who. M4 may restrict `IN_CONSULTATION` once it opens a visit |
 | D18 | Guarding against stale screens | `{from, to}` both required; `from` must equal the current status |
 | D19 | When the queue may move | On the session's clinic-local date, or until an overnight session ends (`409 QUE_WRONG_TIME`, `reason: not_today`); `NO_SHOW` once the session (token) or slot (slot mode) has started (`reason: not_started`) |
 | D20 | Undoing a mistaken transition | None in M3; a mistaken arrival can be marked no-show and back, or cancelled |
@@ -386,8 +386,8 @@ rows are appended as in P2. `PatientRepository.get_many` reads the queue's patie
 
 | Method | Path | Permission | Behaviour |
 |---|---|---|---|
-| POST | `/api/v1/appointments/{id}/transitions` | `QUE_MOVE` | `{from, to}`; 200 with the appointment; audited `appointment.status_changed` |
-| POST | `/api/v1/queue/walk-ins` | `QUE_MOVE` | `{doctor_id, patient_id, session_id?, slot_start?, reason?}`; 201 with the appointment, `ARRIVED`, source `WALK_IN`; audited `appointment.booked` |
+| POST | `/api/v1/appointments/{id}/transitions` | `QUEUE_MOVE` | `{from, to}`; 200 with the appointment; audited `appointment.status_changed` |
+| POST | `/api/v1/queue/walk-ins` | `QUEUE_MOVE` | `{doctor_id, patient_id, session_id?, slot_start?, reason?}`; 201 with the appointment, `ARRIVED`, source `WALK_IN`; audited `appointment.booked` |
 | GET | `/api/v1/queue?date=&doctor_id=` | `APPOINTMENTS_MANAGE` | The date's sessions (generated as `GET /sessions` does), each with its active appointments by token or slot: patient code, name and age, status, timestamps and `wait_minutes` while arrived. `date` defaults to the clinic's today; `include_cancelled=true` adds cancelled ones |
 
 New codes: `QUE_WRONG_TIME` (409), `QUE_NO_SESSION` (409); `QUE_INVALID_TRANSITION` is now
@@ -428,3 +428,30 @@ make lint typecheck test && make smoke
 | Wrong-day transitions from an old tab | The day window (D19), from the clinic's zone, never the server's |
 | A walk-in overbooking slot mode | The same session lock and capacity check as a booking; full is `APT_SESSION_FULL` |
 | Names leaking from the queue | Names are in the response only (staff need them); logs and audit carry IDs |
+### Result (17 Oct 2026)
+
+`make lint typecheck test` on the Linux clone: ruff, format, import-linter (4 contracts kept) and
+mypy (144 files) clean; API **1024 tests** (57 new) at 98.94% package coverage; contract 0.11.0
+validates, the web types are regenerated and `contract-check` is clean. `make up`, `make seed` and
+`make smoke` passed on the rebuilt stack.
+
+The verify steps on the stack, as the sample clinic's front desk, with an extra session running
+now (20:30–21:15 on Saturday 17 Oct): a walk-in came back `201 ARRIVED WALK_IN` with token 1;
+`ARRIVED → IN_CONSULTATION` set `started_at`; repeating it was `409 QUE_INVALID_TRANSITION` with
+the real `from: IN_CONSULTATION`; `COMPLETED → ARRIVED` was `409 QUE_INVALID_TRANSITION` (AC3); the
+queue listed the patient by code with status `COMPLETED`; moving Monday's booking today was
+`409 QUE_WRONG_TIME` (`not_today`). The audit row held from, to, session and doctor IDs only. The
+Monday booking was cancelled afterwards; the completed walk-in and its extra session remain in
+the local demo data as today's history.
+
+Two tabs making the same move at once: one 200, one 409 whose `from` is the winner's status
+(`test_d18_two_tabs_making_the_same_move_one_wins`).
+
+Taken while implementing:
+- The permission is the existing `QUEUE_MOVE` (the design said `QUE_MOVE`; corrected in the notes
+  and the spec).
+- Tests of today's queue add an extra session running now (`tests/sessions_now.py`), because the
+  app runs on the system clock and a fixed weekly block may already have ended.
+- A walk-in records two history rows (`→ BOOKED`, `BOOKED → ARRIVED`) and one `appointment.booked`
+  audit row with source `WALK_IN`.
+- The session list and the queue share one generate-and-list step (`sessions_for_date`).

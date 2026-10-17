@@ -185,7 +185,7 @@ Resolved at M3-P2 approval (2026-10-17):
 - **D16** The booking confirmation job (R5, FR-APT-06) arrives with M5's jobs table and messaging
   port; M3 writes none.
 Resolved at M3-P3 design (2026-10-17; the developer approved the recommended options in advance):
-- **D17** Every role moves the queue (`QUE_MOVE`); history and audit record who.
+- **D17** Every role moves the queue (`QUEUE_MOVE`); history and audit record who.
 - **D18** A transition names the status it saw and the one it wants (`{from, to}`); a different
   current status is `QUE_INVALID_TRANSITION` with the real `from`.
 - **D19** Transitions happen on the session's clinic-local date, or until an overnight session ends;
