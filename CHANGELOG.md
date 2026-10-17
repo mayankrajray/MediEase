@@ -14,7 +14,17 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
-- M3-P1 (#36): doctor schedules and sessions (FR-APT-01, FR-APT-02; spec appointments R1-R4,
+- M3-P2 (#36): booking, cancel and reschedule (FR-APT-03..05, FR-APT-07; spec R3-R8, D10-D16).
+  `POST /api/v1/appointments` books a patient into a session: the next token in token mode, a
+  free slot in slot mode. A session row lock serialises bookings and partial unique indexes back
+  them, so two parallel requests for the last place give one 201 and one 409. Tokens are never
+  reused after a cancellation. `POST .../cancel` takes a reason; `POST .../reschedule` moves a
+  booking to any open session in one transaction, linking the new appointment to the old.
+  `GET /api/v1/appointments/{id}` returns the status history, and
+  `GET /api/v1/patients/{id}/appointments` a patient's appointments. Sessions a leave or schedule
+  change leaves with bookings are now `CLOSED` to new ones (or resized when only the capacity
+  changed), and slots show `available`. New codes `APT_ALREADY_BOOKED`, and the existing `APT_*`
+  codes are now raised. Migration `0008`, contract 0.10.0. No confirmation message until M5.- M3-P1 (#36): doctor schedules and sessions (FR-APT-01, FR-APT-02; spec appointments R1-R4,
   R14-R20). The owner sets a doctor's weekly blocks with `PUT /api/v1/clinic/doctors/{id}/schedule`
   (ops during onboarding with `PUT /api/v1/ops/clinics/{id}/doctors/{id}/schedule`). Times are the
   clinic's wall clock. An end at or before the start is the next day, and a block lasts 15
