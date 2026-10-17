@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 designed next |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; the M4-P4 design proposed, awaiting approval |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -16,7 +16,7 @@
 | P1 | Visit record, history, 24-hour lock and addenda | Below (done, confirmed) |
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (done, confirmed) |
 | P3 | Favourites, templates, clinic-history autocomplete | Below (done, confirmed) |
-| P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | At its start |
+| P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (proposed) |
 | P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | At its start |
 | P6 | Web consultation screen, keyboard-first Rx builder | At its start |
 
@@ -461,3 +461,134 @@ Taken while implementing:
   harmless "operator clause" warning it already prints for the patient-name index.
 - A test left a database connection open and the table reset waited for it; every test now
   closes its connections (`with db.connect()`).
+
+---
+
+## M4-P4 — PDF rendering and blob storage
+
+**Status: proposed 18 Oct 2026, awaiting approval.** API, the API image and compose; printing from
+the screens is P6. Covers FR-RX-04, FR-RX-06 (the printable PDF); spec R8, R16, R18, R20, D1, D3,
+D6; ADR-0012; AC8, AC10.
+
+The developer answered P2's open question on 18 Oct 2026 (spec D6): once a prescription is
+issued, front desk may print it or hand a copy to the patient, as reception does with an e-parchi
+today, without seeing its content on screen.
+
+### Concepts
+
+1. **Two ports, nothing outside the infrastructure (ADR-0012).** `PdfRendererPort.render(document)
+   -> bytes` and `BlobStoragePort.put/get/exists`. Adapters: WeasyPrint (pinned, 70.x) with fonts
+   vendored in the repository; a local volume (dev, CI, tests); an S3-compatible client for
+   production, configured but not used until M6. Tests use an in-memory storage and a fake
+   renderer for use cases, and real WeasyPrint for the adapter and the end-to-end checks.
+2. **Render once, on first download (R18, AC8).** `GET /api/v1/prescriptions/{id}/pdf` locks the
+   prescription row; if it has no `pdf_object_key`, it builds the document, renders, stores under
+   `rx/{clinic_id}/{prescription_id}/v{version}.pdf` (write once, atomic) and records the key (the
+   P2 trigger allows it once). Concurrent first downloads wait on the row lock and then find the
+   key: one render. Waiting longer than 10 s is `503 RX_PDF_BUSY` with `Retry-After: 2`. A render or
+   storage failure is `500 RX_PDF_FAILED`, logged without content, and nothing is stored, so the
+   next download tries again.
+3. **What is printed is fixed by issue, how it looks by the first render.** Content, doctor,
+   clinic letterhead and language come from the issued version (P2 snapshots, R8, R20). The
+   patient's name, code, age at the issue date and sex are read when the PDF is first rendered,
+   then fixed in the file. The paper size is the clinic's setting at first render (decision 3).
+4. **Bilingual by phrasebook, free text verbatim (R20, D5).** `domain/prescriptions/phrasebook.py`
+   holds every label and structured phrase (frequency, timing, preparation, storage, headings) in
+   English and Hindi; P5's patient page uses the same book. A completeness test fails if a code
+   lacks a phrase in either language. Free text (medicine names, doses, warnings, notes, advice)
+   is printed exactly as written. No machine translation anywhere.
+5. **Printing is not viewing (D6).** A new permission `RX_PRINT` (front desk, doctors, owners)
+   downloads the PDF of an issued prescription; drafts are never printable (`409 RX_NOT_ISSUED`).
+   Front desk finds what to print in a list without clinical content (decision 2). Every download
+   is one `prescription.pdf_downloaded` audit row with the version and the role, never content.
+6. **Safe rendering.** Jinja2 with autoescaping builds the HTML from the document view model; the
+   WeasyPrint URL fetcher refuses every URL except the vendored fonts and the stylesheet, so no
+   value can make the renderer fetch anything. The PDF carries no title or metadata with clinical
+   content (the title is "Prescription"). Responses are `application/pdf`, `Cache-Control:
+   private, no-store`, `Content-Disposition: inline; filename="prescription-<code>-v<n>.pdf"`.
+
+### What the PDF shows (R8, PRD §8.6)
+
+Letterhead (clinic name, address, phone), doctor (name, qualification, registration number and
+council), patient (name, code, age, sex), date of issue, and "Revised prescription (version n)"
+when n > 1. One block per medicine: name, form and strength, dose, *when* (frequency and timing
+phrases, or the custom text), *how long*, quantity, *how to give* (preparation phrases with their
+amounts), *storage*, warnings and notes. Advice (diet, activity, "come back immediately if…",
+notes), the follow-up date, page numbers, and the footer "Digitally generated via MediEase". A5
+portrait by default; long prescriptions paginate (more than 15 lines is tested).
+
+### Image, settings and compose
+
+| Change | Detail |
+|---|---|
+| `apps/api/Dockerfile` | Runtime stage installs `libpango-1.0-0`, `libpangoft2-1.0-0`, `libharfbuzz-subset0` and `fontconfig` from the pinned trixie base (Pango 1.56 ≥ 1.44); `XDG_CACHE_HOME=/tmp` so fontconfig writes only to the tmpfs; Trivy keeps scanning |
+| Fonts | Noto Sans and Noto Sans Devanagari, Regular and Bold (SIL OFL 1.1), in `adapters/pdf/fonts/` with `OFL.txt` and their SHA-256 in a `SOURCES.md`; a test checks the hashes |
+| Dependencies | `weasyprint==70.x` and `jinja2` (already installed by Flask, now named), `boto3` for the S3 adapter; dev: `pypdf` (text checks), `moto[s3]` (in-process S3). Exact pins at implementation |
+| Settings | `BLOB_STORAGE=local\|s3` (local by default), `BLOB_LOCAL_DIR=/var/lib/mediease/blobs`; `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_REGION`, credentials from the environment, required only for `s3`; `.env.example` documents them |
+| Compose | A named volume `blobs` on the API at `/var/lib/mediease/blobs`, owned by the app user; the root filesystem stays read-only |
+| Migration `0012` | `clinics.rx_paper_size text not null default 'A5'` (`A5`\|`A4`); `PATCH /clinic` and the ops create gain it |
+
+### Domain, application, delivery
+
+| Where | What |
+|---|---|
+| `domain/prescriptions/phrasebook.py` | Labels and structured phrases in `en` and `hi`; `phrase(code, lang, **params)` |
+| `domain/prescriptions/document.py` | `RxDocument`: the view model the renderer gets (all phrases already resolved), built from the issued version, the patient and the paper size |
+| `ports/pdf.py`, `ports/storage.py` | `PdfRendererPort`, `BlobStoragePort` (`put` write-once, `get`, `exists`) |
+| `adapters/pdf/weasy.py` + template + CSS + fonts | The renderer, with the restricted URL fetcher |
+| `adapters/storage/local.py`, `adapters/storage/s3.py` | Temp file + `fsync` + `os.replace`; S3 `PutObject` with `If-None-Match: *` and server-side encryption |
+| `application/prescriptions/pdf.py` | `DownloadPrescriptionPdf` (lock, render once, store, audit), `ListPrintable` |
+| `domain/identity/permissions.py` | `RX_PRINT` for every clinic role |
+| `delivery/http/prescriptions.py` | `GET /prescriptions/{id}/pdf`, `GET /patients/{id}/prescriptions` |
+
+### API (contract 0.16.0)
+
+| Method | Path | Permission | Behaviour |
+|---|---|---|---|
+| GET | `/api/v1/prescriptions/{id}/pdf` | `RX_PRINT` | The PDF; renders on first request (R18); `409 RX_NOT_ISSUED` for a draft; `503 RX_PDF_BUSY`; `500 RX_PDF_FAILED` |
+| GET | `/api/v1/patients/{id}/prescriptions` | `RX_PRINT` | Decision 2: the patient's issued prescriptions, newest first, **without content**: id, version, status, issued_at, doctor's display name, whether a newer version exists |
+| PATCH | `/api/v1/clinic` | as today | Gains `rx_paper_size` |
+
+### Tests
+
+- **AC8:** two concurrent first downloads → the fake renderer is called once and both responses
+  carry the same bytes; a third is served from storage.
+- **AC10 and R8 with real WeasyPrint:** a Hindi prescription with English free text: the PDF's
+  text (`pypdf`) has the Hindi labels and phrases and the free text byte for byte; the PRD §8.6
+  sample has "10 ml" under "How to give"; doctor registration and footer present; 16 lines
+  paginate; A4 and A5 page sizes.
+- **Phrasebook completeness** for every code in both languages; the font hashes.
+- **Storage:** local write-once (a second `put` keeps the first bytes), atomic (no partial file
+  after a failure), keys cannot escape the base directory; S3 against `moto` (write-once, SSE).
+- **Renderer safety:** a value containing `<img src="http://…">` or `file:///etc/passwd` is
+  printed as text and no fetch happens.
+- **Permissions and audit:** front desk downloads an issued PDF (200) and gets 409 for a draft and
+  403 on `GET /prescriptions/{id}`; one `prescription.pdf_downloaded` per download; another
+  clinic's PDF 404; no content in logs or audit.
+- **Failures:** renderer raises → 500 `RX_PDF_FAILED`, nothing stored, `pdf_object_key` still
+  null; lock wait → 503 with `Retry-After`.
+- **Image:** `make up` builds with the new libraries, the read-only root filesystem holds, and a
+  smoke check downloads a seeded prescription's PDF.
+
+### Verify (on the rebuilt stack, with `make seed`)
+
+1. As the doctor, issue the PRD sample (P2); as front desk, `GET /patients/{id}/prescriptions`
+   lists it without items; `GET /prescriptions/{id}/pdf` → 200 `application/pdf`; open it: the
+   letterhead, registration number, "How to give: … 10 ml …", footer.
+2. `docker compose exec api ls /var/lib/mediease/blobs/rx/<clinic>/<rx>/` shows `v1.pdf`;
+   download again: same bytes, no new render in the logs.
+3. Front desk `GET /prescriptions/{draft}/pdf` → 409 `RX_NOT_ISSUED`. **Failure path.**
+4. Set the patient's language to Hindi, issue another; its PDF has Hindi headings, free text as
+   typed.
+5. `PATCH /clinic {"rx_paper_size": "A4"}`; a newly issued prescription's PDF is A4, earlier ones
+   stay as rendered.
+
+### Decisions for approval
+
+| # | Question | Options | Recommendation |
+|---|---|---|---|
+| 1 | Which versions may front desk print? | **A** the latest issued version; a superseded one only by doctors and owners (`CLINICAL_VIEW`) · **B** any issued or superseded version | **A**: reception hands over what is current; older versions are records for clinicians |
+| 2 | How does front desk find what to print? | **A** `GET /patients/{id}/prescriptions` without content, now (P6 adds a print button on the queue row and the profile) · **B** only from the queue in P6 | **A**: printing works as soon as P4 lands, and the list is the same data P6 needs |
+| 3 | Paper size | **A** a clinic setting (A5 default, A4), applied when a version is first rendered and fixed in the file · **B** chosen per download | **A**: one stored file per version (render once); clinics print on one stationery |
+| 4 | Hindi wording | **A** ship the English and Hindi phrasebook now, the Hindi marked for review by a native-speaking clinician at a pilot clinic (L-07) before patients see it · **B** English-only PDFs until reviewed | **A**: R20 and AC10 need it, and the review fits L-07; wording is data, so a correction is a one-line change |
+| 5 | The S3-compatible adapter | **A** build and test it now (boto3, `moto` in-process), wired in M6 · **B** port and local adapter now, S3 in M6 | **A**: as ADR-0012 and your refinement ask ("ready for prod"); it is small and tested without the network |

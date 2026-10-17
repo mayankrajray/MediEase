@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10, FR-AUD-01, NFR-07 |
 | Milestone / phases | M4 / P1–P6 |
-| Status | Approved (developer sign-off 2026-10-17: decisions D1–D5 with the developer's refinements; ADR-0012) |
+| Status | Approved (developer sign-off 2026-10-17: decisions D1–D5 with the developer's refinements; ADR-0012; D6 added 2026-10-18) |
 | Last updated | 2026-10-17 (approved; §2 made precise for owners; R5 adjusted for M4 without the M5 worker; R14–R20 added for delivery, read audit, the PDF cache and bilingual rendering) |
 
 ## 1. Context
@@ -20,10 +20,10 @@ The permission matrix in PRD §8.1 is normative (`domain/identity/permissions.py
 | Doctor | Yes, for every patient of the clinic (continuity of care) | Their own visits only (the visit's doctor) |
 | Owner who is also a doctor | Yes | Their own visits only |
 | Owner who is not a doctor | Yes, read only | No |
-| Front desk | **No.** Sees that a prescription was issued and can show or resend the link, never its content | No |
+| Front desk | **No** on screen. Prints an **issued** prescription and hands a copy to the patient (D6), sees that one was issued and can show or resend the link | No |
 
-Patients view through a patient link only. Whether front desk may print the PDF (it shows the
-content) is an open question for the M4-P4 design; until then the PDF needs `CLINICAL_VIEW`.
+Patients view through a patient link only. Printing is `RX_PRINT` (every clinic role): the PDF of an
+issued prescription, never a draft, and every download is audited (D6, R16).
 
 ## 3. Domain model
 - `Visit` (`OPEN → COMPLETED`; locked 24 h after completion), `VisitAddendum` (append-only).
@@ -199,8 +199,10 @@ translation service (D1, D5), sending messages (M5).
   once per logical view with no clinical text in metadata (R16, R17).
 - **D5** The patient's preference sets the language, with a page switch; labels and structured
   phrases are bilingual, free text is verbatim, never machine-translated (R19, R20).
+- **D6** (developer, 18 Oct 2026) Once the doctor has issued a prescription, front desk may print
+  it or hand a copy to the patient, as reception does with an e-parchi today. They still do not
+  see its content on screen; printing is its own permission (`RX_PRINT`) and is audited.
 
 ## 13. Open questions
 - Exact legal prescription format requirements — counsel (L-04, before M6).
 - Do pilot doctors want A5 or A4 by default? (L-07; a clinic setting either way.)
-- May front desk print a prescription they cannot otherwise view? (M4-P4 design.)
