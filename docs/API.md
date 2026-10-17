@@ -331,7 +331,8 @@ compared weakly, as RFC 9110 requires (`*`, lists and `W/` tags work).
 | DELETE | `/api/v1/prescriptions/{rx_id}` | Discard a draft | FR-RX-01 | Implemented (M4-P2) |
 | POST | `/api/v1/prescriptions/{rx_id}/issue` | Issue (immutable), snapshots, language, pending-delivery marker (spec R5, R14) | FR-RX-06 | Implemented (M4-P2) |
 | POST | `/api/v1/prescriptions/{rx_id}/revise` | New version from the latest issued one | FR-RX-09 | Implemented (M4-P2) |
-| GET | `/api/v1/prescriptions/{rx_id}/pdf` | The PDF, rendered once per version (spec R18, ADR-0012) | FR-RX-06 | M4-P4 |
+| GET | `/api/v1/prescriptions/{rx_id}/pdf` | The PDF, rendered once per version (spec R18, ADR-0012); `RX_PRINT` | FR-RX-04, 06 | Implemented (M4-P4) |
+| GET | `/api/v1/patients/{patient_id}/prescriptions` | The patient's current versions to print, without content; `RX_PRINT` | FR-RX-06 | Implemented (M4-P4) |
 | GET/POST | `/api/v1/rx-favourites` · PUT/DELETE `…/{favourite_id}` | The caller's favourites | FR-RX-05 | Implemented (M4-P3) |
 | GET/POST | `/api/v1/rx-templates` · GET/PUT/DELETE `…/{template_id}` | The caller's templates | FR-RX-05 | Implemented (M4-P3) |
 | GET | `/api/v1/medicine-suggestions?q=` | The caller's favourites, then names this clinic issued; at most 10 | FR-RX-10 | Implemented (M4-P3) |
@@ -355,6 +356,18 @@ match from the start of the name ignoring case, favourites first (by use) then n
 clinic's issued prescriptions (by distinct visits, then recency); nothing else is ever suggested.
 Draft lines may carry `favourite_id` and the draft `template_id`; issuing counts each once.
 Changes are audited with IDs only; lists and suggestions are not audited.
+M4-P4 rules (spec R8, R16, R18, D6; decisions 1A-5A; contract 0.16.0): printing is `RX_PRINT`,
+held by every role, front desk included (spec D6), who still cannot read a prescription on screen.
+A version's PDF is rendered on its first download while its row is locked (a concurrent first
+download waits and gets the same file; more than 10 s is `503 RX_PDF_BUSY` with `Retry-After`),
+stored write-once, and streamed afterwards with `Cache-Control: private, no-store` — never a
+public or pre-signed URL. Drafts are `409 RX_NOT_ISSUED`; a superseded version needs
+`CLINICAL_VIEW` too, else `409 RX_NOT_LATEST` (1A). `500 RX_PDF_FAILED` stores nothing, so the
+next download tries again. One `prescription.pdf_downloaded` per download (visit, version, role,
+whether it rendered). `GET /patients/{id}/prescriptions` lists the current versions without
+content (2A). `PATCH /clinic` takes `rx_paper_size` (`A5` default, `A4`), applied at first render
+(3A). Labels and dosage phrases are English or Hindi by the prescription's language; the doctor's
+text prints as written.
 
 ### Patient links (M4) — public, no session
 

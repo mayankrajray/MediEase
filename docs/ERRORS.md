@@ -134,7 +134,10 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 | `RX_STALE` | 409 | This prescription was changed elsewhere; reload it and try again | The `PUT` or issue sent an older `revision` (3A), or a favourite or template `PUT` did (M4-P3); `details.revision` is the current one | Reload it |
 | `RX_ALREADY_EXISTS` | 409 | This visit already has a prescription | A second "new prescription" for the visit (1A); `details.prescription_id` | The consultation view's `prescriptions` |
 | `RX_DRAFT_EXISTS` | 409 | A revision is already being drafted | Revising while the chain has a draft; `details.prescription_id` is that draft | Continue the draft |
-| `RX_NOT_LATEST` | 409 | Revise the latest version | Revising a superseded version; `details.latest_id` | The prescription's `versions` || `RX_PDF_FAILED` | 500 (job) | PDF could not be created | Renderer/font/storage error | `render_pdf` job, worker logs |
+| `RX_NOT_LATEST` | 409 | Revise the latest version | Revising a superseded version; `details.latest_id`. Also printing a superseded version without `CLINICAL_VIEW` (front desk prints only the current one, M4-P4 1A) | The prescription's `versions`, or `GET /patients/{id}/prescriptions` |
+| `RX_NOT_ISSUED` | 409 | Only an issued prescription can be printed | A PDF of a draft (spec D6); `details.status` | Ask the doctor to issue it |
+| `RX_PDF_BUSY` | 503 | The prescription is being prepared. Try again in a moment | Another download is rendering this version and held the row lock for more than 10 s (R18); `Retry-After: 2` | `rx.pdf_rendered` / `rx.pdf_failed` logs; a stuck transaction (`pg_stat_activity`) |
+| `RX_PDF_FAILED` | 500 | The prescription could not be prepared. Try again | Rendering or storing failed (`details.stage`: `render` \| `store`); nothing was stored, so the next download tries again | `rx.pdf_failed` log (IDs and stage only): fonts or Pango in the image, the blob volume's space and permissions, S3 credentials |
 | `RX_NAME_TAKEN` | 409 | You already have one with that name | A favourite or template name the doctor already uses, ignoring case and spaces (M4-P3) | `GET /rx-favourites`, `/rx-templates` |
 | `RX_LIBRARY_FULL` | 409 | You have reached the limit; delete one first | 200 favourites or 50 templates per doctor; `details.limit` | The doctor's list |
 
