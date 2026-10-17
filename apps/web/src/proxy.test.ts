@@ -53,7 +53,7 @@ describe("proxy (sign-in hint)", () => {
     expect(response.status).toBe(307);
   });
 
-  it.each(["/sign-in", "/invite/abc123", "/status", "/livez"])("never redirects the public page %s", (path) => {
+  it.each(["/sign-in", "/invite/abc123", "/status", "/livez", "/p/AQFrMQ.x.y"])("never redirects the public page %s", (path) => {
     const response = proxy(signedOut(`http://localhost:3000${path}`));
 
     expect(response.status).toBe(200);
@@ -68,7 +68,7 @@ describe("proxy (sign-in hint)", () => {
   );
 
   it("isPublicPath names exactly the public pages", () => {
-    expect(["/sign-in", "/status", "/livez", "/invite/x"].every(isPublicPath)).toBe(true);
+    expect(["/sign-in", "/status", "/livez", "/invite/x", "/p/x"].every(isPublicPath)).toBe(true);
     expect(["/", "/queue", "/ops", "/invite"].some(isPublicPath)).toBe(false);
   });
 });

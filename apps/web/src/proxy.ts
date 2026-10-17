@@ -23,7 +23,8 @@ export const CSP_HEADER = "Content-Security-Policy";
 
 const SIGN_IN_PATH = "/sign-in";
 const PUBLIC_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, "/status", "/livez"]);
-const PUBLIC_PREFIXES: readonly string[] = ["/invite/"];
+// /p/<token>: the patient's prescription page (M4-P5); the token and the last-4 check guard it.
+const PUBLIC_PREFIXES: readonly string[] = ["/invite/", "/p/"];
 
 /** Pages anyone may open without a session. */
 export function isPublicPath(pathname: string): boolean {
