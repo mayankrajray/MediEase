@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | M4 opened 17 Oct 2026 after M3 merged (PR #37). `docs/specs/prescriptions.md` Approved with D1–D5 and the developer's refinements; ADR-0012 accepted; M4-P1 done and confirmed; M4-P2 being designed |
+| Status | M4 opened 17 Oct 2026 after M3 merged (PR #37). `docs/specs/prescriptions.md` Approved with D1–D5 and the developer's refinements; ADR-0012 accepted; M4-P1 done and confirmed (draft PR #39); the M4-P2 design proposed, awaiting approval |
 | Scope | Milestone 4 in phase detail; M5–M6 as a roadmap only. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37, merged 17 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
 | Design notes | `docs/milestones/M4-visits-and-prescriptions.md` |
@@ -63,7 +63,7 @@ start. P1 is proposed in full now.
 | Phase | Objective | Requirements | Verify |
 |---|---|---|---|
 | P1 | Visits from an in-consultation appointment, clinical notes and vitals, history newest first, 24-hour lock with addenda, read audit at the view boundary, migration `0009` | FR-VIS-01..03, 05; spec R1–R3, R15–R16; AC6 | `make lint typecheck test`; edit after lock 409 `VIS_LOCKED` and an addendum 201; one audit row per screen load; sentinel clinical text absent from logs and audit |
-| P2 | Prescriptions: draft, items with structured instructions, advice, issue (atomic), versions and supersede, immutability trigger, pending delivery marker | FR-RX-01..03, 06, 09; R4–R6, R14, R17; AC1, AC4 | Issued Rx `PUT` 409 `RX_NOT_DRAFT`; direct SQL `UPDATE` refused by the trigger |
+| P2 | Prescriptions: one chain per visit, draft, items with structured instructions, advice, issue (atomic, with doctor and clinic snapshots), versions and supersede, immutability triggers, pending-delivery marker, migration `0010` | FR-RX-01..03, 06, 09; R4–R6, R14, R17, R20; AC1, AC4 | Issued Rx `PUT` 409 `RX_NOT_DRAFT`; direct SQL `UPDATE` refused by the trigger |
 | P3 | Favourites and templates; autocomplete from the clinic's own history only | FR-RX-05, 10; R7; AC5 | "Dru" never suggests a medicine the clinic has not used |
 | P4 | `PdfRendererPort` + WeasyPrint adapter, `BlobStoragePort` + local and S3-compatible adapters, render-once under a row lock, A5/A4, Hindi | FR-RX-04, 06; R8, R18; ADR-0012 | Two concurrent first downloads: one render; Devanagari renders; PDF text checked |
 | P5 | Signed patient links, last-4 challenge and lock, view cookie, open audit, bilingual 360-px page, `scripts/inspect_link_token.py` | FR-RX-04, 07, 08; R9–R13, R19; AC2, AC3 | Sixth attempt 423 `LINK_LOCKED`; Playwright at 360 px; page < 200 KB |
