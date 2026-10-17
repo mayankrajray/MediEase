@@ -45,3 +45,37 @@ export function formatDuration(minutes: number): string {
   const rest = String(minutes % 60).padStart(2, "0");
   return `${hours} h ${rest} min`;
 }
+
+function inZone(timeZone: string, options: Intl.DateTimeFormatOptions, date: Date): string {
+  try {
+    return new Intl.DateTimeFormat("en-IN", { ...options, timeZone }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat("en-IN", { ...options, timeZone: FALLBACK_ZONE }).format(date);
+  }
+}
+
+/** "10:42" on the clinic's wall clock (M3-P5: slots, sessions, status messages). */
+export function formatClock(iso: string | Date, timeZone: string): string {
+  const date = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(date.getTime())) return "–";
+  return inZone(timeZone, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }, date);
+}
+
+/** "Mon 19 Oct" for a clinic-local `YYYY-MM-DD` (a calendar date, no zone needed). */
+export function formatDay(isoDate: string): string {
+  const date = new Date(`${isoDate}T12:00:00Z`);
+  if (Number.isNaN(date.getTime())) return "–";
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+/** `YYYY-MM-DD` plus `days` (calendar arithmetic, no zone). */
+export function addDays(isoDate: string, days: number): string {
+  const date = new Date(`${isoDate}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}

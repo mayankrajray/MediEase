@@ -39,6 +39,7 @@ describe("useQueue (M3-P4, FR-QUE-03)", () => {
     expect(result.current.queue?.on_date).toBe("2026-10-19");
 
     await act(() => vi.advanceTimersByTimeAsync(30_000));
-    expect(result.current).toEqual({ queue: queue(1), error: undefined });
+    expect(result.current.queue).toEqual(queue(1));
+    expect(result.current.error).toBeUndefined();
   });
 });

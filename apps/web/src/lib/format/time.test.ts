@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDateTime, formatDuration, minutesBetween } from "./time";
+import { addDays, formatClock, formatDateTime, formatDay, formatDuration, minutesBetween } from "./time";
 
 describe("formatDateTime", () => {
   it("FR-OPS-04: shows the moment in the clinic's own zone, labelled", () => {
@@ -53,5 +53,22 @@ describe("formatDuration", () => {
     [185, "3 h 05 min"],
   ])("%s minutes -> %s", (minutes, text) => {
     expect(formatDuration(minutes)).toBe(text);
+  });
+});
+
+describe("formatClock, formatDay, addDays (M3-P5)", () => {
+  it("AC5: shows a session's times on the clinic's clock at both midnight edges", () => {
+    expect(formatClock("2026-10-19T04:30:00+00:00", "Asia/Kolkata")).toBe("10:00");
+    // 18:30 UTC is midnight in Kolkata; 18:29 is still 23:59 the day before.
+    expect(formatClock("2026-10-19T18:30:00+00:00", "Asia/Kolkata")).toBe("00:00");
+    expect(formatClock("2026-10-19T18:29:00+00:00", "Asia/Kolkata")).toBe("23:59");
+    expect(formatClock("not a time", "Asia/Kolkata")).toBe("–");
+    expect(formatClock("2026-10-19T04:30:00+00:00", "Not/AZone")).toBe("04:30");
+  });
+
+  it("names a calendar date and steps across months", () => {
+    expect(formatDay("2026-10-19")).toBe("Mon, 19 Oct");
+    expect(addDays("2026-10-31", 1)).toBe("2026-11-01");
+    expect(addDays("2026-11-01", -1)).toBe("2026-10-31");
   });
 });

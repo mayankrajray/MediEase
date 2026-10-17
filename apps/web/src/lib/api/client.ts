@@ -30,7 +30,7 @@ export const WEB_API_BAD_RESPONSE = "WEB_API_BAD_RESPONSE";
 const DEFAULT_TIMEOUT_MS = 5_000;
 
 type ErrorBody = components["schemas"]["Error"];
-type Method = "get" | "post" | "put" | "patch";
+type Method = "get" | "post" | "put" | "patch" | "delete";
 
 type PathWith<M extends Method> = {
   [P in keyof paths]: paths[P] extends { readonly [K in M]: object } ? P : never;
@@ -44,6 +44,8 @@ export type PostPath = PathWith<"post">;
 export type PutPath = PathWith<"put">;
 /** Paths in the contract that support PATCH. */
 export type PatchPath = PathWith<"patch">;
+/** Paths in the contract that support DELETE. */
+export type DeletePath = PathWith<"delete">;
 
 type JsonOf<R> = R extends { readonly content: { readonly "application/json": infer B } } ? B : never;
 
@@ -84,6 +86,8 @@ export type PutBody<P extends PutPath> = JsonRequestBody<OperationOf<P, "put">>;
 export type PatchResponse<P extends PatchPath> = SuccessBody<OperationOf<P, "patch">>;
 /** The JSON request body for `PATCH path`. */
 export type PatchBody<P extends PatchPath> = JsonRequestBody<OperationOf<P, "patch">>;
+/** The success body for `DELETE path`. */
+export type DeleteResponse<P extends DeletePath> = SuccessBody<OperationOf<P, "delete">>;
 
 export interface ApiResult<T> {
   readonly data: T;
@@ -218,8 +222,15 @@ export async function apiPatch<P extends PatchPath>(
   return (await send("PATCH", path, body, options)) as ApiResult<PatchResponse<P>>;
 }
 
+export async function apiDelete<P extends DeletePath>(
+  path: P,
+  options: RequestOptions = {},
+): Promise<ApiResult<DeleteResponse<P>>> {
+  return (await send("DELETE", path, undefined, options)) as ApiResult<DeleteResponse<P>>;
+}
+
 async function send(
-  method: "GET" | "POST" | "PUT" | "PATCH",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   template: string,
   body: unknown,
   options: RequestOptions,

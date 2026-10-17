@@ -17,10 +17,13 @@
 
 import {
   ApiError,
+  apiDelete,
   apiGet,
   apiPatch,
   apiPost,
   apiPut,
+  type DeletePath,
+  type DeleteResponse,
   type GetPath,
   type GetResponse,
   type PostBody,
@@ -158,4 +161,12 @@ export function sessionPatch<P extends PatchPath>(
   options: RequestOptions = {},
 ): Promise<ApiResult<PatchResponse<P>>> {
   return withSessionRefresh(() => apiPatch(path, body, options));
+}
+
+/** `apiDelete` that survives an expired access token. */
+export function sessionDelete<P extends DeletePath>(
+  path: P,
+  options: RequestOptions = {},
+): Promise<ApiResult<DeleteResponse<P>>> {
+  return withSessionRefresh(() => apiDelete(path, options));
 }
