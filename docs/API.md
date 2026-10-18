@@ -369,15 +369,25 @@ content (2A). `PATCH /clinic` takes `rx_paper_size` (`A5` default, `A4`), applie
 (3A). Labels and dosage phrases are English or Hindi by the prescription's language; the doctor's
 text prints as written.
 
-### Patient links (M4) — public, no session
+### Patient links (M4-P5) — public, no session
 
 | Method | Path | Purpose | Req |
 |---|---|---|---|
-| GET | `/api/v1/public/links/{token}` | Validate token; returns clinic name + challenge required | FR-RX-08 |
-| POST | `/api/v1/public/links/{token}/verify` | `{ "phone_last4": "3210" }` → short-lived view session | FR-RX-08 |
-| GET | `/api/v1/public/links/{token}/prescription` | Prescription view model (latest version) | FR-RX-07 |
+| GET | `/api/v1/public/links/{token}` | Validate the token; the clinic's name, the patient's language, locked | FR-RX-08 |
+| POST | `/api/v1/public/links/{token}/verify` | `{ "phone_last4": "3210" }` → a 30-minute view token for this link | FR-RX-08 |
+| GET | `/api/v1/public/links/{token}/prescription?lang=` | The patient page (latest issued version), with `X-Link-View` | FR-RX-07 |
+| GET | `/api/v1/prescriptions/{rx_id}/link` | Staff (`RX_PRINT`): the chain's link for the QR code | FR-RX-08 |
+| POST | `/api/v1/prescriptions/{rx_id}/link/reset` · `/replace` | Staff (`RX_PRINT`): unlock, or revoke and make a new one | FR-RX-08 |
 
-Rate limits: 20 requests/min per IP, 5 failed challenges per link.
+M4-P5 rules (spec R9–R13, R19, R20; decisions 1A–6A; contract 0.17.0): one link per chain,
+created when version 1 is issued and reused by revisions. Tokens carry R9's claims and an
+HMAC-SHA256 (versioned keys, the first signs); anything not exactly ours is `404 LINK_INVALID`.
+Five wrong last-4 answers lock the link (`423 LINK_LOCKED`) until staff reset it. The view token
+is kept by the patient page's server in an HttpOnly cookie scoped to the page and sent as
+`X-Link-View`. Rate limits: 20 requests a minute per link, 300 per caller (`429
+LINK_RATE_LIMITED`, `Retry-After`). Responses are `no-store`, `noindex`, `no-referrer`; the token
+never reaches the logs. Audit: `patient_link.opened`, `.challenge_failed`, `.locked` as
+`PATIENT_LINK`; `.created`, `.reset`, `.replaced` by staff; IDs and versions only.
 
 ### Reminders and messaging (M5)
 

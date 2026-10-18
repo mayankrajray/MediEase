@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 approved (1A-6A) 18 Oct 2026, in implementation |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 approved (1A-6A) and implemented 18 Oct 2026, awaiting confirmation |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -17,7 +17,7 @@
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (done, confirmed) |
 | P3 | Favourites, templates, clinic-history autocomplete | Below (done, confirmed) |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (done) |
-| P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | Below (approved 1A-6A) |
+| P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | Below (implemented) |
 | P6 | Web consultation screen, keyboard-first Rx builder | At its start |
 
 ---
@@ -626,7 +626,9 @@ Taken while implementing:
 
 ## M4-P5 — Signed patient links, last-4 check, bilingual patient page
 
-**Status: approved by the developer 18 Oct 2026 (1A-6A, every recommendation).** API and the public web page; the clinic's
+**Status: approved by the developer 18 Oct 2026 (1A-6A, every recommendation) with the layout
+version addition; implemented the same day (result at the end of this section), awaiting the
+developer's confirmation.** API and the public web page; the clinic's
 QR code and copy button are P6. Covers FR-RX-07, FR-RX-08; spec R9–R13, R19, R20, D2, D5; AC2,
 AC3, AC10 (the page half); NFR-02, NFR-07, NFR-09.
 
@@ -757,3 +759,45 @@ challenge, the lock, the language switch, the size budget.
 | 4 | Per-IP limit (20 a minute) | **A** a counter table in PostgreSQL, shared by all API workers · **B** in each process's memory · **C** none until the M6 proxy | **A**: correct with several workers today, small, and no new service |
 | 5 | The patient page | **A** server-rendered with no client JavaScript, plain forms, system fonts · **B** a React client form | **A**: smallest page on 3G (NFR-02), works on old phones, nothing to hydrate |
 | 6 | Who may reset or replace a link | **A** any `RX_PRINT` holder (front desk handles the patient at the counter), audited · **B** owners and doctors only | **A**: the patient asks reception, as D6 already assumes for printing |
+
+### Result (18 Oct 2026)
+
+API, web and settings, as designed, plus the developer's addition: each prescription records the
+printed layout it was issued with (`prescriptions.layout_version`, `CURRENT_LAYOUT = 1`), and the
+renderer picks that layout's template, so a later layout change never alters an earlier
+prescription. `make lint typecheck contract-check` clean; `make test`: API **1301 tests** at
+98.71% (links and tokens, the patient page model, the signer, migration `0013`, 27 over HTTP on
+PostgreSQL including AC3 and concurrent wrong answers, the contract, the tenancy cases, the
+inspector), web **370**. `make up` applied `0013`; `make seed`, `make smoke` and `make e2e`
+(6 journeys, 2 new) passed. On the stack all six verify steps passed: front desk got a
+101-character link; before the check the page showed only the clinic's name; wrong digits counted
+down 4, 3, 2, 1 and the right ones opened the cards with "Mix in 10 ml of water" under *How to
+give*, in Hindi with the doctor's text unchanged; five wrong answers locked a second link even for
+the right digits, and front desk's reset opened it; after a revision the first link showed
+version 2 with the update banner; `scripts/inspect_link_token.py` printed the claims offline.
+Playwright at 360 × 640: no horizontal scroll, and a first visit of **147 KB** on the wire
+(8 responses; the page itself 5 KB, Next's runtime most of the rest), under the 200 KB budget.
+
+Taken while implementing:
+- **Rate limits per link and per caller, not per patient IP (a deviation from decision 4A's
+  wording).** The API sees the web server's address for every patient request until the M6
+  proxy forwards the client's, so a per-IP limit of 20 a minute would have limited all patients
+  together. The limits are 20 a minute per link (the spec's figure) and 300 a minute per caller
+  fingerprint, both in PostgreSQL as decided; SECURITY_AND_COMPLIANCE lists per-patient IP limits
+  for M6.
+- **The view token goes in a header, not an API cookie.** The patient page's server keeps it in
+  its own HttpOnly cookie scoped to `/p/<token>` and sends it as `X-Link-View`; the API sets no
+  cookie, so nothing on the public API carries ambient authority and CSRF does not apply.
+- **The token is rebuilt from the row and compared exactly**, so a token whose claims disagree
+  with the row in any way (expiry, prescription, key) is `LINK_INVALID`; a link's expiry is kept
+  in whole seconds for that reason.
+- **Chains issued before P5** get their link when staff first ask for it
+  (`patient_link.created`), under the version-1 row lock so two first requests make one link.
+- The view token's expiry is also whole seconds; the API page model is `PatientPage` (the patient
+  registry already has a `PatientView`).
+- The form posts to a Next route handler that answers 303 with a relative `Location`: behind
+  compose the server's idea of its own host is not the browser's.
+- Not done here, as designed: the clinic's QR code and copy button (P6); sending links (M5).
+- Two flaky tests seen under a loaded parallel run: the M2 patient search "/" shortcut (fixed,
+  `0782439`) and the M4-P3 suggestions timing check (p95 226 ms against 150 ms once in a full
+  run; passes alone; not changed).

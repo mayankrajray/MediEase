@@ -145,11 +145,14 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 
 | Code | HTTP | Meaning | Likely cause | Where to look |
 |---|---|---|---|---|
-| `LINK_INVALID` | 404 | This link isn't valid | Tampered/garbled token, or signing key rotated | DEBUGGING §5.9 |
-| `LINK_EXPIRED` | 410 | This link has expired | Past 90 days | `patient_links.expires_at` |
-| `LINK_REVOKED` | 410 | This link is no longer active | Revoked by staff | `patient_links.revoked_at` |
-| `LINK_CHALLENGE_FAILED` | 401 | Those digits don't match | Wrong last 4 digits | `patient_links.failed_challenges` |
-| `LINK_LOCKED` | 423 | Too many attempts — contact the clinic | 5 failed challenges | Staff can reset |
+| `LINK_INVALID` | 404 | This link isn't valid | Tampered or garbled token, a claim that disagrees with the row, another clinic, or a signing key removed (M4-P5) | DEBUGGING §5.9; `scripts/inspect_link_token.py` |
+| `LINK_EXPIRED` | 410 | This link has expired | Past `patient_links.expires_at` (90 days) | Replace the link |
+| `LINK_REVOKED` | 410 | This link is no longer active | Replaced by staff | `patient_links.revoked_at` |
+| `LINK_CHALLENGE_FAILED` | 401 | Those digits don't match | Wrong last 4 digits; `details.attempts_left` | `patient_links.failed_challenges`, `patient_link.challenge_failed` |
+| `LINK_LOCKED` | 423 | Too many attempts. Please contact the clinic | 5 wrong answers; every later attempt, right or wrong (AC3) | Staff reset: `POST /prescriptions/{id}/link/reset` |
+| `LINK_CHALLENGE_REQUIRED` | 401 | Enter the last 4 digits of your phone number first | No view token, another link's, a forged one, or the 30 minutes ended | The page asks again |
+| `LINK_RATE_LIMITED` | 429 | Too many requests. Please wait a moment | > 20 a minute for one link or > 300 from one caller; `Retry-After` | `public_rate_limits` |
+| `LINK_NOT_LOCKED` | 409 | This link is not locked | Reset of a link that is not locked (staff) | The link's `locked` |
 
 ## Reminders, messaging, webhooks, jobs (M5)
 

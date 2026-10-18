@@ -236,9 +236,12 @@ The **clinic** is the Data Fiduciary and responds to the patient; MediEase assis
    actually protects us.
 
 ### 14. Key rotation (patient-link signing key)
-Keys are versioned (`kid`). Add the new key as primary, keep the old key for verification for
-90 days, then remove it. Emergency rotation (compromise) removes the old key immediately — all
-existing links fail with `LINK_INVALID`; clinics resend links from the visit screen.
+Keys are versioned (`kid`) in `PATIENT_LINK_SIGNING_KEYS` (`kid:secret,…`, M4-P5). Put the new
+key **first** (it signs new links) and keep the old one after it (it still verifies) for 90 days,
+then remove it. Emergency rotation (compromise) removes the old key immediately: every existing
+link answers `LINK_INVALID`, and staff use *Replace link*
+(`POST /api/v1/prescriptions/{id}/link/replace`), which makes a new link under the new key.
+`scripts/inspect_link_token.py <token>` shows which `kid` a token uses, offline.
 
 ### 15. Suspected data breach — SEV1
 1. Contain: revoke access, rotate secrets, block the vector.
