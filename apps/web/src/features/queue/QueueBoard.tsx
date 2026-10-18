@@ -158,6 +158,12 @@ export function QueueBoard() {
     setBusy(true);
     setActionError(undefined);
     try {
+      if (to === "COMPLETED" && isMine(entry) && entry.visit_id !== null) {
+        // The doctor's own Complete closes the visit too, so its 24-hour lock starts (FR-VIS-05).
+        await rxApi.completeVisit(entry.visit_id);
+        done(`${who} marked completed at ${at()}.`);
+        return;
+      }
       await api.transition(entry.id, entry.status, to);
       if (to === "IN_CONSULTATION" && isMine(entry)) {
         // The doctor's own Start goes straight to the consultation (journey step 1).
