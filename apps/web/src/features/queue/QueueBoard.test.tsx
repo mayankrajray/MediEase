@@ -1,11 +1,11 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { person } from "@/features/auth/testing";
+import { CLINIC_A, membership, person } from "@/features/auth/testing";
 import { renderInWorkspace } from "@/features/patients/testing";
 import { resetRefreshState } from "@/lib/auth/refresh";
 import { apiError, json, mockApi } from "@/test/api";
-import { resetNavigation } from "@/test/navigation";
+import { push, resetNavigation } from "@/test/navigation";
 
 import { QueueBoard, initialDoctor } from "./QueueBoard";
 import { OTHER_DOCTOR_ID, DOCTOR_ID, boardRoutes, deskWithQueue, doctor, queueOf } from "./testing";
@@ -162,5 +162,112 @@ describe("queue board (M3-P5, FR-QUE-01)", () => {
     expect(screen.getByRole("button", { name: "Book" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add walk-in" })).not.toBeInTheDocument();
     expect(api.calls.at(-1)?.search.get("date")).not.toBe(q.on_date);
+  });
+});
+
+// M4-P6: the doctor's own rows open the consultation; front desk prints an issued prescription.
+const VISIT_ID = "0192f0a0-0000-7000-8000-0000000002a1";
+const RX_ID = "0192f0a0-0000-7000-8000-0000000003b1";
+const doctorMember = membership(CLINIC_A, "Alpha Clinic", "DOCTOR", {
+  permissions: ["CLINIC_VIEW", "DOCTORS_VIEW", "QUEUE_MOVE", "CLINICAL_VIEW", "CLINICAL_WRITE", "RX_PRINT"],
+});
+const deskPrinting = membership(CLINIC_A, "Alpha Clinic", "FRONT_DESK", {
+  permissions: [...deskWithQueue.permissions, "RX_PRINT"],
+});
+const issued = { id: RX_ID, version: 1, issued_at: "2026-10-18T05:00:00+00:00" };
+
+describe("queue board and the consultation (M4-P6)", () => {
+  const asDoctor = {
+    ...boardRoutes,
+    "GET /api/v1/me": () => json(200, person([doctorMember])),
+    "GET /api/v1/clinic/doctors": () => json(200, { items: [doctor({ user_id: "u-1" })] }),
+  };
+
+  it("journey 1: the doctor's Start moves the row, starts the visit and opens the screen", async () => {
+    const api = mockApi({
+      ...asDoctor,
+      "GET /api/v1/queue": queueRoute(queueOf([{ status: "ARRIVED" }])),
+      [TRANSITION]: () => json(200, {}),
+      "POST /api/v1/visits": () => json(201, { id: VISIT_ID }),
+    });
+    await board();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start Asha Rao's consultation" }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/visits/${VISIT_ID}`));
+    expect(api.calls.find((c) => c.path === "/api/v1/visits")?.body).toEqual({ appointment_id: FIRST });
+  });
+
+  it("a second start reopens the existing visit (VIS_ALREADY_EXISTS)", async () => {
+    mockApi({
+      ...asDoctor,
+      "GET /api/v1/queue": queueRoute(queueOf([{ status: "ARRIVED" }])),
+      [TRANSITION]: () => json(200, {}),
+      "POST /api/v1/visits": () =>
+        apiError(409, "VIS_ALREADY_EXISTS", "This consultation already has a visit", {}, { visit_id: VISIT_ID }),
+    });
+    await board();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start Asha Rao's consultation" }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/visits/${VISIT_ID}`));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("in consultation, the doctor's row opens the visit; completing moves to the menu", async () => {
+    const api = mockApi({
+      ...asDoctor,
+      "GET /api/v1/queue": queueRoute(queueOf([{ status: "IN_CONSULTATION" }], "Asha Rao", [{ visit_id: VISIT_ID }])),
+    });
+    await board();
+
+    expect(screen.queryByRole("button", { name: "Complete Asha Rao's consultation" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open Asha Rao's consultation" }));
+    expect(push).toHaveBeenCalledWith(`/visits/${VISIT_ID}`);
+    expect(api.count("POST /api/v1/visits")).toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Asha Rao" }));
+    expect(screen.getByRole("menuitem", { name: "Mark completed" })).toBeInTheDocument();
+  });
+
+  it("another doctor's row keeps the plain queue step", async () => {
+    mockApi({
+      ...asDoctor,
+      "GET /api/v1/clinic/doctors": () => json(200, { items: [doctor({ user_id: "someone-else" })] }),
+      "GET /api/v1/queue": queueRoute(queueOf([{ status: "IN_CONSULTATION" }], "Asha Rao", [{ visit_id: VISIT_ID }])),
+    });
+    await board();
+
+    expect(screen.getByRole("button", { name: "Complete Asha Rao's consultation" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open Asha Rao's consultation" })).not.toBeInTheDocument();
+  });
+
+  it("P2 6A, D6: front desk sees 'Prescription issued' and prints it, with no clinical content", async () => {
+    const pdf = new Blob(["%PDF-1.7"], { type: "application/pdf" });
+    const tab = { location: { href: "" }, close: vi.fn() };
+    const opened = vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+    const created = vi.fn(() => "blob:rx");
+    Object.assign(URL, { createObjectURL: created, revokeObjectURL: vi.fn() });
+    const api = mockApi({
+      ...boardRoutes,
+      "GET /api/v1/me": () => json(200, person([deskPrinting])),
+      "GET /api/v1/queue": queueRoute(
+        queueOf([{ status: "COMPLETED" }], "Asha Rao", [{ visit_id: VISIT_ID, prescription: issued }]),
+      ),
+      [`GET /api/v1/prescriptions/${RX_ID}/pdf`]: () => new Response(pdf, { status: 200, headers: { "Content-Type": "application/pdf" } }),
+    });
+    const table = await board();
+
+    const row = within(table).getAllByRole("row")[1] as HTMLElement;
+    expect(row).toHaveTextContent(/Completed\s*Prescription issued/);
+    expect(within(row).queryByRole("button", { name: /Open/ })).not.toBeInTheDocument();
+    fireEvent.click(within(row).getByRole("button", { name: "More actions for Asha Rao" }));
+    expect(screen.queryByRole("menuitem", { name: "Open consultation" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Print prescription" }));
+
+    await waitFor(() => expect(tab.location.href).toBe("blob:rx"));
+    expect(opened).toHaveBeenCalledWith("", "_blank");
+    expect(api.count(`GET /api/v1/prescriptions/${RX_ID}/pdf`)).toBe(1);
+    opened.mockRestore();
   });
 });

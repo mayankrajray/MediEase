@@ -9,6 +9,8 @@ import { json } from "@/test/api";
 import type { Appointment, Doctor, DoctorSession } from "@/features/appointments/api";
 import type { Queue } from "./useQueue";
 
+type QueueEntry = Queue["sessions"][number]["appointments"][number];
+
 export const DOCTOR_ID = "0192f0a0-0000-7000-8000-0000000000d1";
 export const OTHER_DOCTOR_ID = "0192f0a0-0000-7000-8000-0000000000d2";
 export const SESSION_ID = "0192f0a0-0000-7000-8000-0000000000e1";
@@ -84,7 +86,9 @@ export function appointment(overrides: Partial<Appointment> = {}): Appointment {
   };
 }
 
-export function queueOf(entries: readonly Partial<Appointment>[], name = "Asha Rao"): Queue {
+type EntryExtras = Partial<Pick<QueueEntry, "visit_id" | "prescription">>;
+
+export function queueOf(entries: readonly Partial<Appointment>[], name = "Asha Rao", extras: readonly EntryExtras[] = []): Queue {
   return {
     on_date: today(),
     sessions: [
@@ -96,6 +100,7 @@ export function queueOf(entries: readonly Partial<Appointment>[], name = "Asha R
           wait_minutes: e.status === "ARRIVED" ? 0 : null,
           visit_id: null,
           prescription: null,
+          ...(extras[i] ?? {}),
         })),
       },
     ],

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 
 import { Dialog } from "@/components/Dialog";
@@ -17,6 +18,9 @@ import {
   type Doctor,
 } from "@/features/appointments/api";
 import { clinicToday } from "@/features/patients/fields";
+import { useRxApi } from "@/features/prescriptions/api";
+import { usePrint } from "@/features/prescriptions/PrintAndLink";
+import { visitPath } from "@/features/visits/paths";
 import { useClinic } from "@/features/shell/ClinicGate";
 import { ApiError } from "@/lib/api/client";
 import { addDays, formatClock, formatDay } from "@/lib/format/time";
@@ -25,6 +29,7 @@ import { QueueRow, type QueueEntry } from "./QueueRow";
 import { useQueue } from "./useQueue";
 
 export const QUE_INVALID_TRANSITION = "QUE_INVALID_TRANSITION";
+export const VIS_ALREADY_EXISTS = "VIS_ALREADY_EXISTS";
 const STORAGE_PREFIX = "mediease.queue.doctor.";
 
 /** D27: a doctor sees their own day; others the doctor last chosen here, else the first active. */
@@ -56,6 +61,11 @@ export function QueueBoard() {
   const permissions = choice.kind === "active" ? choice.membership.permissions : [];
   const canMove = permissions.includes("QUEUE_MOVE");
   const canManage = permissions.includes("APPOINTMENTS_MANAGE");
+  const canWriteClinical = permissions.includes("CLINICAL_WRITE");
+  const canPrint = permissions.includes("RX_PRINT");
+  const router = useRouter();
+  const rxApi = useRxApi();
+  const printer = usePrint();
   const now = useNow();
   const today = clinicToday(clinic.timezone, new Date(now));
   const storageKey = `${STORAGE_PREFIX}${clinic.id}`;
@@ -108,12 +118,57 @@ export function QueueBoard() {
     refresh();
   }
 
+  // M4-P6: the rows of the signed-in doctor's own profile open the consultation screen.
+  const myDoctorIds = new Set((doctors ?? []).filter((d) => d.user_id === identity.user.id).map((d) => d.id));
+  const isMine = (entry: QueueEntry) => canWriteClinical && myDoctorIds.has(entry.doctor_id);
+
+  /** Opens the entry's visit, starting it first when there is none yet (a second start reopens it). */
+  async function open(entry: QueueEntry) {
+    if (entry.visit_id !== null) {
+      router.push(visitPath(entry.visit_id));
+      return;
+    }
+    try {
+      const visit = await rxApi.startVisit(entry.id);
+      router.push(visitPath(visit.id));
+    } catch (failure) {
+      const existing = failure instanceof ApiError && failure.code === VIS_ALREADY_EXISTS ? failure.details["visit_id"] : undefined;
+      if (typeof existing === "string") {
+        router.push(visitPath(existing));
+        return;
+      }
+      throw failure;
+    }
+  }
+
+  async function openFromRow(entry: QueueEntry) {
+    setBusy(true);
+    setActionError(undefined);
+    try {
+      await open(entry);
+    } catch (failure) {
+      if (!endSession(failure)) setActionError(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function step(entry: QueueEntry, to: AppointmentStatus) {
     const who = entry.patient.full_name;
     setBusy(true);
     setActionError(undefined);
     try {
       await api.transition(entry.id, entry.status, to);
+      if (to === "IN_CONSULTATION" && isMine(entry)) {
+        // The doctor's own Start goes straight to the consultation (journey step 1).
+        try {
+          await open({ ...entry, status: to });
+        } catch (failure) {
+          refresh(); // the row has moved even though the visit could not be opened
+          throw failure;
+        }
+        return;
+      }
       done(`${who} marked ${STATUS_LABELS[to].toLowerCase()} at ${at()}.`);
     } catch (failure) {
       if (endSession(failure)) return;
@@ -215,6 +270,8 @@ export function QueueBoard() {
         {message}
       </p>
       {actionError !== undefined && <ErrorNotice error={actionError} />}
+      {printer.error !== undefined && <ErrorNotice error={printer.error} />}
+      {printer.printing && <p role="status">Preparing the prescription…</p>}
       {doctorsError !== undefined && <ErrorNotice error={doctorsError} />}
       {error !== undefined && (
         <ErrorNotice
@@ -281,6 +338,10 @@ export function QueueBoard() {
                             kind: "book",
                             target: { kind: "reschedule", appointment: e, patientName: e.patient.full_name },
                           }),
+                        isMine,
+                        onOpen: (e) => void openFromRow(e),
+                        canPrint,
+                        onPrint: printer.print,
                       }}
                     />
                   ))}

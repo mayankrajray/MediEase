@@ -34,6 +34,12 @@ export interface RowActions {
   readonly onNoShow: (entry: QueueEntry) => void;
   readonly onCancel: (entry: QueueEntry) => void;
   readonly onReschedule: (entry: QueueEntry) => void;
+  /** M4-P6: the signed-in doctor's own row, which opens the consultation screen. */
+  readonly isMine?: (entry: QueueEntry) => boolean;
+  readonly onOpen?: (entry: QueueEntry) => void;
+  /** M4-P6, spec D6: print the row's issued prescription (RX_PRINT). */
+  readonly canPrint?: boolean;
+  readonly onPrint?: (rxId: string) => void;
 }
 
 /**
@@ -45,10 +51,22 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
   const now = useNow();
   const who = entry.patient.full_name;
   const status = entry.status;
-  const step = NEXT_STEP[status];
+  const mine = actions.isMine?.(entry) === true && actions.onOpen !== undefined;
+  // The doctor's own patient in consultation opens the screen; completing is in the menu.
+  const step = mine && status === "IN_CONSULTATION" ? undefined : NEXT_STEP[status];
   const started = new Date(entry.slot_start ?? session.starts_at).getTime() <= now;
 
   const menu: MenuItem[] = [];
+  if (mine && status === "IN_CONSULTATION" && actions.canMove) {
+    menu.push({ label: "Mark completed", onSelect: () => actions.onStep(entry, "COMPLETED") });
+  }
+  if (mine && status === "COMPLETED" && entry.visit_id !== null) {
+    menu.push({ label: "Open consultation", onSelect: () => actions.onOpen?.(entry) });
+  }
+  if (actions.canPrint === true && entry.prescription !== null && actions.onPrint !== undefined) {
+    const rxId = entry.prescription.id;
+    menu.push({ label: "Print prescription", onSelect: () => actions.onPrint?.(rxId) });
+  }
   if (actions.canMove && (status === "BOOKED" || status === "ARRIVED") && started) {
     menu.push({ label: "No-show…", onSelect: () => actions.onNoShow(entry) });
   }
@@ -75,10 +93,24 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
           {entry.patient.code} · {entry.patient.age_years} y{entry.source === "WALK_IN" ? " · walk-in" : ""}
         </span>
       </td>
-      <td className="py-3 pr-3">{STATUS_LABELS[status]}</td>
+      <td className="py-3 pr-3">
+        {STATUS_LABELS[status]}
+        {entry.prescription !== null && <span className="block text-sm font-medium text-slate-800">Prescription issued</span>}
+      </td>
       <td className="py-3 pr-3 text-slate-800">{waited === null ? "" : formatDuration(waited)}</td>
       <td className="py-3">
         <div className="flex items-center justify-end gap-3">
+          {mine && status === "IN_CONSULTATION" && (
+            <button
+              type="button"
+              aria-label={`Open ${who}'s consultation`}
+              disabled={actions.busy}
+              onClick={() => actions.onOpen?.(entry)}
+              className="min-w-24 rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900 disabled:bg-slate-400"
+            >
+              Open
+            </button>
+          )}
           {step !== undefined && actions.canMove && (status !== "NO_SHOW" || started) && (
             <button
               type="button"
