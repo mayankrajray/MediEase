@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | M4 opened 17 Oct 2026 after M3 merged (PR #37). `docs/specs/prescriptions.md` Approved with D1–D5 and the developer's refinements; ADR-0012 accepted; M4-P1 done and confirmed (draft PR #39); M4-P1 and M4-P2 done and confirmed; M4-P1 to P3 done and confirmed; M4-P1 to P4 done and confirmed; M4-P1 to P5 done and confirmed; M4-P6 being designed |
+| Status | M4 opened 17 Oct 2026 after M3 merged (PR #37). `docs/specs/prescriptions.md` Approved with D1–D5 and the developer's refinements; ADR-0012 accepted; M4-P1 done and confirmed (draft PR #39); M4-P1 and M4-P2 done and confirmed; M4-P1 to P3 done and confirmed; M4-P1 to P4 done and confirmed; M4-P1 to P5 done and confirmed; the M4-P6 design proposed, awaiting approval |
 | Scope | Milestone 4 in phase detail; M5–M6 as a roadmap only. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37, merged 17 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
 | Design notes | `docs/milestones/M4-visits-and-prescriptions.md` |
