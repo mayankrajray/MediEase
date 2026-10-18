@@ -63,8 +63,11 @@ class AppEnv(StrEnum):
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 BlobBackend = Literal["local", "s3"]
-# M5-P2: only the console provider exists until the WhatsApp adapter (P3).
-MessagingProvider = Literal["console"]
+# M5-P2: the console provider; M5-P3 adds the WhatsApp Cloud API.
+MessagingProvider = Literal["console", "whatsapp_cloud"]
+# M5-P3: Graph API v26.0 (released July 2026); overridable without a code change.
+_WHATSAPP_API_VERSION = "v26.0"
+_WHATSAPP_GRAPH_URL = "https://graph.facebook.com"
 
 
 def _app_env(info: ValidationInfo) -> AppEnv | None:
@@ -139,6 +142,59 @@ class AppSettings(BaseSettings):
     MESSAGING_PHONE_KEYS: SecretStr = SecretStr("")
     # Prescriptions R15: a pending link is sent only within this many hours of issue (max 24).
     RX_LINK_SEND_WINDOW_HOURS: int = Field(default=24, ge=1, le=24)
+    # WhatsApp Cloud API (M5-P3). Every value is required when MESSAGING_PROVIDER=whatsapp_cloud;
+    # the app secret and verify token also guard the webhook, which refuses everything without them.
+    WHATSAPP_API_VERSION: str = _WHATSAPP_API_VERSION
+    WHATSAPP_GRAPH_URL: str = _WHATSAPP_GRAPH_URL
+    WHATSAPP_PHONE_NUMBER_ID: str = ""
+    WHATSAPP_ACCESS_TOKEN: SecretStr = SecretStr("")
+    WHATSAPP_APP_SECRET: SecretStr = SecretStr("")
+    WHATSAPP_VERIFY_TOKEN: SecretStr = SecretStr("")
+
+    @field_validator("WHATSAPP_API_VERSION", mode="before")
+    @classmethod
+    def _api_version(cls, value: object) -> object:
+        value = value or _WHATSAPP_API_VERSION  # an empty line in .env means the default
+        if not isinstance(value, str) or not re.fullmatch(r"v\d{2,3}\.\d", value):
+            raise ValueError("must look like v26.0")
+        return value
+
+    @field_validator("WHATSAPP_GRAPH_URL", mode="before")
+    @classmethod
+    def _graph_url(cls, value: object, info: ValidationInfo) -> object:
+        if value is None or value == "":
+            value = _WHATSAPP_GRAPH_URL
+        if not isinstance(value, str) or not value.startswith(("https://", "http://")):
+            raise ValueError("must be an absolute URL")
+        env = _app_env(info)
+        if env is not None and env.is_deployed and not value.startswith("https://"):
+            raise ValueError(f"must use https when APP_ENV={env.value}")
+        return value.rstrip("/")
+
+    @field_validator("WHATSAPP_PHONE_NUMBER_ID")
+    @classmethod
+    def _phone_number_id(cls, value: str, info: ValidationInfo) -> str:
+        value = value.strip()
+        if value and not value.isdigit():
+            raise ValueError("must be the numeric phone number ID from Meta")
+        if not value and info.data.get("MESSAGING_PROVIDER") == "whatsapp_cloud":
+            raise ValueError("is required when MESSAGING_PROVIDER=whatsapp_cloud")
+        return value
+
+    @field_validator("WHATSAPP_ACCESS_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN")
+    @classmethod
+    def _whatsapp_secret(cls, value: SecretStr, info: ValidationInfo) -> SecretStr:
+        raw = value.get_secret_value().strip()
+        if not raw:
+            if info.data.get("MESSAGING_PROVIDER") == "whatsapp_cloud":
+                raise ValueError("is required when MESSAGING_PROVIDER=whatsapp_cloud")
+            return SecretStr("")
+        env = _app_env(info)
+        if _PLACEHOLDER in raw and env is not AppEnv.LOCAL and env is not AppEnv.TEST:
+            raise ValueError(f"contains a '{_PLACEHOLDER}' placeholder; set the real value")
+        if info.field_name == "WHATSAPP_VERIFY_TOKEN" and len(raw) < 16:
+            raise ValueError("must be at least 16 characters")
+        return SecretStr(raw)
 
     @field_validator("MESSAGING_PHONE_KEYS")
     @classmethod

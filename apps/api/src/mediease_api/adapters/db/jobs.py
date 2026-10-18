@@ -250,10 +250,18 @@ class SqlAlchemyRetentionRepository:
             ),
             {"finished": cutoffs.finished_jobs, "dead": cutoffs.dead_jobs},
         )
+        events = 0
+        if cutoffs.webhook_events is not None:
+            deleted = self._session.execute(
+                text("DELETE FROM webhook_events WHERE received_at < :cutoff"),
+                {"cutoff": cutoffs.webhook_events},
+            )
+            events = deleted.rowcount  # type: ignore[attr-defined]
         return PurgeCounts(
             refresh_tokens=tokens.rowcount,  # type: ignore[attr-defined]
             patient_links=links.rowcount,  # type: ignore[attr-defined]
             jobs=jobs.rowcount,  # type: ignore[attr-defined]
+            webhook_events=events,
         )
 
 

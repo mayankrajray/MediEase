@@ -19,7 +19,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from mediease_api.adapters.db.audit import SqlAlchemyAuditWriter
 from mediease_api.adapters.db.jobs import SqlAlchemyJobQueue, SqlAlchemyRetentionRepository
-from mediease_api.adapters.db.messages import SqlAlchemyMessageRepository
+from mediease_api.adapters.db.messages import (
+    SqlAlchemyMessageLookup,
+    SqlAlchemyMessageRepository,
+    SqlAlchemyWebhookEventRepository,
+)
 from mediease_api.adapters.db.repositories import (
     SqlAlchemyAppointmentHistoryRepository,
     SqlAlchemyAppointmentRepository,
@@ -162,6 +166,9 @@ class _OpenUnit:
         # M5-P1: jobs commit with the change that enqueues them (the outbox).
         self.jobs = SqlAlchemyJobQueue(session)
         self.retention = SqlAlchemyRetentionRepository(session)
+        # M5-P3: provider webhooks name no clinic.
+        self.message_lookup = SqlAlchemyMessageLookup(session)
+        self.webhook_events = SqlAlchemyWebhookEventRepository(session)
 
 
 class SqlAlchemyUnitOfWork:
@@ -226,6 +233,14 @@ class SqlAlchemyUnitOfWork:
     @property
     def retention(self) -> SqlAlchemyRetentionRepository:
         return self._require_open().retention
+
+    @property
+    def message_lookup(self) -> SqlAlchemyMessageLookup:
+        return self._require_open().message_lookup
+
+    @property
+    def webhook_events(self) -> SqlAlchemyWebhookEventRepository:
+        return self._require_open().webhook_events
 
     def tenant(self, clinic_id: UUID) -> SqlAlchemyTenantRepositories:
         return SqlAlchemyTenantRepositories(self._require_open().session, clinic_id)

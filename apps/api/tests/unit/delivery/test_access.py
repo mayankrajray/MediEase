@@ -80,6 +80,9 @@ EXPECTED_POLICIES = {
     "public_links.describe_link": (Access.PUBLIC, None),
     "public_links.verify_link": (Access.PUBLIC, None),
     "public_links.view_link_prescription": (Access.PUBLIC, None),
+    # M5-P3: Meta's webhook; the challenge needs our verify token, the body our signature.
+    "whatsapp_webhook.verify_whatsapp_subscription": (Access.PUBLIC, None),
+    "whatsapp_webhook.receive_whatsapp_webhook": (Access.PUBLIC, None),
     "rx_library.list_favourites": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "rx_library.create_favourite": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "rx_library.replace_favourite": (Access.CLINIC, Permission.CLINICAL_WRITE),

@@ -23,10 +23,14 @@ from mediease_api.domain.shared.time import require_utc
 
 # The retention purge: runs for the whole platform, so it belongs to no clinic.
 PURGE_KIND = "purge_expired_auth_and_links"
+# M5-P3: a provider webhook is not addressed to a clinic until its statuses are matched, and the
+# hourly reconciliation looks at every clinic's messages.
+WEBHOOK_KIND = "process_webhook_event"
+RECONCILE_KIND = "reconcile_messages"
 
 # R9d: the only kinds allowed to have no clinic. The database CHECK ``ck_jobs_system_kind`` lists
 # the same kinds; a test keeps the two in step, and adding a kind is a migration.
-SYSTEM_KINDS: frozenset[str] = frozenset({PURGE_KIND})
+SYSTEM_KINDS: frozenset[str] = frozenset({PURGE_KIND, WEBHOOK_KIND, RECONCILE_KIND})
 
 DEFAULT_MAX_ATTEMPTS = 5
 MAX_ATTEMPTS_LIMIT = 20

@@ -375,3 +375,71 @@ def test_m5_p2_the_rx_link_window_is_at_most_24_hours(
 ) -> None:
     env = {**valid_env, "RX_LINK_SEND_WINDOW_HOURS": value}
     assert _invalid_fields(env, set_env) == {"RX_LINK_SEND_WINDOW_HOURS"}
+
+
+WHATSAPP = {
+    "MESSAGING_PROVIDER": "whatsapp_cloud",
+    "WHATSAPP_PHONE_NUMBER_ID": "123456789012345",
+    "WHATSAPP_ACCESS_TOKEN": "synthetic-access-token-for-tests",
+    "WHATSAPP_APP_SECRET": "synthetic-app-secret-for-tests",
+    "WHATSAPP_VERIFY_TOKEN": "synthetic-verify-token-01",
+}
+
+
+def test_m5_p3_whatsapp_settings_default_and_load(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    set_env({**valid_env, "WHATSAPP_API_VERSION": "", "WHATSAPP_GRAPH_URL": ""})
+    settings = load_settings()
+    assert (settings.WHATSAPP_API_VERSION, settings.WHATSAPP_GRAPH_URL) == (
+        "v26.0",
+        "https://graph.facebook.com",
+    )
+    assert settings.WHATSAPP_APP_SECRET.get_secret_value() == ""  # the webhook refuses all
+    set_env({**valid_env, **WHATSAPP, "WHATSAPP_API_VERSION": "v27.0"})
+    settings = load_settings()
+    assert (settings.MESSAGING_PROVIDER, settings.WHATSAPP_API_VERSION) == (
+        "whatsapp_cloud",
+        "v27.0",
+    )
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "WHATSAPP_ACCESS_TOKEN",
+        "WHATSAPP_APP_SECRET",
+        "WHATSAPP_VERIFY_TOKEN",
+    ],
+)
+def test_m5_p3_the_whatsapp_provider_needs_every_value(
+    set_env: SetEnv, valid_env: dict[str, str], missing: str
+) -> None:
+    env = {**valid_env, **WHATSAPP, missing: ""}
+    assert _invalid_fields(env, set_env) == {missing}
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("WHATSAPP_API_VERSION", "26"),
+        ("WHATSAPP_PHONE_NUMBER_ID", "+15550001111"),
+        ("WHATSAPP_VERIFY_TOKEN", "short"),
+        ("WHATSAPP_GRAPH_URL", "graph.facebook.com"),
+    ],
+)
+def test_m5_p3_malformed_whatsapp_values_are_refused(
+    set_env: SetEnv, valid_env: dict[str, str], name: str, value: str
+) -> None:
+    assert _invalid_fields({**valid_env, **WHATSAPP, name: value}, set_env) == {name}
+
+
+def test_m5_p3_deployed_whatsapp_values_must_be_real_and_https(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    deployed = {**valid_env, **WHATSAPP, "APP_ENV": "staging", "COOKIE_SECURE": "true"}
+    placeholder = {**deployed, "WHATSAPP_APP_SECRET": "change-me-app-secret"}
+    assert _invalid_fields(placeholder, set_env) == {"WHATSAPP_APP_SECRET"}
+    http = {**deployed, "WHATSAPP_GRAPH_URL": "http://graph.example.test"}
+    assert _invalid_fields(http, set_env) == {"WHATSAPP_GRAPH_URL"}

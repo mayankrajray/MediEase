@@ -30,6 +30,17 @@ x-api-environment: &api-environment
   # M5-P1: the background worker's polling.
   WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-2}
   WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-10}
+  # M5-P2: messaging (empty phone keys locally means the development key; required when deployed).
+  MESSAGING_PROVIDER: ${MESSAGING_PROVIDER:-console}
+  MESSAGING_PHONE_KEYS: ${MESSAGING_PHONE_KEYS:-}
+  RX_LINK_SEND_WINDOW_HOURS: ${RX_LINK_SEND_WINDOW_HOURS:-24}
+  # M5-P3: WhatsApp Cloud API and its webhook (empty secrets: the webhook refuses everything).
+  WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-}
+  WHATSAPP_GRAPH_URL: ${WHATSAPP_GRAPH_URL:-}
+  WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+  WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+  WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+  WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
 
 # Least privilege for our own containers (CLAUDE.md): read-only root
 # filesystem, no Linux capabilities, no privilege escalation. Writable scratch

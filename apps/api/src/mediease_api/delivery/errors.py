@@ -27,6 +27,7 @@ from mediease_api.delivery.http.bodies import candidate_body
 from mediease_api.delivery.http.validation import RequestValidationFailed
 from mediease_api.delivery.middleware import get_request_id
 from mediease_api.domain.links.errors import LinkRateLimited
+from mediease_api.domain.messaging.errors import WebhookRateLimited
 from mediease_api.domain.prescriptions.errors import PdfBusy
 from mediease_api.domain.shared.errors import DomainError, InvalidValue
 from mediease_api.ports.readiness import DatabaseTimeout, DatabaseUnavailable, ReadinessError
@@ -120,6 +121,9 @@ DOMAIN_ERROR_STATUS = {
     "LINK_NOT_LOCKED": 409,
     "RX_NAME_TAKEN": 409,
     "RX_LIBRARY_FULL": 409,
+    "WH_SIGNATURE_INVALID": 401,
+    "WH_VERIFY_FAILED": 403,
+    "WH_RATE_LIMITED": 429,
 }
 
 
@@ -141,7 +145,7 @@ def domain_error_response(exc: DomainError) -> tuple[Response, int]:
     elif isinstance(exc, ImportInvalid):
         details = {"problems": list(exc.problems)}
     response, _ = error_response(exc.code, exc.message, status, details)
-    if isinstance(exc, AccountLocked | PdfBusy | LinkRateLimited):
+    if isinstance(exc, AccountLocked | PdfBusy | LinkRateLimited | WebhookRateLimited):
         response.headers["Retry-After"] = str(exc.retry_after_seconds)
     return response, status
 

@@ -225,6 +225,7 @@ class MessageSender:
             template=template,
             language=patient.language,
             variables=values,
+            message_id=message.id,
         )
 
     def _finish(
