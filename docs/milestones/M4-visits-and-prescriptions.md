@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Complete, awaiting the developer's confirmation — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 approved (1A-6A), implemented and confirmed 18 Oct 2026; M4-P6 approved (1A-6A) and implemented 18 Oct 2026: M4 complete, awaiting the developer's confirmation |
+| Status | Complete and confirmed by the developer 18 Oct 2026 (PR #39 in review) — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 approved (1A-6A), implemented and confirmed 18 Oct 2026; M4-P6 approved (1A-6A), implemented and confirmed 18 Oct 2026: M4 complete |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -18,7 +18,7 @@
 | P3 | Favourites, templates, clinic-history autocomplete | Below (done, confirmed) |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (done, confirmed) |
 | P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | Below (done, confirmed) |
-| P6 | Web consultation screen, keyboard-first Rx builder | Below (done) |
+| P6 | Web consultation screen, keyboard-first Rx builder | Below (done, confirmed) |
 
 ---
 
