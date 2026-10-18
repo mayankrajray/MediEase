@@ -73,7 +73,7 @@ export function AppShell({ membership, children }: { membership: Membership; chi
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  aria-current={pathname === item.href || pathname.startsWith(`/`) ? "page" : undefined}
+                  aria-current={pathname === item.href || pathname.startsWith(`${item.href}/`) ? "page" : undefined}
                   className="inline-block border-b-2 border-transparent py-2 aria-[current=page]:border-blue-800 aria-[current=page]:font-semibold"
                 >
                   {item.label}

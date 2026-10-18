@@ -7,7 +7,7 @@ import { SessionProvider } from "@/features/auth/SessionProvider";
 import { CLINIC_A, CLINIC_B, membership, ops, person } from "@/features/auth/testing";
 import { resetRefreshState } from "@/lib/auth/refresh";
 import { apiError, json, mockApi, noContent, type Recorded } from "@/test/api";
-import { replace, resetNavigation } from "@/test/navigation";
+import { navigation, replace, resetNavigation } from "@/test/navigation";
 
 import { EmptyQueue } from "./EmptyQueue";
 import { WorkspaceGuard } from "./WorkspaceGuard";
@@ -75,6 +75,24 @@ describe("dashboard shell", () => {
     expect(screen.getByText("Asia/Kolkata")).toBeInTheDocument(); // the clinic's own time zone
     expect(screen.getByRole("link", { name: "Queue" })).toHaveAttribute("aria-current", "page");
     expect(api.calls.find((c) => c.path === "/api/v1/clinic")?.headers.has("X-Clinic-ID")).toBe(false);
+  });
+
+  it("marks only the section being shown as current (M4-P6 fix)", async () => {
+    const owner = membership(CLINIC_A, "Alpha Clinic", "OWNER", {
+      permissions: ["CLINIC_VIEW", "DOCTORS_VIEW", "PATIENTS_MANAGE", "SCHEDULES_MANAGE"],
+    });
+    mockApi({
+      "GET /api/v1/me": () => json(200, withMemberships(owner)),
+      "GET /api/v1/clinic": clinicRoute(),
+    });
+    navigation.pathname = "/patients/0192f0a0-0000-7000-8000-0000000000c1";
+
+    renderWorkspace();
+
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    expect(within(nav).getByRole("link", { name: "Patients" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "Queue" })).not.toHaveAttribute("aria-current");
+    expect(within(nav).getByRole("link", { name: "Schedule" })).not.toHaveAttribute("aria-current");
   });
 
   it("shows the person's name and role but never their email or phone", async () => {
