@@ -71,6 +71,7 @@ EXPECTED_POLICIES = {
     "prescriptions.discard_prescription": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "prescriptions.issue_prescription": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "prescriptions.revise_prescription": (Access.CLINIC, Permission.CLINICAL_WRITE),
+    "prescriptions.preview_prescription": (Access.CLINIC, Permission.CLINICAL_VIEW),
     "prescriptions.prescription_pdf": (Access.CLINIC, Permission.RX_PRINT),
     "prescriptions.list_printable": (Access.CLINIC, Permission.RX_PRINT),
     "prescriptions.get_patient_link": (Access.CLINIC, Permission.RX_PRINT),

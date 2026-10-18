@@ -59,6 +59,7 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/visits/<uuid:visit_id>/prescriptions": lambda w: f"{_visit_url(w)}/prescriptions",
     "/api/v1/prescriptions/<uuid:rx_id>": lambda w: _prescription_url(w),
     "/api/v1/prescriptions/<uuid:rx_id>/issue": lambda w: f"{_prescription_url(w)}/issue",
+    "/api/v1/prescriptions/<uuid:rx_id>/preview": lambda w: f"{_prescription_url(w)}/preview",
     "/api/v1/prescriptions/<uuid:rx_id>/revise": lambda w: (
         f"{_prescription_url(w, issued=True)}/revise"
     ),

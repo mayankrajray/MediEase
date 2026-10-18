@@ -43,6 +43,7 @@ from mediease_api.domain.appointments.status import (
     AppointmentStatus,
 )
 from mediease_api.domain.audit.actions import AuditAction
+from mediease_api.domain.prescriptions.prescription import IssuedVersion
 from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.scheduling.sessions import Session
 from mediease_api.domain.shared.errors import NotFound
@@ -236,6 +237,8 @@ class QueueEntry:
     view: AppointmentView
     patient: PatientView
     wait_minutes: int | None
+    visit_id: UUID | None = None
+    prescription: IssuedVersion | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -282,16 +285,22 @@ class GetQueue:
                 p.id: PatientView.of(p, day)
                 for p in tenant.patients.get_many({a.patient_id for a in appointments})
             }
+            # M4-P6 decision 4A: which rows have a visit and an issued prescription; IDs only.
+            visits = tenant.visits.ids_for_appointments([a.id for a in appointments])
+            issued = tenant.prescriptions.issued_for_visits(visits.values())
             uow.commit()
 
         by_session: dict[UUID, list[QueueEntry]] = {s.id: [] for s in sessions}
         sessions_by_id = {s.id: s for s in sessions}
         for a in appointments:
+            visit_id = visits.get(a.id)
             by_session[a.session_id].append(
                 QueueEntry(
                     AppointmentView(a, sessions_by_id[a.session_id]),
                     patients[a.patient_id],
                     wait_minutes(a, now),
+                    visit_id,
+                    issued.get(visit_id) if visit_id else None,
                 )
             )
         ordered = tuple(

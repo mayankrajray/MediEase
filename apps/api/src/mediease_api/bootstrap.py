@@ -82,6 +82,7 @@ from mediease_api.application.prescriptions.use_cases import (
     DiscardDraft,
     GetPrescription,
     IssuePrescription,
+    PreviewPrescription,
     ReplaceDraft,
     RevisePrescription,
 )
@@ -368,6 +369,9 @@ class _UseCases:
     def replace_patient_link(self) -> ReplaceLink:
         link: ReplaceLink = self._staff_link(ReplaceLink)
         return link
+
+    def preview_prescription(self) -> PreviewPrescription:
+        return PreviewPrescription(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def revise_prescription(self) -> RevisePrescription:
         return RevisePrescription(uow=self._uow(), clock=self.clock, ids=self.ids)

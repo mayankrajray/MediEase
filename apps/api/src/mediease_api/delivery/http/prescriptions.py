@@ -8,6 +8,7 @@
 | ``DELETE /api/v1/prescriptions/{rx_id}`` | ``CLINICAL_WRITE`` (and the visit's doctor) |
 | ``POST /api/v1/prescriptions/{rx_id}/issue`` | ``CLINICAL_WRITE`` (and the visit's doctor) |
 | ``POST /api/v1/prescriptions/{rx_id}/revise`` | ``CLINICAL_WRITE`` (and the visit's doctor) |
+| ``GET /api/v1/prescriptions/{rx_id}/preview`` | ``CLINICAL_VIEW`` (M4-P6; a draft only) |
 | ``GET /api/v1/prescriptions/{rx_id}/pdf`` | ``RX_PRINT`` (superseded: + ``CLINICAL_VIEW``) |
 | ``GET /api/v1/patients/{patient_id}/prescriptions`` | ``RX_PRINT`` (M4-P4; no content) |
 | ``GET /api/v1/prescriptions/{rx_id}/link`` (+ ``/reset``, ``/replace``) | ``RX_PRINT`` (M4-P5) |
@@ -23,7 +24,7 @@ from datetime import date
 from typing import Protocol
 from uuid import UUID
 
-from flask import Blueprint, Response, jsonify
+from flask import Blueprint, Response, jsonify, request
 from pydantic import BaseModel, ConfigDict, Field
 
 from mediease_api.application.links.use_cases import GetLink, ReplaceLink, ResetLink
@@ -39,6 +40,7 @@ from mediease_api.application.prescriptions.use_cases import (
     GetPrescription,
     IssuePrescription,
     ItemInput,
+    PreviewPrescription,
     ReplaceDraft,
     RevisePrescription,
 )
@@ -46,11 +48,13 @@ from mediease_api.delivery.http.access import clinic, current_context
 from mediease_api.delivery.http.bodies import (
     items_body,
     patient_link_body,
+    patient_view_body,
     prescription_body,
     printable_body,
 )
 from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.identity.permissions import Permission
+from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.prescriptions import prescription as limits
 from mediease_api.domain.prescriptions.prescription import Advice
 from mediease_api.domain.prescriptions.vocabulary import (
@@ -62,6 +66,7 @@ from mediease_api.domain.prescriptions.vocabulary import (
     StorageCode,
     Timing,
 )
+from mediease_api.domain.shared.errors import InvalidValue
 
 
 class PrescriptionUseCases(Protocol):
@@ -73,6 +78,7 @@ class PrescriptionUseCases(Protocol):
     def discard_prescription(self) -> DiscardDraft: ...
     def issue_prescription(self) -> IssuePrescription: ...
     def revise_prescription(self) -> RevisePrescription: ...
+    def preview_prescription(self) -> PreviewPrescription: ...
     def download_prescription_pdf(self) -> DownloadPrescriptionPdf: ...
     def list_printable(self) -> ListPrintable: ...
     def get_patient_link(self) -> GetLink: ...
@@ -231,6 +237,19 @@ def create_prescriptions_blueprint(
     def revise_prescription(rx_id: UUID) -> tuple[Response, int]:
         view = use_cases.revise_prescription().execute(current_context(), rx_id=rx_id)
         return jsonify(prescription_body(view)), 201
+
+    @bp.get(f"{one}/preview")
+    @clinic(Permission.CLINICAL_VIEW)
+    def preview_prescription(rx_id: UUID) -> Response:
+        raw = request.args.get("lang")
+        try:
+            language = Language(raw) if raw is not None else None
+        except ValueError:
+            raise InvalidValue("lang", "must be en or hi") from None
+        page = use_cases.preview_prescription().execute(
+            current_context(), rx_id=rx_id, language=language
+        )
+        return jsonify(patient_view_body(page))
 
     @bp.get(f"{one}/pdf")
     @clinic(Permission.RX_PRINT)

@@ -29,7 +29,9 @@ from mediease_api.application.links.use_cases import new_link
 from mediease_api.application.scheduling.schedules import load_clinic
 from mediease_api.application.visits.use_cases import callers_doctor_id, load_visit
 from mediease_api.domain.audit.actions import AuditAction
+from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.prescriptions.errors import AlreadyExists, DraftExists, NotLatest
+from mediease_api.domain.prescriptions.patient_view import PatientPage, build_preview
 from mediease_api.domain.prescriptions.prescription import (
     Advice,
     Prescription,
@@ -385,3 +387,30 @@ class GetPrescription(_UseCase):
             self._audit(uow, ctx, AuditAction.PRESCRIPTION_VIEWED, rx)
             uow.commit()
         return PrescriptionView(rx, chain)
+
+
+class PreviewPrescription(_UseCase):
+    """M4-P6 decision 3A: a draft as the patient's page would show it if issued now.
+
+    The same builder as the patient page, with the doctor and clinic as they are today (what
+    issuing copies) and the patient's language unless one is asked for. Read only and part of
+    the consultation the doctor already opened (one ``visit.viewed``), so it writes no audit row.
+    """
+
+    def execute(
+        self, ctx: RequestContext, *, rx_id: UUID, language: Language | None = None
+    ) -> PatientPage:
+        with self._uow as uow:
+            clinic = load_clinic(uow, ctx.clinic_id)
+            tenant = uow.tenant(ctx.clinic_id)
+            rx = _load(tenant, ctx.clinic_id, rx_id)
+            doctor = tenant.doctors.get(rx.doctor_id)
+            patient = tenant.patients.get(rx.patient_id)
+            assert doctor is not None and patient is not None  # foreign keys keep them
+        return build_preview(
+            rx,
+            doctor=doctor,
+            clinic=clinic,
+            language=language or patient.language,
+            today=local_date(self._clock.now(), clinic.timezone),
+        )

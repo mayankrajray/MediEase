@@ -1,10 +1,11 @@
 """What the patient page shows (spec prescriptions R11, R12, R19, R20, §6; AC2; M4-P5).
 
 Built from the chain's **latest issued** version (R11) in the language the page asks for: the
-patient's saved preference, or the page's English / हिन्दी switch (R19). Labels and structured
-phrases come from the phrasebook; everything the doctor wrote is passed through exactly as
-written (R20). The patient's own name, code and age are left out: the person holding the phone
-knows them, and a forwarded link then shows less.
+patient's saved preference, or the page's English / हिन्दी switch (R19). ``build_preview`` gives
+the same page for a draft, as it would be if issued today (M4-P6 decision 3A). Labels and
+structured phrases come from the phrasebook; everything the doctor wrote is passed through
+exactly as written (R20). The patient's own name, code and age are left out: the person
+holding the phone knows them, and a forwarded link then shows less.
 
 One card per medicine with the spec §6 headings, in the order a patient reads them: *How much*,
 *When to take*, *How to give*, *For how long*, *Storage*, then warnings and notes.
@@ -14,7 +15,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date
 
+from mediease_api.domain.clinics.clinic import Clinic
+from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.prescriptions.document import (
     RxAdvice,
@@ -25,8 +29,11 @@ from mediease_api.domain.prescriptions.document import (
     storage_text,
     when_text,
 )
+from mediease_api.domain.prescriptions.errors import NotDraft
 from mediease_api.domain.prescriptions.phrasebook import phrase
 from mediease_api.domain.prescriptions.prescription import (
+    ClinicSnapshot,
+    DoctorSnapshot,
     Prescription,
     PrescriptionItem,
     PrescriptionStatus,
@@ -89,10 +96,49 @@ def build_patient_view(
     if rx is None:
         return None
     assert rx.issued_at and rx.doctor_snapshot and rx.clinic_snapshot
+    return _page(
+        rx,
+        doctor=rx.doctor_snapshot,
+        clinic=rx.clinic_snapshot,
+        issued_on=local_date(rx.issued_at, timezone),
+        older=any(p.status is PrescriptionStatus.SUPERSEDED for p in chain),
+        language=language,
+    )
+
+
+def build_preview(
+    draft: Prescription,
+    *,
+    doctor: Doctor,
+    clinic: Clinic,
+    language: Language,
+    today: date,
+) -> PatientPage:
+    """M4-P6 decision 3A: the page a draft would give if issued today, with the doctor and
+    clinic as they are now (issuing copies exactly these); ``RX_DOCTOR_INCOMPLETE`` as issuing
+    would be. An issued draft's revision shows the update banner, as the page will."""
+    if not draft.is_draft:
+        raise NotDraft(draft.status.value)
+    return _page(
+        draft,
+        doctor=DoctorSnapshot.of(doctor),
+        clinic=ClinicSnapshot.of(clinic),
+        issued_on=today,
+        older=draft.version > 1,
+        language=language,
+    )
+
+
+def _page(
+    rx: Prescription,
+    *,
+    doctor: DoctorSnapshot,
+    clinic: ClinicSnapshot,
+    issued_on: date,
+    older: bool,
+    language: Language,
+) -> PatientPage:
     lang = language
-    doctor, clinic = rx.doctor_snapshot, rx.clinic_snapshot
-    issued_on = local_date(rx.issued_at, timezone)
-    older = any(p.status is PrescriptionStatus.SUPERSEDED for p in chain)
     registration = phrase(
         "registration",
         lang,

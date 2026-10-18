@@ -94,6 +94,8 @@ export function queueOf(entries: readonly Partial<Appointment>[], name = "Asha R
           ...appointment({ id: `0192f0a0-0000-7000-8000-00000000010${i}`, token_number: i + 1, ...e }),
           patient: { id: patient().id, code: `SC-000${i + 1}`, full_name: i === 0 ? name : `Patient ${i + 1}`, age_years: 40, sex: "FEMALE" },
           wait_minutes: e.status === "ARRIVED" ? 0 : null,
+          visit_id: null,
+          prescription: null,
         })),
       },
     ],

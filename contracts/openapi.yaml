@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.17.0
+  version: 0.18.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -2361,6 +2361,53 @@ paths:
         '404':
           $ref: '#/components/responses/PermissionError'
         '409':
+          $ref: '#/components/responses/PrescriptionError'
+  /api/v1/prescriptions/{rx_id}/preview:
+    get:
+      tags: [prescriptions]
+      operationId: previewPrescription
+      summary: A draft as the patient's page will show it once issued
+      description: |
+        M4-P6 decision 3A; spec §6 ("Issue shows a preview of exactly what the patient will
+        see"), R20. The same page model as GET /public/links/{token}/prescription, built from the
+        draft with the doctor and clinic as they are now and today's date; lang defaults to the
+        patient's language. 409 RX_NOT_DRAFT for an issued version; 422 RX_DOCTOR_INCOMPLETE as
+        issuing would be. Read only, part of the consultation already audited, so no audit row.
+        Permission CLINICAL_VIEW.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PrescriptionPath'
+        - name: lang
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Language'
+      responses:
+        '200':
+          description: The page the draft would give
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientPrescriptionPage'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/PrescriptionError'
+        '422':
           $ref: '#/components/responses/PrescriptionError'
   /api/v1/prescriptions/{rx_id}/pdf:
     get:
@@ -5505,13 +5552,38 @@ components:
       allOf:
         - $ref: '#/components/schemas/Appointment'
         - type: object
-          required: [patient, wait_minutes]
+          required: [patient, wait_minutes, visit_id, prescription]
           properties:
             patient:
               $ref: '#/components/schemas/QueuePatient'
             wait_minutes:
               type: [integer, 'null']
               description: Since arrival while ARRIVED; arrival to start once started
+            visit_id:
+              type: [string, 'null']
+              format: uuid
+              description: The appointment's visit, once the doctor started it (M4-P6)
+            prescription:
+              description: |
+                The visit's current issued prescription, IDs and time only (M4-P6 decision 4A),
+                so front desk can print from the row; null while there is none.
+              oneOf:
+                - $ref: '#/components/schemas/IssuedPrescriptionRef'
+                - type: 'null'
+    IssuedPrescriptionRef:
+      type: object
+      additionalProperties: false
+      required: [id, version, issued_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+        issued_at:
+          type: string
+          format: date-time
     QueueSession:
       allOf:
         - $ref: '#/components/schemas/DoctorSession'
