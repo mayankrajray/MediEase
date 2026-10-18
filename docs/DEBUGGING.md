@@ -1,4 +1,4 @@
-# MediEase — Debugging Guide
+﻿# MediEase — Debugging Guide
 
 How to find out **what happened, where, and why** — for humans and AI agents alike.
 Read this before investigating any failure, and search [DEBUG_JOURNAL.md](DEBUG_JOURNAL.md) for the
@@ -248,15 +248,25 @@ The queue polls `GET /api/v1/queue` every 5 s with `If-None-Match` (`lib/api/pol
 
 ### 5.6 Jobs not running (M5+)
 ```sql
+select * from v_job_health;   -- due, scheduled, running, stale, dead, oldest_due_age_seconds
+
 select state, kind, count(*), min(run_at) as oldest_run_at
 from jobs group by 1,2 order by 1,2;
 
-select id, kind, attempts, last_error_code, locked_by, locked_at
+select id, kind, attempts, max_attempts, last_error_code, locked_by, locked_at
 from jobs where state in ('running','dead') order by updated_at desc limit 20;
 ```
-- `queued` with old `run_at` → worker not running or crashing: `docker compose logs worker`.
-- `running` with `locked_at` older than 5 min → worker died mid-job; the reaper will requeue it.
-- `dead` → read `last_error_code` in ERRORS.md; fix; requeue from the ops console.
+- `due` > 0 with a large `oldest_due_age_seconds` → worker not running or failing:
+  `docker compose ps worker` (unhealthy means its last good poll was over 90 s ago, usually the
+  database), `docker compose logs worker` (`worker.poll_failed` names the error type only).
+- `running` with `locked_at` older than 5 min (`stale`) → worker died mid-job; the reaper requeues
+  it within a minute, the attempt already counted (`job.lock_expired` in the log).
+- `dead` → read `last_error_code` in ERRORS.md; fix; requeue (RUNBOOK §6). `JOB_MAX_ATTEMPTS` is
+  logged with `job.dead` when a retryable failure ran out of attempts; the cause stays in `last_error_code`.
+- `JOB_HANDLER_MISSING` → the API enqueued a kind this worker does not know (an older worker image
+  after a deploy): rebuild the worker (`make up`). The job retries, so it runs once the worker is current.
+- Follow one job: every worker log line for it carries `job_id`, `job_kind`, `worker_id` and the
+  `request_id` of the change that created it.
 
 ### 5.7 WhatsApp template errors (M5+)
 - Template must be **approved** in Meta for the exact name **and** language code.

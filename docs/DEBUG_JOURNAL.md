@@ -1,4 +1,4 @@
-# MediEase — Debug Journal
+﻿# MediEase — Debug Journal
 
 A running record of real bugs: what we saw, why it happened, how we fixed it, and what stops it
 coming back. Search this file **before** debugging — the same failure may already be solved.
@@ -29,6 +29,37 @@ Rules:
 
 ---
 
+### 2026-10-18 — `enqueue` reported "already queued" for every new job (M5-P1, no error code)
+
+- **Milestone / area:** M5-P1 / jobs
+- **Symptom:** In the first run of the job tests, `uow.jobs.enqueue(job)` returned `False` for a job
+  that did not exist yet, and 17 database tests failed.
+- **Impact:** Local only, before the first commit; it would have made every enqueue look like a
+  duplicate and the caller skip its work.
+- **Reproduction:** `tests/integration/test_jobs_db.py::test_r9c_a_job_exists_only_if_the_change_that_enqueued_it_committed`.
+- **Investigation:** The row was inserted, so `ON CONFLICT DO NOTHING` was not firing. The return
+  value was `session.execute(insert(JobRow)....on_conflict_do_nothing(...)).rowcount == 1`.
+- **Root cause:** `rowcount` of an ORM-enabled `INSERT … ON CONFLICT` is not reliable (the insert
+  can be batched, and the driver then reports -1), so "1 row" was never true.
+- **Fix:** Add `RETURNING id` and treat "a row came back" as "added". Commit: the M5-P1 jobs commit — PR: the M5 milestone PR (#40 is its issue).
+- **Guard:** The enqueue tests in `tests/integration/test_jobs_db.py` (a duplicate live key returns
+  `False`, a new key `True`, a cancelled or dead key `True`).
+- **Prevention / follow-up:** Do not use `rowcount` to learn whether an ORM insert did anything;
+  use `RETURNING`. (It is fine for the `UPDATE`/`DELETE` statements in the job store, whose tests
+  prove the counts.)
+- **Search keywords:** rowcount, on_conflict_do_nothing, RETURNING, enqueue, dedupe, outbox
+
+### 2026-10-18 — a failure type that is a frozen dataclass cannot be raised (M5-P1, caught while writing, before it ran)
+
+- **Milestone / area:** M5-P1 / domain jobs
+- **Symptom:** `JobFailure` was first written as `@dataclass(frozen=True)` subclassing `Exception`.
+- **Impact:** None in the repository; it would have raised `FrozenInstanceError` the first time a
+  handler raised it.
+- **Root cause:** Python sets `__traceback__` (and `__context__`) on an exception when it is
+  raised, and a frozen dataclass refuses attribute assignment.
+- **Fix:** A plain `Exception` subclass with `code` and `retryable` set in `__init__`.
+- **Guard:** `tests/unit/domain/test_jobs.py::test_a_job_failure_can_be_raised_and_carries_its_code`.
+- **Search keywords:** frozen dataclass, Exception, FrozenInstanceError, raise
 ## Entries
 
 ### 2026-10-18 — Hindi prescription PDFs lost spaces between some words

@@ -1,8 +1,8 @@
-# M5 — Messaging and reminders: design notes
+﻿# M5 — Messaging and reminders: design notes
 
 | Field | Value |
 |---|---|
-| Status | In progress — M5 opened 18 Oct 2026 after M4 merged (PR #39); plan and spec approved; M5-P1 approved (1A–5A with four refinements), in implementation |
+| Status | In progress — M5 opened 18 Oct 2026 after M4 merged (PR #39); plan and spec approved; M5-P1 approved (1A–5A with four refinements) and implemented 18 Oct 2026, awaiting the developer's confirmation |
 | Spec | `docs/specs/reminders-and-messaging.md` (Approved 2026-10-18) |
 | ADR | ADR-0005 (PostgreSQL-backed job queue), ADR-0007 (messaging port, WhatsApp first) |
 | Covers | FR-MSG-01..05, FR-MSG-07, FR-REM-01, 02, 04, 05, 07, FR-APT-06, NFR-13 |
@@ -14,7 +14,7 @@
 
 | Phase | Builds | Design |
 |---|---|---|
-| P1 | The job queue and the worker: `jobs`, short committed claims with `SKIP LOCKED`, retries, `dead`, `cancelled`, the reaper, recurring jobs, the first real job (retention purge), `v_job_health`, the `worker` container | Below (approved) |
+| P1 | The job queue and the worker: `jobs`, short committed claims with `SKIP LOCKED`, retries, `dead`, `cancelled`, the reaper, recurring jobs, the first real job (retention purge), `v_job_health`, the `worker` container | Below (done; awaiting confirmation) |
 | P2 | `MessagingPort`, the console adapter, `templates.yaml`; `messages` (encrypted phone, IDs only, unique idempotency key); a send job; booking confirmations and the M4 prescription links still `PENDING` (issued in the last 24 hours, R15 of the M4 spec) through it; `v_message_health` | At its start |
 | P3 | WhatsApp Cloud adapter (errors mapped to `MSG_*`, 10 s timeout); `GET`/`POST /webhooks/whatsapp` (raw-body signature, store once, answer within 1 s); statuses only move forward; reconciliation of messages stuck in `SENT` | At its start; needs L-01, L-02 |
 | P4 | Reminder rules: follow-up reminders from issued prescriptions (09:00 the day before), revisions move or cancel them, manual reminders, quiet hours 21:00–08:00, consent re-read at send time; pending follow-ups API; the automatic no-show job | At its start |
@@ -182,3 +182,37 @@ handler, so no lock is held across I/O and a crash still counts toward `max_atte
 `dedupe_key` unique only among `queued`, `running` and `succeeded`, so cancelled work never blocks
 the same key later; (c) the heartbeat file in a tmpfs `/tmp`, rewritten only after a successful
 poll; (d) the tenancy guard accounts for clinic-less system jobs.
+
+### Result (18 Oct 2026)
+
+Built as designed, with these additions and differences:
+
+- **`release` on the store.** A worker told to stop gives back the jobs it claimed but has not
+  started (`queued` again, the attempt not counted) instead of leaving them for the reaper. The job
+  in hand finishes first.
+- **`retention.purged` audit action.** The only new `AuditAction`; written as `SYSTEM` with the
+  three counts, no user, no clinic.
+- **Logs are console-formatted locally**, JSON elsewhere (the existing logging setup), so the
+  event names below appear as `job.claimed`, `job.retry_scheduled`, `job.dead`, `job.lock_expired`,
+  `job.lost_lock`, `worker.started`, `worker.poll_failed` and `worker.stopped`.
+- **Two bugs found while testing**, both in `docs/DEBUG_JOURNAL.md`: `rowcount` is not reliable for an
+  ORM `INSERT … ON CONFLICT` (enqueue now uses `RETURNING`), and a frozen dataclass cannot be raised
+  as an exception (`JobFailure` is a plain exception class).
+
+Verification on the rebuilt stack (`make up`, `make seed`, `make smoke`; migration `0014`):
+
+| Step | How | Result |
+|---|---|---|
+| 1 | `make up`, `make smoke` | `worker` healthy, uid 999 (not root), read-only root, no capabilities |
+| 2 | The scheduler's daily key; a refresh token expired 31 days ago planted; a purge queued by SQL | Today's `purge_expired_auth_and_links:20261018T000000Z` succeeded on its own; the planted token was deleted; one `retention.purged` row, `SYSTEM`, no user, no clinic, `{"jobs": "0", "patient_links": "0", "refresh_tokens": "1"}` |
+| 3 | An unknown kind for the sample clinic, made due again after each attempt | `JOB_HANDLER_MISSING` each time; back-offs 61 s, 301 s, 985 s, 3701 s (1, 5, 15, 60 minutes plus jitter); `dead` on the fifth attempt, never claimed again; `v_job_health` shows `dead = 1, dead_24h = 1` |
+| 4 | **Failure path.** A purge job left `running` by a "ghost" worker with a 10-minute-old lock | Reaped to `queued` with `JOB_LOCK_EXPIRED`, run again and succeeded with `attempts = 2` |
+| 5 | **Failure path.** `docker compose stop db` | Unhealthy after 122 s (the 90 s heartbeat limit plus the health check's interval), the container kept running and logged `worker.poll_failed` with a growing back-off; healthy 31 s after `start db` |
+
+Gates: `make lint typecheck contract-check test` — API 1382 tests at 98.4% coverage (the 80% gate
+for `domain/` + `application/` holds), web 426. The P3 suggestions performance test failed once on
+the full run (p95 over its 150 ms bound while the machine was loaded) and passed alone, as noted in
+the M4 PR; it is left unchanged.
+
+Not verified here: a worker on more than one host (the two-worker claim is tested with threads on
+one PostgreSQL), and behaviour with real provider calls (P2 and P3).

@@ -1,4 +1,4 @@
-# MediEase — Operations Runbook
+﻿# MediEase — Operations Runbook
 
 Step-by-step procedures for operating MediEase. Each procedure states **when to use it**, the
 **steps**, and **how to confirm** it worked. Production procedures become live in M6; local ones
@@ -112,11 +112,18 @@ so a lost store costs re-renders, never content. Never delete or overwrite an ob
 store is write-once by design.
 
 ### 6. Dead or stuck jobs (M5)
-1. Ops console → Jobs → Dead, or DEBUGGING §5.6 queries.
+1. Is the worker up? `docker compose ps worker` (healthy), `docker compose logs --tail 50 worker`.
+   `select * from v_job_health;` shows due, running, stale and dead jobs by kind (DEBUGGING §5.6).
 2. Read `last_error_code` in ERRORS.md and fix the cause first.
-3. Requeue from the console (sets `state=queued`, `attempts=0`, keeps `dedupe_key`).
-4. For `running` jobs stuck > 5 min with no live worker, the reaper requeues automatically.
-**Confirm:** queue age alert clears; message statuses progress.
+3. Requeue a dead job once the cause is fixed (the ops console version is M6):
+   `update jobs set state='queued', attempts=0, run_at=now(), finished_at=null where id='<id>' and state='dead';`
+   It keeps its `dedupe_key`; if a newer live job already holds that key, the update fails on
+   `uq_jobs_dedupe_key` and the newer job is the one that will run.
+4. `running` jobs with a lock older than 5 minutes belong to a dead worker: the reaper (once a
+   minute) requeues them with the attempt counted, or marks them `dead` at `max_attempts`.
+5. To pause all work: `docker compose stop worker` (the job in hand finishes, the rest are handed
+   back). Start it again to resume; nothing is lost and nothing runs twice.
+**Confirm:** `v_job_health.due` and `stale` fall to 0; message statuses progress.
 
 ### 7. Messaging provider outage (M5)
 1. Confirm on the provider status page; our logs show `MSG_PROVIDER_UNAVAILABLE`.

@@ -1,4 +1,4 @@
-# MediEase — Architecture
+﻿# MediEase — Architecture
 
 This document describes **how the system is built**. It changes as milestones land; the durable
 principles behind it are in `CLAUDE.md`, and the reasons behind each choice are in `docs/adr/`.
@@ -330,10 +330,27 @@ Details and rationale: ADR-0005.
 | `locked_by`, `locked_at` | Which worker holds it; stale locks are reclaimed after 5 minutes |
 | `request_id`, `dedupe_key` (unique) | Traceability and idempotent enqueueing |
 
-- Jobs are inserted in the same transaction as the change that caused them (transactional outbox).
-- Retries use exponential backoff with jitter; after `max_attempts` a job becomes `dead` and
-  appears in the ops console and in logs as `job.dead`.
+- Jobs are inserted in the same transaction as the change that caused them (transactional outbox):
+  `uow.jobs.enqueue(NewJob)`. A live job with the same `dedupe_key` makes the call a no-op.
+- **Claiming is its own short transaction, committed before the handler runs** (spec R9a): one
+  statement moves up to a batch of due jobs `queued -> running` with `FOR UPDATE SKIP LOCKED`, adds
+  one to `attempts` and sets the lock. No row lock is held across a handler or a network call, and
+  a worker that dies mid-job has already used an attempt. The handler works in its own units of
+  work; the outcome (`succeeded`, back to `queued`, `dead`, `cancelled`) is another short
+  transaction that applies only while this worker still holds the job.
+- Retries wait 1, 5, 15, then 60 minutes (plus up to 10% jitter); after `max_attempts`, or on a
+  permanent failure, a job becomes `dead` (`job.dead` in the logs, `v_job_health.dead`).
+- The reaper (once a minute) recovers `running` jobs whose lock is older than 5 minutes: back to
+  `queued` while attempts remain, otherwise `dead`, so a crash loop ends. A long handler renews
+  its lock every 60 seconds.
+- Recurring jobs (the retention purge) are enqueued by a scheduler step in the worker with
+  `dedupe_key = <kind>:<period start>`, so any number of workers still make one job per period.
+- A job with no clinic is allowed only for the system kinds a CHECK lists. Jobs of a suspended
+  clinic are `cancelled`, not run.
 - Handlers are idempotent: re-running a handler for the same job must not send a second message.
+- The worker is `python -m mediease_api.delivery.worker` on the API image. It rewrites a heartbeat
+  file in its `/tmp` tmpfs after every poll that reached the database; the container's health check
+  (`...delivery.worker.health`) fails when the file is older than 90 seconds.
 
 ## 8. Messaging
 
