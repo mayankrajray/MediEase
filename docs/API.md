@@ -408,3 +408,7 @@ never reaches the logs. Audit: `patient_link.opened`, `.challenge_failed`, `.loc
 | POST | `/webhooks/sms/{provider}` | Delivery reports | FR-MSG-03 |
 
 Webhook paths are outside `/api/v1` and are routed directly to the API by the reverse proxy.
+They are not in `contracts/openapi.yaml` (the web app never calls them; Meta's format is Meta's).
+M5-P3: `GET` returns the `hub.challenge` as `text/plain` for the right `hub.verify_token`, else
+403 `WH_VERIFY_FAILED`; `POST` answers 200 `{"status": "received"}` for a correctly signed body
+(also for a redelivery), 401 `WH_SIGNATURE_INVALID`, 413 over 1 MB, 429 `WH_RATE_LIMITED`.

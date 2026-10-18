@@ -169,7 +169,12 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 | `MSG_NO_CONSENT` | — (message) | A message refused earlier was not retried: the patient no longer allows WhatsApp | Opt-out or consent withdrawn between attempts | Patient consent |
 | `MSG_NOT_APPLICABLE` | — (message) | A message refused earlier was not retried: what it was about no longer applies (appointment cancelled or over, prescription superseded or its link expired) | Normal | The appointment or prescription |
 | `MSG_QUIET_HOURS_DEFERRED` | — (info) | Deferred to 08:00 | FR-REM-04 — expected | Job `run_at` |
-| `WH_SIGNATURE_INVALID` | 401 | Webhook rejected | Wrong secret or body re-serialised | DEBUGGING §5.8 |
+| `WH_SIGNATURE_INVALID` | 401 | Webhook rejected | Wrong secret or body re-serialised; or `WHATSAPP_APP_SECRET` is empty (the webhook then refuses everything) | DEBUGGING §5.8 |
+| `WH_VERIFY_FAILED` | 403 | Meta's subscription challenge refused (M5-P3) | `WHATSAPP_VERIFY_TOKEN` differs from the token entered in Meta's webhook settings, or is empty | RUNBOOK §9 |
+| `WH_RATE_LIMITED` | 429 | More than 600 webhook requests a minute from one caller (M5-P3) | A flood, or a misbehaving proxy; `Retry-After` | `public_rate_limits` |
+| `WH_UNMATCHED` | — (event) | A status found no message after the job's five attempts (M5-P3) | A message sent outside this system with our number, or a database restored without recent rows | `webhook_events.error_code` |
+| `MSG_PROVIDER_AUTH` | — (job) | Meta refused our credentials (M5-P3): not retried, logged as an error | `WHATSAPP_ACCESS_TOKEN` expired or lost its permissions; phone number ID wrong | RUNBOOK §9; Meta Business Manager |
+| `MSG_PROVIDER_REJECTED` | — (job, message) | Meta refused the message with a code we do not map (M5-P3): not retried | A new or rare Meta error | `messaging.whatsapp_refused` log (`meta_code`) |
 | `WH_UNKNOWN_EVENT` | 200 (ignored) | Event type not handled | New provider event | `webhook_events` |
 | `JOB_MAX_ATTEMPTS` | — (job) | Job moved to dead | Repeated failure; see `last_error_code` | Ops console dead jobs |
 | `JOB_HANDLER_MISSING` | — (job) | No handler for job kind | Deploy mismatch between api and worker: retried like any failure, so a newer API's jobs wait for the worker to catch up | Worker version (`docker compose images worker`) |

@@ -14,6 +14,19 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M5-P3 (#40): the WhatsApp Cloud API provider and its webhooks (FR-MSG-03; spec R7, R12, R13,
+  R15; AC6). `MESSAGING_PROVIDER=whatsapp_cloud` sends approved templates through Graph API
+  `v26.0` (standard-library HTTP, 10 s timeout) with our message ID echoed back in every status;
+  Meta's error codes map to `MSG_*` (throttling and outages retried, the rest permanent, a timeout
+  never resent). `GET /webhooks/whatsapp` answers Meta's challenge for our verify token; `POST`
+  checks `X-Hub-Signature-256` on the raw body before anything else (401, nothing stored), stores
+  each body once redacted to IDs and statuses (`webhook_events`, migration `0016`, kept 7 days)
+  and processes it in a job: statuses only move forward, and a status proves an unknown outcome
+  was delivered. An hourly job re-runs stuck events and counts unconfirmed messages
+  (`v_message_health.unconfirmed_24h`). New settings `WHATSAPP_*` (all required with the WhatsApp
+  provider), error codes `WH_VERIFY_FAILED`, `WH_RATE_LIMITED`, `WH_UNMATCHED`,
+  `MSG_PROVIDER_AUTH`, `MSG_PROVIDER_REJECTED`. `docker-compose.yml` now passes the messaging
+  settings of P2 and P3 to the containers.
 - M5-P2 (#40): messaging through a `MessagingPort` (FR-MSG-01, 02, 04; FR-APT-06; spec
   reminders-and-messaging R5-R8, AC4, AC7; prescriptions R14, R15). A booking or reschedule for a
   patient who allows WhatsApp enqueues a confirmation in its own transaction; issuing a prescription

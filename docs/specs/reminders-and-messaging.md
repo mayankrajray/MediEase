@@ -5,7 +5,7 @@
 | Requirements | FR-REM-01, 02, 04, 05, 07; FR-MSG-01..05, 07; FR-APT-06; NFR-13 |
 | Milestone / phases | M5 / P1–P6 |
 | Status | Approved (developer sign-off 2026-10-18: the M5 plan with decisions 1A–5A and four refinements to the job queue, R9–R11 and R9a–R9e) |
-| Last updated | 2026-10-18 (M5-P2: R6 names P2's keys and the unknown-outcome rule; earlier: approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
+| Last updated | 2026-10-18 (M5-P3: R15 rewritten — WhatsApp has no status lookup; M5-P2: R6 names P2's keys and the unknown-outcome rule; earlier: approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
 
 ## 1. Context
 Post-visit follow-up depends on memory (A14); patients forget follow-ups and vaccination dates
@@ -102,13 +102,22 @@ window the patient's own STOP message opens:
 ### Webhooks
 - **R12** `GET /webhooks/whatsapp` answers Meta's verification challenge using the configured verify token.
 - **R13** `POST /webhooks/whatsapp` verifies the signature against the raw body, stores the event in
-  `webhook_events` (unique `event_id`), responds 200 within 1 second, and processes status updates
-  idempotently (status only moves forward: SENT → DELIVERED → READ; FAILED is terminal).
+  `webhook_events` (unique `event_key`, the SHA-256 of the body; redacted to IDs and statuses),
+  responds 200 within 1 second, and processes status updates in a job, idempotently (status only
+  moves forward: SENT → DELIVERED → READ; FAILED is terminal). A status that matches no message
+  yet is retried with the job back-off, then recorded as `WH_UNMATCHED`.
 - **R14** Inbound messages whose trimmed, case-insensitive text is `STOP`, `UNSUBSCRIBE`, `रोकें`
   or `बंद` opt out every patient in every clinic with that phone who received a message from us,
   and send `opt_out_confirmed`. Other inbound text is not stored.
-- **R15** A reconciliation job re-fetches statuses for messages stuck in `SENT` for more than
-  24 hours where the provider supports it.
+- **R15** *Reconciliation (M5-P3, rewritten for WhatsApp).* The Cloud API has no endpoint to read a
+  message's status: statuses arrive only by webhook. So an hourly system job
+  (`reconcile_messages`) re-enqueues stored webhook events that never processed (older than 10
+  minutes) and reports messages still `SENT` 24 hours after sending (`messages.reconciled`,
+  `v_message_health.unconfirmed_24h`). Each send carries our message ID as
+  `biz_opaque_callback_data`, which Meta echoes in every status, so a status finds its message
+  even when the worker died before saving Meta's ID; such a status corrects a `QUEUED` row or a
+  `FAILED` / `MSG_OUTCOME_UNKNOWN` row to the status it proves (decision 4A of P3), and a
+  prescription link still `PENDING` becomes `SENT`. A real `FAILED` from the provider stays final.
 
 ### Visibility and cost
 - **R16** Reminder and message statuses are visible on the patient profile and visit screen.

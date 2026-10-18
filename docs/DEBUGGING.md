@@ -1,4 +1,4 @@
-﻿# MediEase — Debugging Guide
+# MediEase — Debugging Guide
 
 How to find out **what happened, where, and why** — for humans and AI agents alike.
 Read this before investigating any failure, and search [DEBUG_JOURNAL.md](DEBUG_JOURNAL.md) for the
@@ -278,7 +278,14 @@ from jobs where state in ('running','dead') order by updated_at desc limit 20;
 - Local development needs a tunnel to receive Meta webhooks; otherwise use the console adapter.
 - `webhook.signature_invalid` → wrong app secret, or the body was re-serialised before verification
   (verify against the **raw** request bytes).
-- Duplicates are normal; `webhook_events.event_id` makes processing idempotent.
+- `webhook.verify_failed` (403 on `GET`) → the verify token differs from Meta's webhook settings.
+- Duplicates are normal; `webhook_events.event_key` (the body's SHA-256) stores each body once, and
+  statuses only move forward, so processing twice changes nothing.
+- A message stuck at `SENT`: `select processed_at, error_code from webhook_events order by
+  received_at desc limit 20;` — `WH_UNMATCHED` means the status found no message (check
+  `biz_opaque_callback_data` and the provider ID); no rows at all means Meta is not reaching us.
+- Locally without Meta, point `WHATSAPP_GRAPH_URL` at a fake and post signed bodies yourself
+  (HMAC-SHA256 of the exact bytes with `WHATSAPP_APP_SECRET`, header `sha256=<hex>`).
 
 ### 5.9 Patient link problems (M4+)
 - Decode the token header/claims locally with `scripts/inspect_link_token.py <token or URL>` (no

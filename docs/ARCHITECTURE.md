@@ -382,6 +382,20 @@ class MessagingPort(Protocol):
   an open customer-service window are free under Meta's per-message pricing; everything else is
   costed into the per-clinic ledger (FR-MSG-07).
 - Message variables contain only clinic name, date/time and a signed link. Never clinical text.
+- Webhooks (M5-P3, `delivery/webhooks/whatsapp.py`, `application/messaging/webhooks.py`): `GET`
+  answers Meta's challenge only for our verify token; `POST` reads the raw body (1 MB max), rate
+  limits by caller (600 a minute), verifies `X-Hub-Signature-256` *before* parsing (401
+  `WH_SIGNATURE_INVALID`, nothing stored), stores the redacted body once in `webhook_events`
+  (keyed by its SHA-256) and enqueues `process_webhook_event` in the same transaction, then
+  answers 200. The job matches each status by our ID (sent as `biz_opaque_callback_data`) or
+  Meta's, through a reviewed cross-clinic lookup that returns only the clinic and message IDs,
+  then updates the message through that clinic's repository; statuses only move forward. The
+  hourly `reconcile_messages` re-enqueues stuck events and reports unconfirmed messages (the Cloud
+  API has no status lookup, R15).
+- The WhatsApp provider (`adapters/messaging/whatsapp_cloud.py`) uses the standard library's HTTP
+  client with a 10 s timeout. Meta's error codes map to `MSG_*` (`whatsapp_errors.py`): throttling
+  and outages are retried; everything else Meta refused is permanent; a timeout or a lost answer is
+  an unknown outcome and is never resent.
 - Webhooks: verify the signature header before parsing, respond `200` fast, and process
   idempotently keyed on the provider message ID.
 

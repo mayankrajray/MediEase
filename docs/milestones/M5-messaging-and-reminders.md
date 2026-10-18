@@ -16,7 +16,7 @@
 |---|---|---|
 | P1 | The job queue and the worker: `jobs`, short committed claims with `SKIP LOCKED`, retries, `dead`, `cancelled`, the reaper, recurring jobs, the first real job (retention purge), `v_job_health`, the `worker` container | Below (done; confirmed) |
 | P2 | `MessagingPort`, the console adapter, `templates.yaml`; `messages` (encrypted phone, IDs only, unique idempotency key); a send job; booking confirmations and the M4 prescription links still `PENDING` (issued in the last 24 hours, R15 of the M4 spec) through it; `v_message_health` | Below (done; confirmed) |
-| P3 | WhatsApp Cloud adapter (errors mapped to `MSG_*`, 10 s timeout); `GET`/`POST /webhooks/whatsapp` (raw-body signature, store once, answer within 1 s); statuses only move forward; reconciliation of messages stuck in `SENT` | At its start; needs L-01, L-02 |
+| P3 | WhatsApp Cloud adapter (errors mapped to `MSG_*`, 10 s timeout); `GET`/`POST /webhooks/whatsapp` (raw-body signature, store once, answer within 1 s); statuses only move forward; reconciliation of messages stuck in `SENT` | Below (done; awaiting confirmation; the live Meta test needs L-01, L-02) |
 | P4 | Reminder rules: follow-up reminders from issued prescriptions (09:00 the day before), revisions move or cancel them, manual reminders, quiet hours 21:00–08:00, consent re-read at send time; pending follow-ups API; the automatic no-show job | At its start |
 | P5 | STOP, UNSUBSCRIBE, रोकें, बंद opt the patient out and confirm; SMS adapter behind a flag (off); cost per message and the ops console's monthly total per clinic | At its start |
 | P6 | Web: reminder and message status on the patient profile and the consultation; pending follow-ups with *Book follow-up*; failed messages explained with a "call the patient" hint; Playwright | At its start |
@@ -283,3 +283,60 @@ under load and passed alone three times and in a full `make test-web`; P2 change
 No HTTP contract change.
 
 Not verified: a real provider (P3); the Hindi wording (L-02).
+
+---
+
+## M5-P3 — The WhatsApp Cloud API adapter and webhooks
+
+Approved 18 Oct 2026 with 1A–5A:
+
+| # | Decision |
+|---|---|
+| 1A | Standard-library HTTP (`urllib`), no new dependency |
+| 2A | Store and enqueue in the request; process statuses in the worker |
+| 3A | Stored bodies are redacted: no message text, profile names or phone numbers |
+| 4A | A status matched by our echoed ID corrects a `FAILED` / `MSG_OUTCOME_UNKNOWN` row (and a `QUEUED` one) to what it proves |
+| 5A | Signature first in logic; a per-caller rate limit of 600 a minute and a 1 MB body cap |
+
+Findings that shaped it (Meta's documentation): the Cloud API has no endpoint to read a message's
+status, so R15 is rewritten (hourly `reconcile_messages`: re-run stuck events, report
+unconfirmed); `biz_opaque_callback_data` is echoed in every status, so each send carries our
+message ID. Graph API `v26.0` (July 2026) is the default, overridable by `WHATSAPP_API_VERSION`.
+
+### Result (18 Oct 2026)
+
+Built as designed (`adapters/messaging/whatsapp_cloud.py`, `whatsapp_errors.py`,
+`whatsapp_webhook.py`, `application/messaging/webhooks.py`, `delivery/webhooks/whatsapp.py`,
+migration `0016`), plus:
+
+- **`docker-compose.yml` passes the messaging settings.** P2's `MESSAGING_*` and
+  `RX_LINK_SEND_WINDOW_HOURS` had worked locally only through their defaults; the compose
+  environment now lists them and the `WHATSAPP_*` values (`WHATSAPP_GRAPH_URL` only for a fake).
+- **The webhook refuses everything without its secrets** (empty app secret: 401; empty verify
+  token: 403), so a deployment without WhatsApp configured exposes nothing.
+- **An unmapped Meta code is permanent** (`MSG_PROVIDER_REJECTED`), and an expired token is
+  `MSG_PROVIDER_AUTH`, logged as an error. Meta's error text is never logged (it can echo
+  parameters); the code and HTTP status are.
+- **Bug found by the tests** (DEBUG_JOURNAL): P2's `ck_messages_sent_has_provider_id` refused a
+  message that Meta accepted and later reported failed; `0016` makes it one-way.
+
+Verification on the rebuilt stack, with the real adapter pointed at a fake Graph API container on
+the compose network and signed webhooks posted to the real API (secrets and the provider set in the
+shell for that run only; `.env` untouched; the default stack restored and smoke-tested after):
+
+| Step | Result |
+|---|---|
+| 1. Booking for a consenting patient | `messages` row `WHATSAPP / whatsapp_cloud / SENT` with `wamid.FAKE-1`; the fake received `POST /v26.0/1234567890/messages` with a bearer token, template `booking_confirmed_v1`, language `en`, three parameters and our message ID as `biz_opaque_callback_data` |
+| 2. `GET` challenge | 200 with the challenge; a wrong token 403 |
+| 3. **Failure path.** A body signed with another secret | 401; `webhook_events` count unchanged |
+| 4. Signed `delivered`, `read`, then a late `sent` | Message `READ` with both times and `pricing_category = utility`; the late `sent` changed nothing; a redelivered body stored once |
+| 5. **Failure path.** Meta answers 131026 for a number | Message `FAILED / MSG_RECIPIENT_INVALID`, job `dead` at once (not retried) |
+| 6. `psql` | Stored webhook payloads contain no phone number; `v_message_health` shows the WhatsApp rows and `unconfirmed_24h` |
+| 7. API and worker logs | `message.sent`, `messaging.whatsapp_refused`, `webhook.received`, `webhook.signature_invalid`, `webhook.processed`, `message.status_changed`; no patient name, phone number, access token, app secret or Meta error text |
+
+Gates: `make lint typecheck contract-check` clean; API 1493 tests at 98.36% (core gate holds);
+web 426. No change to `contracts/openapi.yaml` (webhooks are outside it, API.md says why).
+
+Not verified: Meta itself — a message to the WhatsApp test number and its real webhooks need L-01
+(account and number) and L-02 (approved templates); RUNBOOK §9 has the tunnel steps. The Hindi
+wording still awaits L-02.

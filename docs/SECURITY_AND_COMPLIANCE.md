@@ -65,7 +65,7 @@ Use this list in the M6 security review. Each row names where it is implemented.
 - [ ] Parameterised SQL only (SQLAlchemy); no string-built queries (M0+)
 - [ ] File uploads: type allow-list, size limit, stored outside web root, served via signed URL (P1)
 - [x] Security headers: CSP, X-Content-Type-Options, Referrer-Policy, frame-ancestors none (M0-P4: nonce-based CSP per request in `apps/web/src/proxy.ts`, `script-src` without `'unsafe-inline'`; `Referrer-Policy: no-referrer`; `X-Frame-Options: DENY`; `Permissions-Policy`. HSTS joins with TLS in M6)
-- [ ] Webhook signature verification on raw body; replay-safe processing (M5)
+- [x] Webhook signature verification on raw body; replay-safe processing (M5-P3: HMAC-SHA256 over the raw bytes before parsing, constant-time; one row per body; forward-only statuses; stored bodies redacted to IDs and statuses)
 - [x] Dependency and container image scanning in CI (M0-P5: `pip-audit`, `npm audit --omit=dev --audit-level=high` blocking plus a full-tree `npm audit` that is informational only (exception: braces GHSA-vfj7-8cjw-p6xm has no patched version and is reachable only via dev-only `eslint-config-next`; revisit when patched or Next drops `fast-glob`), Trivy on both images failing on fixed HIGH/CRITICAL; Dependabot for pip, npm, Docker and Actions)
 - [x] Secrets scanning in CI (M0-P5: gitleaks over the full git history, pinned image, redacted output)
 
