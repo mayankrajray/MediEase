@@ -1,8 +1,8 @@
-# Local development stack. `make up` starts everything with one command.
+﻿# Local development stack. `make up` starts everything with one command.
 # Rule (CLAUDE.md): a service appears here only when the application uses it today.
 # Start-up order is declared, not scripted:
 #   db (healthy) -> migrate (exits 0) -> api (healthy) -> web (healthy).
-# worker joins in M5. Target shape: docs/ARCHITECTURE.md §12.
+# The worker (M5-P1) starts after migrate and runs beside the api. Target shape: docs/ARCHITECTURE.md §12.
 
 name: mediease
 
@@ -27,6 +27,9 @@ x-api-environment: &api-environment
   # M4-P5: patient link keys (empty locally means the development key).
   PATIENT_LINK_SIGNING_KEYS: ${PATIENT_LINK_SIGNING_KEYS:-}
   PATIENT_LINK_TTL_DAYS: ${PATIENT_LINK_TTL_DAYS:-90}
+  # M5-P1: the background worker's polling.
+  WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-2}
+  WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-10}
 
 # Least privilege for our own containers (CLAUDE.md): read-only root
 # filesystem, no Linux capabilities, no privilege escalation. Writable scratch
@@ -110,6 +113,32 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    restart: unless-stopped
+
+  # The background worker (M5-P1, ADR-0005): the API image, a different command. It claims due
+  # jobs from the database, so a second one is safe. The root filesystem is read-only; /tmp is a
+  # 1 MB tmpfs for the heartbeat file, which the health check reads (spec R11a).
+  worker:
+    <<: *hardened
+    build: ./apps/api
+    image: mediease-api:local
+    command: ["python", "-m", "mediease_api.delivery.worker"]
+    environment: *api-environment
+    tmpfs: ["/tmp:size=1m,mode=1777"]
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    dns_opt: *fast-dns
+    healthcheck:
+      test: ["CMD", "python", "-m", "mediease_api.delivery.worker.health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    # SIGTERM lets the job in hand finish; the rest are handed back.
+    stop_grace_period: 30s
     restart: unless-stopped
 
   web:

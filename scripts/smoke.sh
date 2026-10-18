@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # End-to-end smoke test of the running local stack (`make up` first).
 # Used by `make smoke` locally and by the CI smoke job, so "a fresh clone works"
 # is checked the same way everywhere. Exits non-zero on the first failure.
@@ -24,7 +24,7 @@ text() { get "$1" | sed 's/<[^>]*>//g'; }
 
 echo "Services"
 state() { $COMPOSE ps -a --format '{{.Service}} {{.State}} {{.Health}} {{.ExitCode}}' | awk -v s="$1" '$1 == s'; }
-for svc in db api web; do
+for svc in db api worker web; do
   [[ "$(state "$svc")" == "$svc running healthy"* ]] && pass "$svc running and healthy" || fail "$svc not healthy: $(state "$svc")"
 done
 [[ "$(state migrate)" == "migrate exited "*" 0" ]] && pass "migrate exited 0" || fail "migrate: $(state migrate)"
@@ -68,7 +68,7 @@ status=$(curl -sS -m 15 -o /dev/null -w '%{http_code}' -H 'If-None-Match: *' "$W
 [ "$status" = "401" ] && pass "/api/v1/queue without a session is 401, also with If-None-Match" || fail "/api/v1/queue anonymous: $status"
 
 echo "Least privilege"
-for svc in api web; do
+for svc in api worker web; do
   uid=$($COMPOSE exec -T "$svc" id -u)
   [[ "$uid" != "0" ]] && pass "$svc runs as uid $uid (not root)" || fail "$svc runs as root"
   if $COMPOSE exec -T "$svc" sh -c 'touch /smoke-write-test' 2>/dev/null; then

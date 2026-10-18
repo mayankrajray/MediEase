@@ -1,4 +1,4 @@
-# MediEase developer commands. Every target is documented in AGENTS.md §4.
+﻿# MediEase developer commands. Every target is documented in AGENTS.md §4.
 # Targets for later milestones are added in the milestone that needs them.
 
 SHELL := /bin/bash
@@ -28,7 +28,7 @@ CORE_COVERAGE := --include='*/mediease_api/domain/*,*/mediease_api/application/*
 
 .PHONY: help env-check up down ps logs psql migrate seed smoke install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
-	typecheck-web dev-web contract contract-check audit e2e
+	typecheck-web dev-web contract contract-check audit e2e worker
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | \
@@ -51,6 +51,9 @@ migrate: env-check ## Re-run database migrations (make up already runs them)
 
 seed: env-check ## Load synthetic demo data (APP_ENV=local only; make up first)
 	$(COMPOSE) run --rm --no-deps api python -m mediease_api.delivery.cli.seed
+
+worker: env-check ## Run a job worker in the foreground (make up already runs one; a second is safe)
+	$(COMPOSE) run --rm --no-deps worker
 
 ps: ## Show service status and health
 	$(COMPOSE) ps

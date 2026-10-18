@@ -305,3 +305,21 @@ def test_m4_p5_deployed_environments_need_real_patient_link_keys(
     assert "PATIENT_LINK_SIGNING_KEYS" in _invalid_fields(deployed, set_env)
     placeholder = {**deployed, "PATIENT_LINK_SIGNING_KEYS": "k1:change-me-" + "a" * 32}
     assert "PATIENT_LINK_SIGNING_KEYS" in _invalid_fields(placeholder, set_env)
+
+
+def test_m5_p1_worker_settings_default_and_are_bounded(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    set_env(valid_env)
+    settings = load_settings()
+    assert (settings.WORKER_POLL_SECONDS, settings.WORKER_BATCH_SIZE) == (2, 10)
+
+    for name, bad in [
+        ("WORKER_POLL_SECONDS", "0"),
+        ("WORKER_POLL_SECONDS", "61"),
+        ("WORKER_BATCH_SIZE", "0"),
+        ("WORKER_BATCH_SIZE", "101"),
+    ]:
+        set_env({**valid_env, name: bad})
+        with pytest.raises(SystemExit):
+            load_settings()
