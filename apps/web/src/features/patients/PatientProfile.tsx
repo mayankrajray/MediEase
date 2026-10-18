@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { PatientAppointments } from "@/features/appointments/PatientAppointments";
+import { PrintablePrescriptions } from "@/features/prescriptions/PrintablePrescriptions";
 import { useClinic } from "@/features/shell/ClinicGate";
+import { PatientVisits } from "@/features/visits/PatientVisits";
 import { formatPhone } from "@/lib/format/phone";
 
 import { usePatientApi } from "./api";
@@ -25,7 +27,10 @@ type Load =
  */
 export function PatientProfile({ patientId }: { patientId: string }) {
   const clinic = useClinic();
-  const { endSession } = useSession();
+  const { clinic: choice, endSession } = useSession();
+  const permissions = choice.kind === "active" ? choice.membership.permissions : [];
+  const canViewClinical = permissions.includes("CLINICAL_VIEW");
+  const canPrint = permissions.includes("RX_PRINT");
   const api = usePatientApi();
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
@@ -138,12 +143,8 @@ export function PatientProfile({ patientId }: { patientId: string }) {
 
       <PatientAppointments patient={patient} />
 
-      <section aria-labelledby="visits-heading" className="space-y-1">
-        <h2 id="visits-heading" className="text-lg font-bold">
-          Visits
-        </h2>
-        <p className="text-slate-700">No visits yet. Visits and prescriptions appear here from M4.</p>
-      </section>
+      {canViewClinical && <PatientVisits patientId={patient.id} />}
+      {canPrint && <PrintablePrescriptions patientId={patient.id} />}
     </article>
   );
 }

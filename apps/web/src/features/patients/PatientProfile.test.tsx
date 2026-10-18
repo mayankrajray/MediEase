@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CLINIC_A, membership, person } from "@/features/auth/testing";
 import { resetRefreshState } from "@/lib/auth/refresh";
 import { apiError, json, mockApi, type Recorded } from "@/test/api";
 import { resetNavigation } from "@/test/navigation";
@@ -169,5 +170,93 @@ describe("consent, opt-out and opt-in (FR-PAT-05, FR-MSG-05)", () => {
     expect(await within(consent()).findByRole("alert")).toHaveTextContent("Opt them back in first.");
     await waitFor(() => expect(within(consent()).getByRole("button", { name: "Opt back in" })).toBeInTheDocument());
     expect(api.count(GET)).toBe(2);
+  });
+});
+
+// M4-P6, journey step 6: doctors see the visits; whoever prints sees the issued prescriptions only.
+const VISIT_ID = "0192f0a0-0000-7000-8000-0000000002a1";
+const RX_ID = "0192f0a0-0000-7000-8000-0000000003b1";
+const printable = {
+  id: RX_ID,
+  visit_id: VISIT_ID,
+  version: 2,
+  issued_at: "2026-10-18T05:00:00+00:00",
+  doctor_display_name: "Dr Meera Iyer",
+};
+const summary = (overrides: Record<string, unknown> = {}) => ({
+  id: VISIT_ID,
+  doctor_id: "0192f0a0-0000-7000-8000-0000000000d1",
+  appointment_id: "0192f0a0-0000-7000-8000-0000000000f1",
+  status: "COMPLETED",
+  started_at: "2026-10-18T04:30:00+00:00",
+  completed_at: "2026-10-18T04:50:00+00:00",
+  chief_complaint: "Sample complaint",
+  diagnosis: "Sample diagnosis",
+  prescription: {
+    id: RX_ID,
+    version: 2,
+    issued_at: "2026-10-18T05:00:00+00:00",
+    items: [{ medicine_name: "Sample Syrup", dose: "5 ml", frequency: "1-0-1", frequency_text: null, timing: "AFTER_FOOD", duration_days: 5 }],
+  },
+  ...overrides,
+});
+
+describe("visits and prescriptions on the profile (M4-P6)", () => {
+  const as = (permissions: string[]) => ({
+    ...workspaceRoutes,
+    "GET /api/v1/me": () =>
+      json(200, person([membership(CLINIC_A, "Alpha Clinic", "DOCTOR", { permissions: permissions as never })])),
+    [GET]: () => json(200, patient()),
+  });
+
+  it("FR-VIS-03: a doctor sees the visits, newest first, each opening its consultation, and pages back", async () => {
+    const older = "0192f0a0-0000-7000-8000-0000000002a0";
+    const api = mockApi({
+      ...as(["CLINIC_VIEW", "DOCTORS_VIEW", "PATIENTS_MANAGE", "CLINICAL_VIEW", "RX_PRINT"]),
+      [`GET ${ONE}/visits`]: (call: Recorded) =>
+        call.search.get("before") === null
+          ? json(200, { items: [summary()], next_before: VISIT_ID })
+          : json(200, { items: [summary({ id: older, chief_complaint: "Older complaint", prescription: null })], next_before: null }),
+      [`GET ${ONE}/prescriptions`]: () => json(200, { items: [printable] }),
+    });
+    await renderProfile();
+
+    const visits = await screen.findByRole("region", { name: "Visits" });
+    expect(await within(visits).findByText("Complaint: Sample complaint")).toBeInTheDocument();
+    expect(within(visits).getByText("Sample Syrup · 5 ml · 1-0-1 · after food · 5 days")).toBeInTheDocument();
+    expect(within(visits).getByRole("link", { name: /18 Oct 2026/ })).toHaveAttribute("href", `/visits/${VISIT_ID}`);
+
+    fireEvent.click(within(visits).getByRole("button", { name: "Show earlier visits" }));
+    expect(await within(visits).findByText("Complaint: Older complaint")).toBeInTheDocument();
+    expect(api.calls.at(-1)?.search.get("before")).toBe(VISIT_ID);
+    expect(within(visits).queryByRole("button", { name: "Show earlier visits" })).not.toBeInTheDocument();
+  });
+
+  it("D6: front desk sees the printable prescriptions and the link, never the visits or their content", async () => {
+    const api = mockApi({
+      ...as(["CLINIC_VIEW", "DOCTORS_VIEW", "PATIENTS_MANAGE", "RX_PRINT"]),
+      [`GET ${ONE}/prescriptions`]: () => json(200, { items: [printable] }),
+      [`GET /api/v1/prescriptions/${RX_ID}/link`]: () =>
+        json(200, {
+          id: "0192f0a0-0000-7000-8000-0000000004c1",
+          url: "https://sample.example/p/sample-token",
+          expires_at: "2027-01-16T05:00:00+00:00",
+          locked: false,
+          open_count: 0,
+          last_opened_at: null,
+        }),
+    });
+    await renderProfile();
+
+    const list = await screen.findByRole("region", { name: "Prescriptions to print" });
+    expect(await within(list).findByText(/18 Oct 2026.*Dr Meera Iyer · version 2/)).toBeInTheDocument();
+    expect(within(list).getByRole("button", { name: /^Print the prescription of 18 Oct 2026/ })).toBeInTheDocument();
+    fireEvent.click(within(list).getByRole("button", { name: "Show link" }));
+    expect(await within(list).findByTestId("patient-link")).toHaveTextContent("https://sample.example/p/sample-token");
+    expect(await within(list).findByRole("img", { name: /QR code/ })).toBeInTheDocument();
+
+    expect(screen.queryByRole("region", { name: "Visits" })).not.toBeInTheDocument();
+    expect(api.count(`GET ${ONE}/visits`)).toBe(0);
+    expect(screen.queryByText(/Sample complaint|Sample Syrup/)).not.toBeInTheDocument();
   });
 });
