@@ -14,7 +14,22 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
-- M5 (#40) opened: the messaging and reminders spec is Approved; M5-P1 (the job queue and worker) is designed. See docs/milestones/M5-messaging-and-reminders.md.
+- M5-P1 (#40): the job queue and the background worker (NFR-13; spec reminders-and-messaging R9-R11,
+  R9a-R9e, R11a; AC3, AC8-AC11; ADR-0005). A `jobs` table (migration `0014`) saved in the same
+  transaction as the change that needs it. The worker, a new `worker` container on the API image
+  (non-root, read-only root filesystem, no capabilities), claims due jobs with `SKIP LOCKED` in a
+  short transaction that is committed, with the attempt counted, **before** the handler runs: no
+  row lock is held across a handler, and a worker that dies mid-job still uses an attempt. Failed
+  jobs retry after 1, 5, 15 and 60 minutes, then go `dead`; a reaper recovers jobs from dead
+  workers (or kills them at `max_attempts`); a job whose clinic is suspended is `cancelled`. A
+  repeated `dedupe_key` is ignored only while the first job is queued, running or done, so cancelled
+  work never blocks it. Jobs with no clinic are limited by the database to system kinds. The first
+  real job purges refresh tokens and patient links 30 days after they expired and finished jobs
+  after 30 days (dead ones after 90), recording one `retention.purged` audit event. The worker's
+  health check reads a heartbeat file in a tmpfs that it rewrites only after a poll that reached
+  the database. New: `make worker`, `v_job_health`, settings `WORKER_POLL_SECONDS` and
+  `WORKER_BATCH_SIZE`, error codes `JOB_HANDLER_ERROR`, `JOB_LOCK_EXPIRED`, `JOB_CLINIC_SUSPENDED`.
+- M5 (#40) opened: the messaging and reminders spec is Approved. See docs/milestones/M5-messaging-and-reminders.md.
 - M4 (#38) complete: visits and digital prescriptions, P1–P6 below, in PR #39.
 - M4-P6 (#38): the consultation screen and the keyboard-first prescription builder (FR-VIS-02,
   03, 05; FR-RX-01..06, 09; spec §6, D2, D6; NFR-09; decisions 1A–6A). On the doctor's own queue

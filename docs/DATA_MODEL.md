@@ -1,4 +1,4 @@
-# MediEase — Data Model
+﻿# MediEase — Data Model
 
 Target schema for the MVP (M1–M5). Tables are created milestone by milestone through Alembic;
 the **Milestone** column says when each table appears. Update this file in the same change as
@@ -512,9 +512,30 @@ received_at` — body is not stored except for the matched keyword.
 ### `webhook_events`
 `id, provider, event_id unique, received_at, processed_at, error_code` — dedupe and replay.
 
-### `jobs`
-See ARCHITECTURE.md §7. Index for claiming:
-`CREATE INDEX jobs_claim_idx ON jobs (run_at) WHERE state = 'queued';`
+### `jobs` (migration `0014`, M5-P1)
+See ARCHITECTURE.md §7. Deliberately not a tenant table: `clinic_id` is null for the system kinds a
+CHECK lists, so it is a reviewed exception in the tenancy guard.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | UUIDv7 |
+| clinic_id | uuid null FK clinics | Null exactly when `kind` is a system kind (`ck_jobs_system_kind`; adding a kind is a migration) |
+| kind | text | `^[a-z][a-z0-9_]{2,63}$`; `purge_expired_auth_and_links` is the only system kind so far |
+| payload | jsonb | IDs, counts and flags only; never names, phone numbers or clinical text |
+| state | text | `queued` \| `running` \| `succeeded` \| `dead` \| `cancelled` |
+| run_at | timestamptz | When it may next run |
+| attempts, max_attempts | smallint | `attempts` is incremented **at claim time**, so a crash still counts; `0 <= attempts <= max_attempts`, `max_attempts` 1-20, default 5 |
+| last_error_code | text null | `JOB_*`, later `MSG_*` |
+| locked_by, locked_at | text, timestamptz null | Both set exactly when `running` (`ck_jobs_lock_when_running`) |
+| request_id | text null | The request that caused the job |
+| dedupe_key | text null | Unique only while the job is `queued`, `running` or `succeeded` (`uq_jobs_dedupe_key`), so a cancelled or dead job never blocks the same key |
+| finished_at | timestamptz null | Set on `succeeded`, `dead`, `cancelled` |
+| created_at, updated_at | timestamptz | |
+
+Indexes: `ix_jobs_claim (run_at) WHERE state = 'queued'`, `ix_jobs_running (locked_at) WHERE state = 'running'`, `ix_jobs_clinic_id`.
+
+`v_job_health` (support view, no clinic or patient data): per `kind`, `due`, `scheduled`, `running`,
+`stale` (running with a lock older than 5 minutes), `dead`, `dead_24h` and `oldest_due_age_seconds`.
 
 ---
 

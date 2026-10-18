@@ -1,4 +1,4 @@
-# MediEase — Error Catalogue
+﻿# MediEase — Error Catalogue
 
 Every error the API returns has a stable `code`. Codes never change meaning; retired codes are
 marked, not reused. Add a row in the same change that introduces a code.
@@ -169,4 +169,7 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 | `WH_SIGNATURE_INVALID` | 401 | Webhook rejected | Wrong secret or body re-serialised | DEBUGGING §5.8 |
 | `WH_UNKNOWN_EVENT` | 200 (ignored) | Event type not handled | New provider event | `webhook_events` |
 | `JOB_MAX_ATTEMPTS` | — (job) | Job moved to dead | Repeated failure; see `last_error_code` | Ops console dead jobs |
-| `JOB_HANDLER_MISSING` | — (job) | No handler for job kind | Deploy mismatch between api and worker | Worker version |
+| `JOB_HANDLER_MISSING` | — (job) | No handler for job kind | Deploy mismatch between api and worker: retried like any failure, so a newer API's jobs wait for the worker to catch up | Worker version (`docker compose images worker`) |
+| `JOB_HANDLER_ERROR` | — (job) | A handler failed unexpectedly | A bug or an outage inside a handler; retried with back-off. The log has the exception's type only, never its message | `job.handler_error` in the worker log; `last_error_code` |
+| `JOB_LOCK_EXPIRED` | — (job) | The worker holding the job stopped renewing its lock | The worker was killed or lost its database; the attempt is already counted, the reaper requeues (or kills at `max_attempts`) | `job.lock_expired` in the log; `docker compose ps worker` |
+| `JOB_CLINIC_SUSPENDED` | — (job) | The clinic is suspended | The job was cancelled, not run; a reminder revised or a clinic unsuspended can enqueue its key again | `jobs.state = 'cancelled'` |
