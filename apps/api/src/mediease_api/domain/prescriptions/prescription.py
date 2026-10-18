@@ -529,3 +529,13 @@ def item_from_json(data: dict[str, Any], *, id: UUID, position: int) -> Prescrip
 def latest_issued(chain: Sequence[Prescription]) -> Prescription | None:
     issued = [p for p in chain if p.status is PrescriptionStatus.ISSUED]
     return max(issued, key=lambda p: p.version) if issued else None
+
+
+@dataclass(frozen=True, slots=True)
+class IssuedVersion:
+    """A visit's current issued version without any content (the queue row, M4-P6 4A)."""
+
+    id: UUID
+    visit_id: UUID
+    version: int
+    issued_at: datetime

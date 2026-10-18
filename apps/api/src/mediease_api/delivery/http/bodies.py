@@ -280,6 +280,18 @@ def queue_body(queue: QueueView) -> dict[str, Any]:
                             "sex": e.patient.sex.value,
                         },
                         "wait_minutes": e.wait_minutes,
+                        # M4-P6 decision 4A: no content, only that a visit and an issued
+                        # prescription exist, so front desk can print from the row.
+                        "visit_id": str(e.visit_id) if e.visit_id else None,
+                        "prescription": (
+                            {
+                                "id": str(e.prescription.id),
+                                "version": e.prescription.version,
+                                "issued_at": e.prescription.issued_at.isoformat(),
+                            }
+                            if e.prescription
+                            else None
+                        ),
                     }
                     for e in q.entries
                 ],

@@ -72,3 +72,36 @@ def test_m4_p5_issue_fixes_the_current_layout_version() -> None:
     rx = issued()
     assert rx.status is PrescriptionStatus.ISSUED
     assert rx.layout_version == CURRENT_LAYOUT == 1
+
+
+def test_m4_p6_the_preview_shows_a_draft_as_issuing_today_would() -> None:
+    from datetime import date
+
+    import pytest
+
+    from mediease_api.domain.prescriptions.errors import DoctorIncomplete, NotDraft
+    from mediease_api.domain.prescriptions.patient_view import build_preview
+    from tests.builders import a_clinic, a_doctor
+
+    rx = filled(draft())
+    clinic = a_clinic()
+    doctor = a_doctor(clinic.id, id=rx.doctor_id)
+    page = build_preview(
+        rx, doctor=doctor, clinic=clinic, language=Language.HI, today=date(2026, 10, 19)
+    )
+    assert page.clinic_name == clinic.name and page.doctor_name == doctor.display_name
+    assert page.issued_on.value == "19 अक्टूबर 2026" and page.updated_note is None
+    assert page.medicines[0].name == "Syrup X"
+
+    with pytest.raises(DoctorIncomplete):
+        build_preview(
+            rx,
+            doctor=replace(doctor, registration_number=" "),
+            clinic=clinic,
+            language=Language.EN,
+            today=date(2026, 10, 19),
+        )
+    with pytest.raises(NotDraft):
+        build_preview(
+            issued(), doctor=doctor, clinic=clinic, language=Language.EN, today=date(2026, 10, 19)
+        )

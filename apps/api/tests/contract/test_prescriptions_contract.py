@@ -84,3 +84,25 @@ def test_adr_0008_printing_matches_the_contract(
     assert clinic["rx_paper_size"] == "A4"
     # An invalid request is refused by the contract itself; the API agrees.
     assert _send(owner, "PATCH", "/api/v1/clinic", {"rx_paper_size": "B5"}).status_code == 422
+
+
+def test_adr_0008_the_preview_and_the_queue_row_match_the_contract(
+    openapi: OpenAPI,  # noqa: F811
+    world: World,
+) -> None:
+    """M4-P6: the draft preview and the queue row's visit and prescription fields."""
+    from tests.integration.test_prescriptions_http import _today
+
+    doctor, visit = _started(world)
+    rx = _expect(openapi, _send(doctor, "POST", f"/api/v1/visits/{visit['id']}/prescriptions"), 201)
+    one = f"/api/v1/prescriptions/{rx['id']}"
+    _expect(openapi, _send(doctor, "PUT", one, {"revision": 1, "items": [SAMPLE_ITEM]}), 200)
+    _expect(openapi, _send(doctor, "GET", f"{one}/preview", query={"lang": "hi"}), 200)
+    _expect(openapi, _send(doctor, "POST", f"{one}/issue", {"revision": 2}), 200)
+    _expect(openapi, _send(doctor, "GET", f"{one}/preview"), 409)
+    desk = world.client_for(world.a.desk)
+    query = {"date": _today().isoformat(), "doctor_id": str(world.a.doctor.id)}
+    queue = _expect(openapi, _send(desk, "GET", "/api/v1/queue", query=query), 200)
+    rows = [a for s in queue["sessions"] for a in s["appointments"]]
+    row = next(a for a in rows if a["id"] == visit["appointment_id"])
+    assert row["prescription"]["id"] == rx["id"]

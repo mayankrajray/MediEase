@@ -65,6 +65,7 @@ from mediease_api.domain.prescriptions.prescription import (
     Advice,
     ClinicSnapshot,
     DoctorSnapshot,
+    IssuedVersion,
     LinkDelivery,
     Prescription,
     PrescriptionItem,
@@ -1250,6 +1251,15 @@ class SqlAlchemyVisitRepository(TenantScopedRepository[VisitRow]):
         row = self._session.scalars(query).one_or_none()
         return _visit_from_row(row) if row else None
 
+    def ids_for_appointments(self, appointment_ids: Collection[UUID]) -> dict[UUID, UUID]:
+        ids = sorted(set(appointment_ids))
+        if not ids:
+            return {}
+        query = select(VisitRow.appointment_id, VisitRow.id).where(
+            VisitRow.clinic_id == self.clinic_id, VisitRow.appointment_id.in_(ids)
+        )
+        return {row[0]: row[1] for row in self._session.execute(query)}
+
     def list_for_patient(
         self, patient_id: UUID, *, limit: int, before: tuple[datetime, UUID] | None = None
     ) -> Sequence[Visit]:
@@ -1512,6 +1522,26 @@ class SqlAlchemyPrescriptionRepository(TenantScopedRepository[PrescriptionRow]):
         rows = list(self._session.scalars(query))
         items = self._items.for_prescriptions([r.id for r in rows])
         return [_prescription_from_row(r, items[r.id]) for r in rows]
+
+    def issued_for_visits(self, visit_ids: Collection[UUID]) -> dict[UUID, IssuedVersion]:
+        ids = sorted(set(visit_ids))
+        if not ids:
+            return {}
+        query = select(
+            PrescriptionRow.id,
+            PrescriptionRow.visit_id,
+            PrescriptionRow.version,
+            PrescriptionRow.issued_at,
+        ).where(
+            PrescriptionRow.clinic_id == self.clinic_id,
+            PrescriptionRow.visit_id.in_(ids),
+            PrescriptionRow.status == PrescriptionStatus.ISSUED.value,
+        )
+        found: dict[UUID, IssuedVersion] = {}
+        for rx_id, visit_id, version, issued_at in self._session.execute(query):
+            assert issued_at is not None  # an issued version has its time (CHECK)
+            found[visit_id] = IssuedVersion(rx_id, visit_id, version, _utc(issued_at))
+        return found
 
     def delete(self, prescription_id: UUID) -> None:
         self._require_row(prescription_id)
