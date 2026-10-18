@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M5 — Messaging and reminders** (issue #40, branch `m5/40-messaging-and-reminders`, one PR for the milestone). M4 merged in PR #39 on 18 Oct 2026 |
-| Active phase | **M5-P1 — The job queue and the worker:** plan, spec and P1 design approved by the developer 18 Oct 2026 (1A-5A and four refinements); implemented, verified on the stack and awaiting the developer's confirmation |
+| Active phase | **M5-P2 — `MessagingPort`, the console adapter and the template registry:** M5-P1 confirmed by the developer 18 Oct 2026; P2 design proposed, awaiting approval |
 | Design notes | `docs/milestones/M5-messaging-and-reminders.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M5 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -123,8 +123,8 @@ flows back through the webhook, and opt-out stops further sends. Depends on L-01
 
 | Phase | Scope | Status |
 |---|---|---|
-| M5-P1 | Job table, worker process, `SKIP LOCKED` claiming, retries with backoff, dead-letter state, stale-lock reaper; `v_job_health`, `v_message_health` views | ▶ |
-| M5-P2 | `MessagingPort`; console adapter; template registry versioned in repo | ☐ |
+| M5-P1 | Job table, worker process, `SKIP LOCKED` claiming, retries with backoff, dead-letter state, stale-lock reaper; `v_job_health`, `v_message_health` views | ✅ (`v_message_health` moves to P2 with the `messages` table) |
+| M5-P2 | `MessagingPort`; console adapter; template registry versioned in repo | ▶ |
 | M5-P3 | WhatsApp Cloud API adapter; webhook signature verification; idempotent status updates; status reconciliation job | ☐ |
 | M5-P4 | Reminder scheduling rules (quiet hours, consent, follow-up defaults); pending follow-ups list; automatic no-show job | ☐ |
 | M5-P5 | Inbound STOP handling; SMS adapter (fallback behind a flag); per-clinic cost ledger | ☐ |

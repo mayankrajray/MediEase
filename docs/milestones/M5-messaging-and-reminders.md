@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M5 opened 18 Oct 2026 after M4 merged (PR #39); plan and spec approved; M5-P1 approved (1A–5A with four refinements) and implemented 18 Oct 2026, awaiting the developer's confirmation |
+| Status | In progress — M5 opened 18 Oct 2026 after M4 merged (PR #39); plan and spec approved; M5-P1 approved (1A–5A with four refinements) implemented and confirmed by the developer 18 Oct 2026; M5-P2 design proposed |
 | Spec | `docs/specs/reminders-and-messaging.md` (Approved 2026-10-18) |
 | ADR | ADR-0005 (PostgreSQL-backed job queue), ADR-0007 (messaging port, WhatsApp first) |
 | Covers | FR-MSG-01..05, FR-MSG-07, FR-REM-01, 02, 04, 05, 07, FR-APT-06, NFR-13 |
