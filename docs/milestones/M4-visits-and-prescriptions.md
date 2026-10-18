@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 approved (1A-6A), implemented and confirmed 18 Oct 2026; the M4-P6 design proposed, awaiting approval |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 approved (1A-6A), implemented and confirmed 18 Oct 2026; M4-P6 approved (1A-6A) 18 Oct 2026, in implementation |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -18,7 +18,7 @@
 | P3 | Favourites, templates, clinic-history autocomplete | Below (done, confirmed) |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (done) |
 | P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | Below (done) |
-| P6 | Web consultation screen, keyboard-first Rx builder | Below (proposed) |
+| P6 | Web consultation screen, keyboard-first Rx builder | Below (approved 1A-6A) |
 
 ---
 
@@ -805,7 +805,7 @@ Taken while implementing:
 
 ## M4-P6 — The consultation screen and the keyboard-first prescription builder
 
-**Status: proposed 18 Oct 2026, awaiting approval.** Web, with three small API additions. Covers
+**Status: approved by the developer 18 Oct 2026 (1A-6A, every recommendation).** Web, with three small API additions. Covers
 FR-VIS-02, FR-VIS-03, FR-VIS-05, FR-RX-01..06, FR-RX-09; spec §6 (UI notes), R2, R5, R11, D2,
 D6; M4-P2 decision 6A (front desk sees "prescription issued" on the queue); NFR-09 (1366 × 768,
 keyboard). This is the last M4 phase: its final commit carries `Closes #38`.
