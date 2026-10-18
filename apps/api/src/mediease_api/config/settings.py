@@ -119,6 +119,9 @@ class AppSettings(BaseSettings):
     # Empty in local and test means a fixed development key; required when deployed.
     PATIENT_LINK_SIGNING_KEYS: SecretStr = SecretStr("")
     PATIENT_LINK_TTL_DAYS: int = Field(default=90, ge=1, le=90)
+    # The background worker (M5-P1): seconds to sleep when no job is due, and jobs claimed per poll.
+    WORKER_POLL_SECONDS: int = Field(default=2, ge=1, le=60)
+    WORKER_BATCH_SIZE: int = Field(default=10, ge=1, le=100)
 
     @field_validator("PATIENT_LINK_SIGNING_KEYS")
     @classmethod

@@ -63,6 +63,8 @@ _MANAGED_VARS = (
     "S3_ENDPOINT_URL",
     "PATIENT_LINK_SIGNING_KEYS",
     "PATIENT_LINK_TTL_DAYS",
+    "WORKER_POLL_SECONDS",
+    "WORKER_BATCH_SIZE",
 )
 
 # Synthetic, test-only secrets (>= 32 characters each).

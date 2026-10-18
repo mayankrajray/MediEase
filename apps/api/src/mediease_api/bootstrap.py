@@ -8,7 +8,12 @@ an app. This is also the only place that chooses adapters (apps/api/CLAUDE.md).
 
 from __future__ import annotations
 
+import os
+import random
 import secrets
+import socket
+import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -16,9 +21,11 @@ from typing import Any
 import structlog
 from flask import Flask
 from sqlalchemy.orm import Session, sessionmaker
+from ulid import ULID
 
 from mediease_api.adapters.clock.system import SystemClock
 from mediease_api.adapters.db.engine import build_engine
+from mediease_api.adapters.db.jobs import SqlAlchemyJobStore
 from mediease_api.adapters.db.readiness import SqlAlchemyDatabaseCheck
 from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork, build_session_factory
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
@@ -51,6 +58,9 @@ from mediease_api.application.clinics.onboard_clinic import (
 )
 from mediease_api.application.clinics.queries import GetClinic, GetDoctor, ListDoctors, ListStaff
 from mediease_api.application.identity.accept_invite import AcceptInvite, DescribeInvite
+from mediease_api.application.jobs.purge import PurgeExpired
+from mediease_api.application.jobs.run import JobHandler, RunJob
+from mediease_api.application.jobs.schedule import ScheduleRecurring
 from mediease_api.application.links.use_cases import (
     DescribeLink,
     GetLink,
@@ -117,6 +127,9 @@ from mediease_api.delivery.http.rx_library import create_rx_library_blueprint
 from mediease_api.delivery.http.scheduling import create_scheduling_blueprint
 from mediease_api.delivery.http.visits import create_visits_blueprint
 from mediease_api.delivery.middleware import register_request_middleware
+from mediease_api.delivery.worker.heartbeat import beat
+from mediease_api.delivery.worker.loop import LockRenewer, Worker
+from mediease_api.domain.jobs.job import PURGE_KIND
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.pdf import PdfRendererPort
@@ -457,6 +470,53 @@ def build_seed_dependencies(settings: AppSettings) -> SeedDependencies:
         clock=SystemClock(),
         ids=Uuid7Generator(),
         hasher=build_password_hasher(),
+    )
+
+
+def _interruptible_sleep(stop: threading.Event) -> Callable[[float], None]:
+    """Sleep that ends at once when the worker is told to stop."""
+
+    def sleep(seconds: float) -> None:
+        stop.wait(seconds)
+
+    return sleep
+
+
+def build_worker(settings: AppSettings, stop: threading.Event) -> Worker:
+    """Compose the background worker (M5-P1): the same adapters as the API, no HTTP.
+
+    ``stop`` is set by the process's signal handlers; the loop finishes the job in hand and exits.
+    """
+    configure_logging(settings)
+    factory = build_session_factory(build_engine(settings))
+    clock = SystemClock()
+    ids = Uuid7Generator()
+    store = SqlAlchemyJobStore(factory)
+    # Jitter only spreads retries out; it needs no cryptographic randomness.
+    rand = random.SystemRandom().random
+    handlers: dict[str, JobHandler] = {
+        PURGE_KIND: PurgeExpired(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
+    }
+    return Worker(
+        worker_id=f"{socket.gethostname()}:{os.getpid()}:{secrets.token_hex(3)}",
+        store=store,
+        run_job=RunJob(
+            store=store,
+            handlers=handlers,
+            uow=SqlAlchemyUnitOfWork(factory),
+            clock=clock,
+            rand=rand,
+        ),
+        schedule=ScheduleRecurring(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
+        clock=clock,
+        rand=rand,
+        request_id=lambda: str(ULID()),
+        beat=beat,
+        sleep=_interruptible_sleep(stop),
+        stopping=stop.is_set,
+        batch_size=settings.WORKER_BATCH_SIZE,
+        poll_seconds=settings.WORKER_POLL_SECONDS,
+        renewer=LockRenewer(store, clock).hold,
     )
 
 
