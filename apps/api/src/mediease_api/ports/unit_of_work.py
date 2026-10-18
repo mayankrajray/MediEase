@@ -22,6 +22,7 @@ from typing import Protocol, Self
 from uuid import UUID
 
 from mediease_api.ports.audit import AuditWriter
+from mediease_api.ports.jobs import JobQueue, RetentionRepository
 from mediease_api.ports.repositories import (
     AppointmentHistoryRepository,
     AppointmentRepository,
@@ -103,6 +104,16 @@ class UnitOfWork(Protocol):
     @property
     def audit(self) -> AuditWriter:
         """Appends audit events in this transaction, so a change is never unaudited (R11)."""
+        ...
+
+    @property
+    def jobs(self) -> JobQueue:
+        """Enqueues background work in this transaction (M5-P1, the outbox)."""
+        ...
+
+    @property
+    def retention(self) -> RetentionRepository:
+        """Expired-row deletion for the worker's purge job (M5-P1)."""
         ...
 
     def tenant(self, clinic_id: UUID) -> TenantRepositories:
