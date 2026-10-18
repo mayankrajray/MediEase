@@ -28,6 +28,11 @@ dependencies = [
     "weasyprint==70.0",
     "jinja2==3.1.6",
     "boto3==1.43.114",
+    # M5-P2 (decisions 1A, 2A): PyCA cryptography for Fernet encryption of the phone numbers
+    # stored on messages, and PyYAML for the template catalogue (read with yaml.safe_load only).
+    # Both were already installed in dev through moto; the runtime now needs them directly.
+    "cryptography==50.0.2",
+    "pyyaml==6.0.3",
 ]
 
 [project.optional-dependencies]
@@ -50,6 +55,8 @@ dev = [
     "moto[s3]==5.2.4",
     "pypdfium2==5.14.0",
     "types-boto3[s3]==1.43.114",
+    # M5-P2: PyYAML type stubs for mypy.
+    "types-pyyaml==6.0.12.20260906",
 ]
 
 [build-system]
@@ -62,6 +69,8 @@ where = ["src"]
 # The PDF renderer's template, stylesheet and vendored fonts ship inside the package (M4-P4).
 [tool.setuptools.package-data]
 "mediease_api.adapters.pdf" = ["assets/*"]
+# The message template catalogue (M5-P2).
+"mediease_api.adapters.messaging" = ["templates.yaml"]
 
 # --- Ruff: lint + format -----------------------------------------------------
 [tool.ruff]
@@ -134,6 +143,7 @@ forbidden_modules = [
     "mediease_api.delivery", "mediease_api.config", "mediease_api.bootstrap", "mediease_api.wsgi",
     "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
     "structlog", "gunicorn", "ulid", "argon2", "jwt", "weasyprint", "jinja2", "boto3", "botocore",
+    "cryptography", "yaml",
 ]
 
 [[tool.importlinter.contracts]]
@@ -144,7 +154,7 @@ forbidden_modules = [
     "mediease_api.adapters", "mediease_api.delivery", "mediease_api.config",
     "mediease_api.bootstrap", "mediease_api.wsgi",
     "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
-    "gunicorn", "argon2", "jwt",
+    "gunicorn", "argon2", "jwt", "cryptography", "yaml",
 ]
 
 [[tool.importlinter.contracts]]
@@ -155,7 +165,7 @@ forbidden_modules = [
     "mediease_api.application", "mediease_api.adapters", "mediease_api.delivery",
     "mediease_api.config", "mediease_api.bootstrap", "mediease_api.wsgi",
     "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
-    "gunicorn", "argon2", "jwt",
+    "gunicorn", "argon2", "jwt", "cryptography", "yaml",
 ]
 
 [[tool.importlinter.contracts]]

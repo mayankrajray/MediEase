@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from mediease_api.adapters.db.audit import SqlAlchemyAuditWriter
 from mediease_api.adapters.db.jobs import SqlAlchemyJobQueue, SqlAlchemyRetentionRepository
+from mediease_api.adapters.db.messages import SqlAlchemyMessageRepository
 from mediease_api.adapters.db.repositories import (
     SqlAlchemyAppointmentHistoryRepository,
     SqlAlchemyAppointmentRepository,
@@ -74,6 +75,7 @@ class SqlAlchemyTenantRepositories:
         self._rx_favourites = SqlAlchemyRxFavouriteRepository(session, clinic_id)
         self._rx_templates = SqlAlchemyRxTemplateRepository(session, clinic_id)
         self._patient_links = SqlAlchemyPatientLinkRepository(session, clinic_id)
+        self._messages = SqlAlchemyMessageRepository(session, clinic_id)
 
     @property
     def clinic_id(self) -> UUID:
@@ -138,6 +140,10 @@ class SqlAlchemyTenantRepositories:
     @property
     def patient_links(self) -> SqlAlchemyPatientLinkRepository:
         return self._patient_links
+
+    @property
+    def messages(self) -> SqlAlchemyMessageRepository:
+        return self._messages
 
 
 class _OpenUnit:

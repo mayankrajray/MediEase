@@ -1,0 +1,82 @@
+# Message templates (M5-P2; spec reminders-and-messaging §3, R8; ARCHITECTURE §8).
+#
+# Adding or changing a template is a data change here plus provider approval (L-02) — no code
+# branching. Bump `version` when a body changes; every message records the version it used.
+# Placeholders are {{name}} and must appear once each, in the order of `variables`: providers bind
+# parameters by position. A variable's `kind` is what it may hold (domain/messaging/template.py):
+# clinic_name, doctor_name, when, phone or link. Nothing clinical has a kind.
+#
+# The Hindi wording is provisional until the pilot clinics review it (spec §12, L-02).
+
+templates:
+  booking_confirmed:
+    version: 1
+    category: utility
+    variables:
+      - { name: clinic_name, kind: clinic_name }
+      - { name: doctor_name, kind: doctor_name }
+      - { name: date_time_or_token, kind: when }
+    languages:
+      en:
+        provider_name: booking_confirmed_v1
+        body: "Your appointment at {{clinic_name}} with {{doctor_name}} is confirmed for {{date_time_or_token}}."
+      hi:
+        provider_name: booking_confirmed_v1
+        body: "{{clinic_name}} में {{doctor_name}} के साथ आपकी अपॉइंटमेंट {{date_time_or_token}} के लिए पक्की हो गई है।"
+
+  rx_ready:
+    version: 1
+    category: utility
+    variables:
+      - { name: clinic_name, kind: clinic_name }
+      - { name: link, kind: link }
+    languages:
+      en:
+        provider_name: rx_ready_v1
+        body: "Your prescription from {{clinic_name}} is ready. View it here: {{link}}"
+      hi:
+        provider_name: rx_ready_v1
+        body: "{{clinic_name}} से आपका पर्चा तैयार है। यहाँ देखें: {{link}}"
+
+  rx_updated:
+    version: 1
+    category: utility
+    variables:
+      - { name: clinic_name, kind: clinic_name }
+      - { name: link, kind: link }
+    languages:
+      en:
+        provider_name: rx_updated_v1
+        body: "Your prescription from {{clinic_name}} has been updated. View the latest version here: {{link}}"
+      hi:
+        provider_name: rx_updated_v1
+        body: "{{clinic_name}} से आपका पर्चा बदला गया है। नया पर्चा यहाँ देखें: {{link}}"
+
+  follow_up_due:
+    version: 1
+    category: utility
+    variables:
+      - { name: clinic_name, kind: clinic_name }
+      - { name: doctor_name, kind: doctor_name }
+      - { name: follow_up_date, kind: when }
+      - { name: clinic_phone, kind: phone }
+    languages:
+      en:
+        provider_name: follow_up_due_v1
+        body: "Reminder from {{clinic_name}}: your follow-up with {{doctor_name}} is due on {{follow_up_date}}. To book, call {{clinic_phone}}."
+      hi:
+        provider_name: follow_up_due_v1
+        body: "{{clinic_name}} की ओर से याद दिलाना: {{doctor_name}} के साथ आपका फ़ॉलो-अप {{follow_up_date}} को है। बुक करने के लिए {{clinic_phone}} पर कॉल करें।"
+
+  opt_out_confirmed:
+    version: 1
+    category: service
+    variables:
+      - { name: clinic_name, kind: clinic_name }
+    languages:
+      en:
+        provider_name: opt_out_confirmed
+        body: "You will no longer receive messages from {{clinic_name}}."
+      hi:
+        provider_name: opt_out_confirmed
+        body: "अब आपको {{clinic_name}} से संदेश नहीं मिलेंगे।"

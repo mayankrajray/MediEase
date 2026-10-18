@@ -21,7 +21,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0014"
+HEAD = "0015"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -34,6 +34,7 @@ M4_P2_TABLES = sorted([*M4_P1_TABLES, "prescription_items", "prescriptions"])
 M4_P3_TABLES = sorted([*M4_P2_TABLES, "rx_favourites", "rx_templates"])
 M4_P5_TABLES = sorted([*M4_P3_TABLES, "patient_links", "public_rate_limits"])
 M5_P1_TABLES = sorted([*M4_P5_TABLES, "jobs"])
+M5_P2_TABLES = sorted([*M5_P1_TABLES, "messages"])
 
 
 @pytest.fixture
@@ -443,9 +444,44 @@ def test_0014_adds_jobs_with_partial_indexes_and_the_health_view(
         engine.dispose()
 
 
+def test_0015_adds_messages_with_unique_keys_and_the_health_view(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    command.upgrade(alembic_config, "0015")
+    assert _tables(scratch_database_url) == M5_P2_TABLES
+    assert {"v_job_health", "v_message_health"} <= set(_views(scratch_database_url))
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            uniques = {u["name"] for u in inspect(conn).get_unique_constraints("messages")}
+            # R6, AC4: one row per idempotency key; P3's webhooks find a row by provider ID.
+            assert {"uq_messages_idempotency_key", "uq_messages_provider_message_id"} <= uniques
+            indexes = {i["name"] for i in inspect(conn).get_indexes("messages")}
+            assert {
+                "ix_messages_clinic_id_patient_id",
+                "ix_messages_clinic_id_source_type_source_id",
+            } <= indexes
+            checks = {c["name"] for c in inspect(conn).get_check_constraints("messages")}
+            assert {
+                "ck_messages_channel",
+                "ck_messages_status",
+                "ck_messages_sent_has_provider_id",
+                "ck_messages_failed_has_code",
+                "ck_messages_started_only_queued",
+            } <= checks
+            columns = {c["name"] for c in inspect(conn).get_columns("messages")}
+            # Decision 1A: the number is only ever stored encrypted.
+            assert "to_phone_encrypted" in columns and "to_phone_e164" not in columns
+        command.downgrade(alembic_config, "0014")
+        assert _tables(scratch_database_url) == M5_P1_TABLES
+        assert "v_message_health" not in _views(scratch_database_url)
+    finally:
+        engine.dispose()
+
+
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M5_P1_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M5_P2_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:

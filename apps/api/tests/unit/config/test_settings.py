@@ -7,7 +7,10 @@ and DB_ECHO_PARAMS=true each stop start-up with CFG_INVALID naming the field.
 
 from __future__ import annotations
 
+import base64
+
 import pytest
+from cryptography.fernet import Fernet
 from pydantic import ValidationError
 
 from mediease_api.config.settings import CFG_INVALID, AppEnv, AppSettings, load_settings
@@ -323,3 +326,52 @@ def test_m5_p1_worker_settings_default_and_are_bounded(
         set_env({**valid_env, name: bad})
         with pytest.raises(SystemExit):
             load_settings()
+
+
+def test_m5_p2_phone_keys_default_to_a_development_key_outside_deployment(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    set_env({k: v for k, v in valid_env.items() if k != "MESSAGING_PHONE_KEYS"})
+    settings = load_settings()
+    [key] = settings.messaging_phone_keys()
+    assert len(base64.urlsafe_b64decode(key)) == 32
+    assert (settings.MESSAGING_PROVIDER, settings.RX_LINK_SEND_WINDOW_HOURS) == ("console", 24)
+
+
+def test_m5_p2_phone_keys_are_ordered_fernet_keys(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    first, second = Fernet.generate_key(), Fernet.generate_key()
+    set_env({**valid_env, "MESSAGING_PHONE_KEYS": f"{first.decode()}, {second.decode()}"})
+    assert load_settings().messaging_phone_keys() == [first, second]
+
+
+@pytest.mark.parametrize("value", ["not-a-key", "change-me", "c2hvcnQ=", "!!!"])
+def test_m5_p2_malformed_phone_keys_are_refused(
+    set_env: SetEnv, valid_env: dict[str, str], value: str
+) -> None:
+    env = {**valid_env, "MESSAGING_PHONE_KEYS": value}
+    assert _invalid_fields(env, set_env) == {"MESSAGING_PHONE_KEYS"}
+
+
+def test_m5_p2_deployed_environments_need_their_own_phone_keys(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    deployed = {**valid_env, "APP_ENV": "staging", "COOKIE_SECURE": "true"}
+    set_env(deployed)
+    assert load_settings().APP_ENV is AppEnv.STAGING
+    assert "MESSAGING_PHONE_KEYS" in _invalid_fields(
+        {**deployed, "MESSAGING_PHONE_KEYS": ""}, set_env
+    )
+    dev_key = base64.urlsafe_b64encode(b"mediease-local-phone-key-32bytes").decode()
+    assert "MESSAGING_PHONE_KEYS" in _invalid_fields(
+        {**deployed, "MESSAGING_PHONE_KEYS": dev_key}, set_env
+    )
+
+
+@pytest.mark.parametrize("value", ["0", "25"])
+def test_m5_p2_the_rx_link_window_is_at_most_24_hours(
+    set_env: SetEnv, valid_env: dict[str, str], value: str
+) -> None:
+    env = {**valid_env, "RX_LINK_SEND_WINDOW_HOURS": value}
+    assert _invalid_fields(env, set_env) == {"RX_LINK_SEND_WINDOW_HOURS"}

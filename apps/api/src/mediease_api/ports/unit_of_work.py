@@ -23,6 +23,7 @@ from uuid import UUID
 
 from mediease_api.ports.audit import AuditWriter
 from mediease_api.ports.jobs import JobQueue, RetentionRepository
+from mediease_api.ports.messaging import MessageRepository
 from mediease_api.ports.repositories import (
     AppointmentHistoryRepository,
     AppointmentRepository,
@@ -83,6 +84,8 @@ class TenantRepositories(Protocol):
     def rx_templates(self) -> TemplateRepository: ...
     @property
     def patient_links(self) -> PatientLinkRepository: ...
+    @property
+    def messages(self) -> MessageRepository: ...
 
 
 class UnitOfWork(Protocol):

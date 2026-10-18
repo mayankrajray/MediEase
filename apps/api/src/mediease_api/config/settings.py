@@ -13,6 +13,8 @@ requires it").
 
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 import sys
 from enum import StrEnum
@@ -39,6 +41,11 @@ _MIN_SIGNING_KEY_LENGTH = 32
 _LINK_KEY_ID = re.compile(r"[A-Za-z0-9_-]{1,16}")
 _DEV_LINK_KEY = "dev:change-me-local-only-patient-link-key-0001"
 
+# M5-P2: phone encryption (Fernet keys, url-safe base64 of 32 bytes). The development key is used
+# only when none is set in local or test; it is not secret and must never protect real numbers.
+_DEV_PHONE_KEY = base64.urlsafe_b64encode(b"mediease-local-phone-key-32bytes").decode("ascii")
+_FERNET_KEY_BYTES = 32
+
 
 class AppEnv(StrEnum):
     """Deployment environment. Drives environment-specific validation."""
@@ -56,6 +63,8 @@ class AppEnv(StrEnum):
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 BlobBackend = Literal["local", "s3"]
+# M5-P2: only the console provider exists until the WhatsApp adapter (P3).
+MessagingProvider = Literal["console"]
 
 
 def _app_env(info: ValidationInfo) -> AppEnv | None:
@@ -122,6 +131,41 @@ class AppSettings(BaseSettings):
     # The background worker (M5-P1): seconds to sleep when no job is due, and jobs claimed per poll.
     WORKER_POLL_SECONDS: int = Field(default=2, ge=1, le=60)
     WORKER_BATCH_SIZE: int = Field(default=10, ge=1, le=100)
+    # Messaging (M5-P2). `console` writes a log line instead of sending; the worker refuses it in
+    # production (bootstrap.build_worker), the API never sends.
+    MESSAGING_PROVIDER: MessagingProvider = "console"
+    # Fernet keys for the phone numbers stored on messages, comma-separated; the first encrypts,
+    # all decrypt. Empty in local and test means a fixed development key; required when deployed.
+    MESSAGING_PHONE_KEYS: SecretStr = SecretStr("")
+    # Prescriptions R15: a pending link is sent only within this many hours of issue (max 24).
+    RX_LINK_SEND_WINDOW_HOURS: int = Field(default=24, ge=1, le=24)
+
+    @field_validator("MESSAGING_PHONE_KEYS")
+    @classmethod
+    def _phone_keys(cls, value: SecretStr, info: ValidationInfo) -> SecretStr:
+        env = _app_env(info)
+        raw = value.get_secret_value().strip()
+        if not raw:
+            if env is not None and env.is_deployed:
+                raise ValueError(f"is required when APP_ENV={env.value}")
+            return SecretStr(_DEV_PHONE_KEY)
+        for key in raw.split(","):
+            try:
+                decoded = base64.urlsafe_b64decode(key.strip().encode("ascii"))
+            except (binascii.Error, ValueError, UnicodeError):
+                decoded = b""
+            if len(decoded) != _FERNET_KEY_BYTES:
+                raise ValueError("each key must be a Fernet key (url-safe base64 of 32 bytes)")
+        if env is not None and env.is_deployed and _DEV_PHONE_KEY in raw:
+            raise ValueError("must not contain the development key when deployed")
+        return SecretStr(raw)
+
+    def messaging_phone_keys(self) -> list[bytes]:
+        """The keys in order, the encrypting key first (``FernetPhoneCipher``)."""
+        return [
+            key.strip().encode("ascii")
+            for key in self.MESSAGING_PHONE_KEYS.get_secret_value().split(",")
+        ]
 
     @field_validator("PATIENT_LINK_SIGNING_KEYS")
     @classmethod
