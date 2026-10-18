@@ -271,10 +271,17 @@ from jobs where state in ('running','dead') order by updated_at desc limit 20;
 - Duplicates are normal; `webhook_events.event_id` makes processing idempotent.
 
 ### 5.9 Patient link problems (M4+)
-- Decode the token header/claims locally with `scripts/inspect_link_token.py` (no network) to see
-  `purpose`, `exp`, `jti`.
-- `LINK_EXPIRED` → issue a fresh link from the visit screen.
-- `LINK_LOCKED` → too many wrong last-4 attempts; staff can reset from the patient profile.
+- Decode the token header/claims locally with `scripts/inspect_link_token.py <token or URL>` (no
+  key, no network; it says "signature: not checked") to see `kind`, `key_id`, `purpose`, `exp`,
+  `jti` (the `patient_links` row's ID).
+- `LINK_EXPIRED` or `LINK_REVOKED` → staff use *Replace link* (`POST /prescriptions/{id}/link/replace`).
+- `LINK_LOCKED` → five wrong last-4 answers; staff reset it
+  (`POST /prescriptions/{id}/link/reset`). Check `patient_links.failed_challenges` and the
+  `patient_link.challenge_failed` audit rows (attempt numbers, never digits).
+- `LINK_CHALLENGE_REQUIRED` on the page → the 30-minute view ended; the page asks again.
+- `LINK_RATE_LIMITED` → more than 20 requests a minute for one link, or 300 from one caller
+  fingerprint (until M6 that is the web server, so it caps the whole patient page);
+  `public_rate_limits` shows the counts.
 - All links invalid at once → the signing key changed; see RUNBOOK "Key rotation".
 
 ## 6. Inspecting the database safely

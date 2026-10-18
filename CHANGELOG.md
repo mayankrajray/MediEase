@@ -14,6 +14,16 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M4-P5 (#38): patient prescription links and the patient page (FR-RX-07, 08; spec R9–R13, R19,
+  R20, AC2, AC3; decisions 1A–6A). Issuing version 1 creates the chain's link; revisions reuse it
+  and the page shows the latest version with "Updated by your doctor on …". `/p/{token}` asks for
+  the last 4 digits of the patient's phone (five wrong answers lock the link until the clinic
+  resets it), then shows one card per medicine in English or Hindi (a switch on the page), the
+  doctor's text as written, at 360 px and about 147 KB on a first visit. Tokens are HMAC-SHA256
+  with rotating keys (`PATIENT_LINK_SIGNING_KEYS`); staff with `RX_PRINT` get, reset and replace
+  links. `scripts/inspect_link_token.py` reads a token offline. Also: each prescription records
+  the printed layout it was issued with (`layout_version`), so a later layout change never
+  alters it. Migration `0013`, contract 0.17.0.
 - M4-P4 (#38): printable prescription PDFs, front desk printing included (FR-RX-04, 06; spec R8,
   R16, R18, R20, D6, AC8, AC10; decisions 1A-5A; ADR-0012). `GET /api/v1/prescriptions/{id}/pdf`
   renders a version on its first download, in-house with WeasyPrint and vendored Noto Sans and
@@ -286,6 +296,8 @@ first production release.
   that is still being set up. Web only; the API is unchanged.
 
 ### Fixed
+- Web tests (#38): the patient search's "/" shortcut test pressed once before its listener was
+  attached under a loaded run; it now presses until the search has the focus.
 - Web (#38): the booking drawer's patient search lost the focus after the jsdom 30.1.2 bump, failing
   CI's web job on `main` and the M4 PR. `Drawer` and `Dialog` now focus a field marked
   `data-autofocus` once the dialog is open (DEBUG_JOURNAL 2026-10-18).

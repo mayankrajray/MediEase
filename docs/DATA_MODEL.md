@@ -36,6 +36,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0010` | `prescriptions` and `prescription_items`, immutable once issued (triggers, `RX_NOT_DRAFT`) | M4-P2 |
 | `0011` | `rx_favourites`, `rx_templates`; `prescription_items.favourite_id`, `prescriptions.template_id`; the medicine-name prefix index | M4-P3 |
 | `0012` | `clinics.rx_paper_size` (`A5` for existing clinics; `A5` \| `A4`) | M4-P4 |
+| `0013` | `patient_links`, `public_rate_limits`; `prescriptions.layout_version` (1 for existing rows) | M4-P5 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -447,18 +448,35 @@ them), counted into `use_count` when the prescription is issued (3A), and
 `ix_prescription_items_clinic_id_medicine_name (clinic_id, lower(medicine_name)
 text_pattern_ops)` for start-of-name suggestions (5A).
 
-### `patient_links`
+### `patient_links` (migration `0013`, M4-P5)
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | Also the token's `jti` |
 | clinic_id, patient_id | uuid FK | |
+| prescription_id | uuid FK | Version 1 of the chain (decision 1A); the page resolves the latest issued version |
 | purpose | text | `RX_VIEW` (later: `QUEUE_STATUS`, `BOOKING_MANAGE`) |
-| resource_id | uuid | e.g. prescription id (resolves to latest version) |
-| expires_at | timestamptz | 90 days (FR-RX-08) |
-| revoked_at | timestamptz null | |
-| failed_challenges | smallint default 0 | Locks after 5 |
-| open_count | integer default 0 | |
+| key_id | text | The signing key the token uses (`PATIENT_LINK_SIGNING_KEYS`); the token is computed from the row and this key, so nothing secret is stored |
+| expires_at | timestamptz | Issue + `PATIENT_LINK_TTL_DAYS` (90), whole seconds (FR-RX-08) |
+| revoked_at | timestamptz null | Set by *Replace link* |
+| failed_challenges | smallint default 0 | 0–5; the fifth sets `locked_at` (CHECK keeps them in step) |
+| locked_at | timestamptz null | Until staff reset it (`LINK_LOCKED`) |
+| open_count | integer default 0 | Successful last-4 checks (R13) |
 | last_opened_at | timestamptz null | |
+| created_by | uuid FK users | The doctor who issued version 1, or the staff member who made or replaced it |
+
+One active link per chain: partial unique index `uq_patient_links_prescription_id_active`
+(`revoked_at IS NULL`). Index `(clinic_id, patient_id)`. Created in the issuing transaction of
+version 1, or by `GET /prescriptions/{id}/link` for chains issued before M4-P5.
+
+### `public_rate_limits` (migration `0013`, M4-P5) — not tenant data
+`bucket text, window_start timestamptz, hits integer ≥ 1`, primary key `(bucket, window_start)`.
+One row per bucket (`link:<jti>`, `caller:<ip fingerprint>`) and minute, upserted per public
+request; rows older than an hour are deleted on write. Holds no patient data.
+
+### `prescriptions.layout_version` (migration `0013`, M4-P5)
+`smallint not null default 1`: the printed layout fixed when the version is issued
+(`CURRENT_LAYOUT`). The PDF renderer picks that layout's template, so a later layout change never
+alters a prescription issued before it; existing rows are 1, the only layout so far.
 
 ---
 
