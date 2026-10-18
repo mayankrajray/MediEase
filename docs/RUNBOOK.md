@@ -147,10 +147,20 @@ store is write-once by design.
 **Confirm:** template status approved / quality rating recovered in Meta Business Manager.
 
 ### 9. Webhooks failing
-1. Look for `webhook.signature_invalid` or 5xx on `/webhooks/*`.
-2. Verify the app secret in the secret store matches Meta's app settings.
-3. Verify the reverse proxy passes the raw body unchanged.
-4. Missed events: statuses can be reconciled by the reconciliation job (M5-P3) for the last 24 h.
+1. Look for `webhook.signature_invalid`, `webhook.verify_failed` or 5xx on `/webhooks/*`.
+2. Verify the app secret in the secret store matches Meta's app settings (`WHATSAPP_APP_SECRET`),
+   and the verify token matches the one entered in Meta's webhook settings
+   (`WHATSAPP_VERIFY_TOKEN`). With either empty the webhook refuses everything.
+3. Verify the reverse proxy passes the raw body unchanged and routes `/webhooks/*` to the API.
+4. Missed events: Meta retries for a while; stored events that never processed are re-enqueued by
+   the hourly `reconcile_messages` job. `select count(*) from webhook_events where processed_at
+   is null;` should be near 0. There is no way to ask Meta for a past status (spec R15).
+5. Local testing with Meta (M5-P3): run a tunnel to the API, e.g.
+   `cloudflared tunnel --url http://localhost:8000` (or ngrok), enter
+   `<tunnel>/webhooks/whatsapp` and the verify token in the App Dashboard (WhatsApp >
+   Configuration), subscribe to the `messages` field, and set `MESSAGING_PROVIDER=whatsapp_cloud`
+   with the five `WHATSAPP_*` values in `.env`. Without Meta, `WHATSAPP_GRAPH_URL` can point the
+   adapter at a local fake.
 
 ### 10. Onboard a clinic (pilot) — target < 60 minutes
 1. Before the visit: collect clinic details, doctor registration numbers, schedules, patient list

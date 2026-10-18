@@ -29,6 +29,26 @@ Rules:
 
 ---
 
+### 2026-10-18 — a message Meta accepted and then reported failed could not be saved (M5-P3, no error code)
+
+- **Milestone / area:** M5-P3 / messaging
+- **Symptom:** `test_a_failed_status_records_the_mapped_code` failed with an `IntegrityError` on
+  `ck_messages_sent_has_provider_id` when a `failed` status arrived for a `SENT` message.
+- **Impact:** Local only, before commit. With Meta, every delivery failure reported later
+  (`131026` usually arrives this way) would have made the processing job fail until it went
+  `dead`, leaving the message shown as `SENT`.
+- **Reproduction:** send a message, then process a webhook with `"status": "failed"` for it.
+- **Investigation:** the update set `FAILED` and kept `sent_at` and `provider_message_id`; the CHECK
+  from `0015` said "accepted **if and only if** those are set".
+- **Root cause:** the P2 CHECK assumed a failed message was never accepted, which is true for a
+  synchronous refusal but not for a delivery failure reported later.
+- **Fix:** migration `0016` makes the CHECK one-way (accepted ⇒ provider ID and send time).
+- **Guard:** `tests/integration/test_webhooks_http.py::test_a_failed_status_records_the_mapped_code`.
+- **Prevention / follow-up:** state CHECKs as implications unless the converse is a real rule.
+- **Search keywords:** ck_messages_sent_has_provider_id, failed status, webhook, IntegrityError
+
+---
+
 ### 2026-10-18 — a restarted worker reused console message IDs, so a "sent" message ended `MSG_OUTCOME_UNKNOWN` (M5-P2)
 
 - **Milestone / area:** M5-P2 / messaging

@@ -511,7 +511,7 @@ One row per message, written before the provider is called (spec R6). Tenant-sco
 | sending_started_at | timestamptz null | Set while a provider call may be under way; a retry that finds it set fails the row as `MSG_OUTCOME_UNKNOWN` (decision 4A) |
 | sent_at, delivered_at, read_at, failed_at | timestamptz null | |
 
-CHECKs: accepted ⇔ `sent_at` and `provider_message_id`; `FAILED` ⇔ `failed_at` and `error_code`;
+CHECKs: accepted ⇒ `sent_at` and `provider_message_id` (one-way from `0016`); `FAILED` ⇔ `failed_at` and `error_code`;
 `sending_started_at` only while `QUEUED`. `v_message_health`: counts by channel, template and
 status, the last 24 hours, `outcome_unknown` and the oldest queued age; no clinic or patient data.
 
@@ -519,8 +519,23 @@ status, the last 24 hours, `outcome_unknown` and the oldest queued age; no clini
 `id, clinic_id null, from_phone_hash, provider_message_id unique, kind (OPT_OUT | OTHER),
 received_at` — body is not stored except for the matched keyword.
 
-### `webhook_events`
-`id, provider, event_id unique, received_at, processed_at, error_code` — dedupe and replay.
+### `webhook_events` (migration `0016`, M5-P3)
+Platform data, no `clinic_id`. One row per webhook body; processed by a `process_webhook_event`
+job; purged 7 days after `received_at` by the retention purge.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| provider | text | `whatsapp_cloud` |
+| event_key | text unique | SHA-256 of the raw body, so a redelivery is stored once |
+| payload | jsonb | Redacted (decision 3A): statuses (ID, status, time, our echoed message ID, error codes, pricing category) and inbound message IDs and types; no text, profile names or phone numbers |
+| received_at | timestamptz | Partial index on unprocessed rows for the hourly reconciliation |
+| processed_at | timestamptz null | |
+| error_code | text null | `WH_UNMATCHED` when a status never found its message |
+
+`messages` gains `pricing_category` (from the status webhook, for P5's ledger), and
+`ck_messages_sent_has_provider_id` became one-way in `0016`: an accepted message keeps its
+provider ID and `sent_at` when Meta later reports it `failed`.
 
 ### `jobs` (migration `0014`, M5-P1)
 See ARCHITECTURE.md §7. Deliberately not a tenant table: `clinic_id` is null for the system kinds a
