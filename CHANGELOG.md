@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes are recorded here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow milestones until the
@@ -14,6 +14,7 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M5 (#40) opened: the messaging and reminders spec is Approved; M5-P1 (the job queue and worker) is designed. See docs/milestones/M5-messaging-and-reminders.md.
 - M4 (#38) complete: visits and digital prescriptions, P1–P6 below, in PR #39.
 - M4-P6 (#38): the consultation screen and the keyboard-first prescription builder (FR-VIS-02,
   03, 05; FR-RX-01..06, 09; spec §6, D2, D6; NFR-09; decisions 1A–6A). On the doctor's own queue

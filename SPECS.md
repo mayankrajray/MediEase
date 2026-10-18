@@ -17,7 +17,7 @@ wrong, update the spec first, then the code.
 | [patients.md](docs/specs/patients.md) | FR-PAT | M2 | Implemented |
 | [appointments-and-queue.md](docs/specs/appointments-and-queue.md) | FR-APT, FR-QUE | M3 | Approved |
 | [prescriptions.md](docs/specs/prescriptions.md) | FR-VIS, FR-RX | M4 | Approved |
-| [reminders-and-messaging.md](docs/specs/reminders-and-messaging.md) | FR-REM, FR-MSG | M5 | Draft |
+| [reminders-and-messaging.md](docs/specs/reminders-and-messaging.md) | FR-REM, FR-MSG | M5 | Approved |
 | Public booking page | FR-PUB | M7 | Not started |
 
 Status values: `Not started` → `Draft` → `Approved` (developer sign-off; implementation may begin)
