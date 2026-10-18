@@ -3,8 +3,8 @@
 Under the lock order of ``common.lock_sessions`` the session row is held ``FOR UPDATE``, so two
 bookings in one session run one after the other and the second sees the first: capacity 1 and
 two parallel requests give one 201 and one 409 (AC1). The appointment, the session's new
-``booked_count`` and ``next_token``, the history row and the audit row commit together (R5). The
-booking confirmation job arrives with M5 (D16).
+``booked_count`` and ``next_token``, the history row, the audit row and, when the patient allows
+WhatsApp, the booking confirmation job commit together (R5; FR-APT-06 from M5-P2).
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from mediease_api.application.appointments.common import (
 from mediease_api.application.appointments.views import AppointmentView
 from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor
+from mediease_api.application.messaging.booking import enqueue_booking_confirmation
 from mediease_api.domain.appointments.appointment import Appointment
 from mediease_api.domain.appointments.errors import SessionClosed
 from mediease_api.domain.appointments.status import AppointmentSource
@@ -54,7 +55,8 @@ class BookAppointment:
     def execute(self, *, clinic_id: UUID, actor: Actor, cmd: BookCommand) -> AppointmentView:
         with self._uow as uow:
             tenant = uow.tenant(clinic_id)
-            if tenant.patients.get(cmd.patient_id) is None:
+            patient = tenant.patients.get(cmd.patient_id)
+            if patient is None:
                 logger.info(
                     "tenancy.not_found",
                     entity="patient",
@@ -92,6 +94,15 @@ class BookAppointment:
                 entity_type=ENTITY_TYPE,
                 entity_id=appointment.id,
                 metadata=place_metadata(appointment, session),
+            )
+            # FR-APT-06 (M5-P2): the confirmation commits with the booking (the outbox).
+            enqueue_booking_confirmation(
+                uow,
+                ids=self._ids,
+                appointment=appointment,
+                patient=patient,
+                request_id=actor.info.request_id,
+                now=now,
             )
             uow.commit()
 

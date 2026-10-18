@@ -25,7 +25,7 @@ from mediease_api.domain.prescriptions.vocabulary import (
     StorageCode,
     Timing,
 )
-from mediease_api.domain.shared.errors import InvalidValue
+from mediease_api.domain.shared.errors import InvalidTransition, InvalidValue
 from mediease_api.domain.visits.visit import Visit, VisitStatus
 from mediease_api.domain.visits.vitals import Vitals
 from tests.builders import a_clinic, a_doctor, new_id
@@ -310,3 +310,18 @@ def test_supersede_keeps_a_not_consented_state() -> None:
     issue(rx, may_message=False)
     rx.supersede(NOW)
     assert rx.link_delivery is LinkDelivery.NOT_CONSENTED
+
+
+def test_m5_p2_r15_a_pending_link_settles_once_as_sent_or_expired() -> None:
+    sent, expired, refused = filled(), filled(), filled()
+    issue(sent)
+    issue(expired)
+    issue(refused, may_message=False)
+    later = NOW + timedelta(hours=1)
+    sent.link_sent(later)
+    expired.link_expired(later)
+    assert (sent.link_delivery, sent.updated_at) == (LinkDelivery.SENT, later)
+    assert expired.link_delivery is LinkDelivery.EXPIRED
+    for settle in (sent.link_expired, expired.link_sent, refused.link_sent):
+        with pytest.raises(InvalidTransition):  # the database trigger agrees (0010)
+            settle(later)

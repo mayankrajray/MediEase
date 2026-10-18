@@ -26,6 +26,7 @@ import structlog
 from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor, RequestContext
 from mediease_api.application.links.use_cases import new_link
+from mediease_api.application.messaging.rx_link import enqueue_rx_link
 from mediease_api.application.scheduling.schedules import load_clinic
 from mediease_api.application.visits.use_cases import callers_doctor_id, load_visit
 from mediease_api.domain.audit.actions import AuditAction
@@ -334,6 +335,8 @@ class IssuePrescription(_UseCase):
             if older is not None:
                 metadata["supersedes_id"] = str(older.id)
             self._audit(uow, ctx, AuditAction.PRESCRIPTION_ISSUED, rx, **metadata)
+            # M5-P2 (R14, R15): the worker sends a pending link; the job commits with the issue.
+            enqueue_rx_link(uow, ids=self._ids, rx=rx, request_id=ctx.request_id, now=now)
             chain = tuple(tenant.prescriptions.list_for_visit(rx.visit_id))
             uow.commit()
         logger.info(
