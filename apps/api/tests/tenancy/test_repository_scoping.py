@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from mediease_api.adapters.db.messages import SqlAlchemyMessageRepository
 from mediease_api.adapters.db.models import Base
 from mediease_api.adapters.db.repositories import (
     SqlAlchemyAppointmentHistoryRepository,
@@ -38,6 +39,7 @@ from mediease_api.domain.appointments.appointment import Appointment, history_en
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
 from mediease_api.domain.links.link import PatientLink
+from mediease_api.domain.messaging.message import Channel, Message, SourceType
 from mediease_api.domain.patients.patient import Patient
 from mediease_api.domain.prescriptions.library import Favourite, Template
 from mediease_api.domain.prescriptions.prescription import Advice, Prescription, PrescriptionItem
@@ -470,6 +472,8 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
             now=NOW,
         )
         staff_b.patient_links.add(link)
+        message = _a_message(b, appointment.id)
+        staff_b.messages.add(message)
         uow.commit()
 
     with uow_factory() as uow:
@@ -508,6 +512,12 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
             staff_a.patient_links.add(link)
         with pytest.raises(TenancyViolation):
             staff_a.patient_links.update(link)
+        assert staff_a.messages.get_by_key(message.idempotency_key) is None
+        assert staff_a.messages.get_by_key(message.idempotency_key, for_update=True) is None
+        with pytest.raises(TenancyViolation):
+            staff_a.messages.add(message)
+        with pytest.raises(TenancyViolation):
+            staff_a.messages.update(message)
         assert staff_a.prescriptions.medicine_history("tab", limit=10) == []
         with pytest.raises(TenancyViolation):
             staff_a.rx_favourites.add(fav)
@@ -523,6 +533,7 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
         assert staff_b.visits.list_for_patient(b.patient.id, limit=10) == [visit]
         assert staff_b.visit_addenda.list_for_visit(visit.id) == [addendum]
         assert staff_b.prescriptions.get(rx.id) == rx
+        assert staff_b.messages.get_by_key(message.idempotency_key) is not None
         assert staff_b.prescriptions.list_for_visit(visit.id) == [rx]
         assert [f.id for f in staff_b.rx_favourites.list_for_doctor(b.doctor.id)] == [fav.id]
         assert staff_b.rx_templates.get(template.id) is not None
@@ -557,6 +568,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "rx_favourites",
             "rx_templates",
             "patient_links",
+            "messages",
             "audit_events",
             "jobs",
         }
@@ -578,7 +590,29 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyRxFavouriteRepository,
         SqlAlchemyRxTemplateRepository,
         SqlAlchemyPatientLinkRepository,
+        SqlAlchemyMessageRepository,
     } == set(TenantScopedRepository.__subclasses__())
+
+
+def _a_message(tenant: Tenant, appointment_id: UUID) -> Message:
+    return Message.prepare(
+        id=new_id(),
+        clinic_id=tenant.clinic_id,
+        patient_id=tenant.patient.id,
+        source_type=SourceType.APPOINTMENT,
+        source_id=appointment_id,
+        channel=Channel.CONSOLE,
+        provider="console",
+        template_key="booking_confirmed",
+        template_version=1,
+        language=tenant.patient.language,
+        variables={"clinic_name": "Sample Clinic"},
+        to_phone_encrypted="ciphertext",
+        idempotency_key=f"booking_confirmed:{appointment_id}",
+        request_id=None,
+        job_id=None,
+        now=NOW,
+    )
 
 
 def _fields(entity: object) -> dict[str, object]:

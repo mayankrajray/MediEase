@@ -7,6 +7,7 @@ outside production).
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import tempfile
@@ -65,6 +66,9 @@ _MANAGED_VARS = (
     "PATIENT_LINK_TTL_DAYS",
     "WORKER_POLL_SECONDS",
     "WORKER_BATCH_SIZE",
+    "MESSAGING_PROVIDER",
+    "MESSAGING_PHONE_KEYS",
+    "RX_LINK_SEND_WINDOW_HOURS",
 )
 
 # Synthetic, test-only secrets (>= 32 characters each).
@@ -83,6 +87,8 @@ _VALID_TEST_ENV = {
     "AUDIT_IP_SALT": TEST_IP_SALT,
     # A real-looking key, so deployed-environment rules can be tested by changing APP_ENV alone.
     "PATIENT_LINK_SIGNING_KEYS": "t1:synthetic-link-key-for-tests-0123456789",  # gitleaks:allow
+    # M5-P2: a synthetic Fernet key (url-safe base64 of 32 bytes), for the same reason.
+    "MESSAGING_PHONE_KEYS": base64.urlsafe_b64encode(b"synthetic-phone-key-for-tests-01").decode(),
 }
 
 
