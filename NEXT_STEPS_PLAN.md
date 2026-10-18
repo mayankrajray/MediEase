@@ -1,80 +1,83 @@
-# NEXT_STEPS_PLAN.md — Approved plan for M4 (Visits and digital prescriptions)
+﻿# NEXT_STEPS_PLAN.md — Approved plan for M5 (Messaging and reminders)
 
 | Field | Value |
 |---|---|
-| Status | M4 opened 17 Oct 2026 after M3 merged (PR #37). `docs/specs/prescriptions.md` Approved with D1–D5 and the developer's refinements; ADR-0012 accepted; M4-P1 done and confirmed (draft PR #39); M4-P1 and M4-P2 done and confirmed; M4-P1 to P3 done and confirmed; M4-P1 to P4 done and confirmed; M4-P1 to P5 done and confirmed; M4-P6 approved (1A-6A), implemented and confirmed 18 Oct 2026: M4 complete, PR #39 ready for review |
-| Scope | Milestone 4 in phase detail; M5–M6 as a roadmap only. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37, merged 17 Oct 2026) |
+| Status | M5 opened 18 Oct 2026 after M4 merged (PR #39). Plan and `docs/specs/reminders-and-messaging.md` approved by the developer, with decisions 1A–5A and four refinements to the job queue; M5-P1 approved, in implementation |
+| Scope | Milestone 5 in phase detail; M6 as a roadmap only. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39, merged 18 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
-| Design notes | `docs/milestones/M4-visits-and-prescriptions.md` |
+| Design notes | `docs/milestones/M5-messaging-and-reminders.md` |
 | Workflow rules | `CLAUDE.md` → "Git Workflow"; `CONTRIBUTING.md`; ADR-0010, ADR-0011 |
 
 ---
 
 ## 1. Problem statement
 
-M3 runs the clinic's day up to *Start*. M4 is what happens in the room and after it: the doctor
-records the visit with the patient's history beside it, and issues a prescription the patient can
-read again at home, in their language, on a cheap phone. Medicine instructions explained once and
-forgotten (A14), dosage and dilution confusion for parents (A3) and prescription clarity (A6) are
-the product's wedge (PRD §8.6).
+M4 gives the patient a prescription they can read again, but only if the clinic shows them the
+QR code. Follow-ups still depend on memory (A14), and patients forget them (A3). M5 makes the
+reminders and the prescription link arrive on the patient's phone, exactly once, only with
+consent, never at night, and stops the moment they reply STOP.
 
 ## 2. Requirements
 
-- Spec: `docs/specs/prescriptions.md` (Approved 17 Oct 2026, D1–D5). AC1–AC7 become tests in the
-  phase that implements them.
-- ADR-0012: PDF rendering (WeasyPrint, vendored Noto fonts) and blob storage (local volume, S3-
-  compatible) in-house behind ports; no third-party document or media service.
-- **M4 exit:** a doctor issues a prescription from the queue; the PDF prints correctly; the
-  patient link passes the 360-px acceptance test (AC2).
-- Clinical content (C3) never reaches logs, audit metadata, analytics, error messages or job
-  payloads (NFR-07, AC7). Reads of clinical records are audited once per logical view (D4).
+- Spec: `docs/specs/reminders-and-messaging.md` (Approved 18 Oct 2026). AC1–AC11 become tests in
+  the phase that implements them.
+- ADR-0005 (the job queue in PostgreSQL, a separate worker) and ADR-0007 (`MessagingPort`,
+  WhatsApp first, SMS and console adapters).
+- **M5 exit:** a reminder scheduled in the app is delivered through the WhatsApp test number,
+  status flows back through the webhook, and opt-out stops further sends.
+- Message bodies never carry clinical content, only the clinic, the doctor, dates and signed links
+  (FR-MSG-04, AC7). Job payloads hold IDs only.
+- The M4 prescription links still `PENDING` are sent only if issued within the last 24 hours and
+  consent still holds (M4 spec R15), so turning M5 on never messages patients about old visits.
 - Coverage gates stay: ≥ 90% API package, ≥ 80% `domain/` + `application/` (NFR-14).
 - Local resources: the WSL VM runs at its 8 GB limit; run `make down` whenever the stack is idle.
 
 ## 3. Delivery workflow (ADR-0011)
 
 ```
-Milestone issue #38 → branch m4/38-visits-and-prescriptions (from origin/main at c44ad49)
+Milestone issue #40 → branch m5/40-messaging-and-reminders (from origin/main at c30a7a9)
   → per phase: design → approval → logical commits → make lint typecheck test
     → developer confirms → push (with permission) to the same branch
   → one PR for the milestone: draft after P1, ready when P6 is done and the exit criteria hold
   → CI green → review + CODEOWNERS approval → maintainer rebase-merges
 ```
 
-- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #38`; the last
-  commit of M4 carries `Closes #38`.
+- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #40`; the last
+  commit of M5 carries `Closes #40`.
 - Agents never push to `main`, push to the milestone branch only with permission, and never merge.
 
 ### 3.1 Open prerequisites
 
 | # | Needed | State |
 |---|---|---|
-| W-5 | Branch protection / CODEOWNERS enforcement on `main` | **Open:** not available for a private repo on GitHub Free (HTTP 403). Needs GitHub Pro/Team or a public repo |
+| L-01 | Meta Business account, business verification, WhatsApp number | Open; needed by P3 |
+| L-02 | Utility templates (booking confirmation, prescription ready, prescription updated, follow-up due) approved in English and Hindi | Open; needed by P3 |
+| L-03 | SMS provider and DLT registration | Open; needed only for P5's SMS fallback (behind a flag) |
+| W-5 | Branch protection / CODEOWNERS enforcement on `main` | **Open:** not available for a private repo on GitHub Free (HTTP 403) |
 | — | `@akhtarjamal10` write access, so their CODEOWNERS entry takes effect | Open |
-| L-07 | Pilot clinics' current Rx formats | Open; M4 builds to the spec and PRD §8.6 sample and adjusts later (D3) |
-| L-04 | Counsel review of the prescription format | Open; a gate for M6, not M4 (D3) |
-| — | #30: an import over 2 MB through the web origin can answer 500 instead of 413 | Open; outside M4 |
+| L-04, L-07 | Counsel's review of the prescription format; pilot clinics' formats | Open; gates for M6 |
+| — | #30: an import over 2 MB through the web origin can answer 500 instead of 413 | Open; outside M5 |
 
 ## 4. Phase breakdown
 
 Details, file lists and test plans per phase are in the design notes; each phase is designed at its
-start. P1 is proposed in full now.
+start. P1 is designed and approved in full.
 
 | Phase | Objective | Requirements | Verify |
 |---|---|---|---|
-| P1 | Visits from an in-consultation appointment, clinical notes and vitals, history newest first, 24-hour lock with addenda, read audit at the view boundary, migration `0009` | FR-VIS-01..03, 05; spec R1–R3, R15–R16; AC6 | `make lint typecheck test`; edit after lock 409 `VIS_LOCKED` and an addendum 201; one audit row per screen load; sentinel clinical text absent from logs and audit |
-| P2 | Prescriptions: one chain per visit, draft, items with structured instructions, advice, issue (atomic, with doctor and clinic snapshots), versions and supersede, immutability triggers, pending-delivery marker, migration `0010` | FR-RX-01..03, 06, 09; R4–R6, R14, R17, R20; AC1, AC4 | Issued Rx `PUT` 409 `RX_NOT_DRAFT`; direct SQL `UPDATE` refused by the trigger |
-| P3 | Favourites and templates; autocomplete from the clinic's own history only | FR-RX-05, 10; R7; AC5 | "Dru" never suggests a medicine the clinic has not used |
-| P4 | `PdfRendererPort` + WeasyPrint adapter, `BlobStoragePort` + local and S3-compatible adapters, render-once under a row lock, A5/A4, bilingual phrasebook, front desk printing (`RX_PRINT`, D6), migration `0012` | FR-RX-04, 06; R8, R16, R18, R20; ADR-0012; AC8, AC10 | Two concurrent first downloads: one render; Devanagari renders; PDF text checked |
-| P5 | Signed patient links, last-4 challenge and lock, view cookie, open audit, bilingual 360-px page, `scripts/inspect_link_token.py` | FR-RX-04, 07, 08; R9–R13, R19; AC2, AC3 | Sixth attempt 423 `LINK_LOCKED`; Playwright at 360 px; page < 200 KB |
-| P6 | Web: consultation screen from the queue (history + notes + keyboard-first Rx builder, issue preview, QR/copy link) | FR-VIS-02, 03, FR-RX-01..05; §6 | `make e2e`: Start → consult → issue → PDF → patient link |
+| P1 | `jobs` (migration `0014`), the outbox enqueue, short committed claims with `SKIP LOCKED` and crash-safe attempts, retries and `dead`, `cancelled`, the reaper, recurring jobs, the retention purge, `v_job_health`, the `worker` container with a tmpfs heartbeat | NFR-13; R9–R11, R9a–R9e, R11a; AC3, AC8–AC11 | Two workers, 100 jobs, each once; a crashed claim reaped and counted; dead after five attempts; worker unhealthy without the database |
+| P2 | `MessagingPort`, console adapter, `templates.yaml`, `messages`, the send job, booking confirmations and pending prescription links, `v_message_health` | FR-MSG-01, 02, 04; FR-APT-06; R6, R8; AC4, AC7 | A booking produces one console message; a crash after the provider accepted sends nothing twice; no clinical text in variables |
+| P3 | WhatsApp Cloud adapter, webhooks with raw-body signatures, forward-only statuses, reconciliation | FR-MSG-03; R7, R12, R13, R15; AC6 | A message to the WhatsApp test number shows `DELIVERED` from the webhook; a bad signature 401 |
+| P4 | Follow-up reminders from prescriptions, revisions, manual reminders, quiet hours, consent at send time, pending follow-ups, the automatic no-show job | FR-REM-01, 02, 04, 05, 07; R1–R5, R17; AC1, AC2 | Follow-up 20 Sep → due 19 Sep 09:00 IST; a job due 22:15 runs at 08:00 |
+| P5 | STOP handling, SMS adapter behind a flag, the cost ledger | FR-MSG-05, 07; R14, R18; AC5 | "stop" opts out and the next reminder is `SKIPPED_NO_CONSENT` |
+| P6 | Web: reminder and message status on the profile and the consultation, the pending follow-ups page | R16, R17; spec §6 | `make e2e` for the new screens |
 
-## 5. Roadmap after M4 (one line each)
+## 5. Roadmap after M5 (one line)
 
-- **M5 Messaging and reminders** — job table + worker, WhatsApp adapter + webhooks, reminder rules,
-  STOP opt-out; sends pending Rx links issued within the last 24 hours only (D2).
-- **M6 Pilot hardening** — India-region deployment (S3-compatible storage wired), backups + restore
-  drill, security review, counsel's format review (L-04), two pilot clinics.
+- **M6 Pilot hardening** — India-region deployment (S3-compatible storage wired), backups and a
+  restore drill, alerts (dead jobs, webhook signature failures), security review, counsel's format
+  review (L-04), two pilot clinics.
+
 ## 6. Progress log
 
 | Date | Task | Issue / PR | State |
@@ -138,3 +141,4 @@ start. P1 is proposed in full now.
 | 18 Oct 2026 | M4-P6 design approved by the developer, every recommendation (1A-6A): the consultation on its own page; autosave with the revision guard; an API preview of the draft in the patient's words; content-free prescription fields on the queue; the `qrcode` package for the QR code; favourites and templates managed from the builder | #38 | P6 approved |
 | 18 Oct 2026 | M4-P6 — the consultation screen `/visits/{id}` and the keyboard-first builder (autosave with the revision guard, favourites, templates, Repeat, preview in English and Hindi, issue, Print, QR link, Revise, Complete), the queue's "Prescription issued" and printing for front desk, the profile's visits and printable prescriptions; `GET /prescriptions/{id}/preview` and two queue fields, contract 0.18.0; `qrcode` 1.5.4. Gates green (API 1308, web 426), `make e2e` 8 passed, `make smoke` passed. The M4 exit criteria hold: issued from the queue, the PDF prints, the 360-px link test passes | #38 | P6 done, M4 complete |
 | 18 Oct 2026 | M4-P6 confirmed by the developer; M4 pushed to PR #39 and marked ready for review | #38 | M4 done |
+| 18 Oct 2026 | M4 merged (PR #39, issue #38 closed). M5 plan and spec approved by the developer (decisions 1A-5A; four refinements: short committed claims with crash-safe attempts, a partial unique index on the dedupe key, a tmpfs heartbeat written after a good poll, the tenancy guard for system jobs). Issue #40 opened, branch m5/40-messaging-and-reminders cut from main at c30a7a9; the spec is Approved and M5-P1 (job queue and worker) is designed and approved | #40 | M5 opened, P1 approved |

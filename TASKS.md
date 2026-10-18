@@ -1,4 +1,4 @@
-# TASKS.md — Delivery Plan and Live Status
+﻿# TASKS.md — Delivery Plan and Live Status
 
 The single place that says **what is being worked on now**. Agents work only on the phase marked
 `▶ ACTIVE`. Update this file at the end of every phase.
@@ -11,13 +11,13 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M4 — Visits and digital prescriptions** (issue #38, branch `m4/38-visits-and-prescriptions`, one PR for the milestone). M3 merged in PR #37 on 17 Oct 2026 |
-| Active phase | **M4 complete (P1–P6) and confirmed by the developer 18 Oct 2026; PR #39 ready for review.** M4-P6 (web consultation screen and keyboard-first Rx builder) approved 18 Oct 2026 (1A-6A) and implemented the same day. Next: M5 once M4 is merged |
-| Design notes | `docs/milestones/M4-visits-and-prescriptions.md` |
-| Approved plan | `NEXT_STEPS_PLAN.md` (M4 phases, workflow, progress log) |
+| Active milestone | **M5 — Messaging and reminders** (issue #40, branch `m5/40-messaging-and-reminders`, one PR for the milestone). M4 merged in PR #39 on 18 Oct 2026 |
+| Active phase | **M5-P1 — The job queue and the worker:** plan, spec and P1 design approved by the developer 18 Oct 2026 (1A-5A and four refinements), in implementation |
+| Design notes | `docs/milestones/M5-messaging-and-reminders.md` |
+| Approved plan | `NEXT_STEPS_PLAN.md` (M5 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | None open; front desk printing answered by the developer 18 Oct 2026 (M4-P4 design). Follow-up outside M4: #30 (an import over 2 MB through the web origin can answer 500 instead of 413) |
+| Open decisions | None open for P1. L-01/L-02 (Meta account, approved templates) are needed before P3; L-03 (SMS/DLT) only for P5's fallback. Follow-up outside M5: #30 (an import over 2 MB through the web origin can answer 500 instead of 413) |
 | Last updated | 18 Oct 2026 |
 
 
@@ -115,7 +115,7 @@ PDF prints correctly; patient link passes the 360-px acceptance test.
 | M4-P5 | Signed patient links, last-4-digit check, open audit; bilingual patient page; `scripts/inspect_link_token.py` | ✅ |
 | M4-P6 | Web: consultation screen (history + notes + Rx builder), keyboard-first | ✅ |
 
-## M5 — Messaging and reminders  `☐`
+## M5 — Messaging and reminders  `▶ ACTIVE`
 
 **Covers:** FR-MSG-01..05, FR-MSG-07, FR-REM-01, 02, 04, 05, 07, FR-APT-06.
 **Exit:** a reminder scheduled in the app is delivered through the WhatsApp test number, status
@@ -123,7 +123,7 @@ flows back through the webhook, and opt-out stops further sends. Depends on L-01
 
 | Phase | Scope | Status |
 |---|---|---|
-| M5-P1 | Job table, worker process, `SKIP LOCKED` claiming, retries with backoff, dead-letter state, stale-lock reaper; `v_job_health`, `v_message_health` views | ☐ |
+| M5-P1 | Job table, worker process, `SKIP LOCKED` claiming, retries with backoff, dead-letter state, stale-lock reaper; `v_job_health`, `v_message_health` views | ▶ |
 | M5-P2 | `MessagingPort`; console adapter; template registry versioned in repo | ☐ |
 | M5-P3 | WhatsApp Cloud API adapter; webhook signature verification; idempotent status updates; status reconciliation job | ☐ |
 | M5-P4 | Reminder scheduling rules (quiet hours, consent, follow-up defaults); pending follow-ups list; automatic no-show job | ☐ |

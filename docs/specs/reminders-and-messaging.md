@@ -4,8 +4,8 @@
 |---|---|
 | Requirements | FR-REM-01, 02, 04, 05, 07; FR-MSG-01..05, 07; FR-APT-06; NFR-13 |
 | Milestone / phases | M5 / P1–P6 |
-| Status | Draft |
-| Last updated | 2026-09-15 |
+| Status | Approved (developer sign-off 2026-10-18: the M5 plan with decisions 1A–5A and four refinements to the job queue, R9–R11 and R9a–R9e) |
+| Last updated | 2026-10-18 (approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
 
 ## 1. Context
 Post-visit follow-up depends on memory (A14); patients forget follow-ups and vaccination dates
@@ -19,7 +19,10 @@ Patients opt out by replying STOP.
 ## 3. Domain model
 - `Reminder` (`SCHEDULED → SENT → DELIVERED → READ`; `FAILED`, `CANCELLED`, `SKIPPED_NO_CONSENT`)
 - `Message` (`QUEUED → SENT → DELIVERED → READ`; `FAILED`)
-- `Job` (`queued → running → succeeded | failed → queued (retry) | dead`)
+- `Job` (`queued → running → succeeded`; `running → queued` to retry; `dead` when attempts are
+  used up or the failure is permanent; `cancelled` when the work no longer applies, e.g. a
+  suspended clinic or a reminder that was revised). There is no separate `failed` state: a failed
+  attempt either goes back to `queued` with a later `run_at` or becomes `dead`.
 - `MessageTemplate` (data from `templates.yaml`)
 
 Initial message definitions in `templates.yaml` (`en` and `hi`). All are Meta-approved utility
@@ -60,8 +63,37 @@ window the patient's own STOP message opens:
 ### Jobs
 - **R9** Workers claim up to 10 due jobs per poll using `FOR UPDATE SKIP LOCKED`, poll every 2
   seconds when idle, and heartbeat `locked_at` every 60 seconds for long jobs.
-- **R10** Jobs locked for more than 5 minutes without heartbeat are requeued by the reaper.
-- **R11** Every job carries the `request_id` of the change that created it; worker logs use it.
+- **R9a** *Short claim, crash-safe attempts.* The claim is its own transaction: it moves the jobs
+  `queued → running`, **increments `attempts`**, sets `locked_by` and `locked_at`, and commits
+  **before** any handler runs. No row lock is held across a handler or network I/O. The handler
+  runs in its own unit of work; the outcome (succeeded, retry, dead) is a third short
+  transaction that only applies while the job is still `running` under this worker's lock. A job
+  that hard-crashes the worker has therefore already counted the attempt.
+- **R9b** *Retries.* A retryable failure goes back to `queued` with `run_at` = now + 1, 5, 15 or
+  60 minutes after attempts 1–4 (plus up to 10% jitter), keeping `last_error_code`. When
+  `attempts >= max_attempts` (default 5), or the failure is permanent, the job becomes `dead`
+  (`job.dead` with the error code). An unknown kind is retryable (`JOB_HANDLER_MISSING`: an api
+  newer than the worker during a deploy).
+- **R9c** *Idempotent enqueueing.* `dedupe_key` is unique only among jobs that are `queued`,
+  `running` or `succeeded` (a partial unique index). A `cancelled` or `dead` job never blocks
+  enqueueing the same logical key again, e.g. a follow-up reminder revised in P4 or a clinic
+  that is unsuspended.
+- **R9d** *System jobs.* A job either belongs to a clinic (`clinic_id` set; the handler gets that
+  clinic's scope only) or is one of an explicit list of system kinds with `clinic_id` null
+  (P1: `purge_expired_auth_and_links`). A database CHECK enforces the pairing both ways; adding a
+  system kind is a migration. Jobs of a suspended clinic are `cancelled`
+  (`JOB_CLINIC_SUSPENDED`), not run.
+- **R9e** *Recurring jobs.* A scheduler step in the worker enqueues each recurring job once per
+  period, with `dedupe_key = <kind>:<period start>`, so several workers never double it.
+- **R10** Jobs still `running` with `locked_at` older than 5 minutes are recovered by the reaper:
+  back to `queued` (with the R9b delay and `JOB_LOCK_EXPIRED`) while attempts remain, otherwise
+  `dead`. A crash loop therefore ends in `dead` after `max_attempts`, never loops for ever.
+- **R11** Every job carries the `request_id` of the change that created it (the scheduler makes
+  one per tick); worker logs bind it with the job's ID and kind. Payloads hold IDs only.
+- **R11a** *Health.* After each poll iteration that reached the database successfully, the worker
+  rewrites a heartbeat file in a small tmpfs at `/tmp` (the root filesystem is read-only). The
+  container's health check fails when the file is older than 90 seconds, so a worker whose
+  database connection is dead turns unhealthy.
 
 ### Webhooks
 - **R12** `GET /webhooks/whatsapp` answers Meta's verification challenge using the configured verify token.
@@ -103,7 +135,8 @@ See API.md "Reminders and messaging".
 | Duplicate webhook | Ignored by `event_id` |
 | Status webhook arrives before our DB write commits | Stored event is retried by the processor after 30 s |
 | Patient number shared by two patients | One opt-out applies to both (same phone) |
-| Clinic suspended | Jobs for that clinic are skipped and marked `CANCELLED` |
+| Clinic suspended | Jobs for that clinic are skipped and marked `cancelled` (`JOB_CLINIC_SUSPENDED`) |
+| Worker killed mid-job | The attempt already counts (R9a); the reaper requeues it after 5 minutes, or marks it `dead` at `max_attempts` (R10) |
 
 ## 9. Acceptance criteria
 - **AC1 (FR-REM-01)** Given an Rx issued with follow-up 20 Sep, then a reminder exists due
@@ -117,11 +150,21 @@ See API.md "Reminders and messaging".
 - **AC6 (FR-MSG-03)** Given a webhook with an invalid signature, then 401 `WH_SIGNATURE_INVALID`
   and nothing is stored beyond a log event.
 - **AC7 (FR-MSG-04)** Given the leakage test, then no message variable contains item or diagnosis text.
+- **AC8 (R9a, R10)** Given a job whose worker dies after the claim, then the reaper requeues it
+  with the attempt counted, and after `max_attempts` such crashes it is `dead`.
+- **AC9 (R9c)** Given a cancelled job with key K, then a new job with key K can be enqueued; given
+  a queued or succeeded job with key K, then a second enqueue of K does nothing.
+- **AC10 (R9d)** Given a job with no clinic and a kind that is not a system kind, then the
+  database refuses it.
+- **AC11 (R11a)** Given a worker that cannot reach the database, then its heartbeat goes stale and
+  the container becomes unhealthy.
 
 ## 10. Observability
-Events: `job.claimed`, `job.succeeded`, `job.retry_scheduled`, `job.dead`, `message.sent`,
+Events: `job.claimed`, `job.succeeded`, `job.retry_scheduled`, `job.dead`, `job.cancelled`,
+`job.lock_expired`, `job.lost_lock`, `worker.started`, `worker.stopped`, `message.sent`,
 `message.failed`, `webhook.received`, `webhook.signature_invalid`, `reminder.skipped_no_consent`.
-Metrics: queue depth, oldest job age, messages by status, failure rate by error code.
+Metrics: queue depth, oldest job age, messages by status, failure rate by error code
+(`v_job_health` from P1, `v_message_health` from P2).
 
 ## 11. Out of scope
 Medicine-course reminders (FR-REM-03), SMS fallback on by default (FR-REM-06), broadcasts,
