@@ -487,23 +487,33 @@ alters a prescription issued before it; existing rows are 1, the only layout so 
 due_at, source_type, source_id, status (FR-REM-05 values), message_id null, job_id null,
 cancelled_by null, created_by`
 
-### `messages`
+### `messages` (migration `0015`, M5-P2)
+One row per message, written before the provider is called (spec R6). Tenant-scoped
+(`SqlAlchemyMessageRepository`).
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
 | clinic_id, patient_id | uuid FK | |
+| source_type, source_id | text, uuid | `APPOINTMENT` \| `PRESCRIPTION` and its ID, for the status shown in P6 |
 | channel | text | `WHATSAPP` \| `SMS` \| `CONSOLE` |
-| template_key, template_version | text | From `templates.yaml` |
-| variables | jsonb | Non-clinical only (clinic name, date, link) |
-| to_phone_e164 | text | Encrypted column (application-level) |
-| provider | text | |
-| provider_message_id | text unique null | Webhook idempotency |
-| idempotency_key | text unique not null | |
+| provider | text | `console` until P3 |
+| template_key, template_version | text, smallint | From `templates.yaml` |
+| language | text | `en` \| `hi` |
+| variables | jsonb | Non-clinical only (R8); the signed link stored as `[link]` (decision 5A) |
+| to_phone_encrypted | text | Fernet ciphertext (decision 1A); keys in `MESSAGING_PHONE_KEYS`, never in the database |
+| idempotency_key | text unique not null | `booking_confirmed:<appointment>`, `rx_link:<prescription version>`; the job's `dedupe_key` |
 | status | text | `QUEUED` \| `SENT` \| `DELIVERED` \| `READ` \| `FAILED` |
-| error_code | text null | Provider error mapped to `MSG_*` |
-| cost_paise | bigint null | FR-MSG-07 |
-| request_id | text | |
+| error_code | text null | `MSG_*`; set on `FAILED`, and on a refused `QUEUED` row awaiting its retry |
+| provider_message_id | text unique null | Webhook idempotency (P3); set exactly when accepted |
+| cost_paise | bigint null | FR-MSG-07 (P5) |
+| request_id, job_id | text, uuid null | Correlation; `job_id` has no FK (jobs are purged) |
+| sending_started_at | timestamptz null | Set while a provider call may be under way; a retry that finds it set fails the row as `MSG_OUTCOME_UNKNOWN` (decision 4A) |
 | sent_at, delivered_at, read_at, failed_at | timestamptz null | |
+
+CHECKs: accepted ⇔ `sent_at` and `provider_message_id`; `FAILED` ⇔ `failed_at` and `error_code`;
+`sending_started_at` only while `QUEUED`. `v_message_health`: counts by channel, template and
+status, the last 24 hours, `outcome_unknown` and the oldest queued age; no clinic or patient data.
 
 ### `inbound_messages`
 `id, clinic_id null, from_phone_hash, provider_message_id unique, kind (OPT_OUT | OTHER),

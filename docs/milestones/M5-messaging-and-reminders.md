@@ -1,4 +1,4 @@
-﻿# M5 — Messaging and reminders: design notes
+# M5 — Messaging and reminders: design notes
 
 | Field | Value |
 |---|---|
@@ -14,8 +14,8 @@
 
 | Phase | Builds | Design |
 |---|---|---|
-| P1 | The job queue and the worker: `jobs`, short committed claims with `SKIP LOCKED`, retries, `dead`, `cancelled`, the reaper, recurring jobs, the first real job (retention purge), `v_job_health`, the `worker` container | Below (done; awaiting confirmation) |
-| P2 | `MessagingPort`, the console adapter, `templates.yaml`; `messages` (encrypted phone, IDs only, unique idempotency key); a send job; booking confirmations and the M4 prescription links still `PENDING` (issued in the last 24 hours, R15 of the M4 spec) through it; `v_message_health` | At its start |
+| P1 | The job queue and the worker: `jobs`, short committed claims with `SKIP LOCKED`, retries, `dead`, `cancelled`, the reaper, recurring jobs, the first real job (retention purge), `v_job_health`, the `worker` container | Below (done; confirmed) |
+| P2 | `MessagingPort`, the console adapter, `templates.yaml`; `messages` (encrypted phone, IDs only, unique idempotency key); a send job; booking confirmations and the M4 prescription links still `PENDING` (issued in the last 24 hours, R15 of the M4 spec) through it; `v_message_health` | Below (done; awaiting confirmation) |
 | P3 | WhatsApp Cloud adapter (errors mapped to `MSG_*`, 10 s timeout); `GET`/`POST /webhooks/whatsapp` (raw-body signature, store once, answer within 1 s); statuses only move forward; reconciliation of messages stuck in `SENT` | At its start; needs L-01, L-02 |
 | P4 | Reminder rules: follow-up reminders from issued prescriptions (09:00 the day before), revisions move or cancel them, manual reminders, quiet hours 21:00–08:00, consent re-read at send time; pending follow-ups API; the automatic no-show job | At its start |
 | P5 | STOP, UNSUBSCRIBE, रोकें, बंद opt the patient out and confirm; SMS adapter behind a flag (off); cost per message and the ops console's monthly total per clinic | At its start |
@@ -216,3 +216,70 @@ the M4 PR; it is left unchanged.
 
 Not verified here: a worker on more than one host (the two-worker claim is tested with threads on
 one PostgreSQL), and behaviour with real provider calls (P2 and P3).
+
+---
+
+## M5-P2 — `MessagingPort`, the console adapter, templates and the send jobs
+
+Approved 18 Oct 2026 with 1A–6A and leave to apply improvements found while building:
+
+| # | Decision |
+|---|---|
+| 1A | The phone on `messages` is Fernet ciphertext (`to_phone_encrypted`; `MESSAGING_PHONE_KEYS`, first key encrypts, all decrypt) |
+| 2A | Templates in `adapters/messaging/templates.yaml`, PyYAML `safe_load`, checked at worker start |
+| 3A | Pending prescription links are sent by a job enqueued at issue, in the issue's transaction (no cross-clinic sweeper) |
+| 4A | At most once: a row found still marked as started at a retry, a timeout or any unexpected provider error is `FAILED` with `MSG_OUTCOME_UNKNOWN`, never resent |
+| 5A | The signed link is stored as `[link]`; the URL exists only in memory |
+| 6A | Confirmations for front-desk booking and reschedule; not walk-ins |
+
+### Result (18 Oct 2026)
+
+Built as designed (`domain/messaging/`, `ports/messaging.py`, `adapters/messaging/`,
+`adapters/security/phone_cipher.py`, `adapters/db/messages.py`, migration `0015`,
+`application/messaging/`), with these improvements over the proposal:
+
+- **Timeouts are unknown outcomes**, not retryable: only a provider's explicit refusal
+  (`MSG_PROVIDER_RATE_LIMIT`, `MSG_PROVIDER_UNAVAILABLE`) is retried, since a timed-out request
+  may have been delivered.
+- **The last attempt fails the message.** A retryable refusal on the final attempt marks the row
+  `FAILED` with that code, so no row is left `QUEUED` behind a dead job.
+- **Consent lost means `EXPIRED`, as prescriptions R15 says** (the database trigger allows only
+  `PENDING → SUPERSEDED | SENT | EXPIRED`); the audit metadata gives the reason (`too_old`,
+  `no_consent`, `no_link`). The window is the setting `RX_LINK_SEND_WINDOW_HOURS` (1–24).
+- **No job for a patient who cannot be messaged** at booking time; consent is still read again at
+  send time. A confirmation is also skipped once the session is over.
+- **`source_type` / `source_id` on `messages`**, so P6 can show the status on the appointment or
+  prescription without another table.
+- **Console refused by the worker, not by settings**, in production: a settings rule would have
+  made every production configuration invalid until P3, including the API's, which never sends.
+- **Encryption in the application layer** (a `PhoneCipherPort` used by the sender), so the unit of
+  work needs no key.
+- **Bug found on the stack** (DEBUG_JOURNAL): the console adapter numbered its IDs per process, so a
+  restarted worker reused `console-00000001` and the outcome write hit
+  `uq_messages_provider_message_id` after the "send" — which, correctly, ended that message as
+  `MSG_OUTCOME_UNKNOWN`. IDs are now random UUIDs; a unit test covers two adapters.
+
+Verification on the rebuilt stack (`make up`, `make seed`, `make smoke`; migration `0015`; a script
+signing in as the seeded owner, desk and doctor on an extra session today):
+
+| Step | Result |
+|---|---|
+| 1. Booking for a consenting patient | One job, `succeeded` at attempt 1; one `messages` row `CONSOLE / console / booking_confirmed v1 / SENT`, variables `clinic_name`, `doctor_name`, `date_time_or_token = "Sun 18 Oct 2026, 8:50 PM, token 4"` |
+| 2. Booking for an opted-out patient | No job, no message |
+| 3. **Failure path.** Worker stopped, booking made, patient opted out, worker started | The job succeeded and sent nothing (`message.skipped`), no row |
+| 4. Prescription issued for a consenting patient (sentinel text in items and advice) | `rx_ready` row `SENT`, variables `{"clinic_name": …, "link": "[link]"}`; `prescriptions.link_delivery = SENT` |
+| 5. `psql` | `to_phone_encrypted` is a 100-character Fernet token without the number |
+| 6. `v_message_health` | Counts by channel, template and status, including the row from the bug above (`FAILED`, `outcome_unknown = 1`) |
+| 7. Worker logs | `message.sent`, `message.skipped`, `messaging.console_accepted`; no patient name, phone number, sentinel text or `/p/` link |
+
+AC4 (a crash after the provider accepted) is proved by
+`tests/integration/test_messaging_db.py::test_ac4_…` (the provider accepts, then the "worker"
+dies with a `BaseException`; the retry makes no second call and fails the row as unknown), not on
+the stack: the window between the call and the commit is too small to hit by killing a container.
+
+Gates: `make lint typecheck contract-check` clean; API 1445 tests at 98.47% (core gate holds);
+web 426 — in the combined `make test` run two web tests (`PrintAndLink`, `Workspace`) timed out
+under load and passed alone three times and in a full `make test-web`; P2 changes no web code.
+No HTTP contract change.
+
+Not verified: a real provider (P3); the Hindi wording (L-02).

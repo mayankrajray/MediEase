@@ -361,8 +361,20 @@ class MessagingPort(Protocol):
     def send_template(self, msg: OutboundTemplateMessage) -> ProviderAccepted: ...
 ```
 
-- Adapters: `ConsoleMessagingAdapter` (dev/test — writes to logs and a local table),
-  `WhatsAppCloudAdapter`, `SmsAdapter`. Selected by settings, wired in `bootstrap.py`.
+- Adapters: `ConsoleMessagingAdapter` (dev/test — one log line with variable *names*, never values;
+  the `messages` row is the record; refused by the worker when `APP_ENV=production`),
+  `WhatsAppCloudAdapter` (P3), `SmsAdapter` (P5). Selected by settings, wired in `bootstrap.py`.
+- Sending (M5-P2, `application/messaging/sender.py`): three short transactions, no lock held over
+  the call. (1) Find the row by idempotency key; settled ends the job; a row still marked started
+  means an earlier attempt died mid-call, so it is `FAILED` with `MSG_OUTCOME_UNKNOWN` and never
+  sent again (at most once). Else re-read consent and the facts (R5), check the values against the
+  template (R8), encrypt the phone, write the row as started and commit. (2) Call the provider.
+  (3) Accepted → `SENT` (and the prescription's `link_delivery` → `SENT` in the same
+  transaction); refused and retryable → not started, the job retries; refused for good, out of
+  attempts, timed out or unknown → `FAILED`.
+- Jobs enqueued in the change's own transaction: `send_booking_confirmation` (booking and
+  reschedule, when the patient allows WhatsApp) and `send_rx_link` (issue with `link_delivery =
+  PENDING`; sent only within `RX_LINK_SEND_WINDOW_HOURS`, else `EXPIRED` audited as SYSTEM).
 - Templates are declared in `apps/api/src/mediease_api/adapters/messaging/templates.yaml` with the
   provider template name, language, category (utility) and variable schema. Adding a template is a
   data change plus provider approval — no code branching.

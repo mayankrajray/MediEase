@@ -164,7 +164,10 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 | `MSG_TEMPLATE_PARAMS` | — (job) | Template variables mismatch | Count/order differs from approved template | DEBUGGING §5.7 |
 | `MSG_RECIPIENT_INVALID` | — (job) | Number can't receive WhatsApp | Not on WhatsApp / invalid | SMS fallback (FR-REM-06) |
 | `MSG_PROVIDER_RATE_LIMIT` | — (job) | Provider throttled us | Burst sending | Job retries with backoff |
-| `MSG_PROVIDER_UNAVAILABLE` | — (job) | Provider error / timeout | Outage | RUNBOOK "Messaging provider outage" |
+| `MSG_PROVIDER_UNAVAILABLE` | — (job) | Provider error / outage (the provider said so: nothing was sent) | Outage | RUNBOOK "Messaging provider outage" |
+| `MSG_OUTCOME_UNKNOWN` | — (job, message) | We cannot tell whether the provider accepted the message: a timeout, a lost connection, or a worker that died during the call or before recording it. Never sent again (M5-P2 decision 4A, at most once); the job is `dead` | Provider latency, a crash, a database error after the call | `messages.error_code`, `v_message_health.outcome_unknown`; call the patient if it matters |
+| `MSG_NO_CONSENT` | — (message) | A message refused earlier was not retried: the patient no longer allows WhatsApp | Opt-out or consent withdrawn between attempts | Patient consent |
+| `MSG_NOT_APPLICABLE` | — (message) | A message refused earlier was not retried: what it was about no longer applies (appointment cancelled or over, prescription superseded or its link expired) | Normal | The appointment or prescription |
 | `MSG_QUIET_HOURS_DEFERRED` | — (info) | Deferred to 08:00 | FR-REM-04 — expected | Job `run_at` |
 | `WH_SIGNATURE_INVALID` | 401 | Webhook rejected | Wrong secret or body re-serialised | DEBUGGING §5.8 |
 | `WH_UNKNOWN_EVENT` | 200 (ignored) | Event type not handled | New provider event | `webhook_events` |

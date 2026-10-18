@@ -123,6 +123,13 @@ store is write-once by design.
    minute) requeues them with the attempt counted, or marks them `dead` at `max_attempts`.
 5. To pause all work: `docker compose stop worker` (the job in hand finishes, the rest are handed
    back). Start it again to resume; nothing is lost and nothing runs twice.
+6. Messages (M5-P2): `select * from v_message_health;`. A `send_*` job that is `dead` with
+   `MSG_OUTCOME_UNKNOWN` must **not** be requeued: the provider may already have delivered it, and
+   the message row's unique key would refuse a second row anyway. Tell the clinic to call the
+   patient if the message mattered. Locally, the console provider writes
+   `messaging.console_accepted` to `docker compose logs worker` (variable names only).
+7. A `send_rx_link` job that finds a prescription issued more than `RX_LINK_SEND_WINDOW_HOURS` ago
+   (24 at most) marks it `EXPIRED` and sends nothing: expected after an outage longer than that.
 **Confirm:** `v_job_health.due` and `stale` fall to 0; message statuses progress.
 
 ### 7. Messaging provider outage (M5)
