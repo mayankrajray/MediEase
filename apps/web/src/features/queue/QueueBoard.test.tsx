@@ -230,6 +230,21 @@ describe("queue board and the consultation (M4-P6)", () => {
     expect(screen.getByRole("menuitem", { name: "Mark completed" })).toBeInTheDocument();
   });
 
+  it("FR-VIS-05: the doctor's Mark completed completes the visit, which completes the row", async () => {
+    const api = mockApi({
+      ...asDoctor,
+      "GET /api/v1/queue": queueRoute(queueOf([{ status: "IN_CONSULTATION" }], "Asha Rao", [{ visit_id: VISIT_ID }])),
+      [`POST /api/v1/visits/${VISIT_ID}/complete`]: () => json(200, { id: VISIT_ID }),
+    });
+    await board();
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Asha Rao" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Mark completed" }));
+
+    expect(await screen.findByText(/^Asha Rao marked completed at \d\d:\d\d\.$/)).toBeInTheDocument();
+    expect(api.count(TRANSITION)).toBe(0);
+  });
+
   it("another doctor's row keeps the plain queue step", async () => {
     mockApi({
       ...asDoctor,
