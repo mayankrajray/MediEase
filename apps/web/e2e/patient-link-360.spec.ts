@@ -107,7 +107,8 @@ test("AC2: the sample opens at 360 px after the last-4 check, in English and Hin
   const loaded = await Promise.all(transfers);
   const total = loaded.reduce((sum, t) => sum + t.bytes, 0);
   console.log(`NFR-02 page weight: ${total} bytes in ${loaded.length} responses`, loaded.map((t) => `${t.bytes} ${new URL(t.url).pathname}`).join("; "));
-  await fresh.close();  expect(total, "NFR-02: under 200 KB for the page and its assets").toBeLessThan(200 * 1024);
+  await fresh.close();
+  expect(total, "NFR-02: under 200 KB for the page and its assets").toBeLessThan(200 * 1024);
 
   await page.getByRole("link", { name: "हिन्दी में देखें" }).click();
   await expect(page.getByRole("heading", { name: "दवाइयाँ" })).toBeVisible();
