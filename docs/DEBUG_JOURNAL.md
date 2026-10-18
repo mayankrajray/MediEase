@@ -29,6 +29,29 @@ Rules:
 
 ---
 
+### 2026-10-18 — a restarted worker reused console message IDs, so a "sent" message ended `MSG_OUTCOME_UNKNOWN` (M5-P2)
+
+- **Milestone / area:** M5-P2 / messaging
+- **Symptom:** On the stack, after `docker compose stop worker` / `start worker`, the next
+  `send_rx_link` logged `messaging.console_accepted`, then `job.handler_error` with
+  `IntegrityError`; the retry found the row still started and failed it as `MSG_OUTCOME_UNKNOWN`.
+- **Impact:** Local only, before commit. With a real provider the same class of failure (the
+  outcome write failing after acceptance) is handled the same way, by design (decision 4A).
+- **Reproduction:** send one message, restart the worker, send another.
+- **Investigation:** the failing statement was the outcome update: `uq_messages_provider_message_id`.
+  Both rows had `console-00000001`.
+- **Root cause:** the console adapter numbered IDs from a per-process counter; the column is unique
+  across all messages (for P3's webhooks). The integration tests' scripted provider built IDs from
+  the idempotency key, so they never repeated.
+- **Fix:** console IDs are `console-<uuid4 hex>`.
+- **Guard:** `tests/unit/adapters/test_messaging_adapters.py::test_the_console_provider_logs_names_not_values_and_repeats_its_answer`
+  (two adapters never give the same ID).
+- **Prevention / follow-up:** a fake provider's IDs must be unique like a real one's; the
+  at-most-once rule worked as intended (no second send).
+- **Search keywords:** console adapter, provider_message_id, unique, worker restart, outcome unknown
+
+---
+
 ### 2026-10-18 — `enqueue` reported "already queued" for every new job (M5-P1, no error code)
 
 - **Milestone / area:** M5-P1 / jobs

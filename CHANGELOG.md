@@ -14,6 +14,21 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M5-P2 (#40): messaging through a `MessagingPort` (FR-MSG-01, 02, 04; FR-APT-06; spec
+  reminders-and-messaging R5-R8, AC4, AC7; prescriptions R14, R15). A booking or reschedule for a
+  patient who allows WhatsApp enqueues a confirmation in its own transaction; issuing a prescription
+  whose link is `PENDING` enqueues the link (`rx_ready`, or `rx_updated` for a revision). The worker
+  sends each at most once: the `messages` row (migration `0015`) is written with a unique
+  idempotency key before the provider is called, a refusal is retried, and an unknown outcome
+  (timeout, crash mid-call) is `FAILED` with `MSG_OUTCOME_UNKNOWN` and never resent. Consent is read
+  again at send time; a link more than 24 hours old, or without consent, is `EXPIRED` and audited
+  as SYSTEM. Templates live in `adapters/messaging/templates.yaml` (en and hi), checked at worker
+  start; variables are typed, so nothing clinical can be sent, and the signed link is never stored.
+  Phone numbers on messages are Fernet-encrypted. Only the console provider exists so far (refused
+  in production). New: `v_message_health`, settings `MESSAGING_PHONE_KEYS` and
+  `RX_LINK_SEND_WINDOW_HOURS`, error codes `MSG_OUTCOME_UNKNOWN`, `MSG_NO_CONSENT`,
+  `MSG_NOT_APPLICABLE`, audit action `prescription.link_expired`; dependencies `cryptography`
+  50.0.2 and `pyyaml` 6.0.3 (and `types-pyyaml` for mypy).
 - M5-P1 (#40): the job queue and the background worker (NFR-13; spec reminders-and-messaging R9-R11,
   R9a-R9e, R11a; AC3, AC8-AC11; ADR-0005). A `jobs` table (migration `0014`) saved in the same
   transaction as the change that needs it. The worker, a new `worker` container on the API image

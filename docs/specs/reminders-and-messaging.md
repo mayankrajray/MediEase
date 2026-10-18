@@ -5,7 +5,7 @@
 | Requirements | FR-REM-01, 02, 04, 05, 07; FR-MSG-01..05, 07; FR-APT-06; NFR-13 |
 | Milestone / phases | M5 / P1–P6 |
 | Status | Approved (developer sign-off 2026-10-18: the M5 plan with decisions 1A–5A and four refinements to the job queue, R9–R11 and R9a–R9e) |
-| Last updated | 2026-10-18 (approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
+| Last updated | 2026-10-18 (M5-P2: R6 names P2's keys and the unknown-outcome rule; earlier: approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
 
 ## 1. Context
 Post-visit follow-up depends on memory (A14); patients forget follow-ups and vaccination dates
@@ -51,8 +51,12 @@ window the patient's own STOP message opens:
   (`MSG_QUIET_HOURS_DEFERRED`, info).
 - **R5** At send time the worker re-reads consent and opt-out; if not allowed → reminder
   `SKIPPED_NO_CONSENT`, no message row.
-- **R6** A message row is created with `idempotency_key = <reminder_id>:<attempt_group>` before
-  calling the provider; a unique constraint prevents a second send for the same key.
+- **R6** A message row is created with a unique `idempotency_key` before calling the provider
+  (P2: `booking_confirmed:<appointment_id>` and `rx_link:<prescription_id>`; P4's reminders use
+  `<reminder_id>:<attempt_group>`); a unique constraint prevents a second send for the same key. A
+  row found still marked as being sent at a retry means the outcome is unknown: it becomes `FAILED`
+  (`MSG_OUTCOME_UNKNOWN`) and is never sent again (M5-P2 decision 4A, at most once). A provider
+  timeout is an unknown outcome, not a retryable error.
 - **R7** Provider timeouts: 10 s. Retryable errors (`MSG_PROVIDER_RATE_LIMIT`,
   `MSG_PROVIDER_UNAVAILABLE`) back off 1, 5, 15, 60 minutes, then `dead`. Non-retryable errors
   (`MSG_TEMPLATE_*`, `MSG_RECIPIENT_INVALID`) fail immediately.

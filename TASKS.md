@@ -1,4 +1,4 @@
-﻿# TASKS.md — Delivery Plan and Live Status
+# TASKS.md — Delivery Plan and Live Status
 
 The single place that says **what is being worked on now**. Agents work only on the phase marked
 `▶ ACTIVE`. Update this file at the end of every phase.
@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M5 — Messaging and reminders** (issue #40, branch `m5/40-messaging-and-reminders`, one PR for the milestone). M4 merged in PR #39 on 18 Oct 2026 |
-| Active phase | **M5-P2 — `MessagingPort`, the console adapter and the template registry:** M5-P1 confirmed by the developer 18 Oct 2026; P2 design proposed, awaiting approval |
+| Active phase | **M5-P2 — `MessagingPort`, the console adapter and the template registry:** M5-P1 confirmed by the developer 18 Oct 2026; P2 approved (1A–6A, with the agent's improvements) and implemented 18 Oct 2026, verified on the stack, awaiting the developer's confirmation |
 | Design notes | `docs/milestones/M5-messaging-and-reminders.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M5 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |

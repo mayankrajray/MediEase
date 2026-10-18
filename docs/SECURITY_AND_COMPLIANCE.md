@@ -52,13 +52,13 @@ Use this list in the M6 security review. Each row names where it is implemented.
 ### Data protection
 - [ ] TLS 1.2+ for all traffic; HSTS on the web origin (M6)
 - [ ] Encryption at rest for database, backups and object storage (M6)
-- [ ] Application-level encryption for `messages.to_phone_e164` (M5)
+- [x] Application-level encryption of the phone number on `messages` (`to_phone_encrypted`, Fernet keys in `MESSAGING_PHONE_KEYS`, M5-P2)
 - [x] Patient links: HMAC-signed, purpose-bound, 90-day expiry, revocable, last-4 challenge, attempt lockout, open audit (M4-P5: HMAC-SHA256 tokens with versioned keys, the claims checked against the row; the last-4 check under a row lock with a five-attempt lockout only staff can reset; a 30-minute view token in an HttpOnly cookie scoped to the link's page; `patient_link.*` audit with IDs only; per-link and per-caller rate limits; no clinical content in the URL, title or logs; `noindex`, `no-store`, `no-referrer`)
 - [ ] Per-patient IP rate limits on the public pages once the M6 proxy forwards the client address (today the API sees the web server)
 - [x] PDFs only through the authenticated, audited API; no public or pre-signed URLs (M4-P4, ADR-0012: `GET /prescriptions/{id}/pdf` needs `RX_PRINT` and the caller's clinic, writes one `prescription.pdf_downloaded` per download, answers `Cache-Control: private, no-store`; files are rendered in-house by WeasyPrint with vendored fonts, the renderer fetches nothing and Jinja2 autoescapes every value, and the store is write-once with keys that cannot leave its root. Front desk may print an issued version but never reads one on screen, spec D6)
 - [ ] Prescription PDFs encrypted at rest: the S3 adapter sets SSE (AES256) on every object; the local `blobs` volume relies on disk encryption (M6)
 - [ ] India-region hosting for all data stores and backups (M6)
-- [ ] No clinical content in message bodies — links only (M5)
+- [ ] No clinical content in message bodies — links only (M5; P2: template variables are typed to clinic name, doctor name, date/time/token, clinic phone and link, and the AC7 leakage test proves it for prescriptions)
 
 ### Application security
 - [ ] Input validation with Pydantic at every boundary; output encoding in React (M0+)
