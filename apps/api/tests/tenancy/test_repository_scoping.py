@@ -76,6 +76,11 @@ class Tenant:
 # Only the job queue (enqueue, in the unit of work) and the worker's store touch it; the store never
 # reads a clinic's rows, and a job's handler is given that job's clinic only
 # (tests/integration/test_jobs_db.py).
+#
+# Reviewed exception (M5-P3): SqlAlchemyMessageLookup reads messages across clinics, because a
+# provider webhook names no clinic. It returns only the clinic and message IDs; the message is then
+# read and changed through that clinic's SqlAlchemyMessageRepository
+# (tests/integration/test_webhooks_http.py). webhook_events has no clinic_id.
 NOT_TENANT_SCOPED = {"audit_events", "jobs"}
 
 

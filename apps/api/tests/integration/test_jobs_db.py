@@ -569,7 +569,12 @@ def test_retention_writes_one_system_audit_event_with_counts_only(
         ).all()
     assert event.actor_type == "SYSTEM" and event.actor_user_id is None
     assert event.clinic_id is None
-    assert event._mapping["metadata"] == {"refresh_tokens": "1", "patient_links": "0", "jobs": "0"}
+    assert event._mapping["metadata"] == {
+        "refresh_tokens": "1",
+        "patient_links": "0",
+        "jobs": "0",
+        "webhook_events": "0",
+    }
 
 
 def test_a_job_of_a_suspended_clinic_is_cancelled_not_run_and_its_key_is_free_again(

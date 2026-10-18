@@ -21,7 +21,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0015"
+HEAD = "0016"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -35,6 +35,7 @@ M4_P3_TABLES = sorted([*M4_P2_TABLES, "rx_favourites", "rx_templates"])
 M4_P5_TABLES = sorted([*M4_P3_TABLES, "patient_links", "public_rate_limits"])
 M5_P1_TABLES = sorted([*M4_P5_TABLES, "jobs"])
 M5_P2_TABLES = sorted([*M5_P1_TABLES, "messages"])
+M5_P3_TABLES = sorted([*M5_P2_TABLES, "webhook_events"])
 
 
 @pytest.fixture
@@ -479,9 +480,44 @@ def test_0015_adds_messages_with_unique_keys_and_the_health_view(
         engine.dispose()
 
 
+def test_0016_adds_webhook_events_and_the_webhook_system_kinds(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    command.upgrade(alembic_config, "0016")
+    assert _tables(scratch_database_url) == M5_P3_TABLES
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            uniques = {u["name"] for u in inspect(conn).get_unique_constraints("webhook_events")}
+            assert "uq_webhook_events_event_key" in uniques  # one row per body (R13)
+            check = conn.execute(
+                text(
+                    "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+                    " WHERE conname = 'ck_jobs_system_kind'"
+                )
+            ).scalar_one()
+            assert "process_webhook_event" in check and "reconcile_messages" in check
+            columns = {c["name"] for c in inspect(conn).get_columns("v_message_health")}
+            assert "unconfirmed_24h" in columns
+        command.downgrade(alembic_config, "0015")
+        assert _tables(scratch_database_url) == M5_P2_TABLES
+        with engine.connect() as conn:
+            columns = {c["name"] for c in inspect(conn).get_columns("v_message_health")}
+            assert "unconfirmed_24h" not in columns
+            check = conn.execute(
+                text(
+                    "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+                    " WHERE conname = 'ck_jobs_system_kind'"
+                )
+            ).scalar_one()
+            assert "reconcile_messages" not in check
+    finally:
+        engine.dispose()
+
+
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M5_P2_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M5_P3_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:

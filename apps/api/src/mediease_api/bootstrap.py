@@ -31,6 +31,12 @@ from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork, build_se
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
 from mediease_api.adapters.messaging.catalog import YamlTemplateCatalog
 from mediease_api.adapters.messaging.console import ConsoleMessagingAdapter
+from mediease_api.adapters.messaging.whatsapp_cloud import WhatsAppCloudAdapter
+from mediease_api.adapters.messaging.whatsapp_webhook import PROVIDER as WHATSAPP_PROVIDER
+from mediease_api.adapters.messaging.whatsapp_webhook import (
+    HmacWebhookVerifier,
+    WhatsAppWebhookParser,
+)
 from mediease_api.adapters.pdf.weasy import WeasyPrintRenderer
 from mediease_api.adapters.security.argon2_hasher import Argon2PasswordHasher
 from mediease_api.adapters.security.ip_hash import HmacIpHasher
@@ -76,6 +82,12 @@ from mediease_api.application.links.use_cases import (
 from mediease_api.application.messaging.booking import SendBookingConfirmation
 from mediease_api.application.messaging.rx_link import SendRxLink
 from mediease_api.application.messaging.sender import MessageSender
+from mediease_api.application.messaging.webhooks import (
+    ProcessWebhookEvent,
+    ReceiveWebhook,
+    ReconcileMessages,
+    VerifyWebhookSubscription,
+)
 from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics
 from mediease_api.application.patients.consent import OptIn, OptOut, RecordConsent
 from mediease_api.application.patients.import_patients import ImportPatients
@@ -133,9 +145,10 @@ from mediease_api.delivery.http.rx_library import create_rx_library_blueprint
 from mediease_api.delivery.http.scheduling import create_scheduling_blueprint
 from mediease_api.delivery.http.visits import create_visits_blueprint
 from mediease_api.delivery.middleware import register_request_middleware
+from mediease_api.delivery.webhooks.whatsapp import create_whatsapp_webhook_blueprint
 from mediease_api.delivery.worker.heartbeat import beat
 from mediease_api.delivery.worker.loop import LockRenewer, Worker
-from mediease_api.domain.jobs.job import PURGE_KIND
+from mediease_api.domain.jobs.job import PURGE_KIND, RECONCILE_KIND, WEBHOOK_KIND
 from mediease_api.domain.messaging.jobs import BOOKING_CONFIRMATION_KIND, RX_LINK_KIND
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -175,6 +188,22 @@ class _UseCases:
     # M4-P5: patient link tokens (the signer holds the keys) and their lifetime.
     link_tokens: LinkTokens
     link_ttl_days: int
+    # M5-P3: the WhatsApp webhook's secrets (empty: the webhook refuses everything).
+    whatsapp_app_secret: str = ""
+    whatsapp_verify_token: str = ""
+
+    def verify_whatsapp_subscription(self) -> VerifyWebhookSubscription:
+        return VerifyWebhookSubscription(verify_token=self.whatsapp_verify_token)
+
+    def receive_whatsapp_webhook(self) -> ReceiveWebhook:
+        return ReceiveWebhook(
+            uow=self._uow(),
+            clock=self.clock,
+            ids=self.ids,
+            verifier=HmacWebhookVerifier(self.whatsapp_app_secret),
+            parser=WhatsAppWebhookParser(),
+            provider=WHATSAPP_PROVIDER,
+        )
 
     def sign_in(self) -> SignIn:
         return SignIn(
@@ -490,6 +519,20 @@ def _interruptible_sleep(stop: threading.Event) -> Callable[[float], None]:
     return sleep
 
 
+def build_messaging(settings: AppSettings) -> MessagingPort:
+    """The provider named by ``MESSAGING_PROVIDER`` (M5-P3); console is refused in production."""
+    if settings.MESSAGING_PROVIDER == "whatsapp_cloud":
+        return WhatsAppCloudAdapter(
+            phone_number_id=settings.WHATSAPP_PHONE_NUMBER_ID,
+            access_token=settings.WHATSAPP_ACCESS_TOKEN.get_secret_value(),
+            api_version=settings.WHATSAPP_API_VERSION,
+            graph_url=settings.WHATSAPP_GRAPH_URL,
+        )
+    if settings.APP_ENV is AppEnv.PRODUCTION:
+        raise ValueError("MESSAGING_PROVIDER=console sends nothing; refused in production")
+    return ConsoleMessagingAdapter()
+
+
 def _messaging_handlers(
     settings: AppSettings,
     factory: sessionmaker[Session],
@@ -497,9 +540,7 @@ def _messaging_handlers(
     ids: IdPort,
 ) -> dict[str, JobHandler]:
     """The M5-P2 send jobs. Templates are loaded and checked here, so a bad file stops start-up."""
-    if settings.MESSAGING_PROVIDER == "console" and settings.APP_ENV is AppEnv.PRODUCTION:
-        raise ValueError("MESSAGING_PROVIDER=console sends nothing; refused in production")
-    messaging: MessagingPort = ConsoleMessagingAdapter()
+    messaging = build_messaging(settings)
     sender = MessageSender(
         uow=SqlAlchemyUnitOfWork(factory),
         clock=clock,
@@ -509,6 +550,10 @@ def _messaging_handlers(
         phones=FernetPhoneCipher(settings.messaging_phone_keys()),
     )
     return {
+        WEBHOOK_KIND: ProcessWebhookEvent(
+            uow=SqlAlchemyUnitOfWork(factory), clock=clock, parser=WhatsAppWebhookParser()
+        ),
+        RECONCILE_KIND: ReconcileMessages(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
         BOOKING_CONFIRMATION_KIND: SendBookingConfirmation(sender=sender),
         RX_LINK_KIND: SendRxLink(
             sender=sender,
@@ -610,6 +655,8 @@ def create_app(
         blob_storage=blob_storage or build_blob_storage(settings),
         link_tokens=LinkTokens(HmacLinkSigner(settings.patient_link_keys())),
         link_ttl_days=settings.PATIENT_LINK_TTL_DAYS,
+        whatsapp_app_secret=settings.WHATSAPP_APP_SECRET.get_secret_value(),
+        whatsapp_verify_token=settings.WHATSAPP_VERIFY_TOKEN.get_secret_value(),
     )
 
     # static_folder=None: the API serves JSON only, so there is no static route
@@ -646,6 +693,7 @@ def create_app(
     )
     app.register_blueprint(create_public_links_blueprint(use_cases))
     app.register_blueprint(create_rx_library_blueprint(use_cases))
+    app.register_blueprint(create_whatsapp_webhook_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

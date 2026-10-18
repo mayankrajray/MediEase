@@ -23,7 +23,11 @@ from uuid import UUID
 
 from mediease_api.ports.audit import AuditWriter
 from mediease_api.ports.jobs import JobQueue, RetentionRepository
-from mediease_api.ports.messaging import MessageRepository
+from mediease_api.ports.messaging import (
+    MessageLookup,
+    MessageRepository,
+    WebhookEventRepository,
+)
 from mediease_api.ports.repositories import (
     AppointmentHistoryRepository,
     AppointmentRepository,
@@ -117,6 +121,16 @@ class UnitOfWork(Protocol):
     @property
     def retention(self) -> RetentionRepository:
         """Expired-row deletion for the worker's purge job (M5-P1)."""
+        ...
+
+    @property
+    def message_lookup(self) -> MessageLookup:
+        """Which clinic a provider status belongs to (M5-P3, a reviewed cross-clinic read)."""
+        ...
+
+    @property
+    def webhook_events(self) -> WebhookEventRepository:
+        """Stored provider webhooks (M5-P3); not tenant data."""
         ...
 
     def tenant(self, clinic_id: UUID) -> TenantRepositories:

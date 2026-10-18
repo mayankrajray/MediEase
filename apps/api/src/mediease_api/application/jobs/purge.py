@@ -1,7 +1,8 @@
 """The retention purge: the first real job (M5-P1, DATA_MODEL "Retention and erasure").
 
-Deletes refresh tokens and patient links 30 days after they expired, and finished jobs after 30
-days (dead ones after 90, kept longer to investigate). One ``retention.purged`` audit event is
+Deletes refresh tokens and patient links 30 days after they expired, finished jobs after 30
+days (dead ones after 90, kept longer to investigate) and stored webhook events after 7 (M5-P3).
+One ``retention.purged`` audit event is
 written as SYSTEM with the counts only, in the same transaction as the deletes.
 """
 
@@ -40,6 +41,7 @@ class PurgeExpired:
                         "refresh_tokens": str(counts.refresh_tokens),
                         "patient_links": str(counts.patient_links),
                         "jobs": str(counts.jobs),
+                        "webhook_events": str(counts.webhook_events),
                     },
                 )
             )
@@ -49,6 +51,7 @@ class PurgeExpired:
             refresh_tokens=counts.refresh_tokens,
             patient_links=counts.patient_links,
             jobs=counts.jobs,
+            webhook_events=counts.webhook_events,
         )
         return counts
 

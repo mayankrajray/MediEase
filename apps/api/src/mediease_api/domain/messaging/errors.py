@@ -8,6 +8,8 @@ at most once).
 
 from __future__ import annotations
 
+from mediease_api.domain.shared.errors import DomainError
+
 # The provider refused for now; retried with the job back-off (R7).
 MSG_PROVIDER_RATE_LIMIT = "MSG_PROVIDER_RATE_LIMIT"
 MSG_PROVIDER_UNAVAILABLE = "MSG_PROVIDER_UNAVAILABLE"
@@ -17,6 +19,10 @@ MSG_TEMPLATE_PARAMS = "MSG_TEMPLATE_PARAMS"
 MSG_RECIPIENT_INVALID = "MSG_RECIPIENT_INVALID"
 # We cannot tell whether the provider accepted it; never sent again (decision 4A).
 MSG_OUTCOME_UNKNOWN = "MSG_OUTCOME_UNKNOWN"
+# M5-P3: the provider refused our credentials (token expired, permission removed), or refused the
+# message for a reason we have no better code for. Neither is retried.
+MSG_PROVIDER_AUTH = "MSG_PROVIDER_AUTH"
+MSG_PROVIDER_REJECTED = "MSG_PROVIDER_REJECTED"
 # A message row that was prepared, refused, and no longer applies at its retry.
 MSG_NO_CONSENT = "MSG_NO_CONSENT"
 MSG_NOT_APPLICABLE = "MSG_NOT_APPLICABLE"
@@ -54,3 +60,38 @@ class TemplateParamsInvalid(Exception):
         super().__init__(f"{template_key}: {reason}")
         self.template_key = template_key
         self.reason = reason
+
+
+# --- Webhooks (M5-P3; spec R12, R13, AC6) -------------------------------------------------------
+
+# A status that matches no message yet (it can arrive before our write commits); retried, then
+# recorded on the event.
+WH_UNMATCHED = "WH_UNMATCHED"
+# An event of a kind we do not handle (stored and marked processed).
+WH_UNKNOWN_EVENT = "WH_UNKNOWN_EVENT"
+
+
+class WebhookSignatureInvalid(DomainError):
+    """R13, AC6: the body is not signed with our app secret. Nothing is stored."""
+
+    code = "WH_SIGNATURE_INVALID"
+
+    def __init__(self) -> None:
+        super().__init__("The webhook signature is not valid.")
+
+
+class WebhookVerifyFailed(DomainError):
+    """R12: the subscription challenge did not carry our verify token."""
+
+    code = "WH_VERIFY_FAILED"
+
+    def __init__(self) -> None:
+        super().__init__("The webhook verification request was refused.")
+
+
+class WebhookRateLimited(DomainError):
+    code = "WH_RATE_LIMITED"
+
+    def __init__(self, retry_after_seconds: int) -> None:
+        super().__init__("Too many requests. Please wait a moment.")
+        self.retry_after_seconds = retry_after_seconds

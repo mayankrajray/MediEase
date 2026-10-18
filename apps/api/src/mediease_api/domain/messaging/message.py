@@ -19,6 +19,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from uuid import UUID
 
+from mediease_api.domain.messaging.errors import MSG_OUTCOME_UNKNOWN, MSG_PROVIDER_REJECTED
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.shared.errors import InvalidTransition
 from mediease_api.domain.shared.time import require_utc
@@ -39,6 +40,24 @@ class MessageStatus(StrEnum):
 
 
 ACCEPTED_STATUSES = frozenset({MessageStatus.SENT, MessageStatus.DELIVERED, MessageStatus.READ})
+# Statuses only move forward (spec R13).
+_RANK = {MessageStatus.SENT: 1, MessageStatus.DELIVERED: 2, MessageStatus.READ: 3}
+
+
+@dataclass(frozen=True, slots=True)
+class StatusUpdate:
+    """One status from a provider's webhook, already mapped to our terms.
+
+    ``message_id`` is our own ID echoed back by the provider (WhatsApp's
+    ``biz_opaque_callback_data``); it finds the row even when the provider's ID was never saved.
+    """
+
+    provider_message_id: str
+    message_id: UUID | None
+    status: MessageStatus
+    at: datetime
+    error_code: str | None = None
+    pricing_category: str | None = None
 
 
 class SourceType(StrEnum):
@@ -73,6 +92,10 @@ class Message:
     failed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # M5-P3: from the provider's status webhooks.
+    delivered_at: datetime | None = None
+    read_at: datetime | None = None
+    pricing_category: str | None = None
 
     @classmethod
     def prepare(
@@ -180,6 +203,56 @@ class Message:
     def _require_queued(self, action: str) -> None:
         if self.status is not MessageStatus.QUEUED:
             raise InvalidTransition("message", self.status.value, action)
+
+    # --- Status webhooks (M5-P3; spec R13; decision 4A) -------------------------------------------
+
+    def apply_status(self, update: StatusUpdate, now: datetime) -> bool:
+        """Move the status forward only; True if anything changed.
+
+        ``SENT -> DELIVERED -> READ``; an older or repeated status changes nothing, and a real
+        ``FAILED`` is final. Two cases learn of an acceptance only from the webhook: a row still
+        ``QUEUED`` (the worker died before recording the call) and a row failed as
+        ``MSG_OUTCOME_UNKNOWN`` (decision 4A); the provider's status proves the call was accepted,
+        so it is corrected.
+        """
+        now = require_utc(now, "now")
+        if update.pricing_category and self.pricing_category != update.pricing_category:
+            self.pricing_category = update.pricing_category
+            changed = True
+        else:
+            changed = False
+        unknown = self.status is MessageStatus.FAILED and self.error_code == MSG_OUTCOME_UNKNOWN
+        if self.status is MessageStatus.FAILED and not unknown:
+            return self._touch(changed, now)
+        if self.status is MessageStatus.QUEUED or unknown:
+            self.status = MessageStatus.SENT
+            self.provider_message_id = self.provider_message_id or update.provider_message_id
+            self.error_code = None
+            self.failed_at = None
+            self.sending_started_at = None
+            self.sent_at = self.sent_at or update.at
+            changed = True
+        if update.status is MessageStatus.FAILED:
+            if self.status is MessageStatus.SENT:
+                self.status = MessageStatus.FAILED
+                self.error_code = update.error_code or MSG_PROVIDER_REJECTED
+                self.failed_at = update.at
+                changed = True
+            return self._touch(changed, now)
+        if _RANK.get(update.status, 0) > _RANK[self.status]:
+            self.status = update.status
+            if update.status is MessageStatus.DELIVERED:
+                self.delivered_at = update.at
+            elif update.status is MessageStatus.READ:
+                self.read_at = update.at
+                self.delivered_at = self.delivered_at or update.at
+            changed = True
+        return self._touch(changed, now)
+
+    def _touch(self, changed: bool, now: datetime) -> bool:
+        if changed:
+            self.updated_at = now
+        return changed
 
     def __repr__(self) -> str:
         # Never the phone or the variables.

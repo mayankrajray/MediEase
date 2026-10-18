@@ -1,13 +1,22 @@
-"""The ``messages`` repository (M5-P2), tenant-scoped like every clinic table (ADR-0003)."""
+"""``messages`` (M5-P2, tenant-scoped like every clinic table, ADR-0003) and webhooks (M5-P3)."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from datetime import datetime
 from types import MappingProxyType
+from uuid import UUID
 
-from mediease_api.adapters.db.models.messages import MessageRow
+from sqlalchemy import Select, func, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import Session
+
+from mediease_api.adapters.db.models.messages import MessageRow, WebhookEventRow
 from mediease_api.adapters.db.tenancy import TenantScopedRepository
 from mediease_api.domain.messaging.message import Channel, Message, MessageStatus, SourceType
+from mediease_api.domain.messaging.webhook import WebhookEvent
 from mediease_api.domain.patients.patient import Language
+from mediease_api.domain.shared.errors import NotFound
 
 
 def _write(row: MessageRow, message: Message) -> None:
@@ -20,7 +29,10 @@ def _write(row: MessageRow, message: Message) -> None:
     row.job_id = message.job_id
     row.sending_started_at = message.sending_started_at
     row.sent_at = message.sent_at
+    row.delivered_at = message.delivered_at
+    row.read_at = message.read_at
     row.failed_at = message.failed_at
+    row.pricing_category = message.pricing_category
     row.updated_at = message.updated_at
 
 
@@ -49,6 +61,9 @@ def _from_row(row: MessageRow) -> Message:
         failed_at=row.failed_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        delivered_at=row.delivered_at,
+        read_at=row.read_at,
+        pricing_category=row.pricing_category,
     )
 
 
@@ -84,7 +99,102 @@ class SqlAlchemyMessageRepository(TenantScopedRepository[MessageRow]):
 
     def get_by_key(self, idempotency_key: str, *, for_update: bool = False) -> Message | None:
         query = self._scoped_select().where(MessageRow.idempotency_key == idempotency_key)
+        return self._one(query, for_update)
+
+    def get(self, message_id: UUID, *, for_update: bool = False) -> Message | None:
+        return self._one(self._scoped_select().where(MessageRow.id == message_id), for_update)
+
+    def _one(self, query: Select[MessageRow], for_update: bool) -> Message | None:
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
         row = self._session.scalars(query).one_or_none()
         return _from_row(row) if row else None
+
+
+class SqlAlchemyMessageLookup:
+    """Which clinic a provider status is for (M5-P3): a reviewed cross-clinic read of two IDs.
+
+    Our own ID (echoed back by the provider) wins; the provider's ID is the fallback. Nothing but
+    the clinic and message IDs leaves this class.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def find(
+        self, *, message_id: UUID | None, provider_message_id: str
+    ) -> tuple[UUID, UUID] | None:
+        query = select(MessageRow.clinic_id, MessageRow.id)
+        if message_id is not None:
+            row = self._session.execute(query.where(MessageRow.id == message_id)).one_or_none()
+            if row is not None:
+                return row.clinic_id, row.id
+        row = self._session.execute(
+            query.where(MessageRow.provider_message_id == provider_message_id)
+        ).one_or_none()
+        return (row.clinic_id, row.id) if row is not None else None
+
+    def count_unconfirmed(self, *, sent_before: datetime) -> int:
+        query = select(func.count()).where(
+            MessageRow.status == MessageStatus.SENT.value, MessageRow.sent_at < sent_before
+        )
+        return int(self._session.execute(query).scalar_one())
+
+
+class SqlAlchemyWebhookEventRepository:
+    """``webhook_events``: platform data, stored once per body (M5-P3)."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, event: WebhookEvent) -> bool:
+        statement = (
+            insert(WebhookEventRow)
+            .values(
+                id=event.id,
+                provider=event.provider,
+                event_key=event.event_key,
+                payload=dict(event.payload),
+                received_at=event.received_at,
+            )
+            .on_conflict_do_nothing(index_elements=["event_key"])
+            .returning(WebhookEventRow.id)
+        )
+        return self._session.execute(statement).scalar_one_or_none() is not None
+
+    def get(self, event_id: UUID, *, for_update: bool = False) -> WebhookEvent | None:
+        query = select(WebhookEventRow).where(WebhookEventRow.id == event_id)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        row = self._session.scalars(query).one_or_none()
+        if row is None:
+            return None
+        return WebhookEvent(
+            id=row.id,
+            provider=row.provider,
+            event_key=row.event_key,
+            payload=row.payload,
+            received_at=row.received_at,
+            processed_at=row.processed_at,
+            error_code=row.error_code,
+        )
+
+    def update(self, event: WebhookEvent) -> None:
+        row = self._session.get(WebhookEventRow, event.id)
+        if row is None:
+            raise NotFound("webhook event")
+        row.processed_at = event.processed_at
+        row.error_code = event.error_code
+        self._session.flush()
+
+    def list_unprocessed(self, *, received_before: datetime, limit: int) -> Sequence[UUID]:
+        query = (
+            select(WebhookEventRow.id)
+            .where(
+                WebhookEventRow.processed_at.is_(None),
+                WebhookEventRow.received_at < received_before,
+            )
+            .order_by(WebhookEventRow.received_at)
+            .limit(limit)
+        )
+        return list(self._session.scalars(query))

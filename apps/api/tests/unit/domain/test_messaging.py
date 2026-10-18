@@ -9,6 +9,7 @@ import pytest
 from mediease_api.domain.messaging.errors import (
     MSG_OUTCOME_UNKNOWN,
     MSG_PROVIDER_RATE_LIMIT,
+    MSG_PROVIDER_REJECTED,
     MSG_PROVIDER_UNAVAILABLE,
     MSG_RECIPIENT_INVALID,
     ProviderOutcomeUnknown,
@@ -17,7 +18,13 @@ from mediease_api.domain.messaging.errors import (
 )
 from mediease_api.domain.messaging.formatting import appointment_when
 from mediease_api.domain.messaging.jobs import booking_confirmation_key, rx_link_key
-from mediease_api.domain.messaging.message import Channel, Message, MessageStatus, SourceType
+from mediease_api.domain.messaging.message import (
+    Channel,
+    Message,
+    MessageStatus,
+    SourceType,
+    StatusUpdate,
+)
 from mediease_api.domain.messaging.template import (
     LINK_PLACEHOLDER,
     LocalisedBody,
@@ -253,3 +260,83 @@ def test_appointment_times_read_in_the_clinic_zone_in_both_languages() -> None:
     assert appointment_when(
         starts_at=noon, token_number=None, timezone="Asia/Kolkata", language=Language.EN
     ).endswith("12:00 PM")
+
+
+# --- Status webhooks (M5-P3; spec R13; decision 4A) ---------------------------------------------
+
+
+def _update(status: MessageStatus, minutes: int = 1, **fields: object) -> StatusUpdate:
+    values: dict[str, object] = {
+        "provider_message_id": "wamid.1",
+        "message_id": None,
+        "status": status,
+        "at": NOW + timedelta(minutes=minutes),
+    }
+    values.update(fields)
+    return StatusUpdate(**values)  # type: ignore[arg-type]
+
+
+def _sent() -> Message:
+    message = _message()
+    message.accepted(provider_message_id="wamid.1", now=NOW)
+    return message
+
+
+def test_r13_statuses_only_move_forward() -> None:
+    message = _sent()
+    assert message.apply_status(_update(MessageStatus.DELIVERED, 1), NOW)
+    assert (message.status, message.delivered_at) == (
+        MessageStatus.DELIVERED,
+        NOW + timedelta(minutes=1),
+    )
+    assert not message.apply_status(_update(MessageStatus.SENT, 2), NOW)  # late, older
+    assert not message.apply_status(_update(MessageStatus.DELIVERED, 3), NOW)  # repeated
+    assert message.apply_status(_update(MessageStatus.READ, 4), NOW)
+    assert message.read_at == NOW + timedelta(minutes=4)
+    assert not message.apply_status(_update(MessageStatus.FAILED, 5), NOW)  # never after read
+    assert message.status is MessageStatus.READ
+
+
+def test_r13_read_before_delivered_fills_both() -> None:
+    message = _sent()
+    assert message.apply_status(_update(MessageStatus.READ, 2), NOW)
+    assert message.delivered_at == message.read_at == NOW + timedelta(minutes=2)
+
+
+def test_r13_a_failed_status_is_final_with_its_code() -> None:
+    message = _sent()
+    assert message.apply_status(
+        _update(MessageStatus.FAILED, 1, error_code=MSG_RECIPIENT_INVALID), NOW
+    )
+    assert (message.status, message.error_code) == (MessageStatus.FAILED, MSG_RECIPIENT_INVALID)
+    assert not message.apply_status(_update(MessageStatus.DELIVERED, 2), NOW)
+    other = _sent()
+    other.apply_status(_update(MessageStatus.FAILED, 1), NOW)
+    assert other.error_code == MSG_PROVIDER_REJECTED
+
+
+def test_decision_4a_a_status_proves_an_unknown_outcome_was_accepted() -> None:
+    unknown = _message()
+    unknown.fail(MSG_OUTCOME_UNKNOWN, NOW)
+    assert unknown.apply_status(_update(MessageStatus.DELIVERED, 1), NOW)
+    assert (unknown.status, unknown.error_code, unknown.failed_at) == (
+        MessageStatus.DELIVERED,
+        None,
+        None,
+    )
+    assert unknown.provider_message_id == "wamid.1" and unknown.sent_at == NOW + timedelta(
+        minutes=1
+    )
+
+    crashed = _message()  # still QUEUED and started: the worker died before recording the call
+    assert crashed.apply_status(_update(MessageStatus.SENT, 1, pricing_category="utility"), NOW)
+    assert (crashed.status, crashed.sending_started_at, crashed.pricing_category) == (
+        MessageStatus.SENT,
+        None,
+        "utility",
+    )
+
+    refused = _message()
+    refused.fail(MSG_RECIPIENT_INVALID, NOW)  # a real failure is never revived
+    assert not refused.apply_status(_update(MessageStatus.DELIVERED, 1), NOW)
+    assert refused.status is MessageStatus.FAILED

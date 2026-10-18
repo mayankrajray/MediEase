@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from mediease_api.domain.jobs.job import PURGE_KIND
+from mediease_api.domain.jobs.job import PURGE_KIND, RECONCILE_KIND
 from mediease_api.domain.shared.time import require_utc
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
@@ -23,7 +23,11 @@ class Recurring:
 
 # The platform's recurring jobs. Clinic jobs are never recurring from here; they are enqueued by
 # the change that needs them.
-RECURRING: tuple[Recurring, ...] = (Recurring(PURGE_KIND, timedelta(days=1)),)
+RECURRING: tuple[Recurring, ...] = (
+    Recurring(PURGE_KIND, timedelta(days=1)),
+    # M5-P3: re-run stored webhook events that did not process, and count unconfirmed messages.
+    Recurring(RECONCILE_KIND, timedelta(hours=1)),
+)
 
 
 def period_start(now: datetime, period: timedelta) -> datetime:
@@ -42,6 +46,8 @@ TOKEN_RETENTION = timedelta(days=30)
 LINK_RETENTION = timedelta(days=30)
 JOB_RETENTION = timedelta(days=30)
 DEAD_JOB_RETENTION = timedelta(days=90)
+# M5-P3: stored webhook bodies (statuses only, no text or phone numbers) are kept a week.
+WEBHOOK_EVENT_RETENTION = timedelta(days=7)
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +58,7 @@ class RetentionCutoffs:
     patient_links: datetime
     finished_jobs: datetime
     dead_jobs: datetime
+    webhook_events: datetime | None = None
 
     @classmethod
     def at(cls, now: datetime) -> RetentionCutoffs:
@@ -61,6 +68,7 @@ class RetentionCutoffs:
             patient_links=now - LINK_RETENTION,
             finished_jobs=now - JOB_RETENTION,
             dead_jobs=now - DEAD_JOB_RETENTION,
+            webhook_events=now - WEBHOOK_EVENT_RETENTION,
         )
 
 
@@ -69,3 +77,4 @@ class PurgeCounts:
     refresh_tokens: int
     patient_links: int
     jobs: int
+    webhook_events: int = 0
