@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M4 — Visits and digital prescriptions** (issue #38, branch `m4/38-visits-and-prescriptions`, one PR for the milestone). M3 merged in PR #37 on 17 Oct 2026 |
-| Active phase | **M4-P5 — Signed patient links, last-4 check, bilingual patient page:** approved by the developer 18 Oct 2026 (1A-6A) with the layout version addition, and implemented the same day; awaiting the developer's confirmation. M4-P1 to P4 done and confirmed; draft PR #39 |
+| Active phase | **M4-P6 — Web consultation screen and keyboard-first Rx builder:** design being prepared 18 Oct 2026. M4-P1 to P5 done and confirmed; draft PR #39 |
 | Design notes | `docs/milestones/M4-visits-and-prescriptions.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M4 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -112,8 +112,8 @@ PDF prints correctly; patient link passes the 360-px acceptance test.
 | M4-P2 | Prescription domain: items, instructions, versioning, immutability | ✅ |
 | M4-P3 | Favourites and Rx templates; clinic-history autocomplete (no external drug data) | ✅ |
 | M4-P4 | PDF rendering port + adapter; letterhead with registration number | ✅ |
-| M4-P5 | Signed patient links, last-4-digit check, open audit; bilingual patient page; `scripts/inspect_link_token.py` | ▶ |
-| M4-P6 | Web: consultation screen (history + notes + Rx builder), keyboard-first | ☐ |
+| M4-P5 | Signed patient links, last-4-digit check, open audit; bilingual patient page; `scripts/inspect_link_token.py` | ✅ |
+| M4-P6 | Web: consultation screen (history + notes + Rx builder), keyboard-first | ▶ |
 
 ## M5 — Messaging and reminders  `☐`
 
