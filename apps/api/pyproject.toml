@@ -9,7 +9,7 @@ dependencies = [
     "flask==3.1.3",
     "gunicorn==26.2.0",
     "pydantic==2.14.1",
-    "pydantic-settings==2.15.0",
+    "pydantic-settings==2.16.0",
     "structlog==26.1.0",
     "python-ulid==4.0.1",
     # M0-P3 (issue #10). psycopg's binary wheel bundles libpq, so neither the
