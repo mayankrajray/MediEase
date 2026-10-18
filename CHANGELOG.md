@@ -14,6 +14,21 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M4 (#38) complete: visits and digital prescriptions, P1–P6 below, in PR #39.
+- M4-P6 (#38): the consultation screen and the keyboard-first prescription builder (FR-VIS-02,
+  03, 05; FR-RX-01..06, 09; spec §6, D2, D6; NFR-09; decisions 1A–6A). On the doctor's own queue
+  row *Start* opens `/visits/{id}`: the patient's earlier visits (with *Repeat*), notes and
+  vitals, and the builder. One entry row, then Tab and Enter, adds each medicine; frequency takes
+  `101`, `1-0-1`, S, O or C; suggestions are the doctor's favourites and the clinic's own history
+  (a favourite brings its whole line); *More* edits form, strength, quantity, preparation and
+  storage phrases, warnings and notes. Everything autosaves with the revision guard, and a
+  change from another tab stops saving and offers *Reload*. *Review and issue* previews the
+  patient page in English or Hindi; afterwards *Print*, the QR code of the patient link with
+  *Copy link*, and *Revise*. Front desk sees "Prescription issued" on the queue row and prints
+  from it or from the patient profile, which also lists the visits for clinical roles. API:
+  `GET /api/v1/prescriptions/{id}/preview` and two content-free queue fields (contract 0.18.0).
+  New dependency `qrcode` 1.5.4 (the QR image, in the browser). Also fixed: the main navigation
+  marked every item as the current page.
 - M4-P5 (#38): patient prescription links and the patient page (FR-RX-07, 08; spec R9–R13, R19,
   R20, AC2, AC3; decisions 1A–6A). Issuing version 1 creates the chain's link; revisions reuse it
   and the page shows the latest version with "Updated by your doctor on …". `/p/{token}` asks for

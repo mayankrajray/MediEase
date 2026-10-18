@@ -316,6 +316,11 @@ bodiless `304` with the same tag. Screens poll every 5 seconds through `lib/api/
 response stays `Cache-Control: no-store`, so nothing holding names is cached. `If-None-Match` is
 compared weakly, as RFC 9110 requires (`*`, lists and `W/` tags work).
 
+M4-P6 (contract 0.18.0; P2 decision 6A): each queue entry also carries `visit_id` (or `null`)
+and `prescription`, the visit's latest issued version as `{id, version, issued_at}` or `null`.
+No clinical content, so front desk sees "Prescription issued" and prints from the row without a
+call per row; the `ETag` covers both fields.
+
 ### Visits and prescriptions (M4)
 
 | Method | Path | Purpose | Req | State |
@@ -332,6 +337,7 @@ compared weakly, as RFC 9110 requires (`*`, lists and `W/` tags work).
 | POST | `/api/v1/prescriptions/{rx_id}/issue` | Issue (immutable), snapshots, language, pending-delivery marker (spec R5, R14) | FR-RX-06 | Implemented (M4-P2) |
 | POST | `/api/v1/prescriptions/{rx_id}/revise` | New version from the latest issued one | FR-RX-09 | Implemented (M4-P2) |
 | GET | `/api/v1/prescriptions/{rx_id}/pdf` | The PDF, rendered once per version (spec R18, ADR-0012); `RX_PRINT` | FR-RX-04, 06 | Implemented (M4-P4) |
+| GET | `/api/v1/prescriptions/{rx_id}/preview?lang=en\|hi` | A **draft** as the patient will read it (`PatientPrescriptionPage`, the same builder as `/p/{token}`); `CLINICAL_VIEW`; no audit row of its own (part of the consultation view); `RX_NOT_DRAFT` otherwise | spec §6 | Implemented (M4-P6) |
 | GET | `/api/v1/patients/{patient_id}/prescriptions` | The patient's current versions to print, without content; `RX_PRINT` | FR-RX-06 | Implemented (M4-P4) |
 | GET/POST | `/api/v1/rx-favourites` · PUT/DELETE `…/{favourite_id}` | The caller's favourites | FR-RX-05 | Implemented (M4-P3) |
 | GET/POST | `/api/v1/rx-templates` · GET/PUT/DELETE `…/{template_id}` | The caller's templates | FR-RX-05 | Implemented (M4-P3) |

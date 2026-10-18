@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 approved (1A-6A), implemented and confirmed 18 Oct 2026; M4-P6 approved (1A-6A) 18 Oct 2026, in implementation |
+| Status | Complete, awaiting the developer's confirmation — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 approved (1A-6A), implemented and confirmed 18 Oct 2026; M4-P6 approved (1A-6A) and implemented 18 Oct 2026: M4 complete, awaiting the developer's confirmation |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -16,9 +16,9 @@
 | P1 | Visit record, history, 24-hour lock and addenda | Below (done, confirmed) |
 | P2 | Prescription domain: items, instructions, versions, immutability, pending delivery (R14) | Below (done, confirmed) |
 | P3 | Favourites, templates, clinic-history autocomplete | Below (done, confirmed) |
-| P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (done) |
-| P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | Below (done) |
-| P6 | Web consultation screen, keyboard-first Rx builder | Below (approved 1A-6A) |
+| P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (done, confirmed) |
+| P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | Below (done, confirmed) |
+| P6 | Web consultation screen, keyboard-first Rx builder | Below (done) |
 
 ---
 
@@ -805,7 +805,7 @@ Taken while implementing:
 
 ## M4-P6 — The consultation screen and the keyboard-first prescription builder
 
-**Status: approved by the developer 18 Oct 2026 (1A-6A, every recommendation).** Web, with three small API additions. Covers
+**Status: approved by the developer 18 Oct 2026 (1A-6A, every recommendation); implemented the same day (result at the end of this section).** Web, with three small API additions. Covers
 FR-VIS-02, FR-VIS-03, FR-VIS-05, FR-RX-01..06, FR-RX-09; spec §6 (UI notes), R2, R5, R11, D2,
 D6; M4-P2 decision 6A (front desk sees "prescription issued" on the queue); NFR-09 (1366 × 768,
 keyboard). This is the last M4 phase: its final commit carries `Closes #38`.
@@ -902,3 +902,42 @@ surveying; fixed here.
 | 4 | "Prescription issued" on the queue | **A** two content-free fields on `QueueEntry` · **B** one call per row | **A**: one poll as today, the ETag covers it |
 | 5 | The QR code | **A** a pinned, widely used npm package (`qrcode`) rendering an image in the browser · **B** the API returns an SVG · **C** a QR encoder written here | **A**: small, maintained, no network use, nothing new in the API |
 | 6 | Favourites and templates management | **A** from the builder only (save, apply, rename, delete in a drawer) · **B** also a settings page | **A**: doctors manage them where they use them; a page can follow if pilots ask |
+
+### Result (18 Oct 2026)
+
+Built as designed, with these differences and additions:
+
+- **Where code lives.** The visit calls sit with the prescription calls in
+  `features/prescriptions/api.ts` (one `useRxApi()` hook), and `fetchPdf` is there too rather than
+  in `lib/api/pdf.ts`: it is the only caller. Autosave is `features/visits/useAutosave.ts`.
+- **Queue, the doctor's own row.** As designed, plus: the doctor's *Mark completed* (in the menu
+  while in consultation) completes the **visit**, not only the appointment, so the 24-hour lock
+  starts; front desk's *Complete* is unchanged. A visit started on the row but not opened (for
+  example a network failure) is reopened through `VIS_ALREADY_EXISTS`.
+- **Completing with an unissued prescription** asks first ("Complete without issuing?").
+- **Reload after a stale save** waits for the new data before restarting the editors (found by the
+  two-tab journey: starting them at once showed the old data).
+- **Deleting a favourite or template** needs a second press on the same button.
+- **Nav fix**: every main navigation item carried `aria-current="page"`; now only the section shown.
+
+Verification on the rebuilt stack (`make up`, `make seed`, `make smoke` passed):
+
+| Step | How | Result |
+|---|---|---|
+| 1 | `consultation-keyboard.spec.ts`: desk books and marks arrived (API); the doctor's *Start* | Opens `/visits/{id}`, title "Consultation · MediEase", every field labelled |
+| 2 | Keyboard: medicine, Tab, `5 ml`, Tab, `101`, Tab, ArrowDown, Tab, `5`, Enter; *More* for the phrases; reload | Line added, focus back on the medicine; the draft and notes are there after the reload |
+| 3 | *Review and issue*; Hindi; *Issue*; *Print* | "Mix in 10 ml of water" under *How to give*; `lang="hi"` with कैसे दें; QR and link shown; a `%PDF-` file |
+| 4 | Front desk's board | "Prescription issued", no medicine names, *Print prescription* gives the PDF |
+| 5 | Second test: a save in a second tab, then one in the first | The first says "Changed in another tab…" and stops; *Reload* shows the second tab's draft |
+| 6 | Unit tests (`ConsultationScreen.test.tsx`) with a locked visit; *Complete visit* on the stack | Read-only notes, no builder, *Add addendum* only; Complete returns to the queue with the row completed |
+
+Gates: `make lint typecheck contract-check test` green (API 1308 tests, 98.75% coverage; web 426
+tests, twice); `make e2e` 8 passed; `make audit` finds no known vulnerabilities in the API or in the
+web's production dependencies (the dev-only braces advisory noted in the CHANGELOG remains).
+
+The M4 exit criteria hold: a doctor issues a prescription from the queue, the PDF prints, and the
+patient link passes the 360-px test (`patient-link-360.spec.ts`).
+
+Known: `e2e/queue-support.ts` makes an extra session starting five minutes back, which overlaps
+(`SCH_OVERLAP`) when an earlier extra session ended in the last five minutes; rerunning a few
+minutes later passes. Left as it is (M3 helper), noted here.
