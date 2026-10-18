@@ -18,6 +18,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from mediease_api.adapters.db.audit import SqlAlchemyAuditWriter
+from mediease_api.adapters.db.jobs import SqlAlchemyJobQueue, SqlAlchemyRetentionRepository
 from mediease_api.adapters.db.repositories import (
     SqlAlchemyAppointmentHistoryRepository,
     SqlAlchemyAppointmentRepository,
@@ -152,6 +153,9 @@ class _OpenUnit:
         self.rate_limits = SqlAlchemyRateLimitRepository(session)
         # Shares the session, so an audit row commits with the change (R11).
         self.audit = SqlAlchemyAuditWriter(session)
+        # M5-P1: jobs commit with the change that enqueues them (the outbox).
+        self.jobs = SqlAlchemyJobQueue(session)
+        self.retention = SqlAlchemyRetentionRepository(session)
 
 
 class SqlAlchemyUnitOfWork:
@@ -208,6 +212,14 @@ class SqlAlchemyUnitOfWork:
     @property
     def audit(self) -> SqlAlchemyAuditWriter:
         return self._require_open().audit
+
+    @property
+    def jobs(self) -> SqlAlchemyJobQueue:
+        return self._require_open().jobs
+
+    @property
+    def retention(self) -> SqlAlchemyRetentionRepository:
+        return self._require_open().retention
 
     def tenant(self, clinic_id: UUID) -> SqlAlchemyTenantRepositories:
         return SqlAlchemyTenantRepositories(self._require_open().session, clinic_id)

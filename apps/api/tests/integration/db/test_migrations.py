@@ -21,7 +21,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0013"
+HEAD = "0014"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -33,6 +33,7 @@ M4_P1_TABLES = sorted([*M3_P2_TABLES, "visit_addenda", "visits"])
 M4_P2_TABLES = sorted([*M4_P1_TABLES, "prescription_items", "prescriptions"])
 M4_P3_TABLES = sorted([*M4_P2_TABLES, "rx_favourites", "rx_templates"])
 M4_P5_TABLES = sorted([*M4_P3_TABLES, "patient_links", "public_rate_limits"])
+M5_P1_TABLES = sorted([*M4_P5_TABLES, "jobs"])
 
 
 @pytest.fixture
@@ -409,9 +410,42 @@ def test_0013_adds_patient_links_rate_limits_and_the_layout_version(
         engine.dispose()
 
 
+def test_0014_adds_jobs_with_partial_indexes_and_the_health_view(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    command.upgrade(alembic_config, "0014")
+    assert _tables(scratch_database_url) == M5_P1_TABLES
+    assert "v_job_health" in _views(scratch_database_url)
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            indexes = {i["name"]: i for i in inspect(conn).get_indexes("jobs")}
+            assert indexes["uq_jobs_dedupe_key"]["unique"]
+            assert {"ix_jobs_claim", "ix_jobs_running", "ix_jobs_clinic_id"} <= set(indexes)
+            definition = conn.execute(
+                text("SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_jobs_dedupe_key'")
+            ).scalar_one()
+            # R9c: only live jobs hold their key; a cancelled or dead one does not.
+            assert "queued" in definition and "succeeded" in definition
+            assert "cancelled" not in definition and "dead" not in definition
+            checks = {c["name"] for c in inspect(conn).get_check_constraints("jobs")}
+            assert {
+                "ck_jobs_state",
+                "ck_jobs_kind_format",
+                "ck_jobs_attempts_range",
+                "ck_jobs_lock_when_running",
+                "ck_jobs_system_kind",
+            } <= checks
+        command.downgrade(alembic_config, "0013")
+        assert _tables(scratch_database_url) == M4_P5_TABLES
+        assert "v_job_health" not in _views(scratch_database_url)
+    finally:
+        engine.dispose()
+
+
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M4_P5_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M5_P1_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:

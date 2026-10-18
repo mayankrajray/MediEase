@@ -68,7 +68,13 @@ class Tenant:
 # platform-level rows (clinic_id null for a sign-in). Nothing in the application
 # reads it; an owner-facing read (FR-AUD-03) must scope its own query by clinic
 # and add cases to this suite.
-NOT_TENANT_SCOPED = {"audit_events"}
+#
+# Reviewed exception (M5-P1): jobs carries a nullable clinic_id on purpose. It is null exactly for
+# the system kinds a CHECK lists (the retention purge), so no tenant repository can own the table.
+# Only the job queue (enqueue, in the unit of work) and the worker's store touch it; the store never
+# reads a clinic's rows, and a job's handler is given that job's clinic only
+# (tests/integration/test_jobs_db.py).
+NOT_TENANT_SCOPED = {"audit_events", "jobs"}
 
 
 @pytest.fixture
@@ -552,6 +558,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "rx_templates",
             "patient_links",
             "audit_events",
+            "jobs",
         }
     )
     assert {

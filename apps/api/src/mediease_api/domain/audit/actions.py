@@ -88,3 +88,5 @@ class AuditAction(StrEnum):
     RX_TEMPLATE_CREATED = "rx_template.created"
     RX_TEMPLATE_UPDATED = "rx_template.updated"
     RX_TEMPLATE_DELETED = "rx_template.deleted"
+    # M5-P1: the platform's retention purge, written as SYSTEM. Metadata: row counts only.
+    RETENTION_PURGED = "retention.purged"
