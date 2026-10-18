@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M4 — Visits and digital prescriptions** (issue #38, branch `m4/38-visits-and-prescriptions`, one PR for the milestone). M3 merged in PR #37 on 17 Oct 2026 |
-| Active phase | **M4-P6 — Web consultation screen and keyboard-first Rx builder:** approved by the developer 18 Oct 2026 (1A-6A), in implementation. M4-P1 to P5 done and confirmed; draft PR #39 |
+| Active phase | **M4 complete (P1–P6), awaiting the developer's confirmation and review of PR #39.** M4-P6 (web consultation screen and keyboard-first Rx builder) approved 18 Oct 2026 (1A-6A) and implemented the same day. Next: M5 once M4 is merged |
 | Design notes | `docs/milestones/M4-visits-and-prescriptions.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M4 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -101,7 +101,7 @@ concurrent double-booking test passes; queue refreshes on all screens within 5 s
 | M3-P4 | Live queue updates (polling with ETag first; SSE only if polling proves insufficient — ADR required) | ✅ |
 | M3-P5 | Web: today's queue board, booking flow, schedule settings | ✅ |
 
-## M4 — Visits and digital prescriptions  `▶ ACTIVE`
+## M4 — Visits and digital prescriptions  `✅`
 
 **Covers:** FR-VIS-01..03, FR-VIS-05, FR-RX-01..10. **Spec:** `docs/specs/prescriptions.md` (Approved 17 Oct 2026, D1-D5). **ADR:** 0012. **Issue:** #38, one branch and one PR for all phases (ADR-0011). **Exit:** doctor issues an Rx from the queue;
 PDF prints correctly; patient link passes the 360-px acceptance test.
@@ -113,7 +113,7 @@ PDF prints correctly; patient link passes the 360-px acceptance test.
 | M4-P3 | Favourites and Rx templates; clinic-history autocomplete (no external drug data) | ✅ |
 | M4-P4 | PDF rendering port + adapter; letterhead with registration number | ✅ |
 | M4-P5 | Signed patient links, last-4-digit check, open audit; bilingual patient page; `scripts/inspect_link_token.py` | ✅ |
-| M4-P6 | Web: consultation screen (history + notes + Rx builder), keyboard-first | ▶ |
+| M4-P6 | Web: consultation screen (history + notes + Rx builder), keyboard-first | ✅ |
 
 ## M5 — Messaging and reminders  `☐`
 

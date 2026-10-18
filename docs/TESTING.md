@@ -43,8 +43,8 @@ Tool choices are confirmed and pinned in the milestone that introduces them.
 The M3 journeys add a session of the sample doctor running now (an extra session) and a fresh
 synthetic patient through the API first (`e2e/queue-support.ts`), so they pass at any hour and
 on a database that has been used before.
-| Book slot → mark arrived → start consultation → issue Rx → print PDF | M4 |
-| Open patient link on a 360-px viewport → wrong last-4 → correct last-4 → view Rx | M4 |
+| Book slot → mark arrived → start consultation → issue Rx → print PDF (`e2e/consultation-keyboard.spec.ts`, at 1366 × 768, keyboard-only entry) | M4 |
+| Open patient link on a 360-px viewport → wrong last-4 → correct last-4 → view Rx (`e2e/patient-link-360.spec.ts`) | M4 |
 | Issue Rx with follow-up → reminder scheduled → worker sends via console adapter → status updates | M5 |
 | Patient replies STOP → opted out → next reminder skipped | M5 |
 
