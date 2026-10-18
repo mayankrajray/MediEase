@@ -25,6 +25,7 @@ from mediease_api.application.appointments.common import (
 from mediease_api.application.appointments.views import AppointmentView
 from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor
+from mediease_api.application.messaging.booking import enqueue_booking_confirmation
 from mediease_api.domain.appointments.appointment import Appointment
 from mediease_api.domain.appointments.errors import NotModifiable, SessionClosed
 from mediease_api.domain.appointments.status import AppointmentStatus, CancelReason
@@ -102,6 +103,18 @@ class RescheduleAppointment:
                     "rescheduled_from_id": str(old.id),
                     "from_session_id": str(source.id),
                 },
+            )
+            patient = tenant.patients.get(new.patient_id)
+            assert patient is not None  # a foreign key keeps it
+            # FR-APT-06 (M5-P2, decision 6A): the new time is confirmed; the old job, if still
+            # queued, finds its appointment cancelled and sends nothing.
+            enqueue_booking_confirmation(
+                uow,
+                ids=self._ids,
+                appointment=new,
+                patient=patient,
+                request_id=actor.info.request_id,
+                now=now,
             )
             uow.commit()
 

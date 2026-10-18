@@ -90,3 +90,6 @@ class AuditAction(StrEnum):
     RX_TEMPLATE_DELETED = "rx_template.deleted"
     # M5-P1: the platform's retention purge, written as SYSTEM. Metadata: row counts only.
     RETENTION_PURGED = "retention.purged"
+    # M5-P2 (prescriptions R15): a pending link not sent, written as SYSTEM. Metadata: the
+    # version and the reason (``too_old``, ``no_consent`` or ``no_link``).
+    PRESCRIPTION_LINK_EXPIRED = "prescription.link_expired"

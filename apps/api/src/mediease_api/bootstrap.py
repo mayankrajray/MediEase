@@ -29,11 +29,14 @@ from mediease_api.adapters.db.jobs import SqlAlchemyJobStore
 from mediease_api.adapters.db.readiness import SqlAlchemyDatabaseCheck
 from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork, build_session_factory
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
+from mediease_api.adapters.messaging.catalog import YamlTemplateCatalog
+from mediease_api.adapters.messaging.console import ConsoleMessagingAdapter
 from mediease_api.adapters.pdf.weasy import WeasyPrintRenderer
 from mediease_api.adapters.security.argon2_hasher import Argon2PasswordHasher
 from mediease_api.adapters.security.ip_hash import HmacIpHasher
 from mediease_api.adapters.security.jwt_tokens import JwtAccessTokenIssuer
 from mediease_api.adapters.security.link_signer import HmacLinkSigner
+from mediease_api.adapters.security.phone_cipher import FernetPhoneCipher
 from mediease_api.adapters.security.refresh_secrets import Sha256RefreshTokenSecrets
 from mediease_api.adapters.storage.local import LocalBlobStorage
 from mediease_api.adapters.storage.s3 import S3BlobStorage
@@ -70,6 +73,9 @@ from mediease_api.application.links.use_cases import (
     VerifyChallenge,
     ViewPrescription,
 )
+from mediease_api.application.messaging.booking import SendBookingConfirmation
+from mediease_api.application.messaging.rx_link import SendRxLink
+from mediease_api.application.messaging.sender import MessageSender
 from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics
 from mediease_api.application.patients.consent import OptIn, OptOut, RecordConsent
 from mediease_api.application.patients.import_patients import ImportPatients
@@ -108,7 +114,7 @@ from mediease_api.application.visits.use_cases import (
     UpdateVisit,
 )
 from mediease_api.config.logging import configure_logging
-from mediease_api.config.settings import AppSettings
+from mediease_api.config.settings import AppEnv, AppSettings
 from mediease_api.delivery.errors import register_error_handlers
 from mediease_api.delivery.http.access import check_every_route_has_policy, register_access_control
 from mediease_api.delivery.http.appointments import create_appointments_blueprint
@@ -130,8 +136,10 @@ from mediease_api.delivery.middleware import register_request_middleware
 from mediease_api.delivery.worker.heartbeat import beat
 from mediease_api.delivery.worker.loop import LockRenewer, Worker
 from mediease_api.domain.jobs.job import PURGE_KIND
+from mediease_api.domain.messaging.jobs import BOOKING_CONFIRMATION_KIND, RX_LINK_KIND
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
+from mediease_api.ports.messaging import MessagingPort
 from mediease_api.ports.pdf import PdfRendererPort
 from mediease_api.ports.readiness import DatabaseCheck
 from mediease_api.ports.security import AccessTokenIssuer, PasswordHasher
@@ -482,6 +490,36 @@ def _interruptible_sleep(stop: threading.Event) -> Callable[[float], None]:
     return sleep
 
 
+def _messaging_handlers(
+    settings: AppSettings,
+    factory: sessionmaker[Session],
+    clock: ClockPort,
+    ids: IdPort,
+) -> dict[str, JobHandler]:
+    """The M5-P2 send jobs. Templates are loaded and checked here, so a bad file stops start-up."""
+    if settings.MESSAGING_PROVIDER == "console" and settings.APP_ENV is AppEnv.PRODUCTION:
+        raise ValueError("MESSAGING_PROVIDER=console sends nothing; refused in production")
+    messaging: MessagingPort = ConsoleMessagingAdapter()
+    sender = MessageSender(
+        uow=SqlAlchemyUnitOfWork(factory),
+        clock=clock,
+        ids=ids,
+        messaging=messaging,
+        templates=YamlTemplateCatalog.from_package(),
+        phones=FernetPhoneCipher(settings.messaging_phone_keys()),
+    )
+    return {
+        BOOKING_CONFIRMATION_KIND: SendBookingConfirmation(sender=sender),
+        RX_LINK_KIND: SendRxLink(
+            sender=sender,
+            ids=ids,
+            tokens=LinkTokens(HmacLinkSigner(settings.patient_link_keys())),
+            public_base_url=settings.PUBLIC_BASE_URL,
+            window=timedelta(hours=settings.RX_LINK_SEND_WINDOW_HOURS),
+        ),
+    }
+
+
 def build_worker(settings: AppSettings, stop: threading.Event) -> Worker:
     """Compose the background worker (M5-P1): the same adapters as the API, no HTTP.
 
@@ -496,6 +534,7 @@ def build_worker(settings: AppSettings, stop: threading.Event) -> Worker:
     rand = random.SystemRandom().random
     handlers: dict[str, JobHandler] = {
         PURGE_KIND: PurgeExpired(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
+        **_messaging_handlers(settings, factory, clock, ids),
     }
     return Worker(
         worker_id=f"{socket.gethostname()}:{os.getpid()}:{secrets.token_hex(3)}",

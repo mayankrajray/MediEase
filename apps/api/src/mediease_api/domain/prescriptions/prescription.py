@@ -39,7 +39,7 @@ from mediease_api.domain.prescriptions.vocabulary import (
     StorageCode,
     Timing,
 )
-from mediease_api.domain.shared.errors import InvalidValue
+from mediease_api.domain.shared.errors import InvalidTransition, InvalidValue
 from mediease_api.domain.shared.text import optional_text, required_text
 from mediease_api.domain.shared.time import require_utc
 from mediease_api.domain.visits.visit import Visit
@@ -469,6 +469,23 @@ class Prescription:
         self.status = PrescriptionStatus.SUPERSEDED
         if self.link_delivery is LinkDelivery.PENDING:
             self.link_delivery = LinkDelivery.SUPERSEDED
+        self.updated_at = now
+
+    def link_sent(self, now: datetime) -> None:
+        """R15 (M5-P2): the pending link was accepted by the provider."""
+        self._settle_link(LinkDelivery.SENT, now)
+
+    def link_expired(self, now: datetime) -> None:
+        """R15: too old, or consent no longer holds; the link is never sent."""
+        self._settle_link(LinkDelivery.EXPIRED, now)
+
+    def _settle_link(self, to: LinkDelivery, now: datetime) -> None:
+        now = require_utc(now, "now")
+        if self.link_delivery is not LinkDelivery.PENDING:
+            raise InvalidTransition(
+                "link delivery", self.link_delivery.value if self.link_delivery else "NONE", to
+            )
+        self.link_delivery = to
         self.updated_at = now
 
 
