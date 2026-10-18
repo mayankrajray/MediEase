@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 approved (1A-6A), implemented and confirmed 18 Oct 2026; M4-P6 designed next |
+| Status | In progress — M4 opened 17 Oct 2026; M4-P1 approved (1A–6A), implemented and confirmed by the developer the same day; M4-P2 approved (1A–6A), implemented and confirmed by the developer 18 Oct 2026; M4-P3 approved (1A–5A), implemented and confirmed by the developer 18 Oct 2026; M4-P4 approved (1A-5A), implemented and confirmed 18 Oct 2026; M4-P5 approved (1A-6A), implemented and confirmed 18 Oct 2026; the M4-P6 design proposed, awaiting approval |
 | Spec | `docs/specs/prescriptions.md` (Approved 2026-10-17, D1–D5) |
 | ADR | ADR-0012 (in-house PDF rendering and blob storage behind ports) |
 | Covers | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10 |
@@ -18,7 +18,7 @@
 | P3 | Favourites, templates, clinic-history autocomplete | Below (done, confirmed) |
 | P4 | `PdfRendererPort`, `BlobStoragePort`, render-once (R18, ADR-0012) | Below (done) |
 | P5 | Patient links, last-4 challenge, bilingual page (R9–R13, R19, R20) | Below (done) |
-| P6 | Web consultation screen, keyboard-first Rx builder | At its start |
+| P6 | Web consultation screen, keyboard-first Rx builder | Below (proposed) |
 
 ---
 
@@ -800,3 +800,105 @@ Taken while implementing:
 - Two flaky tests seen under a loaded parallel run: the M2 patient search "/" shortcut (fixed,
   `0782439`) and the M4-P3 suggestions timing check (p95 226 ms against 150 ms once in a full
   run; passes alone; not changed).
+
+---
+
+## M4-P6 — The consultation screen and the keyboard-first prescription builder
+
+**Status: proposed 18 Oct 2026, awaiting approval.** Web, with three small API additions. Covers
+FR-VIS-02, FR-VIS-03, FR-VIS-05, FR-RX-01..06, FR-RX-09; spec §6 (UI notes), R2, R5, R11, D2,
+D6; M4-P2 decision 6A (front desk sees "prescription issued" on the queue); NFR-09 (1366 × 768,
+keyboard). This is the last M4 phase: its final commit carries `Closes #38`.
+
+### The journey
+
+1. **Queue → consultation.** On the doctor's own row, *Start* moves the appointment to
+   `IN_CONSULTATION`, starts the visit and opens `/visits/{id}`; an `IN_CONSULTATION` row offers
+   *Open consultation* (a visit that exists is reopened through `VIS_ALREADY_EXISTS`). Front desk
+   keeps *Start* as today (the queue step only); they never open the screen (no
+   `CLINICAL_VIEW`).
+2. **The screen** (spec §6), one page at 1366 × 768:
+   - left: the patient (name, code, age, sex, language) and the history timeline (last 10
+     visits, newest first, each with its complaint, diagnosis and medicines; "Repeat" copies a
+     past prescription's lines into the draft);
+   - right: notes (chief complaint, findings, diagnosis, notes) and vitals, then the builder.
+3. **The builder** (spec §6, keyboard-first): one entry row — type the medicine (suggestions:
+   favourites first, then this clinic's history, M4-P3), Tab through dose, frequency, timing,
+   duration; Enter adds the line and returns to the medicine field. Frequency takes `101`, `1-0-1`
+   or a letter (S for SOS, O for once, C for custom). *More* on a line opens form, strength,
+   quantity, preparation and storage phrases, warnings and notes. A favourite inserts its whole
+   line. Lines can be moved (Alt+↑/↓) and removed. Below: advice (diet, activity, "come back
+   immediately if…", notes) and the follow-up date (+3 d, +7 d, +14 d shortcuts). Templates
+   apply a whole body; "Save line as favourite" and "Save as template" are on the builder.
+4. **Issue.** *Review and issue* opens a preview of exactly what the patient will see (decision
+   3), English or Hindi, then *Issue*. Afterwards the screen shows *Print* (the PDF), the patient
+   link as a QR code with *Copy link*, and *Revise*.
+5. **Complete.** *Complete visit* completes the visit and the appointment and returns to the
+   queue. A completed visit's notes stay editable for 24 hours; afterwards the screen offers
+   *Add addendum* (FR-VIS-05).
+6. **Front desk.** The queue row of a patient whose visit has an issued prescription shows
+   "Prescription issued" and a *Print prescription* action (spec D6); the patient profile lists
+   the printable prescriptions with *Print* and *Show link* (QR), no content. Doctors and owners
+   also see the visit history there.
+
+### API additions (contract 0.18.0)
+
+| Change | Why |
+|---|---|
+| `QueueEntry` gains `visit_id` and `prescription: {id, version, issued_at} \| null` (the latest issued version; no content) | The "prescription issued" state and *Print* on the row without a call per row (P2 decision 6A). The queue's ETag covers it. |
+| `GET /api/v1/prescriptions/{id}/preview?lang=en\|hi` (`CLINICAL_VIEW`) returns `PatientPrescriptionPage` for a **draft** | "Issue shows a preview of exactly what the patient will see" (spec §6): the same domain builder as the patient page, so no wording is duplicated in the browser. Not audited separately (part of the consultation view). |
+| `Patient` unchanged; the screen uses `GET /visits/{id}` (one `visit.viewed`, R16) | |
+
+### Web structure
+
+| Where | What |
+|---|---|
+| `app/(clinic)/(workspace)/visits/[id]/page.tsx` | The consultation screen (title "Consultation · MediEase", never the patient's name) |
+| `features/visits/` | `ConsultationScreen`, `HistoryTimeline`, `VisitNotes`, `Vitals`, `CompleteBar`, `Addenda`, `api.ts` |
+| `features/prescriptions/` | `RxBuilder`, `EntryRow`, `LineEditor`, `MedicineCombobox`, `FrequencyField`, `AdviceEditor`, `IssueReview`, `IssuedActions` (print, QR, copy, revise), `TemplatePicker`, `api.ts`, `vocabulary.ts` (labels for the codes, English only, for staff) |
+| `features/queue/QueueRow.tsx` | Doctor: *Start* and *Open consultation*; front desk: "Prescription issued" and *Print prescription* |
+| `features/patients/PatientProfile.tsx` | The visits placeholder becomes *Visits* (CLINICAL_VIEW) and *Prescriptions to print* (RX_PRINT) |
+| `lib/api/pdf.ts` | `fetchPdf(id)`: the PDF as a blob with `X-Clinic-ID`, `RX_PDF_BUSY` retried once after `Retry-After`; opened in a new tab for the browser's own print |
+
+Also: the shell's nav marks every item current (`pathname.startsWith("/")`), found while
+surveying; fixed here.
+
+### Tests
+
+- Unit (Testing Library, mocked API): the entry row's keyboard path (type, Tab ×4, Enter adds,
+  focus back), frequency shortcuts, favourites inserting a whole line, Repeat, saving whole
+  with the revision and `RX_STALE` / `VIS_STALE` banners ("changed in another tab — reload"),
+  issue errors (`RX_EMPTY`, `RX_DOCTOR_INCOMPLETE` naming the missing fields), the preview,
+  print retry on `RX_PDF_BUSY`, the QR's text equal to the link, front desk's row and profile
+  showing no clinical content, locked visits offering only addenda.
+- API: the queue's new fields (content-free, scoped), the preview endpoint (draft only, same
+  words as the issued page, CLINICAL_VIEW, cross-clinic 404), contract checks.
+- Playwright (1366 × 768): the doctor starts from the queue, writes notes, types the PRD §8.6
+  sample with the keyboard only, issues after the preview, sees the QR and prints; front desk
+  sees "Prescription issued" on the row and prints. Axe-style checks: every field labelled,
+  errors announced.
+
+### Verify (on the rebuilt stack, with `make seed`)
+
+1. As front desk, book and mark arrived; as the doctor, *Start* on the row opens the screen with
+   the patient's history.
+2. Type the PRD sample with the keyboard only; Enter adds it; reload the page: the draft is there.
+3. *Review and issue*: the preview shows "Mix in 10 ml of water" under *How to give*; switch to
+   Hindi; *Issue*. The QR opens the P5 page on a phone; *Print* opens the PDF.
+4. As front desk: the row says "Prescription issued"; *Print prescription* opens the same PDF;
+   the profile lists it without content.
+5. In a second tab, change the draft; saving in the first tab says it changed elsewhere and
+   reloads. **Failure path.**
+6. *Complete visit*: the row is completed; after the 24-hour lock (shown with a test clock in the
+   suite) the screen offers *Add addendum* only.
+
+### Decisions for approval
+
+| # | Question | Options | Recommendation |
+|---|---|---|---|
+| 1 | Where the consultation lives | **A** its own page `/visits/{id}` · **B** a wide drawer over the queue | **A**: room for history and the builder at 1366 × 768, a URL to return to, and the queue stays the front desk's |
+| 2 | Saving | **A** autosave a second after typing stops and on leaving a field, with the revision; a status line says "Saved" or what went wrong · **B** explicit *Save* buttons (and Ctrl+S) | **A**: nothing is lost when the doctor moves on; the revision guard already stops overwrites |
+| 3 | The issue preview | **A** a new `GET /prescriptions/{id}/preview` returning the patient page model for a draft · **B** the browser builds the preview from the draft | **A**: exactly the patient's words from the one phrasebook (R20), nothing duplicated in the web |
+| 4 | "Prescription issued" on the queue | **A** two content-free fields on `QueueEntry` · **B** one call per row | **A**: one poll as today, the ETag covers it |
+| 5 | The QR code | **A** a pinned, widely used npm package (`qrcode`) rendering an image in the browser · **B** the API returns an SVG · **C** a QR encoder written here | **A**: small, maintained, no network use, nothing new in the API |
+| 6 | Favourites and templates management | **A** from the builder only (save, apply, rename, delete in a drawer) · **B** also a settings page | **A**: doctors manage them where they use them; a page can follow if pilots ask |
