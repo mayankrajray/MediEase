@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M5 — Messaging and reminders** (issue #40, branch `m5/40-messaging-and-reminders`, one PR for the milestone). M4 merged in PR #39 on 18 Oct 2026 |
-| Active phase | **M5-P4 — Reminder rules:** M5-P3 confirmed by the developer and pushed to PR #41 on 18 Oct 2026 (the live Meta test still needs L-01/L-02); P4 design proposed, awaiting approval |
+| Active phase | **M5-P4 — Reminder rules:** M5-P3 confirmed by the developer and pushed to PR #41 on 18 Oct 2026 (the live Meta test still needs L-01/L-02); P4 approved (1A–6A) and implemented 19 Oct 2026, verified on the stack, awaiting the developer's confirmation |
 | Design notes | `docs/milestones/M5-messaging-and-reminders.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M5 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |

@@ -17,7 +17,7 @@
 | P1 | The job queue and the worker: `jobs`, short committed claims with `SKIP LOCKED`, retries, `dead`, `cancelled`, the reaper, recurring jobs, the first real job (retention purge), `v_job_health`, the `worker` container | Below (done; confirmed) |
 | P2 | `MessagingPort`, the console adapter, `templates.yaml`; `messages` (encrypted phone, IDs only, unique idempotency key); a send job; booking confirmations and the M4 prescription links still `PENDING` (issued in the last 24 hours, R15 of the M4 spec) through it; `v_message_health` | Below (done; confirmed) |
 | P3 | WhatsApp Cloud adapter (errors mapped to `MSG_*`, 10 s timeout); `GET`/`POST /webhooks/whatsapp` (raw-body signature, store once, answer within 1 s); statuses only move forward; reconciliation of messages stuck in `SENT` | Below (done; confirmed; the live Meta test needs L-01, L-02) |
-| P4 | Reminder rules: follow-up reminders from issued prescriptions (09:00 the day before), revisions move or cancel them, manual reminders, quiet hours 21:00–08:00, consent re-read at send time; pending follow-ups API; the automatic no-show job | At its start |
+| P4 | Reminder rules: follow-up reminders from issued prescriptions (09:00 the day before), revisions move or cancel them, manual reminders, quiet hours 21:00–08:00, consent re-read at send time; pending follow-ups API; the automatic no-show job | Below (done; awaiting confirmation) |
 | P5 | STOP, UNSUBSCRIBE, रोकें, बंद opt the patient out and confirm; SMS adapter behind a flag (off); cost per message and the ops console's monthly total per clinic | At its start |
 | P6 | Web: reminder and message status on the patient profile and the consultation; pending follow-ups with *Book follow-up*; failed messages explained with a "call the patient" hint; Playwright | At its start |
 
@@ -340,3 +340,53 @@ web 426. No change to `contracts/openapi.yaml` (webhooks are outside it, API.md 
 Not verified: Meta itself — a message to the WhatsApp test number and its real webhooks need L-01
 (account and number) and L-02 (approved templates); RUNBOOK §9 has the tunnel steps. The Hindi
 wording still awaits L-02.
+
+---
+
+## M5-P4 — Reminder rules, pending follow-ups and the automatic no-show
+
+Approved 18 Oct 2026 with 1A–6A:
+
+| # | Decision |
+|---|---|
+| 1A | One reminder per prescription chain, moved in place; each move bumps `revision`, each job carries its revision, an older job does nothing; no job is edited |
+| 2A | Quiet hours: the job defers the reminder to the next 08:00 under a new revision and enqueues a fresh job; the job queue is unchanged |
+| 3A | Once sent, a reminder's visible status is its message's |
+| 4A | No-show: a 5-minute system sweep returns clinic IDs only and enqueues one per-clinic job |
+| 5A | Manual reminders: a doctor and a follow-up date, due by the same rule |
+| 6A | No clinic phone: manual reminders refused (`REM_CLINIC_PHONE_MISSING`), automatic ones `FAILED` with that code at send time |
+
+Defaults kept fixed for the pilot: 09:00 the day before, quiet hours 21:00–08:00; no-show bookings
+keep their reminders.
+
+### Result (19 Oct 2026)
+
+Built as designed (`domain/reminders/`, `application/reminders/`,
+`application/appointments/no_show.py`, `adapters/db/reminders.py`,
+`delivery/http/reminders.py`, migration `0017`, contract 0.19.0), plus:
+
+- **The 60-minute boundary is inclusive** in the domain, the per-clinic query and the sweep
+  ("at session end + 60 minutes", R10); a test covers one second before and the exact minute.
+- **A deferred reminder keeps a refused message row** for its next job (`Skip(close=False)` in the
+  sender), so a send refused just before 21:00 is retried at 08:00 rather than lost.
+- **One pending row per patient**: the latest overdue follow-up, so a patient with two old chains
+  is listed once.
+- **Reviewed cross-clinic read**: `SqlAlchemyNoShowSweep` (clinic IDs only), recorded in the
+  tenancy suite beside the P3 message lookup.
+
+Verification on the rebuilt stack (`make up`, `make smoke`; migration `0017`):
+
+| Step | Result |
+|---|---|
+| 1. Issue with follow-up tomorrow (14:52 IST) | One reminder `SCHEDULED`, revision 1, due now (09:00 today had passed), its job queued for the same time |
+| 2. Its job run in daytime | `follow_up_due` sent through the console with clinic name, doctor, `Tue 20 Oct 2026` and the clinic phone; reminder `SENT`; `GET /patients/{id}/reminders` shows `SENT` |
+| 3. **AC2 on the stack.** A manual reminder's job forced due while the clinic's zone (switched to Pacific/Auckland for the step, then restored) was at 22:22 | Deferred: revision 2, due 08:00 local the next morning, a new job queued for 08:00, the old job succeeded, no message |
+| 4. **Failure paths.** Manual reminder without consent; cancel twice | 409 `REM_NO_CONSENT`; scheduled 201 (due 03:30 UTC = 09:00 IST), moved (revision 2), cancelled, then 409 `REM_NOT_SCHEDULED` |
+| 5. `GET /follow-ups/pending` | 200 (none on the seeded data) |
+| 6. Automatic no-show | The 22 bookings left `BOOKED` by earlier checks, in sessions that ended over an hour before, became `NO_SHOW` on the worker's own sweep: 22 history rows with no user and 22 SYSTEM audit events |
+| 7. Worker logs | `message.sent`, `reminder.deferred`, `no_show.sweep`, `no_show.marked`; no patient name or prescription text |
+
+Gates: `make lint typecheck contract-check test` — API 1516 tests at 98.33% (core gate holds),
+web 426.
+
+Not verified: per-clinic quiet hours or send times (not built); the Hindi wording (L-02).

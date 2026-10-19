@@ -159,7 +159,9 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 | Code | HTTP | Meaning | Likely cause | Where to look |
 |---|---|---|---|---|
 | `REM_NO_CONSENT` | 409 | Patient hasn't agreed to messages | Consent false or opted out | Patient consent |
-| `REM_IN_PAST` | 422 | Reminder time has passed | Client/timezone | Clock, clinic timezone |
+| `REM_IN_PAST` | 422 | The follow-up date is not after today | Client/timezone | Clock, clinic timezone |
+| `REM_CLINIC_PHONE_MISSING` | 409 (or on a reminder) | The clinic has no phone number, which `follow_up_due` needs (M5-P4 decision 6A): manual reminders are refused; an automatic one becomes `FAILED` with this code at send time | Phone not entered at onboarding | Clinic settings |
+| `REM_NOT_SCHEDULED` | 409 | The reminder was sent, cancelled or skipped and can no longer be changed (M5-P4) | A stale screen | The reminder's status |
 | `MSG_TEMPLATE_NOT_FOUND` | — (job) | Template missing at provider | Name/language not approved | Meta template manager, `templates.yaml` |
 | `MSG_TEMPLATE_PARAMS` | — (job) | Template variables mismatch | Count/order differs from approved template | DEBUGGING §5.7 |
 | `MSG_RECIPIENT_INVALID` | — (job) | Number can't receive WhatsApp | Not on WhatsApp / invalid | SMS fallback (FR-REM-06) |

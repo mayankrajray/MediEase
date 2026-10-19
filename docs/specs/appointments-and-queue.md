@@ -63,7 +63,10 @@ stateDiagram-v2
   `details.from` and `details.to`. Timestamps `arrived_at`, `started_at`, `completed_at` are set on
   entry to the matching state.
 - **R10** `NO_SHOW` is set manually or automatically at session end + 60 minutes for `BOOKED`
-  appointments (job in M5; manual only in M3).
+  appointments (job in M5; manual only in M3). M5-P4: every 5 minutes `schedule_no_shows` finds
+  the active clinics with such bookings (IDs only) and enqueues one `mark_no_shows` job per clinic,
+  which sets `NO_SHOW` at end + 60 minutes or later, writes history with no user and a SYSTEM
+  audit event; a late arrival can still move it to `ARRIVED` the same day (D19).
 - **R11** Walk-ins are added to today's session for the chosen doctor with source `WALK_IN`
   (token mode: next token; slot mode: appended after the last slot, capacity permitting, or
   flagged as overbooked if the owner enabled overbooking).

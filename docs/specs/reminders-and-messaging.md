@@ -5,7 +5,7 @@
 | Requirements | FR-REM-01, 02, 04, 05, 07; FR-MSG-01..05, 07; FR-APT-06; NFR-13 |
 | Milestone / phases | M5 / P1–P6 |
 | Status | Approved (developer sign-off 2026-10-18: the M5 plan with decisions 1A–5A and four refinements to the job queue, R9–R11 and R9a–R9e) |
-| Last updated | 2026-10-18 (M5-P3: R15 rewritten — WhatsApp has no status lookup; M5-P2: R6 names P2's keys and the unknown-outcome rule; earlier: approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
+| Last updated | 2026-10-19 (M5-P4: R2, R5 and R17 made precise; M5-P3: R15 rewritten — WhatsApp has no status lookup; M5-P2: R6 names P2's keys and the unknown-outcome rule; earlier: approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
 
 ## 1. Context
 Post-visit follow-up depends on memory (A14); patients forget follow-ups and vaccination dates
@@ -43,6 +43,9 @@ window the patient's own STOP message opens:
 - **R1** Issuing a prescription with `follow_up_date` creates a `FOLLOW_UP` reminder due at
   `follow_up_date − 1 day, 09:00` clinic time; if that is already past, due now (subject to R4).
 - **R2** Revising a prescription moves or cancels the follow-up reminder to match the new version.
+  M5-P4 (decision 1A): one reminder per chain, moved in place; each move bumps `revision`, and the
+  send job made for an older revision does nothing. A reminder already sent is not changed; a new
+  date then gets a new reminder.
 - **R3** Staff can create a manual follow-up reminder for any patient with consent; without consent
   → `REM_NO_CONSENT`.
 
@@ -50,10 +53,15 @@ window the patient's own STOP message opens:
 - **R4** Quiet hours 21:00–08:00 clinic time: a due job is rescheduled to the next 08:00
   (`MSG_QUIET_HOURS_DEFERRED`, info).
 - **R5** At send time the worker re-reads consent and opt-out; if not allowed → reminder
-  `SKIPPED_NO_CONSENT`, no message row.
+  `SKIPPED_NO_CONSENT`, no message row. M5-P4: R4 is applied both when the reminder is scheduled
+  and at send time; a job that finds itself in the quiet hours defers the reminder to the next
+  08:00 under a new revision and enqueues a fresh job (decision 2A). A clinic without a phone
+  cannot send `follow_up_due`: manual reminders are refused and automatic ones end `FAILED` with
+  `REM_CLINIC_PHONE_MISSING` (decision 6A). Once sent, a reminder shows its message's status
+  (decision 3A).
 - **R6** A message row is created with a unique `idempotency_key` before calling the provider
-  (P2: `booking_confirmed:<appointment_id>` and `rx_link:<prescription_id>`; P4's reminders use
-  `<reminder_id>:<attempt_group>`); a unique constraint prevents a second send for the same key. A
+  (P2: `booking_confirmed:<appointment_id>` and `rx_link:<prescription_id>`; P4: `follow_up_due:<reminder_id>`, one message per
+  reminder however often it moves); a unique constraint prevents a second send for the same key. A
   row found still marked as being sent at a retry means the outcome is unknown: it becomes `FAILED`
   (`MSG_OUTCOME_UNKNOWN`) and is never sent again (M5-P2 decision 4A, at most once). A provider
   timeout is an unknown outcome, not a retryable error.
@@ -122,7 +130,9 @@ window the patient's own STOP message opens:
 ### Visibility and cost
 - **R16** Reminder and message statuses are visible on the patient profile and visit screen.
 - **R17** The pending follow-ups list shows patients whose follow-up date passed without a completed
-  visit on or after that date, ordered by oldest first.
+  visit on or after that date, ordered by oldest first. M5-P4: one row per patient (their latest
+  overdue follow-up, from the latest issued version of its chain), the visit's date read in the
+  clinic's time zone, paginated (`limit` 1–100, `offset`), with that chain's reminder status.
 - **R18** Each message records `cost_paise` from a configurable price table by channel and category;
   the ops console aggregates per clinic per month.
 
