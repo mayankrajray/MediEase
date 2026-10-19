@@ -83,6 +83,10 @@ EXPECTED_POLICIES = {
     # M5-P3: Meta's webhook; the challenge needs our verify token, the body our signature.
     "whatsapp_webhook.verify_whatsapp_subscription": (Access.PUBLIC, None),
     "whatsapp_webhook.receive_whatsapp_webhook": (Access.PUBLIC, None),
+    "reminders.list_patient_reminders": (Access.CLINIC, Permission.REMINDERS_SCHEDULE),
+    "reminders.schedule_reminder": (Access.CLINIC, Permission.REMINDERS_SCHEDULE),
+    "reminders.change_reminder": (Access.CLINIC, Permission.REMINDERS_SCHEDULE),
+    "reminders.list_pending_follow_ups": (Access.CLINIC, Permission.REMINDERS_SCHEDULE),
     "rx_library.list_favourites": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "rx_library.create_favourite": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "rx_library.replace_favourite": (Access.CLINIC, Permission.CLINICAL_WRITE),

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.18.0
+  version: 0.19.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -84,6 +84,11 @@ tags:
       Accepting a staff invitation (M1-P5). Public, because the invitee has no session yet: the
       authority is the single-use secret in the URL, which is also why these paths need no
       X-CSRF-Token. Accepting sets a password, activates the membership and signs the person in.
+  - name: reminders
+    description: |
+      Follow-up reminders (M5-P4; FR-REM-01, 02, 04, 05, 07). A prescription's follow-up date
+      schedules one automatically; staff schedule, move and cancel them; pending follow-ups. Every
+      role holds REMINDERS_SCHEDULE.
 paths:
   /api/v1/auth/sign-in:
     post:
@@ -3117,6 +3122,179 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '422':
           $ref: '#/components/responses/LibraryError'
+  /api/v1/patients/{patient_id}/reminders:
+    get:
+      tags: [reminders]
+      operationId: listPatientReminders
+      summary: A patient's follow-up reminders, latest due first
+      description: |
+        FR-REM-05; M5-P4 decision 3A. At most 50. `status` is the message's status once the
+        reminder was sent (SENT, DELIVERED, READ, FAILED), else the reminder's own (SCHEDULED,
+        CANCELLED, SKIPPED_NO_CONSENT, FAILED). Permission REMINDERS_SCHEDULE.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+      responses:
+        '200':
+          description: The patient's reminders
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReminderList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+    post:
+      tags: [reminders]
+      operationId: scheduleReminder
+      summary: Schedule a follow-up reminder for a patient
+      description: |
+        FR-REM-02; spec R3; M5-P4 decision 5A. Due at 09:00 clinic time the day before
+        `follow_up_date` (now if that has passed), never 21:00-08:00 (FR-REM-04). Records
+        reminder.scheduled. Permission REMINDERS_SCHEDULE. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewReminder'
+      responses:
+        '201':
+          description: The reminder
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reminder'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ReminderError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/ReminderError'
+  /api/v1/reminders/{reminder_id}:
+    patch:
+      tags: [reminders]
+      operationId: changeReminder
+      summary: Move or cancel a scheduled reminder
+      description: |
+        FR-REM-02. Exactly one of `follow_up_date` (a new date, due by the same rule) or
+        `cancel: true`. Only a SCHEDULED reminder (else 409 REM_NOT_SCHEDULED). Records
+        reminder.rescheduled or reminder.cancelled. Permission REMINDERS_SCHEDULE. Needs
+        X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/ReminderPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReminderChange'
+      responses:
+        '200':
+          description: The reminder
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reminder'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ReminderError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/ReminderError'
+  /api/v1/follow-ups/pending:
+    get:
+      tags: [reminders]
+      operationId: listPendingFollowUps
+      summary: Patients whose follow-up date passed without a completed visit since
+      description: |
+        FR-REM-07; spec R17. One row per patient (their latest overdue follow-up), oldest
+        follow-up date first. `reminder_status` is that chain's latest reminder's visible status.
+        Permission REMINDERS_SCHEDULE.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - name: limit
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - name: offset
+          in: query
+          required: false
+          schema: {type: integer, minimum: 0, default: 0}
+      responses:
+        '200':
+          description: Pending follow-ups
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingFollowUpList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/AuthError'
 components:
   securitySchemes:
     sessionCookie:
@@ -3234,6 +3412,11 @@ components:
       schema:
         type: string
         maxLength: 200
+    ReminderPath:
+      name: reminder_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
   responses:
     SessionStarted:
       description: Session started or renewed; me_access, me_refresh and me_csrf are set
@@ -3477,6 +3660,19 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/StaffInvitation'
+    ReminderError:
+      description: |
+        REM_NO_CONSENT (409: the patient has not agreed to WhatsApp or opted out);
+        REM_CLINIC_PHONE_MISSING (409: add the clinic's phone first); REM_NOT_SCHEDULED (409: the
+        reminder was sent, cancelled or skipped); REM_IN_PAST (422: the date is not after today);
+        REQ_VALIDATION_FAILED (422)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
   headers:
     ETag:
       description: Strong entity tag of the body (a quoted hash), for If-None-Match
@@ -3491,6 +3687,86 @@ components:
       schema:
         type: string
   schemas:
+    ReminderStatus:
+      type: string
+      description: FR-REM-05 (the message's status once sent, decision 3A)
+      enum: [SCHEDULED, SENT, DELIVERED, READ, FAILED, CANCELLED, SKIPPED_NO_CONSENT]
+    Reminder:
+      type: object
+      additionalProperties: false
+      required: [id, patient_id, doctor_id, kind, source, prescription_id, follow_up_date,
+                 due_at, status, error_code, revision, created_at, cancelled_at]
+      properties:
+        id: {type: string, format: uuid}
+        patient_id: {type: string, format: uuid}
+        doctor_id: {type: string, format: uuid}
+        kind: {type: string, enum: [FOLLOW_UP]}
+        source: {type: string, enum: [PRESCRIPTION, MANUAL]}
+        prescription_id:
+          description: The prescription chain (its version 1) for an automatic reminder
+          type: [string, 'null']
+          format: uuid
+        follow_up_date: {type: string, format: date}
+        due_at: {type: string, format: date-time}
+        status:
+          $ref: '#/components/schemas/ReminderStatus'
+        error_code:
+          description: Why it failed (MSG_* or REM_CLINIC_PHONE_MISSING), else null
+          type: [string, 'null']
+        revision: {type: integer, minimum: 1}
+        created_at: {type: string, format: date-time}
+        cancelled_at: {type: [string, 'null'], format: date-time}
+    ReminderList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reminder'
+    NewReminder:
+      type: object
+      additionalProperties: false
+      required: [doctor_id, follow_up_date]
+      properties:
+        doctor_id: {type: string, format: uuid}
+        follow_up_date: {type: string, format: date}
+    ReminderChange:
+      type: object
+      additionalProperties: false
+      description: Exactly one of the two
+      properties:
+        follow_up_date: {type: [string, 'null'], format: date}
+        cancel: {type: boolean, default: false}
+    PendingFollowUp:
+      type: object
+      additionalProperties: false
+      required: [patient_id, patient_code, patient_name, doctor_id, prescription_id, visit_id,
+                 follow_up_date, reminder_status]
+      properties:
+        patient_id: {type: string, format: uuid}
+        patient_code: {type: string}
+        patient_name: {type: string}
+        doctor_id: {type: string, format: uuid}
+        prescription_id: {type: string, format: uuid}
+        visit_id: {type: string, format: uuid}
+        follow_up_date: {type: string, format: date}
+        reminder_status:
+          oneOf:
+            - $ref: '#/components/schemas/ReminderStatus'
+            - type: 'null'
+    PendingFollowUpList:
+      type: object
+      additionalProperties: false
+      required: [items, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PendingFollowUp'
+        limit: {type: integer}
+        offset: {type: integer}
     LibraryItem:
       description: A line's body without its identity (the fields of PrescriptionItemOutput)
       type: object

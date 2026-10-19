@@ -65,6 +65,7 @@ class SourceType(StrEnum):
 
     APPOINTMENT = "APPOINTMENT"
     PRESCRIPTION = "PRESCRIPTION"
+    REMINDER = "REMINDER"  # M5-P4
 
 
 @dataclass(slots=True, repr=False)

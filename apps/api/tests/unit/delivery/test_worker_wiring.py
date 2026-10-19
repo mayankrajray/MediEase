@@ -15,8 +15,17 @@ from mediease_api.adapters.messaging.whatsapp_cloud import WhatsAppCloudAdapter
 from mediease_api.bootstrap import _messaging_handlers, build_messaging, build_worker
 from mediease_api.config.settings import load_settings
 from mediease_api.delivery.worker.loop import Worker
-from mediease_api.domain.jobs.job import RECONCILE_KIND, WEBHOOK_KIND
-from mediease_api.domain.messaging.jobs import BOOKING_CONFIRMATION_KIND, RX_LINK_KIND
+from mediease_api.domain.jobs.job import (
+    MARK_NO_SHOWS_KIND,
+    NO_SHOW_SWEEP_KIND,
+    RECONCILE_KIND,
+    WEBHOOK_KIND,
+)
+from mediease_api.domain.messaging.jobs import (
+    BOOKING_CONFIRMATION_KIND,
+    REMINDER_KIND,
+    RX_LINK_KIND,
+)
 from tests.conftest import SetEnv
 from tests.unit.config.test_settings import WHATSAPP
 
@@ -28,7 +37,15 @@ def test_m5_the_worker_handles_the_messaging_jobs(
     settings = load_settings()
     factory = build_session_factory(build_engine(settings))  # no connection is opened
     handlers = _messaging_handlers(settings, factory, SystemClock(), Uuid7Generator())
-    assert set(handlers) == {BOOKING_CONFIRMATION_KIND, RX_LINK_KIND, WEBHOOK_KIND, RECONCILE_KIND}
+    assert set(handlers) == {
+        BOOKING_CONFIRMATION_KIND,
+        RX_LINK_KIND,
+        WEBHOOK_KIND,
+        RECONCILE_KIND,
+        REMINDER_KIND,
+        NO_SHOW_SWEEP_KIND,
+        MARK_NO_SHOWS_KIND,
+    }
     assert isinstance(build_messaging(settings), ConsoleMessagingAdapter)
     assert isinstance(build_worker(settings, threading.Event()), Worker)
 

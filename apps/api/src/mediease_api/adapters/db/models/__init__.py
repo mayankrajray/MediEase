@@ -14,6 +14,7 @@ from mediease_api.adapters.db.models.links import PatientLinkRow, PublicRateLimi
 from mediease_api.adapters.db.models.messages import MessageRow, WebhookEventRow
 from mediease_api.adapters.db.models.patients import PatientRow
 from mediease_api.adapters.db.models.prescriptions import PrescriptionItemRow, PrescriptionRow
+from mediease_api.adapters.db.models.reminders import ReminderRow
 from mediease_api.adapters.db.models.rx_library import RxFavouriteRow, RxTemplateRow
 from mediease_api.adapters.db.models.scheduling import (
     DoctorScheduleRow,
@@ -40,6 +41,7 @@ __all__ = [
     "PrescriptionRow",
     "PublicRateLimitRow",
     "RefreshTokenRow",
+    "ReminderRow",
     "RxFavouriteRow",
     "RxTemplateRow",
     "ScheduleExceptionRow",

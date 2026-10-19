@@ -76,6 +76,9 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     ),
     "/api/v1/rx-favourites/<uuid:favourite_id>": lambda w: _library_url(w, "rx-favourites"),
     "/api/v1/rx-templates/<uuid:template_id>": lambda w: _library_url(w, "rx-templates"),
+    # M5-P4: a patient's reminders and one reminder of clinic B.
+    "/api/v1/patients/<uuid:patient_id>/reminders": lambda w: f"{_patient_url(w)}/reminders",
+    "/api/v1/reminders/<uuid:reminder_id>": lambda w: _reminder_url(w),
 }
 
 # Clinical writes need CLINICAL_WRITE and the visit's doctor (prescriptions spec §2), so these
@@ -126,6 +129,7 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
         "DELETE",
         {},
     ),
+    "/api/v1/reminders/<uuid:reminder_id>": ("PATCH", {"cancel": True}),
 }
 
 # Patients have their own read and write cross-clinic cases in integration/test_patients_http.py;
@@ -145,6 +149,26 @@ def _exception_url(world: World) -> str:
     )
     assert created.status_code == 201, created.get_json()
     return f"{base}/{created.get_json()['exception']['id']}"
+
+
+def _reminder_url(world: World) -> str:
+    """A scheduled reminder of clinic B's patient (consent recorded first)."""
+    url = _patient_url(world)
+    owner_of_b, headers = _owner_of_b(world)
+    consent = owner_of_b.put(
+        f"{url}/consent", json={"whatsapp": True, "sms": False}, headers=headers
+    )
+    assert consent.status_code == 200, consent.get_json()
+    created = owner_of_b.post(
+        f"{url}/reminders",
+        json={
+            "doctor_id": str(world.b.doctor.id),
+            "follow_up_date": (date.today() + timedelta(days=10)).isoformat(),
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201, created.get_json()
+    return f"/api/v1/reminders/{created.get_json()['id']}"
 
 
 def _owner_of_b(world: World) -> tuple[FlaskClient, dict[str, str]]:

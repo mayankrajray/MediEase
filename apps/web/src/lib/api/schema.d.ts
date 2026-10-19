@@ -1446,10 +1446,153 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/patients/{patient_id}/reminders": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A patient's follow-up reminders, latest due first
+         * @description FR-REM-05; M5-P4 decision 3A. At most 50. `status` is the message's status once the
+         *     reminder was sent (SENT, DELIVERED, READ, FAILED), else the reminder's own (SCHEDULED,
+         *     CANCELLED, SKIPPED_NO_CONSENT, FAILED). Permission REMINDERS_SCHEDULE.
+         */
+        readonly get: operations["listPatientReminders"];
+        readonly put?: never;
+        /**
+         * Schedule a follow-up reminder for a patient
+         * @description FR-REM-02; spec R3; M5-P4 decision 5A. Due at 09:00 clinic time the day before
+         *     `follow_up_date` (now if that has passed), never 21:00-08:00 (FR-REM-04). Records
+         *     reminder.scheduled. Permission REMINDERS_SCHEDULE. Needs X-CSRF-Token.
+         */
+        readonly post: operations["scheduleReminder"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/reminders/{reminder_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        /**
+         * Move or cancel a scheduled reminder
+         * @description FR-REM-02. Exactly one of `follow_up_date` (a new date, due by the same rule) or
+         *     `cancel: true`. Only a SCHEDULED reminder (else 409 REM_NOT_SCHEDULED). Records
+         *     reminder.rescheduled or reminder.cancelled. Permission REMINDERS_SCHEDULE. Needs
+         *     X-CSRF-Token.
+         */
+        readonly patch: operations["changeReminder"];
+        readonly trace?: never;
+    };
+    readonly "/api/v1/follow-ups/pending": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Patients whose follow-up date passed without a completed visit since
+         * @description FR-REM-07; spec R17. One row per patient (their latest overdue follow-up), oldest
+         *     follow-up date first. `reminder_status` is that chain's latest reminder's visible status.
+         *     Permission REMINDERS_SCHEDULE.
+         */
+        readonly get: operations["listPendingFollowUps"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description FR-REM-05 (the message's status once sent, decision 3A)
+         * @enum {string}
+         */
+        readonly ReminderStatus: "SCHEDULED" | "SENT" | "DELIVERED" | "READ" | "FAILED" | "CANCELLED" | "SKIPPED_NO_CONSENT";
+        readonly Reminder: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly patient_id: string;
+            /** Format: uuid */
+            readonly doctor_id: string;
+            /** @enum {string} */
+            readonly kind: "FOLLOW_UP";
+            /** @enum {string} */
+            readonly source: "PRESCRIPTION" | "MANUAL";
+            /**
+             * Format: uuid
+             * @description The prescription chain (its version 1) for an automatic reminder
+             */
+            readonly prescription_id: string | null;
+            /** Format: date */
+            readonly follow_up_date: string;
+            /** Format: date-time */
+            readonly due_at: string;
+            readonly status: components["schemas"]["ReminderStatus"];
+            /** @description Why it failed (MSG_* or REM_CLINIC_PHONE_MISSING), else null */
+            readonly error_code: string | null;
+            readonly revision: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly cancelled_at: string | null;
+        };
+        readonly ReminderList: {
+            readonly items: readonly components["schemas"]["Reminder"][];
+        };
+        readonly NewReminder: {
+            /** Format: uuid */
+            readonly doctor_id: string;
+            /** Format: date */
+            readonly follow_up_date: string;
+        };
+        /** @description Exactly one of the two */
+        readonly ReminderChange: {
+            /** Format: date */
+            readonly follow_up_date?: string | null;
+            /** @default false */
+            readonly cancel: boolean;
+        };
+        readonly PendingFollowUp: {
+            /** Format: uuid */
+            readonly patient_id: string;
+            readonly patient_code: string;
+            readonly patient_name: string;
+            /** Format: uuid */
+            readonly doctor_id: string;
+            /** Format: uuid */
+            readonly prescription_id: string;
+            /** Format: uuid */
+            readonly visit_id: string;
+            /** Format: date */
+            readonly follow_up_date: string;
+            readonly reminder_status: components["schemas"]["ReminderStatus"] | null;
+        };
+        readonly PendingFollowUpList: {
+            readonly items: readonly components["schemas"]["PendingFollowUp"][];
+            readonly limit: number;
+            readonly offset: number;
+        };
         /** @description A line's body without its identity (the fields of PrescriptionItemOutput) */
         readonly LibraryItem: {
             readonly medicine_name: string;
@@ -2848,6 +2991,21 @@ export interface components {
                 readonly "application/json": components["schemas"]["StaffInvitation"];
             };
         };
+        /**
+         * @description REM_NO_CONSENT (409: the patient has not agreed to WhatsApp or opted out);
+         *     REM_CLINIC_PHONE_MISSING (409: add the clinic's phone first); REM_NOT_SCHEDULED (409: the
+         *     reminder was sent, cancelled or skipped); REM_IN_PAST (422: the date is not after today);
+         *     REQ_VALIDATION_FAILED (422)
+         */
+        readonly ReminderError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
     };
     parameters: {
         /** @description Correlation ID. Generated by the API when absent and always echoed back. */
@@ -2880,6 +3038,7 @@ export interface components {
         readonly InviteToken: string;
         /** @description The patient link token (spec R9); never logged. */
         readonly LinkToken: string;
+        readonly ReminderPath: string;
     };
     requestBodies: never;
     headers: {
@@ -5833,6 +5992,175 @@ export interface operations {
             readonly 403: components["responses"]["VisitPermissionError"];
             readonly 404: components["responses"]["PermissionError"];
             readonly 422: components["responses"]["LibraryError"];
+        };
+    };
+    readonly listPatientReminders: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description A patient of the request's clinic. */
+                readonly patient_id: components["parameters"]["PatientPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The patient's reminders */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ReminderList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly scheduleReminder: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A patient of the request's clinic. */
+                readonly patient_id: components["parameters"]["PatientPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewReminder"];
+            };
+        };
+        readonly responses: {
+            /** @description The reminder */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Reminder"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ReminderError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["ReminderError"];
+        };
+    };
+    readonly changeReminder: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly reminder_id: components["parameters"]["ReminderPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["ReminderChange"];
+            };
+        };
+        readonly responses: {
+            /** @description The reminder */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Reminder"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ReminderError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["ReminderError"];
+        };
+    };
+    readonly listPendingFollowUps: {
+        readonly parameters: {
+            readonly query?: {
+                readonly limit?: number;
+                readonly offset?: number;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Pending follow-ups */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PendingFollowUpList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 422: components["responses"]["AuthError"];
         };
     };
 }

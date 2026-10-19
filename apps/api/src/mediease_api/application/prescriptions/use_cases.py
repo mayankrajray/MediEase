@@ -27,6 +27,7 @@ from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor, RequestContext
 from mediease_api.application.links.use_cases import new_link
 from mediease_api.application.messaging.rx_link import enqueue_rx_link
+from mediease_api.application.reminders.scheduling import sync_prescription_reminder
 from mediease_api.application.scheduling.schedules import load_clinic
 from mediease_api.application.visits.use_cases import callers_doctor_id, load_visit
 from mediease_api.domain.audit.actions import AuditAction
@@ -338,6 +339,18 @@ class IssuePrescription(_UseCase):
             # M5-P2 (R14, R15): the worker sends a pending link; the job commits with the issue.
             enqueue_rx_link(uow, ids=self._ids, rx=rx, request_id=ctx.request_id, now=now)
             chain = tuple(tenant.prescriptions.list_for_visit(rx.visit_id))
+            # M5-P4 (R1, R2): the chain's follow-up reminder follows this version's date.
+            sync_prescription_reminder(
+                uow,
+                tenant,
+                ids=self._ids,
+                rx=rx,
+                chain_id=next(v.id for v in chain if v.version == 1),
+                timezone=clinic.timezone,
+                user_id=ctx.user_id,
+                request_id=ctx.request_id,
+                now=now,
+            )
             uow.commit()
         logger.info(
             "prescription.issued",
