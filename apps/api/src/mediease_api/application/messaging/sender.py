@@ -60,10 +60,14 @@ class Send:
 
 @dataclass(frozen=True, slots=True)
 class Skip:
-    """Send nothing. ``reason`` is logged; ``code`` closes a refused row that no longer applies."""
+    """Send nothing. ``reason`` is logged; ``code`` closes a refused row that no longer applies.
+
+    ``close=False`` leaves such a row for a later job (a reminder deferred out of quiet hours).
+    """
 
     reason: str
     code: str
+    close: bool = True
 
 
 Plan = Callable[[UnitOfWork, TenantRepositories, datetime], Send | Skip]
@@ -169,7 +173,7 @@ class MessageSender:
 
             decision = plan(uow, tenant, now)
             if isinstance(decision, Skip):
-                if existing is not None:
+                if existing is not None and decision.close:
                     existing.fail(decision.code, now)
                     tenant.messages.update(existing)
                 uow.commit()

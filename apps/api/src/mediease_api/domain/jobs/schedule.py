@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from mediease_api.domain.jobs.job import PURGE_KIND, RECONCILE_KIND
+from mediease_api.domain.jobs.job import NO_SHOW_SWEEP_KIND, PURGE_KIND, RECONCILE_KIND
 from mediease_api.domain.shared.time import require_utc
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
@@ -27,6 +27,8 @@ RECURRING: tuple[Recurring, ...] = (
     Recurring(PURGE_KIND, timedelta(days=1)),
     # M5-P3: re-run stored webhook events that did not process, and count unconfirmed messages.
     Recurring(RECONCILE_KIND, timedelta(hours=1)),
+    # M5-P4: bookings an hour past their session become NO_SHOW (appointments R10).
+    Recurring(NO_SHOW_SWEEP_KIND, timedelta(minutes=5)),
 )
 
 

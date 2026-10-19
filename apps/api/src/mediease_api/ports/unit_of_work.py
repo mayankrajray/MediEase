@@ -28,6 +28,7 @@ from mediease_api.ports.messaging import (
     MessageRepository,
     WebhookEventRepository,
 )
+from mediease_api.ports.reminders import NoShowSweep, ReminderRepository
 from mediease_api.ports.repositories import (
     AppointmentHistoryRepository,
     AppointmentRepository,
@@ -90,6 +91,8 @@ class TenantRepositories(Protocol):
     def patient_links(self) -> PatientLinkRepository: ...
     @property
     def messages(self) -> MessageRepository: ...
+    @property
+    def reminders(self) -> ReminderRepository: ...
 
 
 class UnitOfWork(Protocol):
@@ -131,6 +134,11 @@ class UnitOfWork(Protocol):
     @property
     def webhook_events(self) -> WebhookEventRepository:
         """Stored provider webhooks (M5-P3); not tenant data."""
+        ...
+
+    @property
+    def no_show_sweep(self) -> NoShowSweep:
+        """Clinics with overdue bookings (M5-P4, a reviewed cross-clinic read of IDs)."""
         ...
 
     def tenant(self, clinic_id: UUID) -> TenantRepositories:

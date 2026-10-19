@@ -93,3 +93,8 @@ class AuditAction(StrEnum):
     # M5-P2 (prescriptions R15): a pending link not sent, written as SYSTEM. Metadata: the
     # version and the reason (``too_old``, ``no_consent`` or ``no_link``).
     PRESCRIPTION_LINK_EXPIRED = "prescription.link_expired"
+    # M5-P4 (spec §7): reminders. Metadata: the patient, doctor, source, follow-up date and
+    # revision; written as STAFF, or as SYSTEM when a prescription's revision cancels one.
+    REMINDER_SCHEDULED = "reminder.scheduled"
+    REMINDER_RESCHEDULED = "reminder.rescheduled"
+    REMINDER_CANCELLED = "reminder.cancelled"

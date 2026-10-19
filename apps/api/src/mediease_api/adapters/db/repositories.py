@@ -1134,6 +1134,21 @@ class SqlAlchemyAppointmentRepository(TenantScopedRepository[AppointmentRow]):
         )
         return [_appointment_from_row(row) for row in self._session.scalars(query)]
 
+    def list_booked_ended_before(self, cutoff: datetime, *, limit: int) -> Sequence[UUID]:
+        query = (
+            select(AppointmentRow.id)
+            .join(SessionRow, SessionRow.id == AppointmentRow.session_id)
+            .where(
+                AppointmentRow.clinic_id == self.clinic_id,
+                SessionRow.clinic_id == self.clinic_id,
+                AppointmentRow.status == AppointmentStatus.BOOKED.value,
+                SessionRow.ends_at <= cutoff,
+            )
+            .order_by(SessionRow.ends_at, AppointmentRow.id)
+            .limit(limit)
+        )
+        return list(self._session.scalars(query))
+
 
 class SqlAlchemyAppointmentHistoryRepository(TenantScopedRepository[AppointmentStatusHistoryRow]):
     model = AppointmentStatusHistoryRow

@@ -5,7 +5,7 @@ Formatted here, without the platform locale, so a message reads the same on ever
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from mediease_api.domain.patients.patient import Language
@@ -45,3 +45,13 @@ def appointment_when(
         word = "टोकन" if language is Language.HI else "token"
         text = f"{text}, {word} {token_number}"
     return text
+
+
+def follow_up_date_text(follow_up: date, language: Language) -> str:
+    """``Sun 20 Sep 2026`` / ``20/09/2026`` (a date, no time zone involved)."""
+    if language is Language.HI:
+        return f"{follow_up.day:02d}/{follow_up.month:02d}/{follow_up.year}"
+    return (
+        f"{_WEEKDAYS[follow_up.weekday()]} {follow_up.day} {_MONTHS[follow_up.month - 1]}"
+        f" {follow_up.year}"
+    )

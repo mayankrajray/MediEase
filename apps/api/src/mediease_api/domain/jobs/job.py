@@ -27,10 +27,17 @@ PURGE_KIND = "purge_expired_auth_and_links"
 # hourly reconciliation looks at every clinic's messages.
 WEBHOOK_KIND = "process_webhook_event"
 RECONCILE_KIND = "reconcile_messages"
+# M5-P4 (appointments R10): every 5 minutes, find the clinics with bookings still BOOKED an hour
+# after their session ended (IDs only) and enqueue one MARK_NO_SHOWS_KIND job per clinic, which
+# works only on that clinic's rows.
+NO_SHOW_SWEEP_KIND = "schedule_no_shows"
+MARK_NO_SHOWS_KIND = "mark_no_shows"
 
 # R9d: the only kinds allowed to have no clinic. The database CHECK ``ck_jobs_system_kind`` lists
 # the same kinds; a test keeps the two in step, and adding a kind is a migration.
-SYSTEM_KINDS: frozenset[str] = frozenset({PURGE_KIND, WEBHOOK_KIND, RECONCILE_KIND})
+SYSTEM_KINDS: frozenset[str] = frozenset(
+    {PURGE_KIND, WEBHOOK_KIND, RECONCILE_KIND, NO_SHOW_SWEEP_KIND}
+)
 
 DEFAULT_MAX_ATTEMPTS = 5
 MAX_ATTEMPTS_LIMIT = 20

@@ -10,6 +10,8 @@ from uuid import UUID
 
 BOOKING_CONFIRMATION_KIND = "send_booking_confirmation"
 RX_LINK_KIND = "send_rx_link"
+# M5-P4: a follow-up reminder (one job per reminder revision, decision 1A).
+REMINDER_KIND = "send_reminder"
 
 BOOKING_CONFIRMED = "booking_confirmed"
 RX_READY = "rx_ready"
@@ -29,3 +31,12 @@ def booking_confirmation_key(appointment_id: UUID) -> str:
 
 def rx_link_key(prescription_id: UUID) -> str:
     return f"rx_link:{prescription_id}"
+
+
+def reminder_message_key(reminder_id: UUID) -> str:
+    """One message per reminder, however many jobs its moves made."""
+    return f"{FOLLOW_UP_DUE}:{reminder_id}"
+
+
+def reminder_job_key(reminder_id: UUID, revision: int) -> str:
+    return f"reminder:{reminder_id}:{revision}"

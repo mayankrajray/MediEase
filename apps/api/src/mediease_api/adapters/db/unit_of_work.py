@@ -24,6 +24,7 @@ from mediease_api.adapters.db.messages import (
     SqlAlchemyMessageRepository,
     SqlAlchemyWebhookEventRepository,
 )
+from mediease_api.adapters.db.reminders import SqlAlchemyNoShowSweep, SqlAlchemyReminderRepository
 from mediease_api.adapters.db.repositories import (
     SqlAlchemyAppointmentHistoryRepository,
     SqlAlchemyAppointmentRepository,
@@ -80,6 +81,7 @@ class SqlAlchemyTenantRepositories:
         self._rx_templates = SqlAlchemyRxTemplateRepository(session, clinic_id)
         self._patient_links = SqlAlchemyPatientLinkRepository(session, clinic_id)
         self._messages = SqlAlchemyMessageRepository(session, clinic_id)
+        self._reminders = SqlAlchemyReminderRepository(session, clinic_id)
 
     @property
     def clinic_id(self) -> UUID:
@@ -149,6 +151,10 @@ class SqlAlchemyTenantRepositories:
     def messages(self) -> SqlAlchemyMessageRepository:
         return self._messages
 
+    @property
+    def reminders(self) -> SqlAlchemyReminderRepository:
+        return self._reminders
+
 
 class _OpenUnit:
     """The session and platform repositories of one open unit of work."""
@@ -169,6 +175,8 @@ class _OpenUnit:
         # M5-P3: provider webhooks name no clinic.
         self.message_lookup = SqlAlchemyMessageLookup(session)
         self.webhook_events = SqlAlchemyWebhookEventRepository(session)
+        # M5-P4: which clinics have bookings overdue for NO_SHOW (IDs only).
+        self.no_show_sweep = SqlAlchemyNoShowSweep(session)
 
 
 class SqlAlchemyUnitOfWork:
@@ -241,6 +249,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def webhook_events(self) -> SqlAlchemyWebhookEventRepository:
         return self._require_open().webhook_events
+
+    @property
+    def no_show_sweep(self) -> SqlAlchemyNoShowSweep:
+        return self._require_open().no_show_sweep
 
     def tenant(self, clinic_id: UUID) -> SqlAlchemyTenantRepositories:
         return SqlAlchemyTenantRepositories(self._require_open().session, clinic_id)

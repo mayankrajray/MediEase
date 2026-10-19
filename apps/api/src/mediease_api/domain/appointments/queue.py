@@ -13,7 +13,7 @@ clinic's ``today``.
 from __future__ import annotations
 
 from collections.abc import Collection
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from mediease_api.domain.appointments.appointment import Appointment
 from mediease_api.domain.appointments.errors import InvalidQueueTransition, WrongTime
@@ -72,6 +72,32 @@ def transition(
         appointment.completed_at = now
     appointment.updated_at = now
     return current
+
+
+# Spec R10: a booking still BOOKED this long after its session ended becomes NO_SHOW (M5-P4).
+NO_SHOW_AFTER = timedelta(minutes=60)
+
+
+def no_show_cutoff(now: datetime) -> datetime:
+    """Sessions that ended at or before this instant have overdue bookings."""
+    return require_utc(now, "now") - NO_SHOW_AFTER
+
+
+def mark_no_show_automatically(
+    appointment: Appointment, session: Session, *, now: datetime
+) -> bool:
+    """R10: ``BOOKED`` an hour past the session's end becomes ``NO_SHOW``; False otherwise.
+
+    Not ``transition``: that is bound to the session's day (D19), and a late session's hour can
+    end after midnight. A late arrival can still move it to ``ARRIVED`` the same day (D19).
+    """
+    now = require_utc(now, "now")
+    assert appointment.session_id == session.id, "the appointment's own session"
+    if appointment.status is not S.BOOKED or session.ends_at > no_show_cutoff(now):
+        return False
+    appointment.status = S.NO_SHOW
+    appointment.updated_at = now
+    return True
 
 
 def first_free_slot(

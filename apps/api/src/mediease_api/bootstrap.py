@@ -48,6 +48,7 @@ from mediease_api.adapters.storage.local import LocalBlobStorage
 from mediease_api.adapters.storage.s3 import S3BlobStorage
 from mediease_api.application.appointments.book import BookAppointment
 from mediease_api.application.appointments.cancel import CancelAppointment
+from mediease_api.application.appointments.no_show import MarkNoShows, SweepNoShows
 from mediease_api.application.appointments.queries import GetAppointment, ListPatientAppointments
 from mediease_api.application.appointments.queue import AddWalkIn, GetQueue, TransitionAppointment
 from mediease_api.application.appointments.reschedule import RescheduleAppointment
@@ -114,6 +115,13 @@ from mediease_api.application.prescriptions.use_cases import (
     ReplaceDraft,
     RevisePrescription,
 )
+from mediease_api.application.reminders.send import SendReminder
+from mediease_api.application.reminders.use_cases import (
+    ChangeReminder,
+    ListPatientReminders,
+    ListPendingFollowUps,
+    ScheduleReminder,
+)
 from mediease_api.application.scheduling.exceptions import AddException, RemoveException
 from mediease_api.application.scheduling.schedules import GetSchedule, ReplaceSchedule
 from mediease_api.application.scheduling.sessions import ListSessions
@@ -140,6 +148,7 @@ from mediease_api.delivery.http.patients import create_patients_blueprint
 from mediease_api.delivery.http.platform import create_platform_blueprint
 from mediease_api.delivery.http.prescriptions import create_prescriptions_blueprint
 from mediease_api.delivery.http.public_links import create_public_links_blueprint
+from mediease_api.delivery.http.reminders import create_reminders_blueprint
 from mediease_api.delivery.http.request_info import register_request_info
 from mediease_api.delivery.http.rx_library import create_rx_library_blueprint
 from mediease_api.delivery.http.scheduling import create_scheduling_blueprint
@@ -148,8 +157,18 @@ from mediease_api.delivery.middleware import register_request_middleware
 from mediease_api.delivery.webhooks.whatsapp import create_whatsapp_webhook_blueprint
 from mediease_api.delivery.worker.heartbeat import beat
 from mediease_api.delivery.worker.loop import LockRenewer, Worker
-from mediease_api.domain.jobs.job import PURGE_KIND, RECONCILE_KIND, WEBHOOK_KIND
-from mediease_api.domain.messaging.jobs import BOOKING_CONFIRMATION_KIND, RX_LINK_KIND
+from mediease_api.domain.jobs.job import (
+    MARK_NO_SHOWS_KIND,
+    NO_SHOW_SWEEP_KIND,
+    PURGE_KIND,
+    RECONCILE_KIND,
+    WEBHOOK_KIND,
+)
+from mediease_api.domain.messaging.jobs import (
+    BOOKING_CONFIRMATION_KIND,
+    REMINDER_KIND,
+    RX_LINK_KIND,
+)
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.messaging import MessagingPort
@@ -191,6 +210,18 @@ class _UseCases:
     # M5-P3: the WhatsApp webhook's secrets (empty: the webhook refuses everything).
     whatsapp_app_secret: str = ""
     whatsapp_verify_token: str = ""
+
+    def schedule_reminder(self) -> ScheduleReminder:
+        return ScheduleReminder(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def change_reminder(self) -> ChangeReminder:
+        return ChangeReminder(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def list_patient_reminders(self) -> ListPatientReminders:
+        return ListPatientReminders(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def list_pending_follow_ups(self) -> ListPendingFollowUps:
+        return ListPendingFollowUps(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def verify_whatsapp_subscription(self) -> VerifyWebhookSubscription:
         return VerifyWebhookSubscription(verify_token=self.whatsapp_verify_token)
@@ -554,6 +585,9 @@ def _messaging_handlers(
             uow=SqlAlchemyUnitOfWork(factory), clock=clock, parser=WhatsAppWebhookParser()
         ),
         RECONCILE_KIND: ReconcileMessages(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
+        REMINDER_KIND: SendReminder(sender=sender, ids=ids),
+        NO_SHOW_SWEEP_KIND: SweepNoShows(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
+        MARK_NO_SHOWS_KIND: MarkNoShows(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
         BOOKING_CONFIRMATION_KIND: SendBookingConfirmation(sender=sender),
         RX_LINK_KIND: SendRxLink(
             sender=sender,
@@ -694,6 +728,7 @@ def create_app(
     app.register_blueprint(create_public_links_blueprint(use_cases))
     app.register_blueprint(create_rx_library_blueprint(use_cases))
     app.register_blueprint(create_whatsapp_webhook_blueprint(use_cases))
+    app.register_blueprint(create_reminders_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

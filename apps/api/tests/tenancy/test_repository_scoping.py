@@ -16,6 +16,7 @@ import pytest
 
 from mediease_api.adapters.db.messages import SqlAlchemyMessageRepository
 from mediease_api.adapters.db.models import Base
+from mediease_api.adapters.db.reminders import SqlAlchemyReminderRepository
 from mediease_api.adapters.db.repositories import (
     SqlAlchemyAppointmentHistoryRepository,
     SqlAlchemyAppointmentRepository,
@@ -81,6 +82,10 @@ class Tenant:
 # provider webhook names no clinic. It returns only the clinic and message IDs; the message is then
 # read and changed through that clinic's SqlAlchemyMessageRepository
 # (tests/integration/test_webhooks_http.py). webhook_events has no clinic_id.
+#
+# Reviewed exception (M5-P4): SqlAlchemyNoShowSweep returns the IDs of active clinics with bookings
+# overdue for NO_SHOW; each clinic's own mark_no_shows job then reads and changes only its rows
+# through the tenant repositories (tests/integration/test_reminders_http.py).
 NOT_TENANT_SCOPED = {"audit_events", "jobs"}
 
 
@@ -574,6 +579,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "rx_templates",
             "patient_links",
             "messages",
+            "reminders",
             "audit_events",
             "jobs",
         }
@@ -596,6 +602,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyRxTemplateRepository,
         SqlAlchemyPatientLinkRepository,
         SqlAlchemyMessageRepository,
+        SqlAlchemyReminderRepository,
     } == set(TenantScopedRepository.__subclasses__())
 
 

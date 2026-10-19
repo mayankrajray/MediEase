@@ -311,6 +311,10 @@ class AppointmentRepository(Protocol):
         """The patient's appointments, newest first."""
         ...
 
+    def list_booked_ended_before(self, cutoff: datetime, *, limit: int) -> Sequence[UUID]:
+        """Appointments still ``BOOKED`` whose session ended by ``cutoff`` (M5-P4, R10)."""
+        ...
+
 
 class AppointmentHistoryRepository(Protocol):
     """Append-only status history (FR-APT-05)."""
