@@ -407,6 +407,13 @@ never reaches the logs. Audit: `patient_link.opened`, `.challenge_failed`, `.loc
 | POST | `/webhooks/whatsapp` | Status + inbound (signature verified) | FR-MSG-03/05 |
 | POST | `/webhooks/sms/{provider}` | Delivery reports | FR-MSG-03 |
 
+M5-P4 (contract 0.19.0): the three reminder routes and pending follow-ups need
+`REMINDERS_SCHEDULE` (every role). `POST` takes `{doctor_id, follow_up_date}` (201; 409
+`REM_NO_CONSENT` / `REM_CLINIC_PHONE_MISSING`; 422 `REM_IN_PAST`); `PATCH` takes exactly one of
+`{follow_up_date}` or `{cancel: true}` (409 `REM_NOT_SCHEDULED`). A reminder's `status` is its
+message's once sent. `GET /follow-ups/pending?limit&offset` returns `{items, limit, offset}`.
+The message history route is P6.
+
 Webhook paths are outside `/api/v1` and are routed directly to the API by the reverse proxy.
 They are not in `contracts/openapi.yaml` (the web app never calls them; Meta's format is Meta's).
 M5-P3: `GET` returns the `hub.challenge` as `text/plain` for the right `hub.verify_token`, else

@@ -14,6 +14,18 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M5-P4 (#40): follow-up reminders and the automatic no-show (FR-REM-01, 02, 04, 05, 07; spec
+  R1–R5, R17; appointments R10; AC1, AC2). Issuing a prescription with a follow-up date schedules
+  a reminder for 09:00 clinic time the day before (`reminders`, migration `0017`); revisions move
+  or cancel the chain's one reminder, and every move gives the reminder a new revision so an
+  older send job does nothing. Nothing is sent 21:00–08:00 clinic time (deferred to 08:00);
+  consent is read again at send time (`SKIPPED_NO_CONSENT`); the reminder then shows its message's
+  status. Staff schedule, move and cancel reminders (`/api/v1/patients/{id}/reminders`,
+  `/api/v1/reminders/{id}`), and `/api/v1/follow-ups/pending` lists patients whose follow-up date
+  passed without a completed visit. Every 5 minutes, bookings still `BOOKED` an hour after their
+  session become `NO_SHOW` (history with no user, SYSTEM audit), one job per clinic. Contract
+  0.19.0, web types regenerated. New error codes `REM_CLINIC_PHONE_MISSING`, `REM_NOT_SCHEDULED`;
+  audit actions `reminder.scheduled`, `reminder.rescheduled`, `reminder.cancelled`.
 - M5-P3 (#40): the WhatsApp Cloud API provider and its webhooks (FR-MSG-03; spec R7, R12, R13,
   R15; AC6). `MESSAGING_PROVIDER=whatsapp_cloud` sends approved templates through Graph API
   `v26.0` (standard-library HTTP, 10 s timeout) with our message ID echoed back in every status;

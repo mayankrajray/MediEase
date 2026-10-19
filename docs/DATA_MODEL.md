@@ -482,10 +482,25 @@ alters a prescription issued before it; existing rows are 1, the only layout so 
 
 ## M5 — Reminders, messages, jobs
 
-### `reminders`
-`id, clinic_id, patient_id, kind (FOLLOW_UP | MEDICINE_COURSE | APPOINTMENT | VACCINATION),
-due_at, source_type, source_id, status (FR-REM-05 values), message_id null, job_id null,
-cancelled_by null, created_by`
+### `reminders` (migration `0017`, M5-P4)
+Tenant-scoped (`SqlAlchemyReminderRepository`).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id, patient_id, doctor_id | uuid FK | |
+| kind | text | `FOLLOW_UP` |
+| source, source_id | text, uuid null FK prescriptions | `PRESCRIPTION` with the chain's version 1, or `MANUAL` with none (CHECK) |
+| follow_up_date | date | |
+| due_at | timestamptz | 09:00 clinic time the day before (now if past), never 21:00–08:00 |
+| status | text | `SCHEDULED` \| `SENT` \| `CANCELLED` \| `SKIPPED_NO_CONSENT` \| `FAILED`; once `SENT`, the visible status is the message's (decision 3A) |
+| revision | smallint | Bumped by every move, deferral or cancel; each `send_reminder` job carries the revision it was made for (decision 1A) |
+| error_code | text null | `REM_CLINIC_PHONE_MISSING` on `FAILED` |
+| created_by, cancelled_by | uuid FK users | `cancelled_by` null when the system cancelled it |
+| cancelled_at | timestamptz null | Set exactly when `CANCELLED` (CHECK) |
+
+`uq_reminders_source_id_scheduled`: one `SCHEDULED` reminder per prescription chain. The message
+of a reminder has `source_type = REMINDER` and `source_id` = the reminder.
 
 ### `messages` (migration `0015`, M5-P2)
 One row per message, written before the provider is called (spec R6). Tenant-scoped

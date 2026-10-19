@@ -1,4 +1,4 @@
-﻿# MediEase — Architecture
+# MediEase — Architecture
 
 This document describes **how the system is built**. It changes as milestones land; the durable
 principles behind it are in `CLAUDE.md`, and the reasons behind each choice are in `docs/adr/`.
@@ -392,6 +392,12 @@ class MessagingPort(Protocol):
   then updates the message through that clinic's repository; statuses only move forward. The
   hourly `reconcile_messages` re-enqueues stuck events and reports unconfirmed messages (the Cloud
   API has no status lookup, R15).
+- Reminders (M5-P4, `application/reminders/`): issuing a prescription keeps the chain's one
+  follow-up reminder in step (create, move, cancel); staff schedule, move and cancel manual ones.
+  Every change enqueues a `send_reminder` job for the reminder's new revision; an older job does
+  nothing. At send time the job defers out of the quiet hours (a fresh job at 08:00), re-reads
+  consent, and hands the reminder to the sender with `follow_up_due`. The automatic no-show is a
+  5-minute system sweep (`schedule_no_shows`) that enqueues one `mark_no_shows` job per clinic.
 - The WhatsApp provider (`adapters/messaging/whatsapp_cloud.py`) uses the standard library's HTTP
   client with a 10 s timeout. Meta's error codes map to `MSG_*` (`whatsapp_errors.py`): throttling
   and outages are retried; everything else Meta refused is permanent; a timeout or a lost answer is
