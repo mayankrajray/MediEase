@@ -63,6 +63,10 @@ known only by age, Chetan Verma prefers Hindi, and Deepa Nair is an adult on her
 `GET /api/v1/patients?q=9000000101` or register a new person on that number to see the duplicate
 flow.
 
+M5-P6: Deepa Nair also gets one overdue follow-up, once (while no follow-up is pending): a visit
+10 days ago, completed, whose prescription's follow-up date was 3 days ago, so `/follow-ups` has a
+row to try *Book follow-up* on. Ops see the month's messaging costs at `/ops/messaging-costs`.
+
 `doctor@sample-clinic.example` therefore belongs to two clinics: signing in as them shows the clinic
 chooser and switcher in the web app. The seed refuses to run unless `APP_ENV=local` and is
 idempotent **per clinic**: a clinic that exists is left alone, so a database seeded before

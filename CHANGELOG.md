@@ -14,6 +14,13 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M5-P6 (#40): the reminder and message screens (FR-REM-02, 05, 07; FR-MSG-04; spec R16-R18).
+  The consultation shows the issued prescription's reminder as a chip beside its follow-up date;
+  the patient profile lists reminders (move, cancel, add a manual one) and the message history,
+  status only, from the new `GET /api/v1/patients/{id}/messages` (contract 0.21.0); failed
+  messages say why in plain words with *Call patient*. `/follow-ups` lists overdue follow-ups with
+  *Book follow-up* in two interactions. The ops console gains `/ops/messaging-costs`. `make seed`
+  adds one overdue follow-up; a new Playwright journey file covers the three screens.
 - M5-P5 (#40): opting out by reply, the SMS fallback and message costs (FR-MSG-05, FR-REM-06; spec
   R14, R18, R19; AC5). A WhatsApp reply of STOP, UNSUBSCRIBE, रोकें or बंद opts the sender out in
   every clinic that has messaged that number (a family sharing the phone together), with a SYSTEM

@@ -45,8 +45,10 @@ synthetic patient through the API first (`e2e/queue-support.ts`), so they pass a
 on a database that has been used before.
 | Book slot → mark arrived → start consultation → issue Rx → print PDF (`e2e/consultation-keyboard.spec.ts`, at 1366 × 768, keyboard-only entry) | M4 |
 | Open patient link on a 360-px viewport → wrong last-4 → correct last-4 → view Rx (`e2e/patient-link-360.spec.ts`) | M4 |
-| Issue Rx with follow-up → reminder scheduled → worker sends via console adapter → status updates | M5 |
-| Patient replies STOP → opted out → next reminder skipped | M5 |
+| Issue Rx with follow-up → reminder scheduled → worker sends via console adapter → status updates (`e2e/reminders-follow-ups.spec.ts`: the chip on the consultation and the profile, and the prescription link appearing in the message history once the worker sent it; the reminder's own send is due the day before, so its Scheduled → Sent change is checked on the stack and in `tests/integration/test_reminders_http.py`) | M5 |
+| Pending follow-ups → Book follow-up → Confirm, on `make seed`'s overdue follow-up (`e2e/reminders-follow-ups.spec.ts`) | M5 |
+| Ops open this month's messaging costs (`e2e/reminders-follow-ups.spec.ts`) | M5 |
+| Patient replies STOP → opted out → next reminder skipped (API level: `tests/integration/test_opt_out_db.py`, AC5; the webhook needs the app secret to sign, so not in the browser journeys) | M5 |
 
 ## 4. Mandatory special suites
 

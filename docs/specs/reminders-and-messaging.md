@@ -5,7 +5,7 @@
 | Requirements | FR-REM-01, 02, 04, 05, 06 (P5, behind a flag), 07; FR-MSG-01..05, 07; FR-APT-06; NFR-13 |
 | Milestone / phases | M5 / P1–P6 |
 | Status | Approved (developer sign-off 2026-10-18: the M5 plan with decisions 1A–5A and four refinements to the job queue, R9–R11 and R9a–R9e) |
-| Last updated | 2026-10-20 (M5-P5: R14 and R18 made precise, R19 added for the SMS fallback; M5-P4: R2, R5 and R17 made precise; M5-P3: R15 rewritten — WhatsApp has no status lookup; M5-P2: R6 names P2's keys and the unknown-outcome rule; earlier: approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
+| Last updated | 2026-10-20 (M5-P6: R16 and §6 made precise for the screens; M5-P5: R14 and R18 made precise, R19 added for the SMS fallback; M5-P4: R2, R5 and R17 made precise; M5-P3: R15 rewritten — WhatsApp has no status lookup; M5-P2: R6 names P2's keys and the unknown-outcome rule; earlier: approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
 
 ## 1. Context
 Post-visit follow-up depends on memory (A14); patients forget follow-ups and vaccination dates
@@ -136,6 +136,9 @@ window the patient's own STOP message opens:
 
 ### Visibility and cost
 - **R16** Reminder and message statuses are visible on the patient profile and visit screen.
+  M5-P6 (decisions 1A–3A): the visit screen shows the issued prescription's reminder as a chip
+  beside its follow-up date; the profile lists the patient's reminders (move, cancel, add a manual
+  one) and their message history, status only, from `GET /patients/{id}/messages`.
 - **R17** The pending follow-ups list shows patients whose follow-up date passed without a completed
   visit on or after that date, ordered by oldest first. M5-P4: one row per patient (their latest
   overdue follow-up, from the latest issued version of its chain), the visit's date read in the
@@ -159,9 +162,13 @@ window the patient's own STOP message opens:
 See API.md "Reminders and messaging".
 
 ## 6. UI notes
-- Reminder chip on the visit: "Follow-up reminder · 16 Sep, 9:00 · Scheduled".
-- Pending follow-ups page with one-click "Book follow-up".
-- Failed messages show a plain explanation and a "Call patient" hint.
+- Reminder chip on the visit: "Follow-up reminder · 16 Sep, 9:00 · Scheduled". M5-P6: shown as
+  "Follow-up reminder · Wed, 16 Sep, 09:00 · Scheduled", the status in words (not colour alone).
+- Pending follow-ups page with one-click "Book follow-up". M5-P6: `/follow-ups`; the booking drawer
+  opens with the patient, the doctor and today chosen, so Confirm books it.
+- Failed messages show a plain explanation and a "Call patient" hint. M5-P6: one sentence per
+  code (`features/reminders/labels.ts`), never the code; *Call patient* is a `tel:` link on the
+  profile.
 
 ## 7. Events and side effects
 | Trigger | Audit | Analytics |
