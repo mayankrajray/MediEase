@@ -11,10 +11,13 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
 export function Drawer({
   title,
   onClose,
+  side = "right",
   children,
 }: {
   title: string;
   onClose: () => void;
+  /** M6-P1: the phone menu opens from the left, where the sidebar sits on a wide screen. */
+  side?: "left" | "right";
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -44,7 +47,7 @@ export function Drawer({
         event.preventDefault();
         onClose();
       }}
-      className="ml-auto mr-0 h-full max-h-none w-full max-w-lg overflow-y-auto bg-white p-0 shadow-xl backdrop:bg-slate-900/40"
+      className={`${side === "left" ? "ml-0 mr-auto max-w-xs" : "ml-auto mr-0 max-w-lg"} h-full max-h-none w-full overflow-y-auto bg-white p-0 shadow-xl backdrop:bg-slate-900/40`}
     >
       <div className="flex items-center justify-between border-b border-slate-300 px-5 py-3">
         <h2 id={titleId} className="text-xl font-bold">
