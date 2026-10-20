@@ -14,6 +14,8 @@
 | [0010](0010-issue-driven-workflow-and-logical-commits.md) | Issue-driven workflow with logical commits and rebase merges | Accepted; per-phase issue/branch/PR superseded by ADR-0011 |
 | [0011](0011-one-branch-and-pr-per-milestone.md) | One branch and one pull request per milestone | Accepted |
 | [0012](0012-in-house-pdf-rendering-and-blob-storage.md) | In-house PDF rendering and blob storage behind ports | Accepted |
+| [0013](0013-llm-gateway.md) | An LLM gateway behind a port, OpenAI-compatible, Groq first | Accepted |
+| [0014](0014-multi-clinic-whatsapp-and-consolidated-billing.md) | Each clinic's own WhatsApp number, and one consolidated MediEase invoice | Proposed (built in M8) |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, and add a row here.
 Accepted ADRs are never edited; supersede them with a new ADR.
