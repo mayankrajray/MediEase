@@ -11,13 +11,13 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **None active.** M5 — Messaging and reminders closed by the developer on 20 Oct 2026 (issue #40, PR #41 ready for review), with the live WhatsApp test pending (below). **Next: M6 — Pilot hardening and deployment**, whose plan awaits the developer's approval |
-| Active phase | — (M6 starts with its plan and spec, `/plan-phase`) |
-| Design notes | `docs/milestones/M5-messaging-and-reminders.md` (M5, closed) |
-| Approved plan | `NEXT_STEPS_PLAN.md` (M5 phases, workflow, progress log) |
+| Active milestone | **M6 — MVP demo: clinic and patient experience** (issue #49, branch `m6/49-mvp-demo`, one PR for the milestone). M5 merged in PR #41 on 20 Oct 2026. Product rules changed to PRD v1.1 the same day |
+| Active phase | **M6-P1 — Design system and the *Today* dashboards:** designed (`docs/milestones/M6-mvp-demo.md`), awaiting the developer's approval |
+| Design notes | `docs/milestones/M6-mvp-demo.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
+| Approved plan | `NEXT_STEPS_PLAN.md` (M6 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | M6 plan (to be proposed). Pending from M5 (developer's decision, 20 Oct 2026): the live WhatsApp send and webhook test through Meta's test number, once the developer provides the credentials (L-01, L-02; RUNBOOK §9); the real SMS provider (L-03). Follow-up outside M5: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test is flaky on CI (150 ms bound) |
+| Open decisions | M6-P1 design (6 decisions). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test is flaky on CI (150 ms bound) |
 | Last updated | 20 Oct 2026 |
 
 
@@ -37,6 +37,9 @@ done before the pilot.
 | L-05 | Choose India-region hosting account; enable billing alerts | Engineering | M6 | ☐ |
 | L-06 | Book pilot conversations with Aarogya Hospital (A13), Apollo Diagnostic (A10); Arvind Homoeopathy (A1) as reserve | Founder | M6 | ☐ |
 | L-07 | Collect each pilot clinic's current booking flow, Rx format and patient list format | Product | M4 | ☐ |
+| L-08 | Choose a WhatsApp BSP with a partner-paid (wholesale) model; MediEase's business verification and website for the partnership (ADR-0014) | Founder | M8 | ☐ |
+| L-09 | A Google Cloud OAuth client (free) for Google sign-in, with the local redirect URI | Founder | M6-P3 | ☐ |
+| L-10 | A Groq API key (free tier) for the assistant | Founder | M7 | ☐ |
 
 ---
 
@@ -131,18 +134,51 @@ flows back through the webhook, and opt-out stops further sends. Depends on L-01
 | M5-P6 | Web: reminder status on patient profile and visit; pending follow-ups page; ops monthly messaging costs (P5 decision 7A) | ✅ |
 | M5 pending | **Live WhatsApp test** through Meta's test number: a reminder scheduled in the app delivered, its statuses back through the webhook, a STOP stopping further sends (the exit criterion). Needs the developer's credentials (L-01, L-02); procedure RUNBOOK §9. Also the real SMS provider (L-03) | ⏳ pending credentials |
 
-## M6 — Pilot hardening and deployment  `☐`
+## M6 — MVP demo: clinic and patient experience  `▶ ACTIVE`
 
-**Covers:** NFR-03..07, NFR-16, FR-OPS-03. **Exit:** production deployed in India region; restore
-drill completed; security checklist signed; two pilot clinics onboarded.
+**Covers:** FR-AUTH-07, FR-PRT-01..04, FR-REM-03, FR-NTF-01, FR-PUB-01..04 (PRD v1.1). **Issue:**
+#49, one branch and one PR for all phases (ADR-0011). **Exit:** on the local stack each role lands
+on its own dashboard; a patient signs in with Google or email, links a clinic record by invite or
+prescription link, and sees appointments, prescriptions, reminders and a medicine plan;
+notifications arrive in the app; a public booking request is confirmed by the front desk;
+`make e2e` green. Deployment and hosting are out of scope (developer, 20 Oct 2026).
 
 | Phase | Scope | Status |
 |---|---|---|
-| M6-P1 | Production compose/infra in `infra/`, TLS, domain, secrets management | ☐ |
-| M6-P2 | Backups, restore drill, uptime and error alerting | ☐ |
-| M6-P3 | Security review against `docs/SECURITY_AND_COMPLIANCE.md` checklist; dependency scan; audited export and `scripts/erase_patient.py` procedures | ☐ |
-| M6-P4 | Ops clinic-health view; usage metrics for the pilot scorecard | ☐ |
-| M6-P5 | Pilot runbook rehearsal: onboard a test clinic end-to-end in < 60 min | ☐ |
+| M6-P1 | Design system (tokens, primitives, Motion, responsive shell); *Today* dashboards for front desk, doctor and owner | ▶ (designed, awaiting approval) |
+| M6-P2 | The design system across the existing screens; mobile layouts; motion for drawers, dialogs and lists | ☐ |
+| M6-P3 | Google sign-in for staff and patients; patient email and password; separate patient sessions | ☐ |
+| M6-P4 | Linking a patient account by clinic invite or prescription link; the patient API | ☐ |
+| M6-P5 | Patient portal web (mobile-first, English and Hindi) | ☐ |
+| M6-P6 | Medicine planner (FR-REM-03) | ☐ |
+| M6-P7 | In-app notifications for patients and staff (FR-NTF-01) | ☐ |
+| M6-P8 | Public booking page and booking requests (FR-PUB) | ☐ |
+
+## M7 — AI assistant and pitch  `☐`
+
+**Covers:** FR-AI-01..03 (PRD v1.1). **ADR:** 0013. **Exit:** booking by chat works through tools
+with a confirmation step; the guard-rail tests (no medical advice) pass; the provider switches by
+settings only; the animated landing page tells the story. About 5 phases: the LLM gateway (Groq
+first), tools and guard rails, the patient assistant, the staff assistant, the landing page and
+demo rehearsal.
+
+## M8 — Multi-clinic WhatsApp and consolidated billing  `☐ (designed)`
+
+**Covers:** FR-BIL-WA-01..02 (PRD v1.1). **ADR:** 0014 (Proposed). **Design:**
+`docs/milestones/M8-multi-clinic-whatsapp.md`. About 6 phases; needs L-08 for the live part.
+
+## M9 — Pilot hardening and deployment  `☐`
+
+**Covers:** NFR-03..07, NFR-16, FR-OPS-03. **Exit:** production deployed in India region; restore
+drill completed; security checklist signed; two pilot clinics onboarded. (Was M6 before PRD v1.1.)
+
+| Phase | Scope | Status |
+|---|---|---|
+| M9-P1 | Production compose/infra in `infra/`, TLS, domain, secrets management | ☐ |
+| M9-P2 | Backups, restore drill, uptime and error alerting | ☐ |
+| M9-P3 | Security review against `docs/SECURITY_AND_COMPLIANCE.md` checklist; dependency scan; audited export and `scripts/erase_patient.py` procedures | ☐ |
+| M9-P4 | Ops clinic-health view; usage metrics for the pilot scorecard | ☐ |
+| M9-P5 | Pilot runbook rehearsal: onboard a test clinic end-to-end in < 60 min | ☐ |
 
 ---
 
@@ -150,15 +186,16 @@ drill completed; security checklist signed; two pilot clinics onboarded.
 
 | ID | Item | Requirement | Evidence |
 |---|---|---|---|
-| M7 | Public booking / query page | FR-PUB-01..04 | B4–B7 |
-| M8 | Vaccination schedules and due-date reminders | FR-VAX | A3 |
-| M9 | Broadcast announcements to patient groups | FR-BRD | A1 |
-| M10 | Specialty templates | FR-TPL | A13 |
-| M11 | Advanced search and filters | FR-PAT-07 | A11, A12 |
-| M12 | Appointment reminders, SMS fallback on by default, patient live token link | FR-APT-08, FR-REM-06, FR-QUE-06 | — |
-| M13 | Billing and payment history | FR-BIL | — |
-| M14 | Analytics dashboard | FR-ANL | — |
+| — | Vaccination schedules and due-date reminders | FR-VAX | A3 |
+| — | Broadcast announcements to patient groups | FR-BRD | A1 |
+| — | Specialty templates | FR-TPL | A13 |
+| — | Advanced search and filters | FR-PAT-07 | A11, A12 |
+| — | Appointment reminders, SMS fallback on by default, patient live token link | FR-APT-08, FR-REM-06, FR-QUE-06 | — |
+| — | Analytics dashboard | FR-ANL | — |
+| — | Pharmacy and clinic drug inventory (PRD v1.1 C6) | — | Developer's request |
 | — | ABDM / ABHA integration | — | Open question (PRD §14.3) |
+
+The public booking page moved into M6-P8 and billing into M8 (PRD v1.1).
 
 ---
 

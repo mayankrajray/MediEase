@@ -1,82 +1,82 @@
-# NEXT_STEPS_PLAN.md — Approved plan for M5 (Messaging and reminders)
+# NEXT_STEPS_PLAN.md — Approved plan for M6 (MVP demo: clinic and patient experience)
 
 | Field | Value |
 |---|---|
-| Status | **M5 closed 20 Oct 2026** by the developer: P1–P6 implemented, verified and confirmed (PR #41 ready for review). The live WhatsApp test (L-01, L-02) and the real SMS provider (L-03) are pending the developer's credentials (`docs/milestones/M5-messaging-and-reminders.md`, "Pending after M5"). Next: the M6 plan, to be proposed and approved |
-| Scope | Milestone 5 in phase detail; M6 as a roadmap only. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39, merged 18 Oct 2026) |
+| Status | **M6 opened 20 Oct 2026** after M5 merged (PR #41, #40 closed). Plan approved by the developer: the demo plan's D2–D5 as M6, D6–D7 as M7, the multi-clinic WhatsApp and consolidated billing designed now as M8 and built later; deployment and hosting skipped for now. Product rules changed to PRD v1.1. M6-P1 designed, awaiting approval |
+| Scope | Milestone 6 in phase detail; M7–M9 as a roadmap. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39), M5 (PR #41, merged 20 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
-| Design notes | `docs/milestones/M5-messaging-and-reminders.md` |
+| Design notes | `docs/milestones/M6-mvp-demo.md`; M8: `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Workflow rules | `CLAUDE.md` → "Git Workflow"; `CONTRIBUTING.md`; ADR-0010, ADR-0011 |
 
 ---
 
 ## 1. Problem statement
 
-M4 gives the patient a prescription they can read again, but only if the clinic shows them the
-QR code. Follow-ups still depend on memory (A14), and patients forget them (A3). M5 makes the
-reminders and the prescription link arrive on the patient's phone, exactly once, only with
-consent, never at night, and stops the moment they reply STOP.
+M0–M5 give the clinic its core: patients, booking, the live queue, the consultation with
+prescriptions, and reminders. The developer needs a convincing MVP to present: a calm, modern,
+mobile-friendly product in which each role lands on its own dashboard and the patient has a place
+of their own (appointments, prescriptions, a medicine plan, notifications), plus a public page to
+ask for an appointment. M7 then adds the AI assistant and the pitch page; M8 makes WhatsApp
+per clinic with one MediEase invoice.
 
 ## 2. Requirements
 
-- Spec: `docs/specs/reminders-and-messaging.md` (Approved 18 Oct 2026). AC1–AC11 become tests in
-  the phase that implements them.
-- ADR-0005 (the job queue in PostgreSQL, a separate worker) and ADR-0007 (`MessagingPort`,
-  WhatsApp first, SMS and console adapters).
-- **M5 exit:** a reminder scheduled in the app is delivered through the WhatsApp test number,
-  status flows back through the webhook, and opt-out stops further sends.
-- Message bodies never carry clinical content, only the clinic, the doctor, dates and signed links
-  (FR-MSG-04, AC7). Job payloads hold IDs only.
-- The M4 prescription links still `PENDING` are sent only if issued within the last 24 hours and
-  consent still holds (M4 spec R15), so turning M5 on never messages patients about old visits.
+- PRD v1.1 §0 (C1–C6) and §8.13: FR-AUTH-07, FR-PRT-01..04, FR-REM-03, FR-NTF-01, FR-PUB-01..04.
+- Each phase gets its design (and, where a feature is new, a spec in `docs/specs/`) approved
+  before code.
+- Clinical safety unchanged (principle 6). The patient sees only what the clinic gave them (FR-PRT-03).
+- Patient pages keep their budgets (NFR-02, NFR-10); tenancy tests cover every new table and route.
 - Coverage gates stay: ≥ 90% API package, ≥ 80% `domain/` + `application/` (NFR-14).
 - Local resources: the WSL VM runs at its 8 GB limit; run `make down` whenever the stack is idle.
 
 ## 3. Delivery workflow (ADR-0011)
 
 ```
-Milestone issue #40 → branch m5/40-messaging-and-reminders (from origin/main at c30a7a9)
+Milestone issue #49 → branch m6/49-mvp-demo (from origin/main at cbb6b9a)
   → per phase: design → approval → logical commits → make lint typecheck test
     → developer confirms → push (with permission) to the same branch
-  → one PR for the milestone: draft after P1, ready when P6 is done and the exit criteria hold
+  → one PR for the milestone: draft after P1, ready when P8 is done and the exit criteria hold
   → CI green → review + CODEOWNERS approval → maintainer rebase-merges
 ```
 
-- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #40`; the last
-  commit of M5 carries `Closes #40`.
+- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #49`; the last
+  commit of M6 carries `Closes #49`.
 - Agents never push to `main`, push to the milestone branch only with permission, and never merge.
 
 ### 3.1 Open prerequisites
 
 | # | Needed | State |
 |---|---|---|
-| L-01 | Meta Business account, business verification, WhatsApp number | **Pending after M5:** the developer provides the credentials later; then the live test (RUNBOOK §9) |
-| L-02 | Utility templates (booking confirmation, prescription ready, prescription updated, follow-up due) approved in English and Hindi | **Pending after M5**, with L-01 |
-| L-03 | SMS provider and DLT registration | **Pending after M5:** the real SMS adapter; the fallback stays off |
+| L-09 | A Google Cloud OAuth client for Google sign-in | Open; needed by P3 (email and password work without it) |
+| L-10 | A Groq API key (free tier) | Open; needed by M7 |
+| L-08 | A WhatsApp BSP with a partner-paid model; MediEase's business verification | Open; needed by M8 |
+| L-01, L-02 | Meta account and approved templates for the live WhatsApp test | **Pending after M5** |
+| L-03 | SMS provider and DLT registration | **Pending after M5** |
 | W-5 | Branch protection / CODEOWNERS enforcement on `main` | **Open:** not available for a private repo on GitHub Free (HTTP 403) |
-| — | `@akhtarjamal10` write access, so their CODEOWNERS entry takes effect | Open |
-| L-04, L-07 | Counsel's review of the prescription format; pilot clinics' formats | Open; gates for M6 |
-| — | #30: an import over 2 MB through the web origin can answer 500 instead of 413 | Open; outside M5 |
+| — | #30: an import over 2 MB through the web origin can answer 500 instead of 413 | Open; outside the milestones |
 
 ## 4. Phase breakdown
 
-Details, file lists and test plans per phase are in the design notes; each phase is designed at its
-start. P1 is designed and approved in full.
+Details, file lists and test plans per phase are in the design notes; each phase is designed at
+its start. P1 is designed and awaits approval.
 
 | Phase | Objective | Requirements | Verify |
 |---|---|---|---|
-| P1 | `jobs` (migration `0014`), the outbox enqueue, short committed claims with `SKIP LOCKED` and crash-safe attempts, retries and `dead`, `cancelled`, the reaper, recurring jobs, the retention purge, `v_job_health`, the `worker` container with a tmpfs heartbeat | NFR-13; R9–R11, R9a–R9e, R11a; AC3, AC8–AC11 | Two workers, 100 jobs, each once; a crashed claim reaped and counted; dead after five attempts; worker unhealthy without the database |
-| P2 | `MessagingPort`, console adapter, `templates.yaml`, `messages`, the send job, booking confirmations and pending prescription links, `v_message_health` | FR-MSG-01, 02, 04; FR-APT-06; R6, R8; AC4, AC7 | A booking produces one console message; a crash after the provider accepted sends nothing twice; no clinical text in variables |
-| P3 | WhatsApp Cloud adapter, webhooks with raw-body signatures, forward-only statuses, reconciliation | FR-MSG-03; R7, R12, R13, R15; AC6 | A message to the WhatsApp test number shows `DELIVERED` from the webhook; a bad signature 401 |
-| P4 | Follow-up reminders from prescriptions, revisions, manual reminders, quiet hours, consent at send time, pending follow-ups, the automatic no-show job | FR-REM-01, 02, 04, 05, 07; R1–R5, R17; AC1, AC2 | Follow-up 20 Sep → due 19 Sep 09:00 IST; a job due 22:15 runs at 08:00 |
-| P5 | STOP handling, SMS adapter behind a flag, the cost ledger | FR-MSG-05, 07; R14, R18; AC5 | "stop" opts out and the next reminder is `SKIPPED_NO_CONSENT` |
-| P6 | Web: reminder and message status on the profile and the consultation, the pending follow-ups page | R16, R17; spec §6 | `make e2e` for the new screens |
+| P1 | Design system (tokens, primitives, Motion, responsive shell); *Today* dashboards per role | NFR-02, NFR-09 | Counts match the queue; each role's shape; 360 px |
+| P2 | The design system across the existing screens; mobile layouts; motion | NFR-09, NFR-10 | `make e2e` unchanged journeys green on the new look |
+| P3 | Google sign-in for staff and patients; patient email and password; separate patient sessions | FR-AUTH-07, FR-PRT-01 | Sign in both ways; a patient session cannot reach staff routes |
+| P4 | Linking by clinic invite or prescription link; the patient API | FR-PRT-02, 03 | Linked records only; another clinic's or patient's never |
+| P5 | Patient portal web | FR-PRT-03, 04 | 360 px, English and Hindi, AA |
+| P6 | Medicine planner | FR-REM-03 | Plan equals the prescribed frequency, timing and days |
+| P7 | In-app notifications | FR-NTF-01 | Each event appears once, with read state |
+| P8 | Public booking page and requests | FR-PUB-01..04 | A request confirmed by the front desk |
 
-## 5. Roadmap after M5 (one line)
+## 5. Roadmap after M6
 
-- **M6 Pilot hardening** — India-region deployment (S3-compatible storage wired), backups and a
-  restore drill, alerts (dead jobs, webhook signature failures), security review, counsel's format
-  review (L-04), two pilot clinics.
+- **M7 AI assistant and pitch** — LLM gateway (Groq first, ADR-0013), tools with the user's own
+  permissions, guard rails, patient and staff assistant, animated landing page. About 5 phases.
+- **M8 Multi-clinic WhatsApp and consolidated billing** — designed (ADR-0014). About 6 phases.
+- **M9 Pilot hardening** — the former M6: deployment, backups, alerts, security review.
 
 ## 6. Progress log
 
@@ -155,3 +155,4 @@ start. P1 is designed and approved in full.
 | 20 Oct 2026 | Correction to the row above: PR #41's CI for M5-P5 went fully green (7/7) on the second rerun of the API job; the two failures were only the known suggestions timing test | #40 | — |
 | 20 Oct 2026 | M5-P6 approved (1A–7A) and implemented: `GET /patients/{id}/messages` (contract 0.21.0); the reminder chip on the consultation; reminders (move, cancel, add) and message history on the profile; failed messages in plain words with Call patient; `/follow-ups` with Book follow-up; `/ops/messaging-costs`; one overdue follow-up in `make seed`. API 1578 tests at 98.22%, web 446, `make e2e` 11 of 11 (twice); stack checks; one seed bug found and fixed (the seeded appointment left `BOOKED`) | #40 | P6 done; awaiting confirmation |
 | 20 Oct 2026 | M5-P6 confirmed by the developer; M5 closed with the live WhatsApp test and the real SMS provider recorded as pending (credentials to follow: L-01, L-02, L-03). Last commit carries `Closes #40`; PR #41 marked ready for review. Next: the M6 plan | #40 | M5 done |
+| 20 Oct 2026 | M5 merged by the maintainer (PR #41, #40 closed). M6 opened: issue #49, branch `m6/49-mvp-demo` from `cbb6b9a`. PRD v1.1 recorded (patient portal, Google sign-in, medicine planner and notifications, AI assistant without medical advice, one consolidated MediEase invoice); ADR-0013 (LLM gateway) and ADR-0014 (Proposed: per-clinic WhatsApp through a BSP's partner-paid model, usage ledger); M8 designed; M6-P1 designed, awaiting approval | #49 | M6 opened |
