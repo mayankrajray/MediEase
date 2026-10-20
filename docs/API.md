@@ -421,7 +421,10 @@ M5-P4 (contract 0.19.0): the three reminder routes and pending follow-ups need
 `REM_NO_CONSENT` / `REM_CLINIC_PHONE_MISSING`; 422 `REM_IN_PAST`); `PATCH` takes exactly one of
 `{follow_up_date}` or `{cancel: true}` (409 `REM_NOT_SCHEDULED`). A reminder's `status` is its
 message's once sent. `GET /follow-ups/pending?limit&offset` returns `{items, limit, offset}`.
-The message history route is P6.
+M5-P6 (contract 0.21.0): `GET /patients/{id}/messages` (`REMINDERS_SCHEDULE`) returns the
+patient's messages newest first, at most 50, status only: `template_key`, `source_type` and
+`source_id`, `channel`, `status`, `error_code` and the times; never the variables or the number.
+Another clinic's patient is a 404.
 
 Webhook paths are outside `/api/v1` and are routed directly to the API by the reverse proxy.
 They are not in `contracts/openapi.yaml` (the web app never calls them; Meta's format is Meta's).

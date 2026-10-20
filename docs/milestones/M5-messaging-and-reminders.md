@@ -19,7 +19,7 @@
 | P3 | WhatsApp Cloud adapter (errors mapped to `MSG_*`, 10 s timeout); `GET`/`POST /webhooks/whatsapp` (raw-body signature, store once, answer within 1 s); statuses only move forward; reconciliation of messages stuck in `SENT` | Below (done; confirmed; the live Meta test needs L-01, L-02) |
 | P4 | Reminder rules: follow-up reminders from issued prescriptions (09:00 the day before), revisions move or cancel them, manual reminders, quiet hours 21:00–08:00, consent re-read at send time; pending follow-ups API; the automatic no-show job | Below (done; confirmed) |
 | P5 | STOP, UNSUBSCRIBE, रोकें, बंद opt the patient out and confirm; SMS adapter behind a flag (off); cost per message and the ops console's monthly total per clinic | Below (done; confirmed; the real SMS provider needs L-03) |
-| P6 | Web: reminder and message status on the patient profile and the consultation; pending follow-ups with *Book follow-up*; failed messages explained with a "call the patient" hint; the ops console's monthly messaging-costs table (P5 decision 7A); Playwright | Below (awaiting approval) |
+| P6 | Web: reminder and message status on the patient profile and the consultation; pending follow-ups with *Book follow-up*; failed messages explained with a "call the patient" hint; the ops console's monthly messaging-costs table (P5 decision 7A); Playwright | Below (done; awaiting confirmation) |
 
 ---
 
@@ -524,7 +524,7 @@ Not verified:
 
 ## M5-P6 — Web: reminder and message status, pending follow-ups, ops costs
 
-Designed 20 Oct 2026; awaiting the developer's approval. Recommendations are marked (rec).
+Designed 20 Oct 2026; approved the same day with 1A–7A. Recommendations are marked (rec).
 
 Facts the design rests on:
 
@@ -578,3 +578,50 @@ M5's exit criterion also needs a live WhatsApp send and its webhook through Meta
 which waits for L-01 and L-02. P6 can close the code of M5 but cannot meet that criterion. Before
 the last commit (`Closes #40`), the developer decides whether M5 closes with the live test
 recorded as pending.
+
+### Result (20 Oct 2026)
+
+Built as designed:
+
+- API: `GET /patients/{id}/messages` (contract 0.21.0) and the seeded overdue follow-up.
+- Web: `features/reminders/` (`api.ts`, `labels.ts`, `ReminderChip`, `FollowUpReminder`,
+  `PatientReminders`, `PatientMessages`, `PendingFollowUps`), `features/ops/MessagingCosts`,
+  `lib/format/money.ts`, `formatDayTime`, and the pages `/follow-ups` and `/ops/messaging-costs`.
+  Each page is linked from its navigation.
+- Playwright: `e2e/reminders-follow-ups.spec.ts`.
+
+The build differs from the design in these ways:
+
+- **The profile section is "Message history".** The consent panel's region is already named
+  "Messages".
+- **Dates read "Mon, 19 Oct".** This is the app's existing day format; the design said
+  "Mon 19 Oct".
+- **The seeded visit's appointment is completed that day.** The first version left it `BOOKED`,
+  so the patient looked like a booking still due, and the no-show sweep would have marked a seen
+  patient as a no-show. `d12493b` fixes this.
+- **Screen-reader names got their space back.** "Book follow-up for …" and "Call patient on …"
+  read as "Book follow-upfor …" because the space was inside a visually hidden span; a unit test
+  caught it, and the space is now outside the span.
+
+Verification:
+
+- Gates: `make lint typecheck contract-check test` pass. The API has 1578 tests at 98.22% (the
+  core gate holds); the web has 446.
+- Playwright: on the rebuilt stack (`make up`, `make seed`), `make e2e` passes 11 of 11, and again
+  11 of 11 on a second run against the same database.
+
+Stack checks outside the browser journeys:
+
+| Step | Result |
+|---|---|
+| A prescription reminder forced due during the quiet hours (21:22 IST) | Deferred under a new revision, not sent (P4's rule) |
+| The same reminder forced due in daytime (the clinic's zone switched to America/Sao_Paulo for the step, then restored) | `SENT`. The list the screens read shows `SENT`, and the history shows `follow_up_due` and `rx_ready` |
+| P5's SMS-fallback patient | The history shows the WhatsApp `FAILED` / `MSG_RECIPIENT_INVALID` and the SMS `SENT` |
+| Ops total against the database | 12 paise, from 11,500 millipaise |
+| Failure paths | Front desk on the costs endpoint: 403. The second clinic's owner on this patient's messages: 404. Moving a sent reminder: 409 `REM_NOT_SCHEDULED` with its message |
+
+Not verified in a browser:
+
+- the STOP journey, because the webhook needs the app secret to sign it; it is covered at the API
+  level (`test_opt_out_db.py`, AC5) and on the stack in P5;
+- a reminder delivered and read through Meta, which needs L-01 and L-02.
