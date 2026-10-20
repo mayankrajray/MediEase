@@ -1,5 +1,30 @@
 @import "tailwindcss";
 
+/* M6-P1 design tokens (decision 1A): minimal and calm. One brand colour (teal) over neutral
+   slate, one accent per status (always shown with words as well), an 8 px rhythm (Tailwind's
+   spacing scale), rounded cards with a soft shadow, and the system font stack: nothing is
+   downloaded, and Devanagari renders in the phone's own font. Each brand shade used for text or
+   a filled button meets WCAG 2.1 AA on white (teal-700 is 5.5:1). */
+@theme {
+  --font-sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari",
+    "Helvetica Neue", Arial, sans-serif;
+
+  --color-brand-50: var(--color-teal-50);
+  --color-brand-100: var(--color-teal-100);
+  --color-brand-200: var(--color-teal-200);
+  --color-brand-600: var(--color-teal-600);
+  --color-brand-700: var(--color-teal-700);
+  --color-brand-800: var(--color-teal-800);
+  --color-brand-900: var(--color-teal-900);
+
+  /* The page behind cards in the clinic and ops screens. */
+  --color-canvas: var(--color-slate-50);
+
+  --radius-card: 0.75rem;
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.05), 0 1px 3px rgb(15 23 42 / 0.08);
+}
+
 /* Base text and focus styles for every surface. Focus stays visible for
    keyboard users (WCAG 2.1 AA, apps/web/CLAUDE.md). */
 @layer base {
@@ -12,6 +37,6 @@
   }
 
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-blue-700;
+    @apply outline-2 outline-offset-2 outline-brand-700;
   }
 }
