@@ -69,8 +69,8 @@ where = ["src"]
 # The PDF renderer's template, stylesheet and vendored fonts ship inside the package (M4-P4).
 [tool.setuptools.package-data]
 "mediease_api.adapters.pdf" = ["assets/*"]
-# The message template catalogue (M5-P2).
-"mediease_api.adapters.messaging" = ["templates.yaml"]
+# The message template catalogue (M5-P2) and the price table (M5-P5).
+"mediease_api.adapters.messaging" = ["templates.yaml", "prices.yaml"]
 
 # --- Ruff: lint + format -----------------------------------------------------
 [tool.ruff]
