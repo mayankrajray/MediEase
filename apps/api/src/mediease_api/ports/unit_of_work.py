@@ -26,6 +26,7 @@ from mediease_api.ports.jobs import JobQueue, RetentionRepository
 from mediease_api.ports.messaging import (
     MessageLookup,
     MessageRepository,
+    OptOutLookup,
     WebhookEventRepository,
 )
 from mediease_api.ports.reminders import NoShowSweep, ReminderRepository
@@ -139,6 +140,11 @@ class UnitOfWork(Protocol):
     @property
     def no_show_sweep(self) -> NoShowSweep:
         """Clinics with overdue bookings (M5-P4, a reviewed cross-clinic read of IDs)."""
+        ...
+
+    @property
+    def opt_out_lookup(self) -> OptOutLookup:
+        """Who a STOP reply opts out (M5-P5, a reviewed cross-clinic read of IDs)."""
         ...
 
     def tenant(self, clinic_id: UUID) -> TenantRepositories:

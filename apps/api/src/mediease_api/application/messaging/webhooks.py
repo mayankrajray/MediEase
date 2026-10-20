@@ -8,7 +8,9 @@ answer at once.
 Process (a job): each status finds its message by our echoed ID or the provider's, through the
 reviewed cross-clinic lookup, and then only through that clinic's tenant repository. Statuses only
 move forward. A status with no message yet (the webhook can beat our own commit) makes the job
-retry with the usual back-off; after the last attempt the event records ``WH_UNMATCHED``.
+retry with the usual back-off; after the last attempt the event records ``WH_UNMATCHED``. M5-P5:
+STOP replies are applied first (``opt_out.py``), and the stored payload loses the senders'
+encrypted numbers once the event is processed.
 
 Reconcile (hourly; R15 as rewritten for WhatsApp, which has no status lookup): re-enqueue stored
 events that never processed, and report how many messages are still unconfirmed after a day.
@@ -25,10 +27,12 @@ from uuid import UUID
 import structlog
 
 from mediease_api.application.context import RequestInfo
+from mediease_api.application.messaging.opt_out import OptOutByReply
 from mediease_api.domain.jobs.job import WEBHOOK_KIND, ClaimedJob, NewJob
 from mediease_api.domain.jobs.retry import JobFailure
 from mediease_api.domain.messaging.errors import (
     MSG_OUTCOME_UNKNOWN,
+    WH_STOP_UNMATCHED,
     WH_UNMATCHED,
     WebhookRateLimited,
     WebhookSignatureInvalid,
@@ -132,6 +136,7 @@ class ReceiveWebhook:
             event_id=str(event.id) if stored else None,
             duplicate=not stored,
             statuses=len(self._parser.statuses(event.payload)),
+            opt_outs=len(self._parser.opt_outs(event.payload)),
         )
         return stored
 
@@ -159,10 +164,18 @@ def _process_job(
 
 
 class ProcessWebhookEvent:
-    def __init__(self, *, uow: UnitOfWork, clock: ClockPort, parser: WebhookParser) -> None:
+    def __init__(
+        self,
+        *,
+        uow: UnitOfWork,
+        clock: ClockPort,
+        parser: WebhookParser,
+        opt_outs: OptOutByReply,
+    ) -> None:
         self._uow = uow
         self._clock = clock
         self._parser = parser
+        self._opt_outs = opt_outs
 
     def __call__(self, job: ClaimedJob) -> None:
         event_id = UUID(str(job.payload["event_id"]))
@@ -170,16 +183,27 @@ class ProcessWebhookEvent:
             event = uow.webhook_events.get(event_id, for_update=True)
             if event is None or event.processed_at is not None:
                 return
+            now = self._clock.now()
+            # M5-P5: STOP replies first, so a retry for an unmatched status never delays an
+            # opt-out; repeating them on a retry changes nothing (idempotent, deduplicated jobs).
+            stops = self._parser.opt_outs(event.payload)
+            stops_unmatched = sum(
+                0 if self._opt_outs.apply(uow, s, request_id=job.request_id, now=now) else 1
+                for s in stops
+            )
             updates = self._parser.statuses(event.payload)
             unmatched = sum(0 if self._apply(uow, u) else 1 for u in updates)
-            now = self._clock.now()
             if unmatched and job.attempts < job.max_attempts:
                 uow.commit()  # the statuses that matched are kept; the retry repeats harmlessly
                 logger.info("webhook.unmatched", event_id=str(event_id), unmatched=unmatched)
                 raise JobFailure(WH_UNMATCHED)
             event.processed_at = now
-            # Inbound messages are only stored in P3 (STOP handling is P5).
-            event.error_code = WH_UNMATCHED if unmatched else None
+            if stops:
+                event.payload = self._parser.forget_senders(event.payload)
+            if unmatched:
+                event.error_code = WH_UNMATCHED
+            else:
+                event.error_code = WH_STOP_UNMATCHED if stops_unmatched else None
             uow.webhook_events.update(event)
             uow.commit()
         logger.info(
@@ -187,6 +211,8 @@ class ProcessWebhookEvent:
             event_id=str(event_id),
             statuses=len(updates),
             unmatched=unmatched,
+            opt_outs=len(stops),
+            opt_outs_unmatched=stops_unmatched,
         )
 
     def _apply(self, uow: UnitOfWork, update: StatusUpdate) -> bool:

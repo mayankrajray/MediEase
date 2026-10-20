@@ -69,6 +69,9 @@ class TemplateParamsInvalid(Exception):
 WH_UNMATCHED = "WH_UNMATCHED"
 # An event of a kind we do not handle (stored and marked processed).
 WH_UNKNOWN_EVENT = "WH_UNKNOWN_EVENT"
+# M5-P5: a STOP reply whose sender matches no patient we have messaged (or carries no number and
+# replies to no message of ours). Recorded on the event; nothing changes.
+WH_STOP_UNMATCHED = "WH_STOP_UNMATCHED"
 
 
 class WebhookSignatureInvalid(DomainError):

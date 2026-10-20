@@ -66,6 +66,8 @@ class SourceType(StrEnum):
     APPOINTMENT = "APPOINTMENT"
     PRESCRIPTION = "PRESCRIPTION"
     REMINDER = "REMINDER"  # M5-P4
+    # M5-P5: the reply confirming a STOP; ``source_id`` is the patient.
+    OPT_OUT = "OPT_OUT"
 
 
 @dataclass(slots=True, repr=False)

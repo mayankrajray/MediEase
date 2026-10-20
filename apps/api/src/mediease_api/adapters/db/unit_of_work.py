@@ -22,6 +22,7 @@ from mediease_api.adapters.db.jobs import SqlAlchemyJobQueue, SqlAlchemyRetentio
 from mediease_api.adapters.db.messages import (
     SqlAlchemyMessageLookup,
     SqlAlchemyMessageRepository,
+    SqlAlchemyOptOutLookup,
     SqlAlchemyWebhookEventRepository,
 )
 from mediease_api.adapters.db.reminders import SqlAlchemyNoShowSweep, SqlAlchemyReminderRepository
@@ -177,6 +178,8 @@ class _OpenUnit:
         self.webhook_events = SqlAlchemyWebhookEventRepository(session)
         # M5-P4: which clinics have bookings overdue for NO_SHOW (IDs only).
         self.no_show_sweep = SqlAlchemyNoShowSweep(session)
+        # M5-P5: who a STOP reply opts out (IDs only).
+        self.opt_out_lookup = SqlAlchemyOptOutLookup(session)
 
 
 class SqlAlchemyUnitOfWork:
@@ -253,6 +256,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def no_show_sweep(self) -> SqlAlchemyNoShowSweep:
         return self._require_open().no_show_sweep
+
+    @property
+    def opt_out_lookup(self) -> SqlAlchemyOptOutLookup:
+        return self._require_open().opt_out_lookup
 
     def tenant(self, clinic_id: UUID) -> SqlAlchemyTenantRepositories:
         return SqlAlchemyTenantRepositories(self._require_open().session, clinic_id)

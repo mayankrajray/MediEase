@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 import pytest
+from cryptography.fernet import Fernet
 
 from mediease_api.adapters.messaging.catalog import YamlTemplateCatalog
 from mediease_api.adapters.messaging.whatsapp_cloud import (
@@ -25,6 +26,7 @@ from mediease_api.adapters.messaging.whatsapp_webhook import (
     HmacWebhookVerifier,
     WhatsAppWebhookParser,
 )
+from mediease_api.adapters.security.phone_cipher import FernetPhoneCipher
 from mediease_api.domain.messaging.errors import (
     MSG_PROVIDER_AUTH,
     MSG_PROVIDER_RATE_LIMIT,
@@ -46,6 +48,7 @@ from tests.conftest import LogReader
 PHONE = PhoneNumber.parse("9000000001")
 CATALOG = YamlTemplateCatalog.from_package()
 MESSAGE_ID = new_id()
+CIPHER = FernetPhoneCipher([Fernet.generate_key()])
 
 
 def _msg(
@@ -318,7 +321,7 @@ DOCUMENT: dict[str, Any] = {
 
 
 def test_decision_3a_the_stored_payload_has_no_text_names_or_numbers() -> None:
-    parser = WhatsAppWebhookParser()
+    parser = WhatsAppWebhookParser(CIPHER)
     stored = json.dumps(parser.redact(DOCUMENT))
     for secret in ("my fever", "Sample Person", "919000000001", "919000000002", "15550001111"):
         assert secret not in stored
@@ -327,7 +330,7 @@ def test_decision_3a_the_stored_payload_has_no_text_names_or_numbers() -> None:
 
 
 def test_r13_statuses_are_parsed_with_our_id_codes_and_category() -> None:
-    parser = WhatsAppWebhookParser()
+    parser = WhatsAppWebhookParser(CIPHER)
     delivered, failed = parser.statuses(parser.redact(DOCUMENT))
     assert (delivered.provider_message_id, delivered.message_id, delivered.status) == (
         "wamid.1",
@@ -342,3 +345,89 @@ def test_r13_statuses_are_parsed_with_our_id_codes_and_category() -> None:
         None,
     )
     assert parser.statuses({"entry": "nonsense"}) == []
+
+
+def _inbound(*messages: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "field": "messages",
+                        "value": {
+                            "contacts": [{"profile": {"name": "Sample Person"}}],
+                            "messages": list(messages),
+                        },
+                    }
+                ]
+            }
+        ],
+    }
+
+
+def _text(body: str, *, sender: str | None = "919000000001", **extra: Any) -> dict[str, Any]:
+    raw: dict[str, Any] = {
+        "id": f"wamid.{abs(hash(body))}",
+        "timestamp": "1792300000",
+        "type": "text",
+        "text": {"body": body},
+        **extra,
+    }
+    if sender is not None:
+        raw["from"] = sender
+    return raw
+
+
+def test_r14_decision_1a_a_stop_reply_keeps_only_its_sender_encrypted_and_its_context() -> None:
+    parser = WhatsAppWebhookParser(CIPHER)
+    stored = parser.redact(
+        _inbound(
+            _text("  Stop ", context={"from": "15550001111", "id": "wamid.OURS"}),
+            _text("please stop sending these"),  # not the whole text: not a STOP
+        )
+    )
+    text = json.dumps(stored)
+    for secret in ("919000000001", "15550001111", "Sample Person", "please stop"):
+        assert secret not in text
+    [stop] = parser.opt_outs(stored)
+    assert stop.phone_encrypted is not None and stop.context_id == "wamid.OURS"
+    assert CIPHER.decrypt(stop.phone_encrypted) == PhoneNumber("+919000000001")
+    assert stop.at.timestamp() == 1792300000
+    assert "from_encrypted" not in json.dumps(parser.forget_senders(stored))
+    assert parser.opt_outs(parser.forget_senders(stored))[0].phone_encrypted is None
+    assert "from_encrypted" in json.dumps(stored)  # forget_senders copies
+
+
+@pytest.mark.parametrize("body", ["STOP", "stop", "Unsubscribe", " रोकें ", "बंद"])
+def test_r14_each_keyword_is_a_stop(body: str) -> None:
+    parser = WhatsAppWebhookParser(CIPHER)
+    assert len(parser.opt_outs(parser.redact(_inbound(_text(body))))) == 1
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        _text("stopp"),
+        _text("start"),
+        {"id": "wamid.B", "timestamp": "1", "type": "button", "button": {"text": "STOP"}},
+        _text("stop", timestamp="soon"),
+    ],
+    ids=["near-miss", "other-word", "not-text", "bad-time"],
+)
+def test_r14_anything_else_is_no_stop(raw: dict[str, Any]) -> None:
+    parser = WhatsAppWebhookParser(CIPHER)
+    assert parser.opt_outs(parser.redact(_inbound(raw))) == []
+
+
+def test_r14_a_stop_from_a_hidden_or_malformed_number_keeps_no_number() -> None:
+    parser = WhatsAppWebhookParser(CIPHER)
+    stored = parser.redact(
+        _inbound(
+            _text("stop", sender=None, context={"id": "wamid.OURS"}), _text("stop", sender="12")
+        )
+    )
+    hidden, malformed = parser.opt_outs(stored)
+    assert (hidden.phone_encrypted, hidden.context_id) == (None, "wamid.OURS")
+    assert (malformed.phone_encrypted, malformed.context_id) == (None, None)
+    assert "has_phone=False" in repr(hidden)

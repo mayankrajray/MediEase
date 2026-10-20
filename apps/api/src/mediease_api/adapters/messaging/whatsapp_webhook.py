@@ -7,13 +7,16 @@ Redaction: only what the status processor needs is stored — for each status it
 time, our echoed message ID, the error codes and the pricing category; for each inbound message
 only its ID, type and time. Message text, profile names and every phone number (``from``,
 ``recipient_id``, ``wa_id``, the business number) are dropped (spec R14: inbound text is not
-stored).
+stored). M5-P5 (decision 1A): a STOP reply is recognised here, before redaction, and is the one
+exception — it also keeps ``stop: true``, the sender's number *encrypted* with the messages' phone
+keys, and the ID of our message it replied to; the processing job removes the number again.
 """
 
 from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -23,6 +26,10 @@ import structlog
 
 from mediease_api.adapters.messaging.whatsapp_errors import map_meta_error
 from mediease_api.domain.messaging.message import MessageStatus, StatusUpdate
+from mediease_api.domain.messaging.opt_out import InboundOptOut, is_stop_keyword
+from mediease_api.domain.shared.errors import InvalidValue
+from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.ports.messaging import PhoneCipherPort
 
 logger = structlog.get_logger(__name__)
 
@@ -70,6 +77,11 @@ def _status(raw: Mapping[str, Any]) -> dict[str, Any]:
 
 
 class WhatsAppWebhookParser:
+    """``phones`` encrypts a STOP sender's number for the stored payload (M5-P5 decision 1A)."""
+
+    def __init__(self, phones: PhoneCipherPort) -> None:
+        self._phones = phones
+
     def event_key(self, body: bytes) -> str:
         return hashlib.sha256(body).hexdigest()
 
@@ -83,25 +95,83 @@ class WhatsAppWebhookParser:
                 statuses = [_status(_dict(s)) for s in _list(value.get("statuses"))]
                 if statuses:
                     kept["statuses"] = statuses
-                messages = [
-                    {k: _dict(m)[k] for k in ("id", "type", "timestamp") if k in _dict(m)}
-                    for m in _list(value.get("messages"))
-                ]
+                messages = [self._inbound(_dict(m)) for m in _list(value.get("messages"))]
                 if messages:
                     kept["messages"] = messages
                 changes.append({"field": _dict(change).get("field"), "value": kept})
             entries.append({"changes": changes})
         return {"object": document.get("object"), "entry": entries}
 
+    def _inbound(self, raw: Mapping[str, Any]) -> dict[str, Any]:
+        """ID, type and time; a STOP reply also keeps its sender, encrypted, and its context."""
+        kept: dict[str, Any] = {k: raw[k] for k in ("id", "type", "timestamp") if k in raw}
+        body = _dict(raw.get("text")).get("body")
+        if raw.get("type") != "text" or not isinstance(body, str) or not is_stop_keyword(body):
+            return kept
+        kept["stop"] = True
+        sender = raw.get("from")
+        if isinstance(sender, str) and sender.isdigit():
+            try:
+                kept["from_encrypted"] = self._phones.encrypt(PhoneNumber(f"+{sender}"))
+            except InvalidValue:
+                logger.info("webhook.stop_sender_invalid")
+        context = _dict(raw.get("context")).get("id")
+        if isinstance(context, str) and context:
+            kept["context_id"] = context
+        return kept
+
     def statuses(self, payload: Mapping[str, Any]) -> Sequence[StatusUpdate]:
         updates: list[StatusUpdate] = []
-        for entry in _list(payload.get("entry")):
-            for change in _list(_dict(entry).get("changes")):
-                for raw in _list(_dict(_dict(change).get("value")).get("statuses")):
-                    update = _update(_dict(raw))
-                    if update is not None:
-                        updates.append(update)
+        for value in _values(payload):
+            for raw in _list(value.get("statuses")):
+                update = _update(_dict(raw))
+                if update is not None:
+                    updates.append(update)
         return updates
+
+    def opt_outs(self, payload: Mapping[str, Any]) -> Sequence[InboundOptOut]:
+        found: list[InboundOptOut] = []
+        for value in _values(payload):
+            for raw in map(_dict, _list(value.get("messages"))):
+                provider_id = raw.get("id")
+                if raw.get("stop") is not True or not isinstance(provider_id, str):
+                    continue
+                at = _time(raw.get("timestamp"))
+                if at is None:
+                    continue
+                phone = raw.get("from_encrypted")
+                context = raw.get("context_id")
+                found.append(
+                    InboundOptOut(
+                        provider_message_id=provider_id,
+                        at=at,
+                        phone_encrypted=phone if isinstance(phone, str) else None,
+                        context_id=context if isinstance(context, str) else None,
+                    )
+                )
+        return found
+
+    def forget_senders(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        copy: dict[str, Any] = json.loads(json.dumps(payload))
+        for value in _values(copy):
+            for raw in map(_dict, _list(value.get("messages"))):
+                raw.pop("from_encrypted", None)
+        return copy
+
+
+def _values(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _dict(_dict(change).get("value"))
+        for entry in _list(payload.get("entry"))
+        for change in _list(_dict(entry).get("changes"))
+    ]
+
+
+def _time(raw: object) -> datetime | None:
+    try:
+        return datetime.fromtimestamp(int(str(raw)), tz=UTC)
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
 
 
 def _update(raw: Mapping[str, Any]) -> StatusUpdate | None:
@@ -110,9 +180,8 @@ def _update(raw: Mapping[str, Any]) -> StatusUpdate | None:
     if status is None or not isinstance(provider_id, str) or not provider_id:
         logger.info("webhook.status_ignored", status=str(raw.get("status"))[:20])
         return None
-    try:
-        at = datetime.fromtimestamp(int(str(raw.get("timestamp"))), tz=UTC)
-    except (TypeError, ValueError, OverflowError, OSError):
+    at = _time(raw.get("timestamp"))
+    if at is None:
         return None
     try:
         message_id: UUID | None = UUID(str(raw["biz_opaque_callback_data"]))

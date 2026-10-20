@@ -9,6 +9,7 @@ SQLAlchemy models, and that env.py takes its URL from the settings.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from alembic import command
@@ -21,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0017"
+HEAD = "0018"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -540,6 +541,35 @@ def test_0017_adds_reminders_with_one_scheduled_per_chain(
             assert "schedule_no_shows" in kinds
         command.downgrade(alembic_config, "0016")
         assert _tables(scratch_database_url) == M5_P3_TABLES
+    finally:
+        engine.dispose()
+
+
+def _check(conn: Any, name: str) -> str:
+    return str(
+        conn.execute(
+            text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :n"),
+            {"n": name},
+        ).scalar_one()
+    )
+
+
+def test_0018_indexes_patients_by_number_and_allows_opt_out_replies(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    command.upgrade(alembic_config, "0018")
+    assert _tables(scratch_database_url) == M5_P4_TABLES  # no new table
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            indexes = {i["name"]: i for i in inspect(conn).get_indexes("patients")}
+            assert indexes["ix_patients_phone_e164"]["column_names"] == ["phone_e164"]
+            assert "OPT_OUT" in _check(conn, "ck_messages_source_type")
+        command.downgrade(alembic_config, "0017")
+        with engine.connect() as conn:
+            names = {i["name"] for i in inspect(conn).get_indexes("patients")}
+            assert "ix_patients_phone_e164" not in names
+            assert "OPT_OUT" not in _check(conn, "ck_messages_source_type")
     finally:
         engine.dispose()
 
