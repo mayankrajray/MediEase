@@ -161,6 +161,15 @@ the person holding the link knows whether to ask for a new one.
 | GET | `/api/v1/ops/clinics/{clinic_id}/health` | Usage metrics, no clinical data (FR-OPS-03) | M6-P4 |
 | POST | `/api/v1/ops/clinics/{clinic_id}/patient-imports?dry_run=true` | CSV import (FR-PAT-08), dry run unless `dry_run=false` | Implemented (M2-P4) |
 | GET | `/api/v1/ops/jobs?state=dead` | Dead jobs | M5-P1 |
+| GET | `/api/v1/ops/messaging-costs?month=YYYY-MM` | Each clinic's messages and their cost in a month (spec R18) | Implemented (M5-P5) |
+
+**Messaging costs (M5-P5, decisions 5A-7A).** `month` is required (`YYYY-MM`, else 422
+`REQ_VALIDATION_FAILED`) and read in each clinic's own time zone on the sending time. The answer
+lists every clinic that sent messages that month, with per-channel `messages`, `priced`,
+`unpriced` and `cost_paise`, and the month's total `cost_paise`. Money is excluding GST, kept in
+millipaise and rounded half up to paise at each total; a message whose cost is not yet known is
+`unpriced`, never guessed. Prices come from `adapters/messaging/prices.yaml`. Counts and money
+only: no message, patient or number.
 
 Ops routes are `@ops`: platform staff only, and clinic staff are refused even as owners (R10).
 Ops users have no membership, so the clinic is named in the path; the use cases still reach tenant
@@ -419,3 +428,7 @@ They are not in `contracts/openapi.yaml` (the web app never calls them; Meta's f
 M5-P3: `GET` returns the `hub.challenge` as `text/plain` for the right `hub.verify_token`, else
 403 `WH_VERIFY_FAILED`; `POST` answers 200 `{"status": "received"}` for a correctly signed body
 (also for a redelivery), 401 `WH_SIGNATURE_INVALID`, 413 over 1 MB, 429 `WH_RATE_LIMITED`.
+M5-P5: an inbound text that is exactly STOP, UNSUBSCRIBE, रोकें or बंद (trimmed, any case) opts the
+sender out, in each clinic that has messaged that number, and that clinic replies
+`opt_out_confirmed`; nothing else inbound is acted on or stored. `POST /webhooks/sms/{provider}`
+waits for a real SMS provider (L-03).

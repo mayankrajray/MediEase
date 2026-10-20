@@ -14,6 +14,17 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M5-P5 (#40): opting out by reply, the SMS fallback and message costs (FR-MSG-05, FR-REM-06; spec
+  R14, R18, R19; AC5). A WhatsApp reply of STOP, UNSUBSCRIBE, रोकें or बंद opts the sender out in
+  every clinic that has messaged that number (a family sharing the phone together), with a SYSTEM
+  `patient.opted_out` audit event, and each such clinic replies `opt_out_confirmed`; only a STOP
+  keeps its sender's number, encrypted, until processed (migration `0018`: `ix_patients_phone_e164`,
+  source type `OPT_OUT`). Behind `MESSAGING_SMS_FALLBACK_ENABLED` (off), a follow-up reminder
+  WhatsApp definitely could not deliver gets one SMS if the patient consented to SMS; only a
+  console SMS provider exists until L-03, refused in production. Each message records its cost in
+  millipaise from `prices.yaml` (migration `0019`), and ops read every clinic's month with
+  `GET /api/v1/ops/messaging-costs?month=YYYY-MM`. Contract 0.20.0, web types regenerated. New
+  error code `WH_STOP_UNMATCHED`.
 - M5-P4 (#40): follow-up reminders and the automatic no-show (FR-REM-01, 02, 04, 05, 07; spec
   R1–R5, R17; appointments R10; AC1, AC2). Issuing a prescription with a follow-up date schedules
   a reminder for 09:00 clinic time the day before (`reminders`, migration `0017`); revisions move

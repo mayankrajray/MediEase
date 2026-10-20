@@ -510,18 +510,18 @@ One row per message, written before the provider is called (spec R6). Tenant-sco
 |---|---|---|
 | id | uuid PK | |
 | clinic_id, patient_id | uuid FK | |
-| source_type, source_id | text, uuid | `APPOINTMENT` \| `PRESCRIPTION` and its ID, for the status shown in P6 |
+| source_type, source_id | text, uuid | `APPOINTMENT` \| `PRESCRIPTION` \| `REMINDER` (P4) \| `OPT_OUT` (P5: the STOP reply; `source_id` is the patient) and its ID. A reminder may have two rows, WhatsApp and its SMS fallback (P5); it shows the latest |
 | channel | text | `WHATSAPP` \| `SMS` \| `CONSOLE` |
-| provider | text | `console` until P3 |
+| provider | text | `console`, `whatsapp_cloud` (P3); an SMS row from the console SMS adapter is `SMS`/`console` (P5) |
 | template_key, template_version | text, smallint | From `templates.yaml` |
 | language | text | `en` \| `hi` |
 | variables | jsonb | Non-clinical only (R8); the signed link stored as `[link]` (decision 5A) |
 | to_phone_encrypted | text | Fernet ciphertext (decision 1A); keys in `MESSAGING_PHONE_KEYS`, never in the database |
-| idempotency_key | text unique not null | `booking_confirmed:<appointment>`, `rx_link:<prescription version>`; the job's `dedupe_key` |
+| idempotency_key | text unique not null | `booking_confirmed:<appointment>`, `rx_link:<prescription version>`, `follow_up_due:<reminder>` (P4), `sms:<reminder>` and `opt_out_confirmed:<clinic>:<inbound message>` (P5); the job's `dedupe_key` except for the SMS fallback, whose jobs are `sms_fallback:<reminder>:<deferrals>` |
 | status | text | `QUEUED` \| `SENT` \| `DELIVERED` \| `READ` \| `FAILED` |
 | error_code | text null | `MSG_*`; set on `FAILED`, and on a refused `QUEUED` row awaiting its retry |
 | provider_message_id | text unique null | Webhook idempotency (P3); set exactly when accepted |
-| cost_paise | bigint null | FR-MSG-07 (P5) |
+| cost_millipaise | bigint null | R18 (migration `0019`, renamed from the never-written `cost_paise`): integer millipaise, 1 paisa = 1,000, excluding GST, from `prices.yaml`. Set once: WhatsApp when delivery is reported (0 if Meta says not billable), SMS at acceptance per segment, console and failures 0; null while unknown (an unknown outcome stays null). `ck_messages_cost_not_negative` |
 | request_id, job_id | text, uuid null | Correlation; `job_id` has no FK (jobs are purged) |
 | sending_started_at | timestamptz null | Set while a provider call may be under way; a retry that finds it set fails the row as `MSG_OUTCOME_UNKNOWN` (decision 4A) |
 | sent_at, delivered_at, read_at, failed_at | timestamptz null | |
@@ -529,10 +529,13 @@ One row per message, written before the provider is called (spec R6). Tenant-sco
 CHECKs: accepted ⇒ `sent_at` and `provider_message_id` (one-way from `0016`); `FAILED` ⇔ `failed_at` and `error_code`;
 `sending_started_at` only while `QUEUED`. `v_message_health`: counts by channel, template and
 status, the last 24 hours, `outcome_unknown` and the oldest queued age; no clinic or patient data.
+`ix_messages_clinic_id_sent_at` (`0019`) serves the ops monthly total
+(`GET /ops/messaging-costs`).
 
-### `inbound_messages`
-`id, clinic_id null, from_phone_hash, provider_message_id unique, kind (OPT_OUT | OTHER),
-received_at` — body is not stored except for the matched keyword.
+### `inbound_messages` (not built)
+Planned before M5; replaced in M5-P5 (decision 1A) by the redacted `webhook_events` payload: only a
+STOP reply keeps anything about its sender, and only until it is processed (below). No other
+inbound text, phone hash or table is kept.
 
 ### `webhook_events` (migration `0016`, M5-P3)
 Platform data, no `clinic_id`. One row per webhook body; processed by a `process_webhook_event`
@@ -543,10 +546,10 @@ job; purged 7 days after `received_at` by the retention purge.
 | id | uuid PK | |
 | provider | text | `whatsapp_cloud` |
 | event_key | text unique | SHA-256 of the raw body, so a redelivery is stored once |
-| payload | jsonb | Redacted (decision 3A): statuses (ID, status, time, our echoed message ID, error codes, pricing category) and inbound message IDs and types; no text, profile names or phone numbers |
+| payload | jsonb | Redacted (decision 3A): statuses (ID, status, time, our echoed message ID, error codes, pricing category and, from P5, `billable`) and inbound message IDs and types; no text, profile names or phone numbers. P5 (decision 1A): a STOP reply also keeps `stop: true`, `context_id` (our message it answered) and `from_encrypted` (the sender's number, Fernet under `MESSAGING_PHONE_KEYS`), which the processing job removes when the event is processed |
 | received_at | timestamptz | Partial index on unprocessed rows for the hourly reconciliation |
 | processed_at | timestamptz null | |
-| error_code | text null | `WH_UNMATCHED` when a status never found its message |
+| error_code | text null | `WH_UNMATCHED` when a status never found its message; `WH_STOP_UNMATCHED` (P5) when a STOP matched no patient a clinic had messaged |
 
 `messages` gains `pricing_category` (from the status webhook, for P5's ledger), and
 `ck_messages_sent_has_provider_id` became one-way in `0016`: an accepted message keeps its

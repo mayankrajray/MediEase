@@ -18,8 +18,8 @@
 | P2 | `MessagingPort`, the console adapter, `templates.yaml`; `messages` (encrypted phone, IDs only, unique idempotency key); a send job; booking confirmations and the M4 prescription links still `PENDING` (issued in the last 24 hours, R15 of the M4 spec) through it; `v_message_health` | Below (done; confirmed) |
 | P3 | WhatsApp Cloud adapter (errors mapped to `MSG_*`, 10 s timeout); `GET`/`POST /webhooks/whatsapp` (raw-body signature, store once, answer within 1 s); statuses only move forward; reconciliation of messages stuck in `SENT` | Below (done; confirmed; the live Meta test needs L-01, L-02) |
 | P4 | Reminder rules: follow-up reminders from issued prescriptions (09:00 the day before), revisions move or cancel them, manual reminders, quiet hours 21:00–08:00, consent re-read at send time; pending follow-ups API; the automatic no-show job | Below (done; confirmed) |
-| P5 | STOP, UNSUBSCRIBE, रोकें, बंद opt the patient out and confirm; SMS adapter behind a flag (off); cost per message and the ops console's monthly total per clinic | Below (awaiting approval) |
-| P6 | Web: reminder and message status on the patient profile and the consultation; pending follow-ups with *Book follow-up*; failed messages explained with a "call the patient" hint; Playwright | At its start |
+| P5 | STOP, UNSUBSCRIBE, रोकें, बंद opt the patient out and confirm; SMS adapter behind a flag (off); cost per message and the ops console's monthly total per clinic | Below (done; awaiting confirmation) |
+| P6 | Web: reminder and message status on the patient profile and the consultation; pending follow-ups with *Book follow-up*; failed messages explained with a "call the patient" hint; the ops console's monthly messaging-costs table (P5 decision 7A); Playwright | At its start |
 
 ---
 
@@ -395,7 +395,7 @@ Not verified: per-clinic quiet hours or send times (not built); the Hindi wordin
 
 ## M5-P5 — Opt-out by reply, SMS fallback, cost ledger
 
-Designed 20 Oct 2026; awaiting the developer's approval. Recommendations are marked (rec).
+Designed 20 Oct 2026; approved the same day with 1A–7A. Recommendations are marked (rec).
 
 Facts the design rests on:
 
@@ -459,3 +459,63 @@ Planned verification on the stack, against the fake Graph API from P3:
    403 on the costs endpoint.
 
 Not verifiable in P5: a real SMS provider (L-03), and a live Meta STOP (L-01, L-02).
+
+### Result (20 Oct 2026)
+
+Built as designed:
+
+- STOP: `domain/messaging/opt_out.py`, `application/messaging/opt_out.py`, and the parser and the
+  processor in `whatsapp_webhook.py` and `webhooks.py`. Migration `0018` adds
+  `ix_patients_phone_e164` and source type `OPT_OUT`.
+- SMS: `domain/messaging/sms.py`, `application/reminders/fallback.py`, `console_sms.py`, and SMS
+  wording for `follow_up_due`.
+- Costs: `domain/messaging/pricing.py` and `prices.yaml`. Migration `0019` adds
+  `cost_millipaise` and `ix_messages_clinic_id_sent_at`.
+- Ops: `GET /ops/messaging-costs`, contract 0.20.0.
+
+The build differs from the design in these ways:
+
+- **2A scope, made precise.** In each clinic that has messaged the number, every patient with that
+  number is opted out, not only the one who received the message. This follows spec §8, where a
+  family sharing a phone is opted out together. A clinic that never wrote to the number is still
+  left alone.
+- **STOPs are applied before statuses.** A status that is still unmatched makes the job retry, and
+  that must never delay an opt-out. Repeating a STOP on a retry changes nothing.
+- **A reminder shows its latest message.** Once the SMS exists, the reminder shows the SMS's status
+  (P4 decision 3A, applied to two rows).
+- **An unknown outcome stays unpriced.** A later webhook may still prove the message was
+  delivered, so it is not priced at 0 like other failures.
+- **Two migrations instead of one.** The opt-out (`0018`) and the costs (`0019`) went into their
+  own commits.
+
+Two bugs were found and fixed:
+
+- **One long line broke `ruff check`.** It was in the pending follow-ups SQL; `e631c00` wraps it.
+  Commit `c44ed71` on its own therefore fails `ruff check`.
+- **`prices.yaml` was missing from the package.** The worker image failed at start-up; `d695295`
+  fixes it. The tests read the source tree, so only `make up` could catch this. Commit `b4da260`
+  on its own therefore passes the gates but does not start the worker.
+
+Verification on the rebuilt stack, run with `make up` and `make smoke`, migration `0019`, the real
+WhatsApp adapter against the fake Graph API from P3, and the console SMS fallback on:
+
+| Step | Result |
+|---|---|
+| 1. Delivered status with `utility`, billable | Booking `DELIVERED`, `cost_millipaise` 11500 |
+| 2. Signed "  Stop " from the patient's number | The patient and a sibling sharing the number were opted out, with 2 SYSTEM `patient.opted_out` events (`inbound_message`). The second clinic's patient with the same number was not opted out. One `opt_out_confirmed` reply was sent as text naming the clinic (`OPT_OUT`). The processed payload has no `from_encrypted`, no number, no text and no name |
+| 3. AC5 | The opted-out patient's manual reminder, forced due, became `SKIPPED_NO_CONSENT` with no message |
+| 4. SMS fallback | The fake refused the number (131026), so the WhatsApp message became `FAILED` `MSG_RECIPIENT_INVALID`. One `send_sms_fallback` job ran and one SMS row was `SENT` (`SMS`, `console`, cost 0). The reminder shows `SENT` |
+| 5. `GET /ops/messaging-costs?month=2026-10` | 200. Sample Clinic, WhatsApp 3 messages, 1 priced, 12 paise. The total is 12. The unpriced rows are messages sent before P5 |
+| 6. Failure paths | Other inbound text: 200, not stored, no error. Unsigned body: 401. STOP from an unknown number: `WH_STOP_UNMATCHED`. Front desk on costs: 403. `month=2026-13`: 422 |
+| 7. Logs | No line in the API or worker logs carries a test patient's name or the inbound text |
+
+Gates: `make lint typecheck contract-check test` pass. The API has 1575 tests at 98.27% (the core
+gate holds); the web has 426.
+
+Not verified:
+
+- a real SMS provider (L-03);
+- a live STOP through Meta (L-01, L-02);
+- whether Meta reports `billable: false` for the monthly free service messages (the free
+  allowance is not modelled);
+- the Hindi SMS wording (L-02).

@@ -164,17 +164,18 @@ against a bug, a migration mistake or a stolen connection. Lifting it is an appr
 | `REM_NOT_SCHEDULED` | 409 | The reminder was sent, cancelled or skipped and can no longer be changed (M5-P4) | A stale screen | The reminder's status |
 | `MSG_TEMPLATE_NOT_FOUND` | — (job) | Template missing at provider | Name/language not approved | Meta template manager, `templates.yaml` |
 | `MSG_TEMPLATE_PARAMS` | — (job) | Template variables mismatch | Count/order differs from approved template | DEBUGGING §5.7 |
-| `MSG_RECIPIENT_INVALID` | — (job) | Number can't receive WhatsApp | Not on WhatsApp / invalid | SMS fallback (FR-REM-06) |
+| `MSG_RECIPIENT_INVALID` | — (job) | Number can't receive WhatsApp | Not on WhatsApp / invalid | A reminder falls back to one SMS when `MESSAGING_SMS_FALLBACK_ENABLED` and the patient consented to SMS (FR-REM-06, M5-P5) |
 | `MSG_PROVIDER_RATE_LIMIT` | — (job) | Provider throttled us | Burst sending | Job retries with backoff |
 | `MSG_PROVIDER_UNAVAILABLE` | — (job) | Provider error / outage (the provider said so: nothing was sent) | Outage | RUNBOOK "Messaging provider outage" |
 | `MSG_OUTCOME_UNKNOWN` | — (job, message) | We cannot tell whether the provider accepted the message: a timeout, a lost connection, or a worker that died during the call or before recording it. Never sent again (M5-P2 decision 4A, at most once); the job is `dead` | Provider latency, a crash, a database error after the call | `messages.error_code`, `v_message_health.outcome_unknown`; call the patient if it matters |
-| `MSG_NO_CONSENT` | — (message) | A message refused earlier was not retried: the patient no longer allows WhatsApp | Opt-out or consent withdrawn between attempts | Patient consent |
+| `MSG_NO_CONSENT` | — (message) | A message refused earlier was not retried: the patient no longer allows WhatsApp (or, for the SMS fallback, SMS) | Opt-out or consent withdrawn between attempts | Patient consent |
 | `MSG_NOT_APPLICABLE` | — (message) | A message refused earlier was not retried: what it was about no longer applies (appointment cancelled or over, prescription superseded or its link expired) | Normal | The appointment or prescription |
 | `MSG_QUIET_HOURS_DEFERRED` | — (info) | Deferred to 08:00 | FR-REM-04 — expected | Job `run_at` |
 | `WH_SIGNATURE_INVALID` | 401 | Webhook rejected | Wrong secret or body re-serialised; or `WHATSAPP_APP_SECRET` is empty (the webhook then refuses everything) | DEBUGGING §5.8 |
 | `WH_VERIFY_FAILED` | 403 | Meta's subscription challenge refused (M5-P3) | `WHATSAPP_VERIFY_TOKEN` differs from the token entered in Meta's webhook settings, or is empty | RUNBOOK §9 |
 | `WH_RATE_LIMITED` | 429 | More than 600 webhook requests a minute from one caller (M5-P3) | A flood, or a misbehaving proxy; `Retry-After` | `public_rate_limits` |
 | `WH_UNMATCHED` | — (event) | A status found no message after the job's five attempts (M5-P3) | A message sent outside this system with our number, or a database restored without recent rows | `webhook_events.error_code` |
+| `WH_STOP_UNMATCHED` | — (event, info) | A STOP reply opted nobody out (M5-P5): no clinic has messaged a patient with that number, or the number was hidden and the reply answered none of our messages | A wrong number, a patient whose number changed, a WhatsApp username | `webhook_events.error_code`, `webhook.stop_unmatched` log (no number); opt the patient out by hand if they ask the clinic |
 | `MSG_PROVIDER_AUTH` | — (job) | Meta refused our credentials (M5-P3): not retried, logged as an error | `WHATSAPP_ACCESS_TOKEN` expired or lost its permissions; phone number ID wrong | RUNBOOK §9; Meta Business Manager |
 | `MSG_PROVIDER_REJECTED` | — (job, message) | Meta refused the message with a code we do not map (M5-P3): not retried | A new or rare Meta error | `messaging.whatsapp_refused` log (`meta_code`) |
 | `WH_UNKNOWN_EVENT` | 200 (ignored) | Event type not handled | New provider event | `webhook_events` |

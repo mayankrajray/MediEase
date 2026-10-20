@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M5 — Messaging and reminders** (issue #40, branch `m5/40-messaging-and-reminders`, one PR for the milestone). M4 merged in PR #39 on 18 Oct 2026 |
-| Active phase | **M5-P5 — Opt-out, SMS fallback, cost ledger:** M5-P4 confirmed by the developer and pushed to PR #41 on 20 Oct 2026; P5 designed (`docs/milestones/M5-messaging-and-reminders.md`), awaiting the developer's approval |
+| Active phase | **M5-P5 — Opt-out, SMS fallback, cost ledger:** M5-P4 confirmed by the developer and pushed to PR #41 on 20 Oct 2026; P5 approved (1A–7A) and implemented 20 Oct 2026, verified on the stack, awaiting the developer's confirmation (the real SMS provider needs L-03) |
 | Design notes | `docs/milestones/M5-messaging-and-reminders.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M5 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -128,7 +128,7 @@ flows back through the webhook, and opt-out stops further sends. Depends on L-01
 | M5-P3 | WhatsApp Cloud API adapter; webhook signature verification; idempotent status updates; status reconciliation job | ✅ (live Meta test pending L-01/L-02) |
 | M5-P4 | Reminder scheduling rules (quiet hours, consent, follow-up defaults); pending follow-ups list; automatic no-show job | ✅ |
 | M5-P5 | Inbound STOP handling; SMS adapter (fallback behind a flag); per-clinic cost ledger | ▶ |
-| M5-P6 | Web: reminder status on patient profile and visit; pending follow-ups page | ☐ |
+| M5-P6 | Web: reminder status on patient profile and visit; pending follow-ups page; ops monthly messaging costs (P5 decision 7A) | ☐ |
 
 ## M6 — Pilot hardening and deployment  `☐`
 
