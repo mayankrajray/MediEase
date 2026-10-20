@@ -21,6 +21,8 @@ class PatientRow(TenantOwned, Timestamps, Base):
         UniqueConstraint("clinic_id", "code"),
         # Exact phone lookup and the duplicate-phone check (families share phones).
         Index("ix_patients_clinic_id_phone_e164", "clinic_id", "phone_e164"),
+        # M5-P5: a STOP reply names a number, not a clinic (the reviewed opt-out lookup).
+        Index("ix_patients_phone_e164", "phone_e164"),
         # Case-insensitive name *prefix* lookup: text_pattern_ops lets LIKE 'ab%' use the index.
         # SQLAlchemy has no way to attach an operator class to an expression, so it is in the
         # text, and Alembic cannot compare this one index (it warns); the lookup test plans the

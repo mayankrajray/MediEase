@@ -25,9 +25,11 @@ from mediease_api.adapters.clock.system import SystemClock
 from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
 from mediease_api.adapters.messaging.whatsapp_webhook import WhatsAppWebhookParser
+from mediease_api.adapters.security.phone_cipher import FernetPhoneCipher
+from mediease_api.application.messaging.opt_out import OptOutByReply
 from mediease_api.application.messaging.webhooks import ProcessWebhookEvent, ReconcileMessages
 from mediease_api.bootstrap import create_app
-from mediease_api.config.settings import AppEnv, AppSettings
+from mediease_api.config.settings import _DEV_PHONE_KEY, AppEnv, AppSettings
 from mediease_api.domain.jobs.retry import JobFailure
 from mediease_api.domain.messaging.errors import MSG_OUTCOME_UNKNOWN, WH_UNMATCHED
 from tests.conftest import _BLOBS, CHEAP_HASHER, TEST_IP_SALT, TEST_SIGNING_KEY, LogReader, World
@@ -46,6 +48,9 @@ from tests.integration.test_messaging_db import (
 SECRET = "synthetic-app-secret-for-tests"
 VERIFY = "synthetic-verify-token-01"
 URL = "/webhooks/whatsapp"
+# The test app's phone keys (none set in test: the development key), so a STOP sender stored by
+# the app decrypts in the processing job.
+CIPHER = FernetPhoneCipher([_DEV_PHONE_KEY.encode("ascii")])
 
 
 @pytest.fixture
@@ -148,7 +153,8 @@ def _process(session_factory: sessionmaker[Session], db: Engine, body: bytes, **
     handler = ProcessWebhookEvent(
         uow=SqlAlchemyUnitOfWork(session_factory),
         clock=SystemClock(),
-        parser=WhatsAppWebhookParser(),
+        parser=WhatsAppWebhookParser(CIPHER),
+        opt_outs=OptOutByReply(ids=Uuid7Generator(), phones=CIPHER),
     )
     handler(_job(db, f"process_webhook_event:{_event_id(db, body)}", **job))
 

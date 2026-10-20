@@ -9,14 +9,16 @@ from uuid import UUID
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from mediease_api.adapters.db.models.messages import MessageRow, WebhookEventRow
+from mediease_api.adapters.db.models.patients import PatientRow
 from mediease_api.adapters.db.tenancy import TenantScopedRepository
 from mediease_api.domain.messaging.message import Channel, Message, MessageStatus, SourceType
 from mediease_api.domain.messaging.webhook import WebhookEvent
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.shared.errors import NotFound
+from mediease_api.domain.shared.phone import PhoneNumber
 
 
 def _write(row: MessageRow, message: Message) -> None:
@@ -141,6 +143,42 @@ class SqlAlchemyMessageLookup:
         return int(self._session.execute(query).scalar_one())
 
 
+class SqlAlchemyOptOutLookup:
+    """Who a STOP reply opts out (M5-P5 decision 2A): a reviewed cross-clinic read of IDs.
+
+    In every clinic that has sent a message (``sent_at`` set) to a patient with this number, every
+    patient whose current number it is: a family sharing one phone is opted out together (spec §8),
+    and a clinic that never wrote to the number is left alone. Only clinic and patient IDs leave
+    this class; ``ix_patients_phone_e164`` serves the number match and
+    ``ix_messages_clinic_id_patient_id`` the check.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def patients_messaged(self, phone: PhoneNumber) -> Sequence[tuple[UUID, UUID]]:
+        reached = aliased(PatientRow)
+        clinic_wrote = (
+            select(MessageRow.id)
+            .join(
+                reached,
+                (reached.clinic_id == MessageRow.clinic_id) & (reached.id == MessageRow.patient_id),
+            )
+            .where(
+                MessageRow.clinic_id == PatientRow.clinic_id,
+                reached.phone_e164 == phone.e164,
+                MessageRow.sent_at.is_not(None),
+            )
+            .exists()
+        )
+        query = (
+            select(PatientRow.clinic_id, PatientRow.id)
+            .where(PatientRow.phone_e164 == phone.e164, clinic_wrote)
+            .order_by(PatientRow.clinic_id, PatientRow.id)
+        )
+        return [(row.clinic_id, row.id) for row in self._session.execute(query)]
+
+
 class SqlAlchemyWebhookEventRepository:
     """``webhook_events``: platform data, stored once per body (M5-P3)."""
 
@@ -183,6 +221,7 @@ class SqlAlchemyWebhookEventRepository:
         row = self._session.get(WebhookEventRow, event.id)
         if row is None:
             raise NotFound("webhook event")
+        row.payload = dict(event.payload)  # M5-P5: a STOP sender's number is removed
         row.processed_at = event.processed_at
         row.error_code = event.error_code
         self._session.flush()

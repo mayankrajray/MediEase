@@ -14,6 +14,7 @@ from typing import Any, Protocol
 from uuid import UUID
 
 from mediease_api.domain.messaging.message import Channel, Message, StatusUpdate
+from mediease_api.domain.messaging.opt_out import InboundOptOut
 from mediease_api.domain.messaging.template import MessageTemplate
 from mediease_api.domain.messaging.webhook import WebhookEvent
 from mediease_api.domain.patients.patient import Language
@@ -126,3 +127,23 @@ class WebhookParser(Protocol):
         ...
 
     def statuses(self, payload: Mapping[str, Any]) -> Sequence[StatusUpdate]: ...
+
+    def opt_outs(self, payload: Mapping[str, Any]) -> Sequence[InboundOptOut]:
+        """The STOP replies in a stored payload (M5-P5; spec R14)."""
+        ...
+
+    def forget_senders(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        """The payload without the STOP senders' encrypted numbers, once they are processed."""
+        ...
+
+
+class OptOutLookup(Protocol):
+    """Who a STOP reply opts out (M5-P5 decision 2A).
+
+    Reviewed cross-clinic exception, like ``MessageLookup``: a reply names no clinic. It returns
+    clinic and patient IDs only: in each clinic that has messaged a patient with ``phone``, every
+    patient whose current number it is (a family sharing a phone, spec §8). Each patient is then
+    changed through its clinic's repository.
+    """
+
+    def patients_messaged(self, phone: PhoneNumber) -> Sequence[tuple[UUID, UUID]]: ...

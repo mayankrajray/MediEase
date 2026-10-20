@@ -81,6 +81,7 @@ from mediease_api.application.links.use_cases import (
     ViewPrescription,
 )
 from mediease_api.application.messaging.booking import SendBookingConfirmation
+from mediease_api.application.messaging.opt_out import OptOutByReply, SendOptOutConfirmation
 from mediease_api.application.messaging.rx_link import SendRxLink
 from mediease_api.application.messaging.sender import MessageSender
 from mediease_api.application.messaging.webhooks import (
@@ -166,12 +167,13 @@ from mediease_api.domain.jobs.job import (
 )
 from mediease_api.domain.messaging.jobs import (
     BOOKING_CONFIRMATION_KIND,
+    OPT_OUT_CONFIRMATION_KIND,
     REMINDER_KIND,
     RX_LINK_KIND,
 )
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
-from mediease_api.ports.messaging import MessagingPort
+from mediease_api.ports.messaging import MessagingPort, PhoneCipherPort
 from mediease_api.ports.pdf import PdfRendererPort
 from mediease_api.ports.readiness import DatabaseCheck
 from mediease_api.ports.security import AccessTokenIssuer, PasswordHasher
@@ -210,6 +212,8 @@ class _UseCases:
     # M5-P3: the WhatsApp webhook's secrets (empty: the webhook refuses everything).
     whatsapp_app_secret: str = ""
     whatsapp_verify_token: str = ""
+    # M5-P5: a STOP sender's number is stored encrypted until processed (decision 1A).
+    phones: PhoneCipherPort | None = None
 
     def schedule_reminder(self) -> ScheduleReminder:
         return ScheduleReminder(uow=self._uow(), clock=self.clock, ids=self.ids)
@@ -227,12 +231,13 @@ class _UseCases:
         return VerifyWebhookSubscription(verify_token=self.whatsapp_verify_token)
 
     def receive_whatsapp_webhook(self) -> ReceiveWebhook:
+        assert self.phones is not None, "create_app sets the phone cipher"
         return ReceiveWebhook(
             uow=self._uow(),
             clock=self.clock,
             ids=self.ids,
             verifier=HmacWebhookVerifier(self.whatsapp_app_secret),
-            parser=WhatsAppWebhookParser(),
+            parser=WhatsAppWebhookParser(self.phones),
             provider=WHATSAPP_PROVIDER,
         )
 
@@ -572,18 +577,23 @@ def _messaging_handlers(
 ) -> dict[str, JobHandler]:
     """The M5-P2 send jobs. Templates are loaded and checked here, so a bad file stops start-up."""
     messaging = build_messaging(settings)
+    phones = FernetPhoneCipher(settings.messaging_phone_keys())
     sender = MessageSender(
         uow=SqlAlchemyUnitOfWork(factory),
         clock=clock,
         ids=ids,
         messaging=messaging,
         templates=YamlTemplateCatalog.from_package(),
-        phones=FernetPhoneCipher(settings.messaging_phone_keys()),
+        phones=phones,
     )
     return {
         WEBHOOK_KIND: ProcessWebhookEvent(
-            uow=SqlAlchemyUnitOfWork(factory), clock=clock, parser=WhatsAppWebhookParser()
+            uow=SqlAlchemyUnitOfWork(factory),
+            clock=clock,
+            parser=WhatsAppWebhookParser(phones),
+            opt_outs=OptOutByReply(ids=ids, phones=phones),
         ),
+        OPT_OUT_CONFIRMATION_KIND: SendOptOutConfirmation(sender=sender),
         RECONCILE_KIND: ReconcileMessages(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
         REMINDER_KIND: SendReminder(sender=sender, ids=ids),
         NO_SHOW_SWEEP_KIND: SweepNoShows(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
@@ -691,6 +701,7 @@ def create_app(
         link_ttl_days=settings.PATIENT_LINK_TTL_DAYS,
         whatsapp_app_secret=settings.WHATSAPP_APP_SECRET.get_secret_value(),
         whatsapp_verify_token=settings.WHATSAPP_VERIFY_TOKEN.get_secret_value(),
+        phones=FernetPhoneCipher(settings.messaging_phone_keys()),
     )
 
     # static_folder=None: the API serves JSON only, so there is no static route

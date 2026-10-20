@@ -23,6 +23,7 @@ from mediease_api.domain.jobs.job import (
 )
 from mediease_api.domain.messaging.jobs import (
     BOOKING_CONFIRMATION_KIND,
+    OPT_OUT_CONFIRMATION_KIND,
     REMINDER_KIND,
     RX_LINK_KIND,
 )
@@ -45,6 +46,7 @@ def test_m5_the_worker_handles_the_messaging_jobs(
         REMINDER_KIND,
         NO_SHOW_SWEEP_KIND,
         MARK_NO_SHOWS_KIND,
+        OPT_OUT_CONFIRMATION_KIND,
     }
     assert isinstance(build_messaging(settings), ConsoleMessagingAdapter)
     assert isinstance(build_worker(settings, threading.Event()), Worker)

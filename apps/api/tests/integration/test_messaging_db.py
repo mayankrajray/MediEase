@@ -98,10 +98,14 @@ class Rig:
 
 
 def _rig(
-    session_factory: sessionmaker[Session], *, clock: Any = None, window_hours: int = 24
+    session_factory: sessionmaker[Session],
+    *,
+    clock: Any = None,
+    window_hours: int = 24,
+    cipher: FernetPhoneCipher | None = None,
 ) -> Rig:
     provider = ScriptedProvider()
-    cipher = FernetPhoneCipher([Fernet.generate_key()])
+    cipher = cipher or FernetPhoneCipher([Fernet.generate_key()])
     clock = clock or SystemClock()
     ids = Uuid7Generator()
     sender = MessageSender(

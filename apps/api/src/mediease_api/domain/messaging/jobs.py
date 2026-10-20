@@ -12,6 +12,8 @@ BOOKING_CONFIRMATION_KIND = "send_booking_confirmation"
 RX_LINK_KIND = "send_rx_link"
 # M5-P4: a follow-up reminder (one job per reminder revision, decision 1A).
 REMINDER_KIND = "send_reminder"
+# M5-P5: the reply to a STOP, one per clinic that opted the sender out (decision 3A).
+OPT_OUT_CONFIRMATION_KIND = "send_opt_out_confirmation"
 
 BOOKING_CONFIRMED = "booking_confirmed"
 RX_READY = "rx_ready"
@@ -40,3 +42,8 @@ def reminder_message_key(reminder_id: UUID) -> str:
 
 def reminder_job_key(reminder_id: UUID, revision: int) -> str:
     return f"reminder:{reminder_id}:{revision}"
+
+
+def opt_out_confirmation_key(clinic_id: UUID, inbound_message_id: str) -> str:
+    """At most one reply per STOP message per clinic (M5-P5 decision 3A)."""
+    return f"{OPT_OUT_CONFIRMED}:{clinic_id}:{inbound_message_id}"

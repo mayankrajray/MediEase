@@ -86,6 +86,11 @@ class Tenant:
 # Reviewed exception (M5-P4): SqlAlchemyNoShowSweep returns the IDs of active clinics with bookings
 # overdue for NO_SHOW; each clinic's own mark_no_shows job then reads and changes only its rows
 # through the tenant repositories (tests/integration/test_reminders_http.py).
+#
+# Reviewed exception (M5-P5): SqlAlchemyOptOutLookup matches a STOP reply's number across clinics,
+# because a reply names no clinic. It returns only clinic and patient IDs (patients with that
+# number in clinics that have messaged it); each patient is then locked, opted out and audited
+# through that clinic's SqlAlchemyPatientRepository (tests/integration/test_opt_out_db.py).
 NOT_TENANT_SCOPED = {"audit_events", "jobs"}
 
 
