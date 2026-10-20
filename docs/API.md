@@ -435,3 +435,19 @@ M5-P5: an inbound text that is exactly STOP, UNSUBSCRIBE, रोकें or ब
 sender out, in each clinic that has messaged that number, and that clinic replies
 `opt_out_confirmed`; nothing else inbound is acted on or stored. `POST /webhooks/sms/{provider}`
 waits for a real SMS provider (L-03).
+### Dashboards (M6)
+
+| Method | Path | Purpose | Req |
+|---|---|---|---|
+| GET | `/api/v1/dashboard/today` | *Today*: counts for the caller's role | M6-P1 (decision 5A) |
+
+M6-P1 (contract 0.22.0): `CLINIC_VIEW` (every role). Computed in the clinic's zone; today's
+sessions are generated first, as `GET /queue` does. A doctor with a doctor profile gets
+`scope: DOCTOR` (their own sessions, next patients and counts; `messages_failed` null); front desk
+and owners get `scope: CLINIC`. `counts` are active appointments by status (`not_arrived`,
+`waiting`, `in_consultation`, `completed`, `no_show`, `total`; cancelled not counted), also per
+session. `next_patients` is at most three: those waiting first, then those not yet arrived, with the
+patient's code and first name only. `follow_ups_pending` is the clinic's, as
+`/follow-ups/pending` lists them. `week` (the last 7 days ending today, oldest first) needs
+`USAGE_METRICS_VIEW` and is null without it; in scope `DOCTOR` its `messages_sent` are null. Like
+the queue, a strong ETag and a bodiless 304 for `If-None-Match`; `Cache-Control: no-store`.
