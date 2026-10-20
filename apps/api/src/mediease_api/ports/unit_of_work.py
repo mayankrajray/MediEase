@@ -22,6 +22,7 @@ from typing import Protocol, Self
 from uuid import UUID
 
 from mediease_api.ports.audit import AuditWriter
+from mediease_api.ports.dashboard import DashboardReads
 from mediease_api.ports.jobs import JobQueue, RetentionRepository
 from mediease_api.ports.messaging import (
     MessageCostReport,
@@ -95,6 +96,10 @@ class TenantRepositories(Protocol):
     def messages(self) -> MessageRepository: ...
     @property
     def reminders(self) -> ReminderRepository: ...
+    @property
+    def dashboard(self) -> DashboardReads:
+        """Counts for the *Today* screen (M6-P1)."""
+        ...
 
 
 class UnitOfWork(Protocol):

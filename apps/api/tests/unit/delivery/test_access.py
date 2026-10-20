@@ -88,6 +88,8 @@ EXPECTED_POLICIES = {
     "reminders.change_reminder": (Access.CLINIC, Permission.REMINDERS_SCHEDULE),
     "reminders.list_pending_follow_ups": (Access.CLINIC, Permission.REMINDERS_SCHEDULE),
     "reminders.list_patient_messages": (Access.CLINIC, Permission.REMINDERS_SCHEDULE),
+    # M6-P1: Today, for every clinic role (the 7-day strip is shaped inside, not refused).
+    "dashboard.get_today": (Access.CLINIC, Permission.CLINIC_VIEW),
     "rx_library.list_favourites": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "rx_library.create_favourite": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "rx_library.replace_favourite": (Access.CLINIC, Permission.CLINICAL_WRITE),

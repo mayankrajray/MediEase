@@ -1568,6 +1568,33 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/dashboard/today": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * How today is going, for the caller's role
+         * @description M6-P1 decisions 5A and 6A. Computed in the clinic's zone; today's sessions are generated
+         *     first, as GET /queue does, so the two always agree. Permission CLINIC_VIEW (every role).
+         *     A doctor with a doctor profile gets scope DOCTOR: their own sessions, next patients and
+         *     counts, and messages_failed null. Front desk and owners get scope CLINIC. week (the last 7
+         *     days, oldest first, ending today) needs USAGE_METRICS_VIEW and is null without it; in
+         *     scope DOCTOR its messages_sent are null. follow_ups_pending is the clinic's, as
+         *     GET /follow-ups/pending lists them. Counts exclude cancelled appointments. Like the
+         *     queue, the 200 carries a strong ETag and an unchanged answer is a bodiless 304.
+         */
+        readonly get: operations["getDashboardToday"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2810,6 +2837,82 @@ export interface components {
             /** Format: date */
             readonly on_date: string;
             readonly sessions: readonly components["schemas"]["QueueSession"][];
+        };
+        /** @description Active appointments by status; cancelled ones are not counted */
+        readonly DashboardCounts: {
+            readonly total: number;
+            /** @description Booked and not yet arrived */
+            readonly not_arrived: number;
+            /** @description Arrived and waiting to be seen */
+            readonly waiting: number;
+            readonly in_consultation: number;
+            readonly completed: number;
+            readonly no_show: number;
+        };
+        readonly DashboardSession: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly doctor_id: string;
+            readonly doctor_name: string;
+            /** Format: date-time */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly ends_at: string;
+            /** @enum {string} */
+            readonly status: "OPEN" | "CLOSED" | "CANCELLED";
+            readonly mode: components["schemas"]["BookingMode"];
+            readonly capacity: number;
+            readonly counts: components["schemas"]["DashboardCounts"];
+        };
+        /**
+         * @description Someone still to be seen: those waiting first, then those not yet arrived, by slot or
+         *     session start and token. The patient's code and first name only.
+         */
+        readonly DashboardNextPatient: {
+            /** Format: uuid */
+            readonly appointment_id: string;
+            /** Format: uuid */
+            readonly session_id: string;
+            /** Format: uuid */
+            readonly doctor_id: string;
+            /** @enum {string} */
+            readonly status: "BOOKED" | "ARRIVED";
+            readonly token_number: number | null;
+            /** Format: date-time */
+            readonly slot_start: string | null;
+            /** @example ME-0142 */
+            readonly patient_code: string;
+            readonly patient_first_name: string;
+        };
+        readonly DashboardDay: {
+            /** Format: date */
+            readonly on_date: string;
+            /** @description Active appointments in that date's sessions */
+            readonly appointments: number;
+            readonly completed: number;
+            readonly no_show: number;
+            /** @description Messages the provider accepted that day; null in scope DOCTOR */
+            readonly messages_sent: number | null;
+        };
+        readonly DashboardToday: {
+            /** Format: date */
+            readonly on_date: string;
+            /** @enum {string} */
+            readonly scope: "CLINIC" | "DOCTOR";
+            /**
+             * Format: uuid
+             * @description The caller's doctor profile in scope DOCTOR; null in scope CLINIC
+             */
+            readonly doctor_id: string | null;
+            readonly counts: components["schemas"]["DashboardCounts"];
+            readonly sessions: readonly components["schemas"]["DashboardSession"][];
+            readonly next_patients: readonly components["schemas"]["DashboardNextPatient"][];
+            readonly follow_ups_pending: number;
+            /** @description Messages that failed today; null in scope DOCTOR */
+            readonly messages_failed: number | null;
+            /** @description The last 7 days ending today; null without USAGE_METRICS_VIEW */
+            readonly week: readonly components["schemas"]["DashboardDay"][] | null;
         };
         readonly Error: {
             /**
@@ -6344,6 +6447,53 @@ export interface operations {
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
             readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly getDashboardToday: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description The ETag of the answer the screen already has */
+                readonly "If-None-Match"?: string;
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Today's counts */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly ETag: components["headers"]["ETag"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["DashboardToday"];
+                };
+            };
+            /** @description Unchanged since the ETag sent; no body */
+            readonly 304: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly ETag: components["headers"]["ETag"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
         };
     };
 }
