@@ -18,8 +18,8 @@
 | P2 | `MessagingPort`, the console adapter, `templates.yaml`; `messages` (encrypted phone, IDs only, unique idempotency key); a send job; booking confirmations and the M4 prescription links still `PENDING` (issued in the last 24 hours, R15 of the M4 spec) through it; `v_message_health` | Below (done; confirmed) |
 | P3 | WhatsApp Cloud adapter (errors mapped to `MSG_*`, 10 s timeout); `GET`/`POST /webhooks/whatsapp` (raw-body signature, store once, answer within 1 s); statuses only move forward; reconciliation of messages stuck in `SENT` | Below (done; confirmed; the live Meta test needs L-01, L-02) |
 | P4 | Reminder rules: follow-up reminders from issued prescriptions (09:00 the day before), revisions move or cancel them, manual reminders, quiet hours 21:00–08:00, consent re-read at send time; pending follow-ups API; the automatic no-show job | Below (done; confirmed) |
-| P5 | STOP, UNSUBSCRIBE, रोकें, बंद opt the patient out and confirm; SMS adapter behind a flag (off); cost per message and the ops console's monthly total per clinic | Below (done; awaiting confirmation) |
-| P6 | Web: reminder and message status on the patient profile and the consultation; pending follow-ups with *Book follow-up*; failed messages explained with a "call the patient" hint; the ops console's monthly messaging-costs table (P5 decision 7A); Playwright | At its start |
+| P5 | STOP, UNSUBSCRIBE, रोकें, बंद opt the patient out and confirm; SMS adapter behind a flag (off); cost per message and the ops console's monthly total per clinic | Below (done; confirmed; the real SMS provider needs L-03) |
+| P6 | Web: reminder and message status on the patient profile and the consultation; pending follow-ups with *Book follow-up*; failed messages explained with a "call the patient" hint; the ops console's monthly messaging-costs table (P5 decision 7A); Playwright | Below (awaiting approval) |
 
 ---
 
@@ -519,3 +519,62 @@ Not verified:
 - whether Meta reports `billable: false` for the monthly free service messages (the free
   allowance is not modelled);
 - the Hindi SMS wording (L-02).
+
+---
+
+## M5-P6 — Web: reminder and message status, pending follow-ups, ops costs
+
+Designed 20 Oct 2026; awaiting the developer's approval. Recommendations are marked (rec).
+
+Facts the design rests on:
+
+- **No reminder or message UI yet.** The web has no reminder, follow-up or message screen. The
+  generated types already contain `Reminder`, `PendingFollowUp` and `OpsMessagingCosts`.
+- **Reminder API.** `GET /patients/{id}/reminders` (every role, `REMINDERS_SCHEDULE`) returns
+  each reminder's visible status, which is its latest message's status, and its `error_code`. An
+  automatic reminder names its prescription chain by version 1's ID; it has no visit ID.
+- **Pending follow-ups.** `PendingFollowUp` carries the patient, doctor, visit, prescription,
+  follow-up date and reminder status, and has no phone.
+- **No message history API.** No route for it exists. `messages` holds only IDs, the template key,
+  channel, status, error code and times, with the phone encrypted.
+- **Booking.** `BookDrawer` already takes a patient, a doctor and a date, so a prefilled
+  *Book follow-up* is a reuse.
+- **Seeded data.** A prescription's follow-up date must be after the day it is issued, so the
+  seeded data can only have an overdue follow-up if the seed issues it in the past.
+
+| # | Question | A (rec) | Rejected |
+|---|---|---|---|
+| 1 | Message history | `GET /api/v1/patients/{id}/messages?limit` (every role, `REMINDERS_SCHEDULE`). It returns status only: template key, what it was about (`source_type`, `source_id`), channel, status, error code and times; never variables or the number. Newest first, at most 50. The profile shows it as **Messages**. Contract 0.21.0 | B: reminders only (booking confirmations, prescription links and opt-out replies would stay invisible; R16 asks for message status) |
+| 2 | The reminder on the consultation | The screen also loads the patient's reminders, and next to *Follow-up: …* on the issued prescription shows a chip such as "Follow-up reminder · Mon 19 Oct, 09:00 · Scheduled". The chip comes from the reminder whose `prescription_id` is this visit's version 1; the latest wins if there are several. No API change | B: a `reminder` field on the consultation response (couples the visits API to reminders for one chip) |
+| 3 | Reminders on the profile | A **Reminders** section showing status chip, follow-up date, due time and source. A `SCHEDULED` reminder can be moved or cancelled, and a manual one can be added by choosing a doctor and a date. P4's routes already do all of this | B: read only (FR-REM-02's manual reminders would have no screen) |
+| 4 | Pending follow-ups | New `/follow-ups` page in the clinic nav for every role. Oldest first, 50 a page with *Show more*. The patient links to the profile. *Book follow-up* opens `BookDrawer` with the patient and doctor already chosen and the date set to the clinic's today, so booking takes two interactions. A booked row is marked "Booked …" until the visit is completed, then leaves the list (R17) | B: a filter on the queue (the queue is one day; these are older than today) |
+| 5 | Failed messages | One table maps codes to plain English, for example `MSG_RECIPIENT_INVALID` becomes "This number can't receive WhatsApp", `MSG_NO_CONSENT` becomes "Not sent: the patient hasn't agreed to messages", and `MSG_OUTCOME_UNKNOWN` becomes "We can't tell if it arrived". A failed reminder or message shows its sentence and *Call patient*, which is a `tel:` link on the profile, where the number is shown already. No code reaches the screen raw | B: show the code (staff can't act on it) |
+| 6 | Ops costs | `/ops/messaging-costs`, linked in the ops nav. It has a month picker that defaults to this month in Asia/Kolkata (single-region pilot). The table shows clinic, messages, unpriced and cost in rupees (`₹0.12`, via a new `lib/format/money.ts` that formats paise), with per-channel rows. Costs are labelled "excluding GST" and unpriced is explained | B: a column on the clinic list (no month, no channels) |
+| 7 | e2e data and journeys | The seed adds one synthetic patient whose prescription was issued 10 days ago with a follow-up date 3 days ago (valid as of its issue date), so `/follow-ups` has a row. Three Playwright journeys: issue with a follow-up and then see the chip on the consultation and the reminder on the profile; from `/follow-ups`, *Book follow-up* then Confirm; ops opens messaging costs for this month | B: create the overdue data in the e2e through the API (impossible: the API refuses a past follow-up) |
+
+Fixed points:
+
+- **Times.** Times are shown in the clinic's zone.
+- **Accessibility.**
+  - Status chips are text, not colour alone.
+  - Tables have captions and scoped headers.
+  - The month picker is a labelled `<input type="month">`.
+- **Design patterns.**
+  - Data is fetched through `lib/api` hooks.
+  - Every load has an error state with *Try again* and the `Ref`.
+  - A failure leaves the screen usable.
+- **Patient pages and printouts unchanged.** Nothing changes on patient-facing pages or
+  printouts.
+
+Planned verification:
+
+- the gates and `make e2e` with the three new journeys;
+- on the stack: a reminder's chip moves from Scheduled to Sent after its job runs, a failed
+  message shows its sentence and *Call patient*, and the costs page matches the API;
+- failure paths: the API down shows the `Ref`, a stale move shows `REM_NOT_SCHEDULED`'s message,
+  and front desk on `/ops` is sent away.
+
+M5's exit criterion also needs a live WhatsApp send and its webhook through Meta's test number,
+which waits for L-01 and L-02. P6 can close the code of M5 but cannot meet that criterion. Before
+the last commit (`Closes #40`), the developer decides whether M5 closes with the live test
+recorded as pending.
