@@ -14,6 +14,16 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6-P1 (#49): the design system and *Today* (decisions 1A–6A, decision 2 amended by the
+  developer). Tokens in Tailwind's `@theme` (teal brand, slate, one accent per status, system
+  fonts); our own primitives in `apps/web/src/components/ui/` (Button, Card, StatTile,
+  StatusBadge, PageHeader, EmptyState, Skeleton, Tabs), with Tabs on `@radix-ui/react-tabs` 1.2.1
+  for its keyboard and ARIA behaviour; `motion` 14.4.0 through `LazyMotion` with reduced motion
+  honoured, in the clinic and ops shells only (never `/p/…`). The clinic shell is responsive: a
+  sidebar from 1024 px, a Menu drawer below. New `GET /api/v1/dashboard/today` (contract 0.22.0):
+  counts shaped by role, a 7-day strip with `USAGE_METRICS_VIEW`, ETag and 304. Clinic members
+  now land on `/today`; the queue keeps `/queue`. Web tests run on half the cores (a load-timing
+  fix, DEBUG_JOURNAL 20 Oct 2026).
 - M5 closed (#40): P1–P6 complete. Pending, with credentials to follow: the live WhatsApp test
   through Meta's test number (L-01, L-02) and the real SMS provider (L-03).
 - M5-P6 (#40): the reminder and message screens (FR-REM-02, 05, 07; FR-MSG-04; spec R16-R18).

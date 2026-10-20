@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Opened 20 Oct 2026 (issue #49, branch `m6/49-mvp-demo`); plan approved by the developer (items D2–D5 of the demo plan); M6-P1 designed, awaiting approval |
+| Status | Opened 20 Oct 2026 (issue #49, branch `m6/49-mvp-demo`); plan approved by the developer (items D2–D5 of the demo plan); M6-P1 approved 20 Oct 2026 (A on all six, decision 2 amended), built and verified locally; awaiting the developer's confirmation |
 | PRD | v1.1 §0 (C1–C3), §8.13 |
 | ADR | ADR-0013 (for M7), ADR-0014 (for M8); patient accounts and Google sign-in get an ADR in P3 |
 | Covers | FR-AUTH-07, FR-PRT-01..04, FR-REM-03, FR-NTF-01, FR-PUB-01..04 |
@@ -14,7 +14,7 @@
 
 | Phase | Builds | Design |
 |---|---|---|
-| P1 | Design system (tokens, primitives, Motion, responsive shell) and the role dashboards' first screen: *Today* for front desk, doctor and owner | Below (awaiting approval) |
+| P1 | Design system (tokens, primitives, Motion, responsive shell) and the role dashboards' first screen: *Today* for front desk, doctor and owner | Below (approved) |
 | P2 | The design system across the existing screens (queue, patients, consultation, schedule, follow-ups, ops); mobile layouts; motion for drawers, dialogs and list changes | At its start |
 | P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR) | At its start |
 | P4 | Linking a patient account to a clinic's record by clinic invite or prescription link; the patient API (appointments, prescriptions, reminders, per clinic) | At its start |
@@ -28,6 +28,18 @@
 ## M6-P1 — Design system and the *Today* dashboards
 
 Proposed 20 Oct 2026. Recommendations are marked (rec).
+
+**Approved 20 Oct 2026: A on all six, with decision 2 amended by the developer.** "I would not
+switch wholesale to shadcn just because it's popular. Build your small MediEase design system
+yourself and selectively use shadcn/headless primitives where accessibility and interaction
+complexity justify them." So the primitives stay ours, and a headless primitive is adopted one
+component at a time, only where its keyboard and screen-reader behaviour is worth not
+re-implementing. P1 adopts one: `@radix-ui/react-tabs` 1.2.1 (the primitive shadcn/ui's Tabs
+wraps) behind our `components/ui/Tabs`, for roving focus, arrow, Home and End keys and the
+tab/tabpanel wiring. Everything else in P1 is plain markup (cards, tiles, badges), and the
+mobile menu reuses our native-`<dialog>` `Drawer`, which already gives focus trapping, an inert
+page and Escape for free. Each later adoption (for example a combobox or a toast) is named in
+its phase's design.
 
 Facts the design rests on:
 
@@ -74,3 +86,43 @@ Planned verification:
 - **Failure paths:**
   - the API down shows the `Ref`;
   - another clinic's numbers never appear.
+
+### M6-P1 — as built (20 Oct 2026)
+
+- **API.** `GET /api/v1/dashboard/today` (`GetToday`, `delivery/http/dashboard.py`), backed by a
+  tenant-scoped `DashboardReads` port (`adapters/db/dashboard.py`). Every query filters every
+  table by the clinic, joins included. The pending follow-up count shares its SQL with
+  `/follow-ups/pending` (`adapters/db/reminders.py`), so the number is always the list's length.
+  Scope `DOCTOR` comes from the caller's doctor profile; `week` comes with `USAGE_METRICS_VIEW`,
+  which doctors hold too, so a doctor sees their own week without message counts.
+- **Web.**
+  - Tokens are in `globals.css`.
+  - Primitives are in `components/ui/` (README there). Tabs use `@radix-ui/react-tabs` 1.2.1, the
+    only headless primitive adopted.
+  - Motion runs through `MotionProvider`, mounted in `AppShell` and `OpsShell` only.
+  - The shell is responsive. On a phone, Sign out moves into the Menu drawer and the header shows
+    the brand mark only.
+  - `features/dashboard/` holds `TodayDashboard`, `useToday` (polls with an ETag) and `labels`.
+  - `TODAY_PATH` replaces `QUEUE_PATH` as the landing page.
+  - The Playwright journeys now sign in to `/today` and open the queue from the sidebar
+    (`queue-support.ts` `signInAs`, `openQueue`).
+- **Dependencies added (pinned).** `motion` 14.4.0 provides the animation that decision 3A asked
+  for. `@radix-ui/react-tabs` 1.2.1 is the accessible tabs primitive under the amended decision 2
+  and brings 7 small `@radix-ui` packages with it. `npm audit --omit=dev` finds 0
+  vulnerabilities. The full-tree audit still shows the dev-only braces advisory, recorded in the
+  CHANGELOG since #19.
+- **Verification.**
+  - `make lint typecheck contract-check test` are green.
+  - API: 1,588 tests (10 new) at 98.26% coverage. Web: 463 tests in 50 files.
+  - `make up`, `make seed` and `make smoke` are green; `make e2e` is 13/13, including the new
+    `today-dashboard.spec.ts`.
+  - Stack checks: for desk, doctor and owner, the counts match `/queue` status by status. A doctor
+    gets scope `DOCTOR` and `messages_failed` null. Front desk gets `week` null; the owner and the
+    doctor get 7 days.
+  - With the API stopped, the web origin answers 500 for the endpoint. The screen's error-with-Ref
+    and *Try again* path is covered by a unit test; it was not seen in a browser.
+  - Screenshots taken at 1366 px and 360 px. At 360 px there is no sideways scrolling (asserted in
+    the e2e journey).
+  - A doctor seeing only their own sessions is proved by the integration test with a second
+    doctor. The seed has one doctor, so on the stack the doctor's numbers equal the clinic's.
+  - A web test runner fix is recorded in DEBUG_JOURNAL (20 Oct 2026).
