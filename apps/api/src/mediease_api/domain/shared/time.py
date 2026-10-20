@@ -29,3 +29,8 @@ def local_date(instant: datetime, timezone: str) -> date:
     Asia/Kolkata. The caller passes the clinic's zone; the server's is never used.
     """
     return require_utc(instant, "instant").astimezone(ZoneInfo(timezone)).date()
+
+
+def local_day_start(day: date, timezone: str) -> datetime:
+    """The UTC instant a clinic-local date begins (M6-P1: "today" as a range of instants)."""
+    return datetime.combine(day, datetime.min.time(), tzinfo=ZoneInfo(timezone)).astimezone(UTC)

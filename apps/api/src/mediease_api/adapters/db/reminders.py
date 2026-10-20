@@ -60,8 +60,7 @@ def _from_row(row: ReminderRow) -> Reminder:
     )
 
 
-_PENDING = text(
-    """
+_LATEST_OVERDUE = """
     WITH latest AS (
         SELECT DISTINCT ON (p.patient_id)
                p.id, p.visit_id, p.patient_id, p.doctor_id, p.follow_up_date
@@ -70,6 +69,21 @@ _PENDING = text(
           AND p.follow_up_date IS NOT NULL AND p.follow_up_date < :today
         ORDER BY p.patient_id, p.follow_up_date DESC, p.issued_at DESC
     )
+"""
+
+# No completed visit on or after the follow-up date (R17). Shared by the list and the count
+# (M6-P1), so the dashboard's number is always the length of the list.
+_NOT_SEEN_SINCE = """
+    NOT EXISTS (
+        SELECT 1 FROM visits v
+        WHERE v.clinic_id = :clinic AND v.patient_id = l.patient_id AND v.status = 'COMPLETED'
+          AND (v.started_at AT TIME ZONE :tz)::date >= l.follow_up_date
+    )
+"""
+
+_PENDING = text(
+    _LATEST_OVERDUE
+    + """
     SELECT l.id, l.visit_id, l.patient_id, l.doctor_id, l.follow_up_date,
            pt.code, pt.full_name,
            (SELECT coalesce(m.status, r.status)
@@ -82,14 +96,21 @@ _PENDING = text(
              LIMIT 1) AS reminder_status
     FROM latest l
     JOIN patients pt ON pt.id = l.patient_id AND pt.clinic_id = :clinic
-    WHERE NOT EXISTS (
-        SELECT 1 FROM visits v
-        WHERE v.clinic_id = :clinic AND v.patient_id = l.patient_id AND v.status = 'COMPLETED'
-          AND (v.started_at AT TIME ZONE :tz)::date >= l.follow_up_date
-    )
+    WHERE"""
+    + _NOT_SEEN_SINCE
+    + """
     ORDER BY l.follow_up_date, l.patient_id
     LIMIT :limit OFFSET :offset
     """
+)
+
+PENDING_COUNT = text(
+    _LATEST_OVERDUE
+    + """
+    SELECT count(*) FROM latest l
+    JOIN patients pt ON pt.id = l.patient_id AND pt.clinic_id = :clinic
+    WHERE"""
+    + _NOT_SEEN_SINCE
 )
 
 

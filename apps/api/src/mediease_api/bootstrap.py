@@ -69,6 +69,7 @@ from mediease_api.application.clinics.onboard_clinic import (
     UpdateDoctor,
 )
 from mediease_api.application.clinics.queries import GetClinic, GetDoctor, ListDoctors, ListStaff
+from mediease_api.application.dashboard.today import GetToday
 from mediease_api.application.identity.accept_invite import AcceptInvite, DescribeInvite
 from mediease_api.application.jobs.purge import PurgeExpired
 from mediease_api.application.jobs.run import JobHandler, RunJob
@@ -146,6 +147,7 @@ from mediease_api.delivery.http.appointments import create_appointments_blueprin
 from mediease_api.delivery.http.auth import create_auth_blueprint
 from mediease_api.delivery.http.clinic import create_clinic_blueprint
 from mediease_api.delivery.http.csrf import register_csrf_protection
+from mediease_api.delivery.http.dashboard import create_dashboard_blueprint
 from mediease_api.delivery.http.invites import create_invite_blueprint
 from mediease_api.delivery.http.me import create_me_blueprint
 from mediease_api.delivery.http.ops import create_ops_blueprint
@@ -388,6 +390,9 @@ class _UseCases:
 
     def get_queue(self) -> GetQueue:
         return GetQueue(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def get_today(self) -> GetToday:
+        return GetToday(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def start_visit(self) -> StartVisit:
         return StartVisit(uow=self._uow(), clock=self.clock, ids=self.ids)
@@ -785,6 +790,7 @@ def create_app(
     app.register_blueprint(create_rx_library_blueprint(use_cases))
     app.register_blueprint(create_whatsapp_webhook_blueprint(use_cases))
     app.register_blueprint(create_reminders_blueprint(use_cases))
+    app.register_blueprint(create_dashboard_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

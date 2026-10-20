@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.21.0
+  version: 0.22.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -89,6 +89,10 @@ tags:
       Follow-up reminders (M5-P4; FR-REM-01, 02, 04, 05, 07). A prescription's follow-up date
       schedules one automatically; staff schedule, move and cancel them; pending follow-ups. Every
       role holds REMINDERS_SCHEDULE.
+  - name: dashboard
+    description: |
+      The role dashboards (M6-P1). Today: counts for the first screen of every clinic role,
+      shaped by role. Counts, codes, first names, times and statuses only; never clinical text.
 paths:
   /api/v1/auth/sign-in:
     post:
@@ -3381,6 +3385,60 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '422':
           $ref: '#/components/responses/AuthError'
+  /api/v1/dashboard/today:
+    get:
+      tags: [dashboard]
+      operationId: getDashboardToday
+      summary: How today is going, for the caller's role
+      description: |
+        M6-P1 decisions 5A and 6A. Computed in the clinic's zone; today's sessions are generated
+        first, as GET /queue does, so the two always agree. Permission CLINIC_VIEW (every role).
+        A doctor with a doctor profile gets scope DOCTOR: their own sessions, next patients and
+        counts, and messages_failed null. Front desk and owners get scope CLINIC. week (the last 7
+        days, oldest first, ending today) needs USAGE_METRICS_VIEW and is null without it; in
+        scope DOCTOR its messages_sent are null. follow_ups_pending is the clinic's, as
+        GET /follow-ups/pending lists them. Counts exclude cancelled appointments. Like the
+        queue, the 200 carries a strong ETag and an unchanged answer is a bodiless 304.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - name: If-None-Match
+          in: header
+          required: false
+          description: The ETag of the answer the screen already has
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Today's counts
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardToday'
+        '304':
+          description: Unchanged since the ETag sent; no body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
 components:
   securitySchemes:
     sessionCookie:
@@ -6060,6 +6118,122 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/QueueSession'
+    DashboardCounts:
+      type: object
+      description: Active appointments by status; cancelled ones are not counted
+      required: [total, not_arrived, waiting, in_consultation, completed, no_show]
+      properties:
+        total: {type: integer, minimum: 0}
+        not_arrived:
+          type: integer
+          minimum: 0
+          description: Booked and not yet arrived
+        waiting:
+          type: integer
+          minimum: 0
+          description: Arrived and waiting to be seen
+        in_consultation: {type: integer, minimum: 0}
+        completed: {type: integer, minimum: 0}
+        no_show: {type: integer, minimum: 0}
+    DashboardSession:
+      type: object
+      required: [id, doctor_id, doctor_name, starts_at, ends_at, status, mode, capacity, counts]
+      properties:
+        id: {type: string, format: uuid}
+        doctor_id: {type: string, format: uuid}
+        doctor_name: {type: string}
+        starts_at: {type: string, format: date-time}
+        ends_at: {type: string, format: date-time}
+        status:
+          type: string
+          enum: [OPEN, CLOSED, CANCELLED]
+        mode:
+          $ref: '#/components/schemas/BookingMode'
+        capacity: {type: integer, minimum: 0}
+        counts:
+          $ref: '#/components/schemas/DashboardCounts'
+    DashboardNextPatient:
+      type: object
+      description: |
+        Someone still to be seen: those waiting first, then those not yet arrived, by slot or
+        session start and token. The patient's code and first name only.
+      required:
+        - appointment_id
+        - session_id
+        - doctor_id
+        - status
+        - token_number
+        - slot_start
+        - patient_code
+        - patient_first_name
+      properties:
+        appointment_id: {type: string, format: uuid}
+        session_id: {type: string, format: uuid}
+        doctor_id: {type: string, format: uuid}
+        status:
+          type: string
+          enum: [BOOKED, ARRIVED]
+        token_number: {type: ['integer', 'null'], minimum: 1}
+        slot_start: {type: ['string', 'null'], format: date-time}
+        patient_code: {type: string, examples: [ME-0142]}
+        patient_first_name: {type: string}
+    DashboardDay:
+      type: object
+      required: [on_date, appointments, completed, no_show, messages_sent]
+      properties:
+        on_date: {type: string, format: date}
+        appointments:
+          type: integer
+          minimum: 0
+          description: Active appointments in that date's sessions
+        completed: {type: integer, minimum: 0}
+        no_show: {type: integer, minimum: 0}
+        messages_sent:
+          type: ['integer', 'null']
+          minimum: 0
+          description: Messages the provider accepted that day; null in scope DOCTOR
+    DashboardToday:
+      type: object
+      required:
+        - on_date
+        - scope
+        - doctor_id
+        - counts
+        - sessions
+        - next_patients
+        - follow_ups_pending
+        - messages_failed
+        - week
+      properties:
+        on_date: {type: string, format: date}
+        scope:
+          type: string
+          enum: [CLINIC, DOCTOR]
+        doctor_id:
+          type: ['string', 'null']
+          format: uuid
+          description: The caller's doctor profile in scope DOCTOR; null in scope CLINIC
+        counts:
+          $ref: '#/components/schemas/DashboardCounts'
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardSession'
+        next_patients:
+          type: array
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/DashboardNextPatient'
+        follow_ups_pending: {type: integer, minimum: 0}
+        messages_failed:
+          type: ['integer', 'null']
+          minimum: 0
+          description: Messages that failed today; null in scope DOCTOR
+        week:
+          type: ['array', 'null']
+          description: The last 7 days ending today; null without USAGE_METRICS_VIEW
+          items:
+            $ref: '#/components/schemas/DashboardDay'
     Error:
       type: object
       required: [code, message, request_id]

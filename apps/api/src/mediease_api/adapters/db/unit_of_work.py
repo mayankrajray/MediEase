@@ -18,6 +18,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from mediease_api.adapters.db.audit import SqlAlchemyAuditWriter
+from mediease_api.adapters.db.dashboard import SqlAlchemyDashboardReads
 from mediease_api.adapters.db.jobs import SqlAlchemyJobQueue, SqlAlchemyRetentionRepository
 from mediease_api.adapters.db.messages import (
     SqlAlchemyMessageCostReport,
@@ -84,6 +85,7 @@ class SqlAlchemyTenantRepositories:
         self._patient_links = SqlAlchemyPatientLinkRepository(session, clinic_id)
         self._messages = SqlAlchemyMessageRepository(session, clinic_id)
         self._reminders = SqlAlchemyReminderRepository(session, clinic_id)
+        self._dashboard = SqlAlchemyDashboardReads(session, clinic_id)
 
     @property
     def clinic_id(self) -> UUID:
@@ -156,6 +158,10 @@ class SqlAlchemyTenantRepositories:
     @property
     def reminders(self) -> SqlAlchemyReminderRepository:
         return self._reminders
+
+    @property
+    def dashboard(self) -> SqlAlchemyDashboardReads:
+        return self._dashboard
 
 
 class _OpenUnit:
