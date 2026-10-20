@@ -29,6 +29,29 @@ Rules:
 
 ---
 
+### 2026-10-20 — web tests timing out on a many-core machine (M6-P1, no error code)
+
+- **Milestone / area:** M6-P1 / web test runner
+- **Symptom:** `PrintAndLink.test.tsx` › "Print opens the tab at the click…" failed in every full
+  `npx vitest run` (twice in a row) with `Unable to find role="button"`: the DOM was still at
+  "Loading Alpha Clinic…". The same file passed alone, in 233 ms.
+- **Impact:** Local only. The same test had timed out under load once before (M5-P2 notes).
+- **Reproduction:** a full web run on a 20-core WSL machine with Vitest's default workers.
+- **Investigation:** the failing render had taken 1,227 ms against Testing Library's 1 s wait.
+  Other tests in that run also took about 1 s each. With `--maxWorkers=6` and with `50%` the suite
+  passed twice, and it finished faster (about 15.5 s instead of 20 s). So the cause is CPU
+  oversubscription, not the shell. M6-P1's heavier shell (Motion, the sidebar and the drawer)
+  pushed a test that was already close to the limit over it.
+- **Root cause:** one jsdom worker per core minus one oversubscribes the CPU, so the first
+  workspace render in a file can take longer than the 1 s wait.
+- **Fix:** `maxWorkers: "50%"` in `apps/web/vitest.config.mts`. No assertion or timeout changed.
+- **Guard:** the full web suite in `make test`.
+- **Prevention / follow-up:** if a `findBy…` times out only in full runs, check the worker count
+  before raising any timeout.
+- **Search keywords:** vitest, timeout, findByRole, workers, load, flaky, jsdom
+
+---
+
 ### 2026-10-18 — a message Meta accepted and then reported failed could not be saved (M5-P3, no error code)
 
 - **Milestone / area:** M5-P3 / messaging
