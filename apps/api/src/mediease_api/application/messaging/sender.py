@@ -72,6 +72,8 @@ class Skip:
 
 Plan = Callable[[UnitOfWork, TenantRepositories, datetime], Send | Skip]
 AfterSent = Callable[[UnitOfWork, TenantRepositories, datetime], None]
+# M5-P5: runs in the transaction that records a final failure (the SMS fallback, FR-REM-06).
+AfterFailed = Callable[[UnitOfWork, TenantRepositories, Message, datetime], None]
 Change = Callable[[Message, datetime], None]
 
 
@@ -94,7 +96,13 @@ class MessageSender:
         self._phones = phones
 
     def send(
-        self, job: ClaimedJob, *, key: str, plan: Plan, after_sent: AfterSent | None = None
+        self,
+        job: ClaimedJob,
+        *,
+        key: str,
+        plan: Plan,
+        after_sent: AfterSent | None = None,
+        after_failed: AfterFailed | None = None,
     ) -> None:
         if job.clinic_id is None:  # pragma: no cover - messaging kinds are never system kinds
             raise JobFailure("JOB_HANDLER_ERROR", retryable=False)
@@ -114,9 +122,10 @@ class MessageSender:
         except ProviderRefused as refusal:
             final = not refusal.retryable or job.attempts >= job.max_attempts
             code = refusal.code
-            self._finish(
-                clinic_id, key, (lambda m, now: m.fail(code, now)) if final else _refused(code)
-            )
+            if final:
+                self._finish(clinic_id, key, lambda m, now: m.fail(code, now), failed=after_failed)
+            else:
+                self._finish(clinic_id, key, _refused(code))
             log.warning("message.failed" if final else "message.refused", error_code=code)
             raise JobFailure(code, retryable=refusal.retryable) from None
         except Exception as error:
@@ -233,7 +242,13 @@ class MessageSender:
         )
 
     def _finish(
-        self, clinic_id: UUID, key: str, change: Change, after: AfterSent | None = None
+        self,
+        clinic_id: UUID,
+        key: str,
+        change: Change,
+        after: AfterSent | None = None,
+        *,
+        failed: AfterFailed | None = None,
     ) -> None:
         with self._uow as uow:
             tenant = uow.tenant(clinic_id)
@@ -244,6 +259,8 @@ class MessageSender:
             tenant.messages.update(message)
             if after is not None:
                 after(uow, tenant, now)
+            if failed is not None:
+                failed(uow, tenant, message, now)
             uow.commit()
 
 

@@ -34,6 +34,9 @@ x-api-environment: &api-environment
   MESSAGING_PROVIDER: ${MESSAGING_PROVIDER:-console}
   MESSAGING_PHONE_KEYS: ${MESSAGING_PHONE_KEYS:-}
   RX_LINK_SEND_WINDOW_HOURS: ${RX_LINK_SEND_WINDOW_HOURS:-24}
+  # M5-P5: the SMS fallback for reminders (FR-REM-06), off unless set; console only until L-03.
+  MESSAGING_SMS_FALLBACK_ENABLED: ${MESSAGING_SMS_FALLBACK_ENABLED:-false}
+  SMS_PROVIDER: ${SMS_PROVIDER:-console}
   # M5-P3: WhatsApp Cloud API and its webhook (empty secrets: the webhook refuses everything).
   WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-}
   WHATSAPP_GRAPH_URL: ${WHATSAPP_GRAPH_URL:-}

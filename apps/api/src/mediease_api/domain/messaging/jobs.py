@@ -12,6 +12,8 @@ BOOKING_CONFIRMATION_KIND = "send_booking_confirmation"
 RX_LINK_KIND = "send_rx_link"
 # M5-P4: a follow-up reminder (one job per reminder revision, decision 1A).
 REMINDER_KIND = "send_reminder"
+# M5-P5: one SMS after a reminder's WhatsApp message failed (FR-REM-06, decision 4A).
+SMS_FALLBACK_KIND = "send_sms_fallback"
 # M5-P5: the reply to a STOP, one per clinic that opted the sender out (decision 3A).
 OPT_OUT_CONFIRMATION_KIND = "send_opt_out_confirmation"
 
@@ -47,3 +49,13 @@ def reminder_job_key(reminder_id: UUID, revision: int) -> str:
 def opt_out_confirmation_key(clinic_id: UUID, inbound_message_id: str) -> str:
     """At most one reply per STOP message per clinic (M5-P5 decision 3A)."""
     return f"{OPT_OUT_CONFIRMED}:{clinic_id}:{inbound_message_id}"
+
+
+def sms_fallback_key(reminder_id: UUID) -> str:
+    """The SMS message of a reminder: at most one, however often its job is deferred."""
+    return f"sms:{reminder_id}"
+
+
+def sms_fallback_job_key(reminder_id: UUID, deferrals: int) -> str:
+    """Each deferral out of the quiet hours is a fresh job (P4 decision 2A)."""
+    return f"sms_fallback:{reminder_id}:{deferrals}"

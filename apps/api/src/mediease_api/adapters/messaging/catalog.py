@@ -53,12 +53,17 @@ def _template(key: str, raw: Any) -> MessageTemplate:
             )
             for language, body in _require(raw, "languages", where).items()
         }
+        raw_sms = raw.get("sms") if isinstance(raw, dict) else None
+        if raw_sms is not None and not isinstance(raw_sms, dict):
+            raise TemplateFileInvalid(f"{where}: 'sms' must be a mapping")
+        sms = {Language(language): str(text) for language, text in (raw_sms or {}).items()}
         return MessageTemplate.create(
             key=key,
             version=int(_require(raw, "version", where)),
             category=TemplateCategory(_require(raw, "category", where)),
             variables=variables,
             languages=languages,
+            sms=sms,
         )
     except TemplateFileInvalid:
         raise

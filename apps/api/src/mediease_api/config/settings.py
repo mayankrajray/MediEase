@@ -65,6 +65,8 @@ LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 BlobBackend = Literal["local", "s3"]
 # M5-P2: the console provider; M5-P3 adds the WhatsApp Cloud API.
 MessagingProvider = Literal["console", "whatsapp_cloud"]
+# M5-P5: the SMS fallback's provider; a real one follows L-03.
+SmsProvider = Literal["console"]
 # M5-P3: Graph API v26.0 (released July 2026); overridable without a code change.
 _WHATSAPP_API_VERSION = "v26.0"
 _WHATSAPP_GRAPH_URL = "https://graph.facebook.com"
@@ -142,6 +144,11 @@ class AppSettings(BaseSettings):
     MESSAGING_PHONE_KEYS: SecretStr = SecretStr("")
     # Prescriptions R15: a pending link is sent only within this many hours of issue (max 24).
     RX_LINK_SEND_WINDOW_HOURS: int = Field(default=24, ge=1, le=24)
+    # M5-P5 (FR-REM-06): a reminder WhatsApp could not deliver falls back to one SMS, if the
+    # patient consented to SMS. Off by default. `console` is the only SMS provider until L-03 (a
+    # real provider with DLT templates); the worker refuses the fallback on with it in production.
+    MESSAGING_SMS_FALLBACK_ENABLED: bool = False
+    SMS_PROVIDER: SmsProvider = "console"
     # WhatsApp Cloud API (M5-P3). Every value is required when MESSAGING_PROVIDER=whatsapp_cloud;
     # the app secret and verify token also guard the webhook, which refuses everything without them.
     WHATSAPP_API_VERSION: str = _WHATSAPP_API_VERSION

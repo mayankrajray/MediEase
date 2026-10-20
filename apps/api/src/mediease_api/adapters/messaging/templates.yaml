@@ -67,6 +67,11 @@ templates:
       hi:
         provider_name: follow_up_due_v1
         body: "{{clinic_name}} की ओर से याद दिलाना: {{doctor_name}} के साथ आपका फ़ॉलो-अप {{follow_up_date}} को है। बुक करने के लिए {{clinic_phone}} पर कॉल करें।"
+    # M5-P5 (FR-REM-06): the SMS fallback's wording, kept short: one segment in English for usual
+    # names, two in Hindi (UCS-2). The DLT template IDs and sender ID come with the provider (L-03).
+    sms:
+      en: "{{clinic_name}}: your follow-up with {{doctor_name}} is due on {{follow_up_date}}. To book, call {{clinic_phone}}."
+      hi: "{{clinic_name}}: {{doctor_name}} के साथ फ़ॉलो-अप {{follow_up_date}} को है। बुकिंग: {{clinic_phone}}"
 
   opt_out_confirmed:
     version: 1

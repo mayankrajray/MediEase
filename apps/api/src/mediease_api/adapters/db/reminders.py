@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import Select, select, text
+from sqlalchemy import Select, select, text, true
 from sqlalchemy.orm import Session
 
 from mediease_api.adapters.db.models import MessageRow
@@ -78,7 +78,7 @@ _PENDING = text(
               LEFT JOIN messages m ON m.clinic_id = :clinic AND m.source_type = 'REMINDER'
                                   AND m.source_id = r.id
              WHERE first.clinic_id = :clinic AND first.visit_id = l.visit_id AND first.version = 1
-             ORDER BY r.created_at DESC LIMIT 1) AS reminder_status
+             ORDER BY r.created_at DESC, m.created_at DESC NULLS LAST, m.id DESC LIMIT 1) AS reminder_status
     FROM latest l
     JOIN patients pt ON pt.id = l.patient_id AND pt.clinic_id = :clinic
     WHERE NOT EXISTS (
@@ -137,14 +137,21 @@ class SqlAlchemyReminderRepository(TenantScopedRepository[ReminderRow]):
         return self._session.scalars(query.limit(1)).first() is not None
 
     def list_for_patient(self, patient_id: UUID, *, limit: int) -> Sequence[ReminderRead]:
-        query = (
-            select(ReminderRow, MessageRow.status, MessageRow.error_code)
-            .outerjoin(
-                MessageRow,
-                (MessageRow.clinic_id == ReminderRow.clinic_id)
-                & (MessageRow.source_type == SourceType.REMINDER.value)
-                & (MessageRow.source_id == ReminderRow.id),
+        # A reminder shows its latest message (P4 decision 3A): the SMS once it fell back (P5).
+        latest = (
+            select(MessageRow.status, MessageRow.error_code)
+            .where(
+                MessageRow.clinic_id == ReminderRow.clinic_id,
+                MessageRow.source_type == SourceType.REMINDER.value,
+                MessageRow.source_id == ReminderRow.id,
             )
+            .order_by(MessageRow.created_at.desc(), MessageRow.id.desc())
+            .limit(1)
+            .lateral("latest_message")
+        )
+        query = (
+            select(ReminderRow, latest.c.status, latest.c.error_code)
+            .outerjoin(latest, true())
             .where(ReminderRow.clinic_id == self.clinic_id, ReminderRow.patient_id == patient_id)
             .order_by(ReminderRow.due_at.desc(), ReminderRow.id.desc())
             .limit(limit)
