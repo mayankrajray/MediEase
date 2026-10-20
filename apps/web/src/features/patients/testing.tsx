@@ -49,6 +49,9 @@ export const workspaceRoutes = {
   // The profile's appointments section (M3-P5): none yet, and no doctors to book with.
   [`GET /api/v1/patients/${PATIENT_ID}/appointments`]: () => json(200, { items: [] }),
   [`GET /api/v1/patients/${OTHER_ID}/appointments`]: () => json(200, { items: [] }),
+  // M5-P6: the profile's reminders and message history, and the consultation's reminder chip.
+  [`GET /api/v1/patients/${PATIENT_ID}/reminders`]: () => json(200, { items: [] }),
+  [`GET /api/v1/patients/${PATIENT_ID}/messages`]: () => json(200, { items: [] }),
   "GET /api/v1/clinic/doctors": () => json(200, { items: [] }),
   "GET /api/v1/me": () => json(200, person([desk])),
   "GET /api/v1/clinic": () =>

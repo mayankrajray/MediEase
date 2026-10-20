@@ -29,5 +29,11 @@ describe("visibleNav", () => {
       "/patients",
       "/settings/schedule",
     ]);
+    // M5-P6: every role holds REMINDERS_SCHEDULE, so every role sees Follow-ups.
+    expect(visibleNav(["PATIENTS_MANAGE", "REMINDERS_SCHEDULE"]).map((i) => i.href)).toEqual([
+      "/queue",
+      "/patients",
+      "/follow-ups",
+    ]);
   });
 });
