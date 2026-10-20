@@ -404,6 +404,16 @@ class MessagingPort(Protocol):
   an unknown outcome and is never resent.
 - Webhooks: verify the signature header before parsing, respond `200` fast, and process
   idempotently keyed on the provider message ID.
+- Opt-out by reply (M5-P5): the webhook parser recognises a STOP before redaction and keeps only
+  its sender's number, encrypted; the processing job applies STOPs before statuses
+  (`application/messaging/opt_out.py`) through a reviewed cross-clinic lookup of IDs, then each
+  clinic's own repositories, and enqueues one `send_opt_out_confirmation` per clinic.
+- SMS fallback (M5-P5, off by default): a second `MessageSender` over the SMS port
+  (`adapters/messaging/console_sms.py` until L-03). The reminder sender's `after_failed` hook and
+  the webhook processor enqueue `send_sms_fallback` in the failure's transaction
+  (`application/reminders/fallback.py`).
+- Costs (M5-P5): `prices.yaml` is loaded once into a domain `PriceTable`; the sender prices at
+  acceptance or failure and the webhook processor at delivery, once per message, in millipaise.
 
 ## 9. Security architecture
 

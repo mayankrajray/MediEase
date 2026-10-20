@@ -130,13 +130,27 @@ store is write-once by design.
    `messaging.console_accepted` to `docker compose logs worker` (variable names only).
 7. A `send_rx_link` job that finds a prescription issued more than `RX_LINK_SEND_WINDOW_HOURS` ago
    (24 at most) marks it `EXPIRED` and sends nothing: expected after an outage longer than that.
+8. Opt-outs by reply (M5-P5): a STOP (STOP, UNSUBSCRIBE, रोकें, बंद) is applied by the
+   `process_webhook_event` job; each opt-out is a SYSTEM `patient.opted_out` audit event with
+   source `inbound_message`, and the clinic's `send_opt_out_confirmation` job replies. A
+   `webhook_events` row with `WH_STOP_UNMATCHED` opted nobody out (no clinic had messaged that
+   number); if the patient asks the clinic, staff opt them out on the patient page. Opting back in
+   is always a staff action with fresh consent.
+9. Message costs (M5-P5): `GET /api/v1/ops/messaging-costs?month=YYYY-MM` (ops). Prices are
+   `apps/api/src/mediease_api/adapters/messaging/prices.yaml`, excluding GST; when Meta changes a
+   rate, add an entry with its `effective_from` date (never edit an old one) and deploy. Many
+   `unpriced` messages mean an unknown pricing category (`message.unpriced` in the worker log).
 **Confirm:** `v_job_health.due` and `stale` fall to 0; message statuses progress.
 
 ### 7. Messaging provider outage (M5)
 1. Confirm on the provider status page; our logs show `MSG_PROVIDER_UNAVAILABLE`.
 2. Jobs retry with backoff automatically — do not requeue manually during the outage.
-3. If the outage exceeds 2 hours during clinic hours, enable SMS fallback for consented patients
-   (`MESSAGING_SMS_FALLBACK_ENABLED=true`) and inform pilot clinics.
+3. The SMS fallback (`MESSAGING_SMS_FALLBACK_ENABLED=true`, M5-P5) sends one SMS for a follow-up
+   reminder whose WhatsApp message ended `FAILED` with a definite non-delivery (an outage counts
+   only after the job's last attempt), to patients who consented to SMS. It needs a real SMS
+   provider (L-03): with the console provider the worker refuses to start in production. Turning
+   it on and off is a worker restart; a fallback job left over after turning it off does nothing.
+   Inform pilot clinics if it is used.
 **Confirm:** after recovery, `messages` in `QUEUED` drain; failure rate < 5%.
 
 ### 8. WhatsApp template rejected or quality rating dropped

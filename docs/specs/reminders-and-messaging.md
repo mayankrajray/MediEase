@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| Requirements | FR-REM-01, 02, 04, 05, 07; FR-MSG-01..05, 07; FR-APT-06; NFR-13 |
+| Requirements | FR-REM-01, 02, 04, 05, 06 (P5, behind a flag), 07; FR-MSG-01..05, 07; FR-APT-06; NFR-13 |
 | Milestone / phases | M5 / P1–P6 |
 | Status | Approved (developer sign-off 2026-10-18: the M5 plan with decisions 1A–5A and four refinements to the job queue, R9–R11 and R9a–R9e) |
-| Last updated | 2026-10-19 (M5-P4: R2, R5 and R17 made precise; M5-P3: R15 rewritten — WhatsApp has no status lookup; M5-P2: R6 names P2's keys and the unknown-outcome rule; earlier: approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
+| Last updated | 2026-10-20 (M5-P5: R14 and R18 made precise, R19 added for the SMS fallback; M5-P4: R2, R5 and R17 made precise; M5-P3: R15 rewritten — WhatsApp has no status lookup; M5-P2: R6 names P2's keys and the unknown-outcome rule; earlier: approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
 
 ## 1. Context
 Post-visit follow-up depends on memory (A14); patients forget follow-ups and vaccination dates
@@ -116,7 +116,14 @@ window the patient's own STOP message opens:
   yet is retried with the job back-off, then recorded as `WH_UNMATCHED`.
 - **R14** Inbound messages whose trimmed, case-insensitive text is `STOP`, `UNSUBSCRIBE`, `रोकें`
   or `बंद` opt out every patient in every clinic with that phone who received a message from us,
-  and send `opt_out_confirmed`. Other inbound text is not stored.
+  and send `opt_out_confirmed`. Other inbound text is not stored. M5-P5 (decisions 1A–3A): the
+  keyword is matched in the request before redaction (Unicode NFC, text messages only); only a STOP
+  keeps the sender's number, encrypted with the messages' keys, until its processing job runs. In
+  each clinic that has sent a message to a patient with that number, every patient whose current
+  number it is is opted out (so a family sharing a phone goes together, §8); a clinic that never
+  wrote to the number is left alone. A hidden number (a WhatsApp username) is found through our
+  message the reply answered; otherwise `WH_STOP_UNMATCHED` and nothing changes. Each affected
+  clinic replies once per STOP, naming itself, unless 24 hours have passed (the service window).
 - **R15** *Reconciliation (M5-P3, rewritten for WhatsApp).* The Cloud API has no endpoint to read a
   message's status: statuses arrive only by webhook. So an hourly system job
   (`reconcile_messages`) re-enqueues stored webhook events that never processed (older than 10
@@ -134,7 +141,19 @@ window the patient's own STOP message opens:
   overdue follow-up, from the latest issued version of its chain), the visit's date read in the
   clinic's time zone, paginated (`limit` 1–100, `offset`), with that chain's reminder status.
 - **R18** Each message records `cost_paise` from a configurable price table by channel and category;
-  the ops console aggregates per clinic per month.
+  the ops console aggregates per clinic per month. M5-P5 (decisions 5A–7A): the cost is
+  `cost_millipaise` (integer, 1 paisa = 1,000; Meta's utility rate is 11.5 paise), from
+  `prices.yaml` (by channel and category from an effective date, excluding GST). WhatsApp is priced
+  when delivery is reported, at the webhook's category, 0 when Meta says it is not billable; a
+  failure 0 (not an unknown outcome); the console 0; an SMS per segment at acceptance. An unknown
+  price stays null and is counted as unpriced. `GET /ops/messaging-costs?month=YYYY-MM` reads each
+  clinic's month in its own time zone and rounds to paise at each total.
+- **R19** *SMS fallback (FR-REM-06, M5-P5 decision 4A; off unless `MESSAGING_SMS_FALLBACK_ENABLED`).*
+  A follow-up reminder whose WhatsApp message ends `FAILED` with a definite non-delivery
+  (`MSG_RECIPIENT_INVALID`, `MSG_PROVIDER_REJECTED`, or a rate-limit or outage after the last
+  attempt) — at send time or by webhook — gets one SMS (`sms:<reminder>`), if the patient consented
+  to SMS, outside the quiet hours. Never after `MSG_OUTCOME_UNKNOWN`. The reminder then shows the
+  SMS's status. Only a console SMS provider exists until L-03; it is refused in production.
 
 ## 5. API surface
 See API.md "Reminders and messaging".
@@ -157,7 +176,7 @@ See API.md "Reminders and messaging".
 | Worker crashes after provider accepted but before DB update | Retry hits the unique idempotency key → no second send; reconciliation fixes status |
 | Duplicate webhook | Ignored by `event_id` |
 | Status webhook arrives before our DB write commits | Stored event is retried by the processor after 30 s |
-| Patient number shared by two patients | One opt-out applies to both (same phone) |
+| Patient number shared by two patients | One opt-out applies to both (same phone), in each clinic that messaged the number (M5-P5) |
 | Clinic suspended | Jobs for that clinic are skipped and marked `cancelled` (`JOB_CLINIC_SUSPENDED`) |
 | Worker killed mid-job | The attempt already counts (R9a); the reaper requeues it after 5 minutes, or marks it `dead` at `max_attempts` (R10) |
 
@@ -185,7 +204,9 @@ See API.md "Reminders and messaging".
 ## 10. Observability
 Events: `job.claimed`, `job.succeeded`, `job.retry_scheduled`, `job.dead`, `job.cancelled`,
 `job.lock_expired`, `job.lost_lock`, `worker.started`, `worker.stopped`, `message.sent`,
-`message.failed`, `webhook.received`, `webhook.signature_invalid`, `reminder.skipped_no_consent`.
+`message.failed`, `webhook.received`, `webhook.signature_invalid`, `reminder.skipped_no_consent`,
+and from M5-P5 `webhook.stop_unmatched`, `patient.opted_out`, `reminder.sms_fallback_enqueued`,
+`messaging.console_sms_accepted`, `message.unpriced`.
 Metrics: queue depth, oldest job age, messages by status, failure rate by error code
 (`v_job_health` from P1, `v_message_health` from P2).
 
