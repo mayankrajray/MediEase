@@ -91,6 +91,11 @@ class Tenant:
 # because a reply names no clinic. It returns only clinic and patient IDs (patients with that
 # number in clinics that have messaged it); each patient is then locked, opted out and audited
 # through that clinic's SqlAlchemyPatientRepository (tests/integration/test_opt_out_db.py).
+#
+# Reviewed exception (M5-P5): SqlAlchemyMessageCostReport sums messages across clinics for the ops
+# console's monthly total (decision 7A), like the ops clinic list. It returns counts and sums per
+# clinic and channel only, never a message, patient or number, and only ops reach it
+# (tests/integration/test_message_costs_db.py).
 NOT_TENANT_SCOPED = {"audit_events", "jobs"}
 
 

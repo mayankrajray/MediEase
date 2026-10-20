@@ -33,6 +33,7 @@ from mediease_api.domain.messaging.errors import (
     TemplateParamsInvalid,
 )
 from mediease_api.domain.messaging.message import Message, MessageStatus, SourceType
+from mediease_api.domain.messaging.pricing import PriceTable
 from mediease_api.domain.patients.patient import Patient
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -87,6 +88,7 @@ class MessageSender:
         messaging: MessagingPort,
         templates: TemplateCatalog,
         phones: PhoneCipherPort,
+        prices: PriceTable | None = None,
     ) -> None:
         self._uow = uow
         self._clock = clock
@@ -94,6 +96,8 @@ class MessageSender:
         self._messaging = messaging
         self._templates = templates
         self._phones = phones
+        # M5-P5 (R18): none means every cost stays unknown, except the console's and a failure's.
+        self._prices = prices or PriceTable()
 
     def send(
         self,
@@ -138,12 +142,13 @@ class MessageSender:
                 expected=isinstance(error, ProviderOutcomeUnknown),
             )
             raise JobFailure(MSG_OUTCOME_UNKNOWN, retryable=False) from None
-        provider_id = accepted.provider_message_id
+        provider_id, units = accepted.provider_message_id, accepted.units
         self._finish(
             clinic_id,
             key,
             lambda m, now: m.accepted(provider_message_id=provider_id, now=now),
             after_sent,
+            units=units,
         )
         log.info("message.sent", channel=message.channel.value, provider=message.provider)
 
@@ -249,6 +254,7 @@ class MessageSender:
         after: AfterSent | None = None,
         *,
         failed: AfterFailed | None = None,
+        units: int = 1,
     ) -> None:
         with self._uow as uow:
             tenant = uow.tenant(clinic_id)
@@ -256,6 +262,9 @@ class MessageSender:
             message = tenant.messages.get_by_key(key, for_update=True)
             assert message is not None, "written before the call"
             change(message, now)
+            # R18: an SMS (per segment), a console message or a failure is priced now; WhatsApp
+            # waits for the delivery status.
+            message.settle_cost(self._prices.cost(message, units=units), now)
             tenant.messages.update(message)
             if after is not None:
                 after(uow, tenant, now)

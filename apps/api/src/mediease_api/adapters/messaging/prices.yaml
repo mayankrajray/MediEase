@@ -1,0 +1,21 @@
+# Message prices (M5-P5; spec R18; decisions 5A, 6A; domain/messaging/pricing.py).
+#
+# Per unit (a WhatsApp message, an SMS segment), in millipaise (1 paisa = 1,000), EXCLUDING GST.
+# A price applies from `effective_from` (UTC date) until a later entry for the same channel and
+# category; changing a price is a new entry here, never an edit of an old one, so past costs stay
+# as they were recorded. A category without a price leaves the cost unknown (counted as unpriced).
+#
+# WhatsApp: Meta charges per delivered message to an Indian number, by the pricing category its
+# status webhook reports; volume tiers are not modelled, and a message Meta reports as not billable
+# (e.g. within the free monthly service allowance) costs 0. Rates as published for 2026 (utility
+# and authentication ₹0.1150, marketing ₹0.8631); service replies became chargeable from
+# 1 October 2026. Check Meta's current rate card before relying on a total.
+#
+# SMS: no price until the provider and its DLT rates are chosen (L-03).
+
+prices:
+  - { channel: WHATSAPP, category: utility, effective_from: 2026-01-01, millipaise: 11500 }
+  - { channel: WHATSAPP, category: authentication, effective_from: 2026-01-01, millipaise: 11500 }
+  - { channel: WHATSAPP, category: marketing, effective_from: 2026-01-01, millipaise: 86310 }
+  - { channel: WHATSAPP, category: service, effective_from: 2026-01-01, millipaise: 0 }
+  - { channel: WHATSAPP, category: service, effective_from: 2026-10-01, millipaise: 11500 }

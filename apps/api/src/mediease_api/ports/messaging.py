@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -40,6 +40,8 @@ class OutboundTemplateMessage:
 @dataclass(frozen=True, slots=True)
 class ProviderAccepted:
     provider_message_id: str
+    # M5-P5: billable units, the SMS segment count; a WhatsApp message is one (R18).
+    units: int = 1
 
 
 class MessagingPort(Protocol):
@@ -147,3 +149,30 @@ class OptOutLookup(Protocol):
     """
 
     def patients_messaged(self, phone: PhoneNumber) -> Sequence[tuple[UUID, UUID]]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class ChannelCost:
+    """One clinic's messages on one channel sent in a month (M5-P5, R18): counts and money only."""
+
+    clinic_id: UUID
+    clinic_name: str
+    channel: Channel
+    messages: int
+    priced: int
+    cost_millipaise: int
+
+    @property
+    def unpriced(self) -> int:
+        return self.messages - self.priced
+
+
+class MessageCostReport(Protocol):
+    """The ops console's monthly totals (M5-P5 decision 7A).
+
+    A reviewed cross-clinic ops read, like the clinic list: it returns counts and sums per clinic
+    and channel, never a message, patient or number. ``month`` is the first day of the month,
+    read in each clinic's own time zone on ``sent_at``.
+    """
+
+    def monthly(self, month: date) -> Sequence[ChannelCost]: ...

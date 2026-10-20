@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import date, datetime
 from types import MappingProxyType
 from uuid import UUID
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, aliased
 
@@ -19,6 +19,7 @@ from mediease_api.domain.messaging.webhook import WebhookEvent
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.ports.messaging import ChannelCost
 
 
 def _write(row: MessageRow, message: Message) -> None:
@@ -35,6 +36,7 @@ def _write(row: MessageRow, message: Message) -> None:
     row.read_at = message.read_at
     row.failed_at = message.failed_at
     row.pricing_category = message.pricing_category
+    row.cost_millipaise = message.cost_millipaise
     row.updated_at = message.updated_at
 
 
@@ -66,6 +68,7 @@ def _from_row(row: MessageRow) -> Message:
         delivered_at=row.delivered_at,
         read_at=row.read_at,
         pricing_category=row.pricing_category,
+        cost_millipaise=row.cost_millipaise,
     )
 
 
@@ -237,3 +240,41 @@ class SqlAlchemyWebhookEventRepository:
             .limit(limit)
         )
         return list(self._session.scalars(query))
+
+
+# The month's bounds are taken in each clinic's time zone, so the comparison on sent_at stays a
+# plain range that ix_messages_clinic_id_sent_at serves.
+_MONTHLY_COSTS = text(
+    """
+    SELECT c.id AS clinic_id, c.name AS clinic_name, m.channel,
+           count(*) AS messages, count(m.cost_millipaise) AS priced,
+           coalesce(sum(m.cost_millipaise), 0) AS cost_millipaise
+    FROM clinics c
+    JOIN messages m ON m.clinic_id = c.id
+     AND m.sent_at >= (CAST(:month AS date)::timestamp AT TIME ZONE c.timezone)
+     AND m.sent_at < ((CAST(:month AS date) + interval '1 month')::timestamp
+                      AT TIME ZONE c.timezone)
+    GROUP BY c.id, c.name, m.channel
+    ORDER BY c.name, c.id, m.channel
+    """
+)
+
+
+class SqlAlchemyMessageCostReport:
+    """The ops monthly totals (M5-P5 decision 7A): a reviewed cross-clinic read of sums only."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def monthly(self, month: date) -> Sequence[ChannelCost]:
+        return [
+            ChannelCost(
+                clinic_id=row.clinic_id,
+                clinic_name=row.clinic_name,
+                channel=Channel(row.channel),
+                messages=int(row.messages),
+                priced=int(row.priced),
+                cost_millipaise=int(row.cost_millipaise),
+            )
+            for row in self._session.execute(_MONTHLY_COSTS, {"month": month.replace(day=1)})
+        ]

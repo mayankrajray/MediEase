@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0018"
+HEAD = "0019"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -570,6 +570,33 @@ def test_0018_indexes_patients_by_number_and_allows_opt_out_replies(
             names = {i["name"] for i in inspect(conn).get_indexes("patients")}
             assert "ix_patients_phone_e164" not in names
             assert "OPT_OUT" not in _check(conn, "ck_messages_source_type")
+    finally:
+        engine.dispose()
+
+
+def _message_columns(conn: Any) -> set[str]:
+    return {c["name"] for c in inspect(conn).get_columns("messages")}
+
+
+def test_0019_keeps_costs_in_millipaise_with_the_monthly_index(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    command.upgrade(alembic_config, "0019")
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            columns = _message_columns(conn)
+            assert "cost_millipaise" in columns and "cost_paise" not in columns
+            indexes = {i["name"]: i for i in inspect(conn).get_indexes("messages")}
+            assert indexes["ix_messages_clinic_id_sent_at"]["column_names"] == [
+                "clinic_id",
+                "sent_at",
+            ]
+            assert ">= 0" in _check(conn, "ck_messages_cost_not_negative")
+        command.downgrade(alembic_config, "0018")
+        with engine.connect() as conn:
+            columns = _message_columns(conn)
+            assert "cost_paise" in columns and "cost_millipaise" not in columns
     finally:
         engine.dispose()
 

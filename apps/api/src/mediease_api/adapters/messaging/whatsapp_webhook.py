@@ -4,12 +4,13 @@ Signature: ``X-Hub-Signature-256: sha256=<hex>``, HMAC-SHA256 of the *raw* body 
 secret, compared in constant time before the body is parsed. An empty secret verifies nothing.
 
 Redaction: only what the status processor needs is stored — for each status its ID, status,
-time, our echoed message ID, the error codes and the pricing category; for each inbound message
-only its ID, type and time. Message text, profile names and every phone number (``from``,
-``recipient_id``, ``wa_id``, the business number) are dropped (spec R14: inbound text is not
-stored). M5-P5 (decision 1A): a STOP reply is recognised here, before redaction, and is the one
-exception — it also keeps ``stop: true``, the sender's number *encrypted* with the messages' phone
-keys, and the ID of our message it replied to; the processing job removes the number again.
+time, our echoed message ID, the error codes and the pricing category and billable flag; for
+each inbound message only its ID, type and time. Message text, profile names and every phone
+number (``from``, ``recipient_id``, ``wa_id``, the business number) are dropped (spec R14:
+inbound text is not stored). M5-P5 (decision 1A): a STOP reply is recognised here, before
+redaction, and is the one exception — it also keeps ``stop: true``, the sender's number
+*encrypted* with the messages' phone keys, and the ID of our message it replied to; the
+processing job removes the number again.
 """
 
 from __future__ import annotations
@@ -73,6 +74,9 @@ def _status(raw: Mapping[str, Any]) -> dict[str, Any]:
     category = _dict(raw.get("pricing")).get("category")
     if category:
         kept["pricing"] = {"category": category}
+    billable = _dict(raw.get("pricing")).get("billable")
+    if isinstance(billable, bool):  # M5-P5: a free message costs nothing (decision 6A)
+        kept.setdefault("pricing", {})["billable"] = billable
     return kept
 
 
@@ -190,6 +194,7 @@ def _update(raw: Mapping[str, Any]) -> StatusUpdate | None:
     errors = _list(raw.get("errors"))
     code = map_meta_error(_dict(errors[0]).get("code")) if errors else None
     category = _dict(raw.get("pricing")).get("category")
+    billable = _dict(raw.get("pricing")).get("billable")
     return StatusUpdate(
         provider_message_id=provider_id,
         message_id=message_id,
@@ -197,4 +202,5 @@ def _update(raw: Mapping[str, Any]) -> StatusUpdate | None:
         at=at,
         error_code=code if status is MessageStatus.FAILED else None,
         pricing_category=str(category)[:40] if category else None,
+        billable=billable if isinstance(billable, bool) else None,
     )

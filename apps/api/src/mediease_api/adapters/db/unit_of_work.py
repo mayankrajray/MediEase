@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from mediease_api.adapters.db.audit import SqlAlchemyAuditWriter
 from mediease_api.adapters.db.jobs import SqlAlchemyJobQueue, SqlAlchemyRetentionRepository
 from mediease_api.adapters.db.messages import (
+    SqlAlchemyMessageCostReport,
     SqlAlchemyMessageLookup,
     SqlAlchemyMessageRepository,
     SqlAlchemyOptOutLookup,
@@ -180,6 +181,7 @@ class _OpenUnit:
         self.no_show_sweep = SqlAlchemyNoShowSweep(session)
         # M5-P5: who a STOP reply opts out (IDs only).
         self.opt_out_lookup = SqlAlchemyOptOutLookup(session)
+        self.message_costs = SqlAlchemyMessageCostReport(session)
 
 
 class SqlAlchemyUnitOfWork:
@@ -260,6 +262,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def opt_out_lookup(self) -> SqlAlchemyOptOutLookup:
         return self._require_open().opt_out_lookup
+
+    @property
+    def message_costs(self) -> SqlAlchemyMessageCostReport:
+        return self._require_open().message_costs
 
     def tenant(self, clinic_id: UUID) -> SqlAlchemyTenantRepositories:
         return SqlAlchemyTenantRepositories(self._require_open().session, clinic_id)
