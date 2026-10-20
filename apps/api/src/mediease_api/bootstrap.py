@@ -32,6 +32,7 @@ from mediease_api.adapters.ids.uuid7 import Uuid7Generator
 from mediease_api.adapters.messaging.catalog import YamlTemplateCatalog
 from mediease_api.adapters.messaging.console import ConsoleMessagingAdapter
 from mediease_api.adapters.messaging.console_sms import ConsoleSmsAdapter
+from mediease_api.adapters.messaging.prices import load_price_table
 from mediease_api.adapters.messaging.whatsapp_cloud import WhatsAppCloudAdapter
 from mediease_api.adapters.messaging.whatsapp_webhook import PROVIDER as WHATSAPP_PROVIDER
 from mediease_api.adapters.messaging.whatsapp_webhook import (
@@ -91,7 +92,7 @@ from mediease_api.application.messaging.webhooks import (
     ReconcileMessages,
     VerifyWebhookSubscription,
 )
-from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics
+from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics, MessagingCosts
 from mediease_api.application.patients.consent import OptIn, OptOut, RecordConsent
 from mediease_api.application.patients.import_patients import ImportPatients
 from mediease_api.application.patients.queries import GetPatient, LookupPatients
@@ -507,6 +508,9 @@ class _UseCases:
     def get_clinic_onboarding(self) -> GetClinicOnboarding:
         return GetClinicOnboarding(uow=self._uow())
 
+    def messaging_costs(self) -> MessagingCosts:
+        return MessagingCosts(uow=self._uow())
+
     def _uow(self) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(self.session_factory)
 
@@ -595,6 +599,7 @@ def _messaging_handlers(
     messaging = build_messaging(settings)
     phones = FernetPhoneCipher(settings.messaging_phone_keys())
     templates = YamlTemplateCatalog.from_package()
+    prices = load_price_table()
     sender = MessageSender(
         uow=SqlAlchemyUnitOfWork(factory),
         clock=clock,
@@ -602,6 +607,7 @@ def _messaging_handlers(
         messaging=messaging,
         templates=templates,
         phones=phones,
+        prices=prices,
     )
     sms = build_sms(settings)
     sms_sender = (
@@ -612,6 +618,7 @@ def _messaging_handlers(
             messaging=sms,
             templates=templates,
             phones=phones,
+            prices=prices,
         )
         if sms is not None
         else None
@@ -624,6 +631,7 @@ def _messaging_handlers(
             parser=WhatsAppWebhookParser(phones),
             opt_outs=OptOutByReply(ids=ids, phones=phones),
             fallback=fallback,
+            prices=prices,
         ),
         OPT_OUT_CONFIRMATION_KIND: SendOptOutConfirmation(sender=sender),
         SMS_FALLBACK_KIND: SendSmsFallback(sender=sms_sender, ids=ids),

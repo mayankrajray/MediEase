@@ -21,7 +21,7 @@ from uuid import UUID
 
 from mediease_api.domain.messaging.errors import MSG_OUTCOME_UNKNOWN, MSG_PROVIDER_REJECTED
 from mediease_api.domain.patients.patient import Language
-from mediease_api.domain.shared.errors import InvalidTransition
+from mediease_api.domain.shared.errors import InvalidTransition, InvalidValue
 from mediease_api.domain.shared.time import require_utc
 
 
@@ -58,6 +58,8 @@ class StatusUpdate:
     at: datetime
     error_code: str | None = None
     pricing_category: str | None = None
+    # M5-P5: Meta's ``pricing.billable``; False means the message is free (decision 6A).
+    billable: bool | None = None
 
 
 class SourceType(StrEnum):
@@ -99,6 +101,8 @@ class Message:
     delivered_at: datetime | None = None
     read_at: datetime | None = None
     pricing_category: str | None = None
+    # M5-P5 (R18, decision 5A): integer millipaise, set once (``domain/messaging/pricing.py``).
+    cost_millipaise: int | None = None
 
     @classmethod
     def prepare(
@@ -256,6 +260,15 @@ class Message:
         if changed:
             self.updated_at = now
         return changed
+
+    def settle_cost(self, cost: int | None, now: datetime) -> bool:
+        """Record the cost the first time it is known; True if it was set now (R18)."""
+        if cost is None or self.cost_millipaise is not None:
+            return False
+        if cost < 0:
+            raise InvalidValue("cost_millipaise", "must not be negative")
+        self.cost_millipaise = cost
+        return self._touch(True, require_utc(now, "now"))
 
     def __repr__(self) -> str:
         # Never the phone or the variables.

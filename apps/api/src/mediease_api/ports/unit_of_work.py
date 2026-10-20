@@ -24,6 +24,7 @@ from uuid import UUID
 from mediease_api.ports.audit import AuditWriter
 from mediease_api.ports.jobs import JobQueue, RetentionRepository
 from mediease_api.ports.messaging import (
+    MessageCostReport,
     MessageLookup,
     MessageRepository,
     OptOutLookup,
@@ -145,6 +146,11 @@ class UnitOfWork(Protocol):
     @property
     def opt_out_lookup(self) -> OptOutLookup:
         """Who a STOP reply opts out (M5-P5, a reviewed cross-clinic read of IDs)."""
+        ...
+
+    @property
+    def message_costs(self) -> MessageCostReport:
+        """Monthly message counts and costs per clinic (M5-P5, a reviewed ops read)."""
         ...
 
     def tenant(self, clinic_id: UUID) -> TenantRepositories:

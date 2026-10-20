@@ -47,10 +47,15 @@ class MessageRow(TenantOwned, Timestamps, Base):
         CheckConstraint(
             "sending_started_at IS NULL OR status = 'QUEUED'", name="started_only_queued"
         ),
+        CheckConstraint(
+            "cost_millipaise IS NULL OR cost_millipaise >= 0", name="cost_not_negative"
+        ),
         Index("ix_messages_clinic_id_patient_id", "clinic_id", "patient_id"),
         Index(
             "ix_messages_clinic_id_source_type_source_id", "clinic_id", "source_type", "source_id"
         ),
+        # M5-P5: the ops monthly total per clinic (R18).
+        Index("ix_messages_clinic_id_sent_at", "clinic_id", "sent_at"),
     )
 
     patient_id: Mapped[UUID] = mapped_column(ForeignKey("patients.id"))
@@ -69,7 +74,8 @@ class MessageRow(TenantOwned, Timestamps, Base):
     status: Mapped[str] = mapped_column(Text)
     error_code: Mapped[str | None] = mapped_column(Text)
     provider_message_id: Mapped[str | None] = mapped_column(Text, unique=True)
-    cost_paise: Mapped[int | None] = mapped_column(BigInteger)
+    # M5-P5 (R18, decision 5A): integer millipaise (1 paisa = 1,000), null until known.
+    cost_millipaise: Mapped[int | None] = mapped_column(BigInteger)
     request_id: Mapped[str | None] = mapped_column(Text)
     # The job that last tried it; no foreign key, finished jobs are purged after 30 days.
     job_id: Mapped[UUID | None]

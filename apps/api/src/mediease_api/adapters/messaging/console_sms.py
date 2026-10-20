@@ -57,4 +57,4 @@ class ConsoleSmsAdapter:
             provider_message_id=provider_id,
             repeat=repeat,
         )
-        return ProviderAccepted(provider_message_id=provider_id)
+        return ProviderAccepted(provider_message_id=provider_id, units=sms_segments(text))

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.19.0
+  version: 0.20.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -1807,6 +1807,57 @@ paths:
             PAT_IMPORT_INVALID (the file as a whole cannot be read: header, encoding, CSV
             syntax, no rows or more than 5,000; details.problems lists why) or
             REQ_VALIDATION_FAILED (dry_run is not true or false). Nothing is imported.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/ops/messaging-costs:
+    get:
+      tags: [ops]
+      operationId: getOpsMessagingCosts
+      summary: Each clinic's messages and their cost in one month
+      description: |
+        Spec reminders-and-messaging R18 (M5-P5 decision 7A). Ops only. For every clinic that
+        sent messages in the month (read in the clinic's own time zone on the sending time),
+        the count per channel, how many are priced and the cost in paise, excluding GST.
+        A WhatsApp message is priced once its delivery is reported, at the webhook's pricing
+        category (free when Meta reports it is not billable); a failed message costs nothing;
+        a message whose cost is not yet known is counted as unpriced, never guessed. Costs are
+        kept in millipaise and rounded half up to paise at each total. Counts and money only:
+        no message, patient or number.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: month
+          in: query
+          required: true
+          description: The calendar month, YYYY-MM
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+            example: '2026-10'
+      responses:
+        '200':
+          description: The month's messages and costs per clinic
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsMessagingCosts'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          description: REQ_VALIDATION_FAILED (month is missing or not YYYY-MM)
           headers:
             X-Request-ID:
               $ref: '#/components/headers/RequestId'
@@ -5245,6 +5296,67 @@ components:
                     oneOf:
                       - $ref: '#/components/schemas/OnboardingChecklist'
                       - type: 'null'
+    OpsMessagingCosts:
+      type: object
+      description: M5-P5 (R18). Money in paise, excluding GST.
+      required: [month, clinics, cost_paise]
+      additionalProperties: false
+      properties:
+        month:
+          type: string
+          example: '2026-10'
+        clinics:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsClinicMessagingCost'
+        cost_paise:
+          type: integer
+          minimum: 0
+          description: Every clinic's cost in the month
+    OpsClinicMessagingCost:
+      type: object
+      required: [clinic_id, clinic_name, messages, unpriced, cost_paise, channels]
+      additionalProperties: false
+      properties:
+        clinic_id:
+          type: string
+          format: uuid
+        clinic_name:
+          type: string
+        messages:
+          type: integer
+          minimum: 0
+        unpriced:
+          type: integer
+          minimum: 0
+          description: Messages whose cost is not known yet (not counted in cost_paise)
+        cost_paise:
+          type: integer
+          minimum: 0
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsChannelCost'
+    OpsChannelCost:
+      type: object
+      required: [channel, messages, priced, unpriced, cost_paise]
+      additionalProperties: false
+      properties:
+        channel:
+          type: string
+          enum: [WHATSAPP, SMS, CONSOLE]
+        messages:
+          type: integer
+          minimum: 0
+        priced:
+          type: integer
+          minimum: 0
+        unpriced:
+          type: integer
+          minimum: 0
+        cost_paise:
+          type: integer
+          minimum: 0
     OpsClinicDetail:
       allOf:
         - $ref: '#/components/schemas/Clinic'

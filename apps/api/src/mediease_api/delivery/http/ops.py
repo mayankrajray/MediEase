@@ -9,6 +9,7 @@
 | ``POST /api/v1/ops/clinics/{id}/staff-invites`` | Invite the owner (or any role) |
 | ``POST /api/v1/ops/clinics/{id}/patient-imports`` | CSV patient import, dry run by default |
 | ``PUT /api/v1/ops/clinics/{id}/doctors/{doctor_id}/schedule`` | Weekly schedule (D5) |
+| ``GET /api/v1/ops/messaging-costs?month=YYYY-MM`` | Messages and their cost per clinic (M5-P5) |
 
 Every route is ``@ops``: platform staff only, and clinic staff are refused
 even as owners (spec R10). Ops users have no membership, so the clinic is
@@ -25,6 +26,8 @@ time the secret is visible anywhere.
 
 from __future__ import annotations
 
+import re
+from datetime import date
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -44,7 +47,13 @@ from mediease_api.application.clinics.onboard_clinic import (
     DoctorCommand,
 )
 from mediease_api.application.context import Actor
-from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics
+from mediease_api.application.ops.queries import (
+    ClinicMessagingCost,
+    GetClinicOnboarding,
+    ListClinics,
+    MessagingCosts,
+    paise,
+)
 from mediease_api.application.patients.import_patients import (
     ImportPatients,
     ImportPatientsCommand,
@@ -81,6 +90,7 @@ class OpsUseCases(Protocol):
     def invite_staff(self) -> InviteStaff: ...
     def import_patients(self) -> ImportPatients: ...
     def replace_schedule(self) -> ReplaceSchedule: ...
+    def messaging_costs(self) -> MessagingCosts: ...
 
 
 class NewClinicRequest(BaseModel):
@@ -224,7 +234,52 @@ def create_ops_blueprint(use_cases: OpsUseCases, *, public_base_url: str) -> Blu
         )
         return jsonify(import_report_body(report))
 
+    @bp.get("/messaging-costs")
+    @ops
+    def messaging_costs() -> Response:
+        month = _month()
+        clinics = use_cases.messaging_costs().execute(month)
+        return jsonify(
+            {
+                "month": month.strftime("%Y-%m"),
+                "clinics": [clinic_cost_body(c) for c in clinics],
+                "cost_paise": paise(sum(c.cost_millipaise for c in clinics)),
+            }
+        )
+
     return bp
+
+
+_MONTH = re.compile(r"(\d{4})-(0[1-9]|1[0-2])")
+
+
+def _month() -> date:
+    """``month=YYYY-MM``, required: a total is always for a named month."""
+    match = _MONTH.fullmatch(request.args.get("month", "").strip())
+    if match is None:
+        raise RequestValidationFailed([{"field": "month", "reason": "must be YYYY-MM"}])
+    return date(int(match.group(1)), int(match.group(2)), 1)
+
+
+def clinic_cost_body(clinic: ClinicMessagingCost) -> dict[str, Any]:
+    """Counts and money only (R18); paise rounded at each total from exact millipaise."""
+    return {
+        "clinic_id": str(clinic.clinic_id),
+        "clinic_name": clinic.clinic_name,
+        "messages": clinic.messages,
+        "unpriced": clinic.unpriced,
+        "cost_paise": paise(clinic.cost_millipaise),
+        "channels": [
+            {
+                "channel": c.channel.value,
+                "messages": c.messages,
+                "priced": c.priced,
+                "unpriced": c.unpriced,
+                "cost_paise": paise(c.cost_millipaise),
+            }
+            for c in clinic.channels
+        ],
+    }
 
 
 def _dry_run_flag() -> bool:

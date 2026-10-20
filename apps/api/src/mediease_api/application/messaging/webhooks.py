@@ -40,6 +40,7 @@ from mediease_api.domain.messaging.errors import (
     WebhookVerifyFailed,
 )
 from mediease_api.domain.messaging.message import MessageStatus, SourceType, StatusUpdate
+from mediease_api.domain.messaging.pricing import PriceTable
 from mediease_api.domain.messaging.webhook import WebhookEvent
 from mediease_api.domain.prescriptions.prescription import LinkDelivery
 from mediease_api.ports.clock import ClockPort
@@ -173,12 +174,14 @@ class ProcessWebhookEvent:
         parser: WebhookParser,
         opt_outs: OptOutByReply,
         fallback: SmsFallback | None = None,
+        prices: PriceTable | None = None,
     ) -> None:
         self._uow = uow
         self._clock = clock
         self._parser = parser
         self._opt_outs = opt_outs
         self._fallback = fallback
+        self._prices = prices or PriceTable()
 
     def __call__(self, job: ClaimedJob) -> None:
         event_id = UUID(str(job.payload["event_id"]))
@@ -232,9 +235,18 @@ class ProcessWebhookEvent:
         before, was_accepted = message.status, message.is_accepted
         was_unknown = message.error_code == MSG_OUTCOME_UNKNOWN
         now = self._clock.now()
-        if not message.apply_status(update, now):
+        changed = message.apply_status(update, now)
+        # R18 (decision 6A): priced once delivery is proven, at the webhook's category.
+        priced = message.settle_cost(self._prices.cost(message, billable=update.billable), now)
+        if not (changed or priced):
             return True
         tenant.messages.update(message)
+        if message.cost_millipaise is None and message.delivered_at is not None:
+            logger.info(
+                "message.unpriced",
+                message_id=str(message.id),
+                pricing_category=message.pricing_category,
+            )
         if (
             self._fallback is not None
             and before is not MessageStatus.FAILED
