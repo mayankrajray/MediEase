@@ -8,12 +8,12 @@
 
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 
-import { DESK, DOCTOR, PASSWORD, newPatient, sessionRunningNow, signInApi } from "./queue-support";
+import { DESK, DOCTOR, LANDING, PASSWORD, newPatient, sessionRunningNow, signInApi } from "./queue-support";
 
 const OPS = "ops@mediease.example";
 const ZONE = "Asia/Kolkata";
 
-async function as(browser: Browser, email: string, landing: RegExp = /\/(queue|select-clinic)$/): Promise<Page> {
+async function as(browser: Browser, email: string, landing: RegExp = LANDING): Promise<Page> {
   const page = await (await browser.newContext({ viewport: { width: 1366, height: 768 } })).newPage();
   await page.goto("/sign-in");
   await page.getByLabel("Email or phone number").fill(email);
@@ -23,7 +23,7 @@ async function as(browser: Browser, email: string, landing: RegExp = /\/(queue|s
   // The seeded doctor works in both sample clinics, so they choose this one first.
   if (page.url().endsWith("/select-clinic")) {
     await page.getByRole("button", { name: /^Sample Clinic\b(?! Two)/ }).click();
-    await expect(page).toHaveURL(/\/queue$/);
+    await expect(page).toHaveURL(/\/today$/);
   }
   return page;
 }

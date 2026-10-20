@@ -14,6 +14,8 @@ export interface NavItem {
  * creates it, so the menu never links to something that does not exist yet.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
+  // M6-P1 (decision 6A): every clinic member lands on Today; CLINIC_VIEW is every role's.
+  { href: "/today", label: "Today" },
   { href: "/queue", label: "Queue" },
   { href: "/patients", label: "Patients", requires: "PATIENTS_MANAGE" },
   // M5-P6: every role holds REMINDERS_SCHEDULE.

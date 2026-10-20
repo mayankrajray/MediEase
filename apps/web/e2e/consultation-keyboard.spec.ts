@@ -10,22 +10,15 @@ import { readFile } from "node:fs/promises";
 
 import { expect, test, type Browser, type Download, type Page } from "@playwright/test";
 
-import { DESK, DOCTOR, PASSWORD, newPatient, sessionRunningNow, signInApi } from "./queue-support";
+import { DESK, DOCTOR, newPatient, openQueue, sessionRunningNow, signInApi, signInAs } from "./queue-support";
 
 test.use({ viewport: { width: 1366, height: 768 } });
 
 async function boardAs(browser: Browser, email: string): Promise<Page> {
   const page = await (await browser.newContext({ viewport: { width: 1366, height: 768 } })).newPage();
-  await page.goto("/sign-in");
-  await page.getByLabel("Email or phone number").fill(email);
-  await page.getByLabel("Password").fill(PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  // The seeded doctor works in both sample clinics, so they choose this one first.
-  await expect(page).toHaveURL(/\/(queue|select-clinic)$/);
-  if (page.url().endsWith("/select-clinic")) {
-    await page.getByRole("button", { name: /^Sample Clinic\b(?! Two)/ }).click();
-    await expect(page).toHaveURL(/\/queue$/);
-  }
+  // M6-P1: every member lands on Today; the queue is one click away.
+  await signInAs(page, email);
+  await openQueue(page);
   return page;
 }
 

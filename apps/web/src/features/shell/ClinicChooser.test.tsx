@@ -28,7 +28,7 @@ afterEach(() => {
 });
 
 describe("ClinicChooser", () => {
-  const renderChooser = (next = "/queue") =>
+  const renderChooser = (next = "/today") =>
     render(
       <SessionProvider>
         <ClinicChooser next={next} />
@@ -60,12 +60,12 @@ describe("ClinicChooser", () => {
     expect(current).toHaveAttribute("aria-current", "true");
   });
 
-  it("a person with one clinic has nothing to choose: they go to the queue", async () => {
+  it("a person with one clinic has nothing to choose: they go to Today (M6-P1)", async () => {
     mockApi({ "GET /api/v1/me": () => json(200, person([alpha])) });
 
     renderChooser();
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/queue"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/today"));
     expect(screen.queryByRole("heading", { name: "Choose a clinic" })).not.toBeInTheDocument();
   });
 
@@ -100,12 +100,12 @@ describe("OpsShell", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
-  it("R10: clinic staff are sent to their queue and never see the console", async () => {
+  it("R10: clinic staff are sent to Today (M6-P1) and never see the console", async () => {
     mockApi({ "GET /api/v1/me": () => json(200, person([alpha])) });
 
     renderOps();
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/queue"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/today"));
     expect(screen.queryByText("console page")).not.toBeInTheDocument();
   });
 });

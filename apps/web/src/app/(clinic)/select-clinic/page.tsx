@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { QUEUE_PATH } from "@/features/auth/landing";
+import { TODAY_PATH } from "@/features/auth/landing";
 import { ClinicChooser } from "@/features/shell/ClinicChooser";
 import { safeNextPath } from "@/lib/auth/safe-next";
 
@@ -13,5 +13,5 @@ export default async function SelectClinicPage({
 }) {
   const { next } = await searchParams;
   const raw = Array.isArray(next) ? next[0] : next;
-  return <ClinicChooser next={safeNextPath(raw, QUEUE_PATH)} />;
+  return <ClinicChooser next={safeNextPath(raw, TODAY_PATH)} />;
 }

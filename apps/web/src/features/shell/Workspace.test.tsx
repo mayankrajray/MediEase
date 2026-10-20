@@ -277,4 +277,25 @@ describe("dashboard shell", () => {
     expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument();
     expect(screen.getByRole("main")).toHaveAttribute("id", "main");
   });
+
+  it("M6-P1 decision 4A: Today comes first, and on a phone Menu opens the same links in a drawer", async () => {
+    mockApi({
+      "GET /api/v1/me": () => json(200, withMemberships(alpha)),
+      "GET /api/v1/clinic": clinicRoute(),
+    });
+
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "Today's queue" });
+    const sidebar = screen.getByRole("navigation", { name: "Main" });
+    expect(within(sidebar).getAllByRole("link").map((l) => l.textContent)[0]).toBe("Today");
+
+    const menu = within(screen.getByRole("banner")).getByRole("button", { name: "Menu" });
+    expect(menu).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(menu);
+
+    const drawer = await screen.findByRole("dialog", { name: "Menu" });
+    expect(menu).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(within(drawer).getByRole("link", { name: "Today" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Menu" })).not.toBeInTheDocument());
+  });
 });

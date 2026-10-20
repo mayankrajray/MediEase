@@ -5,13 +5,38 @@
  * them would fail outside clinic hours; this makes the journeys pass at any time of day.
  */
 
-import { expect, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 export const PASSWORD = process.env.E2E_PASSWORD ?? "MediEase-demo-2026";
 export const DESK = "desk@sample-clinic.example";
 export const OWNER = "owner@sample-clinic.example";
 export const DOCTOR = "doctor@sample-clinic.example";
 const ZONE = "Asia/Kolkata";
+
+/** Where a clinic member lands after signing in (M6-P1, decision 6A), or the clinic chooser. */
+export const LANDING = /\/(today|select-clinic)$/;
+
+/**
+ * Signs in through the form and lands on Today, choosing the first sample clinic when the person
+ * works in both (the seeded doctor does).
+ */
+export async function signInAs(page: Page, email: string): Promise<void> {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email or phone number").fill(email);
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(LANDING);
+  if (page.url().endsWith("/select-clinic")) {
+    await page.getByRole("button", { name: /^Sample Clinic\b(?! Two)/ }).click();
+  }
+  await expect(page).toHaveURL(/\/today$/);
+}
+
+/** The queue is one click from anywhere in the workspace: the sidebar's Queue link. */
+export async function openQueue(page: Page): Promise<void> {
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Queue" }).click();
+  await expect(page).toHaveURL(/\/queue$/);
+}
 
 async function csrf(request: APIRequestContext): Promise<string> {
   const state = await request.storageState();

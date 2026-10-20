@@ -18,7 +18,7 @@ async function signInAsFrontDesk(page: Page) {
   await page.getByLabel("Email or phone number").fill(DESK);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/queue$/);
+  await expect(page).toHaveURL(/\/today$/); // M6-P1: every member lands on Today
 }
 
 async function fillRegistration(page: Page, fullName: string) {

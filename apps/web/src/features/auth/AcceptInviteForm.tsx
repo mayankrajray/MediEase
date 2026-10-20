@@ -9,7 +9,7 @@ import { ApiError, apiGet, apiPost, type GetResponse } from "@/lib/api/client";
 import { readRememberedClinic } from "./clinic-selection";
 import { ErrorNotice } from "./ErrorNotice";
 import { ROLE_LABELS } from "./labels";
-import { QUEUE_PATH, postSignInPath } from "./landing";
+import { TODAY_PATH, postSignInPath } from "./landing";
 import {
   AUTH_INVALID_CREDENTIALS,
   AUTH_LOCKED,
@@ -89,7 +89,7 @@ export function AcceptInviteForm({ token }: { token: string }) {
         { password },
         { pathParams: { token } },
       );
-      router.replace(postSignInPath(data, readRememberedClinic(), QUEUE_PATH));
+      router.replace(postSignInPath(data, readRememberedClinic(), TODAY_PATH));
     } catch (failure) {
       if (
         failure instanceof ApiError &&

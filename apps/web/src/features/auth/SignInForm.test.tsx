@@ -94,7 +94,7 @@ describe("SignInForm", () => {
 
   it("FR-AUTH-03: a multi-clinic person with no remembered clinic goes to the chooser", async () => {
     mockApi({ "POST /api/v1/auth/sign-in": () => session(twoClinics) });
-    render(<SignInForm next="/queue" />);
+    render(<SignInForm next="/today" />);
 
     fill("doctor@sample-clinic.example", "a-synthetic-password");
     submit();

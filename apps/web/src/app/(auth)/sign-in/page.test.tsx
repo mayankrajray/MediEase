@@ -21,19 +21,19 @@ describe("sign-in page (?next= and ?reason= come from the URL)", () => {
     });
   });
 
-  it("defaults next to the queue and omits an absent reason", async () => {
-    expect(await propsFor({})).toEqual({ next: "/queue" });
+  it("M6-P1: defaults next to Today and omits an absent reason", async () => {
+    expect(await propsFor({})).toEqual({ next: "/today" });
   });
 
   it.each(["https://evil.example", "//evil.example", "javascript:alert(1)", "/\\evil.example"])(
-    "replaces the open-redirect attempt %j with the queue",
+    "replaces the open-redirect attempt %j with Today",
     async (next) => {
-      expect((await propsFor({ next })).next).toBe("/queue");
+      expect((await propsFor({ next })).next).toBe("/today");
     },
   );
 
   it("drops an unknown reason instead of showing attacker-chosen text", async () => {
-    expect(await propsFor({ reason: "<b>Call 555-0100</b>" })).toEqual({ next: "/queue" });
+    expect(await propsFor({ reason: "<b>Call 555-0100</b>" })).toEqual({ next: "/today" });
   });
 
   it("uses the first value when a parameter is repeated", async () => {
