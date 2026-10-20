@@ -16,6 +16,8 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/queue", label: "Queue" },
   { href: "/patients", label: "Patients", requires: "PATIENTS_MANAGE" },
+  // M5-P6: every role holds REMINDERS_SCHEDULE.
+  { href: "/follow-ups", label: "Follow-ups", requires: "REMINDERS_SCHEDULE" },
   { href: "/settings/schedule", label: "Schedule", requires: "SCHEDULES_MANAGE" },
 ];
 

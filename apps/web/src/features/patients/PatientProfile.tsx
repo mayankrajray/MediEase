@@ -6,6 +6,8 @@ import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { PatientAppointments } from "@/features/appointments/PatientAppointments";
 import { PrintablePrescriptions } from "@/features/prescriptions/PrintablePrescriptions";
+import { PatientMessages } from "@/features/reminders/PatientMessages";
+import { PatientReminders } from "@/features/reminders/PatientReminders";
 import { useClinic } from "@/features/shell/ClinicGate";
 import { PatientVisits } from "@/features/visits/PatientVisits";
 import { formatPhone } from "@/lib/format/phone";
@@ -31,6 +33,7 @@ export function PatientProfile({ patientId }: { patientId: string }) {
   const permissions = choice.kind === "active" ? choice.membership.permissions : [];
   const canViewClinical = permissions.includes("CLINICAL_VIEW");
   const canPrint = permissions.includes("RX_PRINT");
+  const canRemind = permissions.includes("REMINDERS_SCHEDULE");
   const api = usePatientApi();
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
@@ -142,6 +145,9 @@ export function PatientProfile({ patientId }: { patientId: string }) {
       <ConsentPanel patient={patient} timeZone={clinic.timezone} onChange={show} />
 
       <PatientAppointments patient={patient} />
+
+      {canRemind && <PatientReminders patient={patient} />}
+      {canRemind && <PatientMessages patient={patient} />}
 
       {canViewClinical && <PatientVisits patientId={patient.id} />}
       {canPrint && <PrintablePrescriptions patientId={patient.id} />}

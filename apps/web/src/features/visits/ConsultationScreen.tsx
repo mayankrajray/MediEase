@@ -198,7 +198,12 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
               onReload={reload}
             />
           ) : issued !== undefined ? (
-            <IssuedActions rx={issued} canRevise={writer} onRevised={reload} />
+            <IssuedActions
+              rx={issued}
+              canRevise={writer}
+              onRevised={reload}
+              chainId={(prescriptions.find((p) => p.version === 1) ?? issued).id}
+            />
           ) : (
             <section aria-labelledby="rx-heading">
               <h2 id="rx-heading" className="text-lg font-bold">

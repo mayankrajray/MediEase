@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
+import { FollowUpReminder } from "@/features/reminders/FollowUpReminder";
 import { useClinic } from "@/features/shell/ClinicGate";
 import { ApiError } from "@/lib/api/client";
 import { formatDateTime, formatDay } from "@/lib/format/time";
@@ -15,13 +16,15 @@ import { lineSummary } from "./vocabulary";
 /**
  * An issued prescription on the consultation screen (journey step 4): what was issued, read only
  * (FR-RX-09), with Print, the patient link as a QR code, and Revise, which starts a new version
- * that supersedes this one when it is issued.
+ * that supersedes this one when it is issued. M5-P6: beside the follow-up date, the chain's
+ * reminder (`chainId` is version 1's ID, which the reminder names).
  */
 export function IssuedActions({
   rx,
   canRevise,
   onRevised,
-}: Readonly<{ rx: Prescription; canRevise: boolean; onRevised: () => void }>) {
+  chainId,
+}: Readonly<{ rx: Prescription; canRevise: boolean; onRevised: () => void; chainId?: string }>) {
   const api = useRxApi();
   const clinic = useClinic();
   const { endSession } = useSession();
@@ -95,7 +98,12 @@ export function IssuedActions({
           )}
         </dl>
       )}
-      {rx.follow_up_date !== null && <p>Follow-up: {formatDay(rx.follow_up_date)}</p>}
+      {rx.follow_up_date !== null && (
+        <div className="flex flex-wrap items-start gap-3">
+          <p>Follow-up: {formatDay(rx.follow_up_date)}</p>
+          {chainId !== undefined && <FollowUpReminder patientId={rx.patient_id} chainId={chainId} />}
+        </div>
+      )}
       <h3 className="font-bold">Patient link</h3>
       <LinkPanel rxId={rx.id} />
     </section>

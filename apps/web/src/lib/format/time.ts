@@ -61,6 +61,14 @@ export function formatClock(iso: string | Date, timeZone: string): string {
   return inZone(timeZone, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }, date);
 }
 
+/** "Mon, 19 Oct, 09:00" on the clinic's calendar and wall clock (M5-P6: when a reminder is due). */
+export function formatDayTime(iso: string, timeZone: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "–";
+  const day = inZone(timeZone, { weekday: "short", day: "numeric", month: "short" }, date);
+  return `${day}, ${formatClock(date, timeZone)}`;
+}
+
 /** "Mon 19 Oct" for a clinic-local `YYYY-MM-DD` (a calendar date, no zone needed). */
 export function formatDay(isoDate: string): string {
   const date = new Date(`${isoDate}T12:00:00Z`);

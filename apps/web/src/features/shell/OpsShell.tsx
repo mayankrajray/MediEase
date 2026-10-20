@@ -11,8 +11,8 @@ import { SignOutButton } from "./SignOutButton";
 
 /**
  * The ops console frame (platform staff only, spec R10). Clinic staff who land
- * here are sent to their queue. The screens are the clinics list and the Create
- * clinic wizard (M1-P7).
+ * here are sent to their queue. The screens are the clinics list, the Create
+ * clinic wizard (M1-P7) and the monthly messaging costs (M5-P6).
  */
 export function OpsShell({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -42,9 +42,12 @@ export function OpsShell({ children }: { children: ReactNode }) {
             <SignOutButton />
           </div>
         </div>
-        <nav aria-label="Ops" className="mx-auto max-w-6xl px-4">
+        <nav aria-label="Ops" className="mx-auto flex max-w-6xl gap-6 px-4">
           <Link href="/ops" className="inline-block border-b-2 border-transparent py-2 font-semibold">
             Clinics
+          </Link>
+          <Link href="/ops/messaging-costs" className="inline-block border-b-2 border-transparent py-2 font-semibold">
+            Messaging costs
           </Link>
         </nav>
       </header>
