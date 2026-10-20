@@ -17,8 +17,8 @@
 | P1 | The job queue and the worker: `jobs`, short committed claims with `SKIP LOCKED`, retries, `dead`, `cancelled`, the reaper, recurring jobs, the first real job (retention purge), `v_job_health`, the `worker` container | Below (done; confirmed) |
 | P2 | `MessagingPort`, the console adapter, `templates.yaml`; `messages` (encrypted phone, IDs only, unique idempotency key); a send job; booking confirmations and the M4 prescription links still `PENDING` (issued in the last 24 hours, R15 of the M4 spec) through it; `v_message_health` | Below (done; confirmed) |
 | P3 | WhatsApp Cloud adapter (errors mapped to `MSG_*`, 10 s timeout); `GET`/`POST /webhooks/whatsapp` (raw-body signature, store once, answer within 1 s); statuses only move forward; reconciliation of messages stuck in `SENT` | Below (done; confirmed; the live Meta test needs L-01, L-02) |
-| P4 | Reminder rules: follow-up reminders from issued prescriptions (09:00 the day before), revisions move or cancel them, manual reminders, quiet hours 21:00–08:00, consent re-read at send time; pending follow-ups API; the automatic no-show job | Below (done; awaiting confirmation) |
-| P5 | STOP, UNSUBSCRIBE, रोकें, बंद opt the patient out and confirm; SMS adapter behind a flag (off); cost per message and the ops console's monthly total per clinic | At its start |
+| P4 | Reminder rules: follow-up reminders from issued prescriptions (09:00 the day before), revisions move or cancel them, manual reminders, quiet hours 21:00–08:00, consent re-read at send time; pending follow-ups API; the automatic no-show job | Below (done; confirmed) |
+| P5 | STOP, UNSUBSCRIBE, रोकें, बंद opt the patient out and confirm; SMS adapter behind a flag (off); cost per message and the ops console's monthly total per clinic | Below (awaiting approval) |
 | P6 | Web: reminder and message status on the patient profile and the consultation; pending follow-ups with *Book follow-up*; failed messages explained with a "call the patient" hint; Playwright | At its start |
 
 ---
@@ -390,3 +390,72 @@ Gates: `make lint typecheck contract-check test` — API 1516 tests at 98.33% (c
 web 426.
 
 Not verified: per-clinic quiet hours or send times (not built); the Hindi wording (L-02).
+
+---
+
+## M5-P5 — Opt-out by reply, SMS fallback, cost ledger
+
+Designed 20 Oct 2026; awaiting the developer's approval. Recommendations are marked (rec).
+
+Facts the design rests on:
+
+- The webhook stores inbound messages as ID, type and time only, and processing ignores them.
+  Nothing keeps the sender's number. `patients.phone_e164` is plain and indexed only after
+  `clinic_id`.
+- `Patient.opt_out` and the `patient.opted_out` audit event exist (M2). `OptOutSource` already has
+  `inbound_message`. `may_receive_whatsapp` is false once a patient is opted out, so AC5 (the next
+  reminder `SKIPPED_NO_CONSENT`) follows from the P4 send check with no further change.
+- `opt_out_confirmed` is already in `templates.yaml` as a service message, which the WhatsApp
+  adapter sends as text.
+- `messages.cost_paise` and `channel` (`WHATSAPP`, `SMS`, `CONSOLE`) exist but are unused.
+  `pricing_category` comes from the status webhook.
+- Since 31 Mar 2026, WhatsApp webhooks also carry a business-scoped user ID. Users who adopt a
+  username may hide their number, so `from` can be missing.
+- Meta charges per delivered message. India's utility rate is ₹0.1150, which is 11.5 paise. Since
+  1 Oct 2026, service replies are billed after 1,000 free per number per month.
+
+| # | Question | A (rec) | Rejected |
+|---|---|---|---|
+| 1 | Where the sender's number lives | The STOP keyword is matched in the request, before redaction. Only a STOP message keeps `stop: true` and the sender's number encrypted with the messages' Fernet keys (plus `context_id` when it replies to us). The worker rewrites the payload without the number once it has processed it. Other inbound text keeps ID, type and time only | B: opt out inside the request (breaks P3 2A's store-then-process, and a database error would lose the STOP). C: a phone HMAC column on patients (a new key, a backfill and upkeep on every phone edit) |
+| 2 | Who is opted out | Every patient, in any clinic, whose current number is the sender's and who has at least one message we sent (`sent_at` set). This uses a reviewed cross-clinic lookup that returns clinic and patient IDs only, on a new index `patients(phone_e164)`. Without a number but with `context_id`, the number comes from the message replied to. Otherwise the result is `WH_STOP_UNMATCHED` (logged; nothing changes). Each opt-out is idempotent and records a SYSTEM `patient.opted_out` event with source `inbound_message` | B: every patient with that number, messaged or not (R14 limits it to those we wrote to) |
+| 3 | The confirmation | One `opt_out_confirmed` per affected clinic, naming that clinic. It goes out as a per-clinic job `send_opt_out_confirmation` with key `opt_out_confirmed:<clinic_id>:<inbound id>`, at most once per STOP per clinic. It is sent even though the patient is now opted out, and also to a patient opted out already, so a repeated STOP is still answered. It is skipped (`MSG_NOT_APPLICABLE`) if the job runs more than 24 hours after the STOP, when the service window has closed. New source type `OPT_OUT` | B: a single reply with no clinic name (a new template, and the patient may not know which clinic) |
+| 4 | SMS fallback | Build the flow and a console SMS adapter now; the real adapter waits for L-03 (provider, DLT template IDs, sender ID). `MESSAGING_SMS_FALLBACK_ENABLED` defaults to false. When it is on, a reminder's WhatsApp message that ends `FAILED` with a definite non-delivery enqueues one `send_sms_fallback` job, keyed `sms:<reminder_id>`. That happens when the send fails directly or when the webhook later reports a failure. The codes are `MSG_RECIPIENT_INVALID`, `MSG_PROVIDER_REJECTED`, and a rate-limit or unavailable error after the last attempt, but never `MSG_OUTCOME_UNKNOWN` or a skip. The job re-reads `may_receive_sms` and the quiet hours (deferring as in P4 2A). It then sends the reminder's SMS body (new `sms` bodies in `templates.yaml`, en and hi, one segment, no link) as a second message row on channel `SMS`. Fallback on with the console SMS provider is refused in production. It applies to reminders only (FR-REM-06) | B: write a real provider adapter now (untestable without L-03). C: defer SMS to M6 (the flow and the flag can be built and tested now) |
+| 5 | Cost precision | Replace the unused `cost_paise` with `cost_millipaise` (bigint, so money stays an integer; 11.5 paise = 11 500). Ops totals are rounded to paise at the total. R18 is reworded | B: integer paise per message (each utility message would be counted at 12 paise, 4% high) |
+| 6 | Price table and when cost is set | `adapters/messaging/prices.yaml` in the repo: prices by channel and category with `effective_from` dates, excluding GST, loaded like the templates. A WhatsApp message is priced when a status first proves delivery, at the price for its category on that date. The price is 0 if Meta reports `billable: false` (so redaction also keeps `pricing.billable`), and a `FAILED` message is also 0. Console messages are always 0. An SMS is priced at acceptance per segment. An unknown category leaves the cost null, logs `message.unpriced`, and counts as unpriced in the totals | B: an env var (hard to version by date). C: a database table edited by ops (needs screens and audit for a few changes a year) |
+| 7 | Ops monthly total | `GET /api/v1/ops/messaging-costs?month=YYYY-MM` (ops only). It returns, per clinic and channel: messages sent, priced, unpriced, and `cost_paise`. The month is read in each clinic's time zone on `sent_at`, through a reviewed cross-clinic ops read. The API comes in P5; the ops web table comes in P6 with the other screens | B: only a per-clinic endpoint (ops wants every clinic side by side) |
+
+Fixed points:
+
+- **Keyword matching.**
+  - Only `type: text` messages are checked.
+  - The text is NFC-normalised, trimmed and case-folded, then must equal `stop`, `unsubscribe`, `रोकें` or `बंद` exactly.
+  - Opting back in stays a staff action with fresh consent (M2); there is no `START` handling.
+- **Suspended clinics.** The opt-out still applies to a suspended clinic; the queue cancels its reply job (R9d).
+- **Migration `0018`.**
+  - The index `patients(phone_e164)`.
+  - Source type `OPT_OUT`.
+  - `cost_paise` becomes `cost_millipaise`.
+  - An index `messages(clinic_id, sent_at)`.
+  - The new job kinds are per clinic, so the system-kind CHECK does not change.
+- **Docs.**
+  - ERRORS gains `WH_STOP_UNMATCHED` (info).
+  - API.md gains the ops endpoint.
+  - R14 and R18 are updated.
+  - SECURITY_AND_COMPLIANCE records where the STOP sender's number is held and for how long.
+  - RUNBOOK covers the SMS flag.
+
+Planned verification on the stack, against the fake Graph API from P3:
+
+1. A signed inbound "Stop " from a seeded patient's number opts that patient out, writes one
+   SYSTEM audit event, sends one `opt_out_confirmed` and leaves no number in the stored payload.
+2. That patient's next reminder becomes `SKIPPED_NO_CONSENT` (AC5).
+3. A second clinic with the same number, which has messaged the patient, is opted out too. A
+   third clinic, which never messaged the patient, is not.
+4. With the flag on, a WhatsApp failure that the fake reports (131026) produces one SMS row,
+   sent through the console. With the flag off, it produces none.
+5. After a delivered status, `GET /ops/messaging-costs` shows the utility price, and a
+   non-billable status shows 0.
+6. Failure paths: other inbound text is not stored; an unsigned body gets 401; clinic staff get
+   403 on the costs endpoint.
+
+Not verifiable in P5: a real SMS provider (L-03), and a live Meta STOP (L-01, L-02).
