@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | M5 opened 18 Oct 2026 after M4 merged (PR #39). Plan and `docs/specs/reminders-and-messaging.md` approved by the developer, with decisions 1A–5A and four refinements to the job queue; M5-P1 confirmed by the developer on 18 Oct 2026; M5-P2 confirmed and pushed (PR #41); M5-P3 confirmed and pushed (PR #41); M5-P4 approved and implemented, awaiting the developer's confirmation |
+| Status | M5 opened 18 Oct 2026 after M4 merged (PR #39). Plan and `docs/specs/reminders-and-messaging.md` approved by the developer, with decisions 1A–5A and four refinements to the job queue; M5-P1 confirmed by the developer on 18 Oct 2026; M5-P2 confirmed and pushed (PR #41); M5-P3 confirmed and pushed (PR #41); M5-P4 confirmed and pushed (PR #41); M5-P5 designed, awaiting the developer's approval |
 | Scope | Milestone 5 in phase detail; M6 as a roadmap only. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39, merged 18 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
 | Design notes | `docs/milestones/M5-messaging-and-reminders.md` |
@@ -149,3 +149,4 @@ start. P1 is designed and approved in full.
 | 18 Oct 2026 | M5-P3 approved (1A–5A) and implemented: the WhatsApp Cloud adapter (stdlib HTTP, `v26.0`, Meta codes mapped to `MSG_*`, our ID echoed in statuses), `GET`/`POST /webhooks/whatsapp` (signature on the raw body first, stored once redacted, processed by a job), forward-only statuses that also settle unknown outcomes, hourly reconciliation (R15 rewritten: no status lookup exists), migration `0016`. API 1493 tests at 98.36%, web 426; stack verify steps 1–7 against a fake Graph API; one bug found and fixed (a one-way CHECK) | #40 | P3 done; awaiting confirmation |
 | 18 Oct 2026 | M5-P3 confirmed by the developer and pushed to PR #41 (CI 7/7). M5-P4 (reminder rules, quiet hours, pending follow-ups, automatic no-show) designed; awaiting approval | #40 | P3 done |
 | 19 Oct 2026 | M5-P4 approved (1A–6A) and implemented: `reminders` (migration `0017`), follow-ups from prescriptions moved by revision, quiet hours at scheduling and at send, consent at send, manual reminders and pending follow-ups (contract 0.19.0), the automatic no-show as a sweep plus one job per clinic. API 1516 tests at 98.33%, web 426; stack steps 1–7 including AC2 and 22 automatic no-shows | #40 | P4 done; awaiting confirmation |
+| 20 Oct 2026 | M5-P4 confirmed by the developer and pushed to PR #41 (CI 7/7). M5-P5 (inbound STOP opt-out, SMS fallback behind a flag, per-message cost and the ops monthly total) designed; awaiting approval | #40 | P4 done |
