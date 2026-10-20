@@ -92,4 +92,6 @@ Use this list in the M6 security review. Each row names where it is implemented.
 - AI agents work on synthetic data only; `.env` and secret files are denied in `.claude/settings.json`.
 - No production data, logs containing identifiers, or screenshots of real records go into prompts.
 - MediEase does not use AI to produce clinical content. Any future AI feature needs a PRD update,
-  an ADR and a privacy review before design starts.
+  an ADR and a privacy review before design starts. PRD v1.1 (C4) and ADR-0013 cover the M7
+  assistant: no medical advice, tools limited to the user's own permissions, synthetic data only
+  until a provider contract and a privacy review allow real patient data.

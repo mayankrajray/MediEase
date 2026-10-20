@@ -4,8 +4,8 @@
 |---|---|
 | Product | MediEase (working name) |
 | Document owner | Product team (Sitare University Startup Program, Group 1) |
-| Status | Draft v1.0 — ready for Milestone 0 |
-| Last updated | 15 September 2026 |
+| Status | v1.1 — product rules changed by the developer on 20 Oct 2026 (§0) |
+| Last updated | 20 October 2026 |
 | Target segment | Independent clinics and small specialty hospitals, 1–4 doctors, India |
 | Related documents | [ARCHITECTURE.md](ARCHITECTURE.md) · [DATA_MODEL.md](DATA_MODEL.md) · [API.md](API.md) · [../SPECS.md](../SPECS.md) · [../TASKS.md](../TASKS.md) · [SECURITY_AND_COMPLIANCE.md](SECURITY_AND_COMPLIANCE.md) |
 
@@ -13,6 +13,25 @@
 > Sections 6–9 define *what* it must do, with stable requirement IDs (`FR-…`, `NFR-…`) that specs,
 > tasks, tests and commits reference. Sections 10–14 cover *how we will know it works* and *how it
 > ships*. Anything describing *how the code is built* lives in the architecture documents, not here.
+
+---
+
+## 0. Changes in v1.1 (20 October 2026)
+
+Decided by the developer after M5. Where a later section still says otherwise, this section wins.
+
+| # | Change | Replaces | Built in |
+|---|---|---|---|
+| C1 | **Patient portal.** Patients may sign in on the web (Google sign-in or email and password) to see their upcoming and past appointments, saved prescriptions, reminders, medicine plan and notifications. It is a mobile-first web app; nothing is installed. A sign-in is linked to a clinic's patient record only by proof the clinic gave the patient: a clinic invite or a prescription link (FR-PRT) | §6.3 "A patient mobile app" non-goal; principle 2 now reads "no patient *install*" | M6 |
+| C2 | **Staff sign-in with Google** in addition to email and password (FR-AUTH-07) | — | M6 |
+| C3 | **Medicine planner and in-app notifications.** A daily dose plan built only from the doctor's prescription (FR-REM-03), and notifications inside the app for patients and staff (FR-NTF) | — | M6 |
+| C4 | **AI assistant, without medical advice.** Booking by chat, clinic questions, restating the doctor's own instructions in plain words, and staff helpers, through tools that call existing use cases with the user's own permissions. It never diagnoses, suggests drugs or doses, or interprets results. Behind an LLM gateway: Groq first, switchable (ADR-0013) (FR-AI) | §6.3 "AI diagnosis or clinical decision support" stays a non-goal; principle 6 unchanged | M7 |
+| C5 | **One consolidated MediEase invoice per clinic:** the subscription, plus the clinic's actual WhatsApp usage, plus a MediEase markup on that usage. Each clinic sends from its own WhatsApp number; usage is metered per clinic (ADR-0014) (FR-BIL-WA) | Principle 4 "no per-message charges" and §12 "subscription only" | M8 (designed in M6, built later) |
+| C6 | Pharmacy and clinic drug inventory stays a non-goal for now; it is a backlog candidate after the pilot | — | — |
+
+Clinical safety is unchanged: MediEase never suggests diagnoses, doses or drugs (principle 6), and
+clinical content never reaches logs, analytics or a third-party model except what a feature
+explicitly sends under ADR-0013's rules.
 
 ---
 
@@ -135,19 +154,20 @@ a one-to-four-doctor clinic in our sample will pay. MediEase ships it as a core 
 
 - In-patient / IPD management, bed management, insurance or TPA billing, NABH modules.
 - A patient marketplace or doctor discovery.
-- A patient mobile app.
+- A patient mobile app to install (a web portal is in scope from v1.1, C1).
 - Telemedicine / video consultation.
-- Pharmacy inventory.
+- Pharmacy inventory (a backlog candidate after the pilot, v1.1 C6).
 - ABDM / ABHA integration (revisit post-pilot; see §14).
-- Full billing and invoicing (P2 — no clinic named it as a pain).
-- AI diagnosis or clinical decision support of any kind.
+- Full billing and invoicing beyond the consolidated MediEase invoice (v1.1, C5).
+- AI diagnosis or clinical decision support of any kind (the v1.1 assistant, C4, never does either).
 
 ### 6.4 Product principles
 
 1. **Meet the clinic in WhatsApp, don't fight it.** Booking should still feel like sending a message.
-2. **No patient install.** Every patient touchpoint is a link or a message.
+2. **No patient install.** Every patient touchpoint is a link, a message or the web portal (v1.1, C1).
 3. **Three taps for the doctor.** Any doctor action that needs training is a design defect.
-4. **Flat, predictable price.** No per-message or percentage charges passed to the clinic.
+4. **Predictable price.** One MediEase invoice: the flat subscription plus the clinic's WhatsApp
+   usage at cost plus a stated markup (v1.1, C5); nothing else per message or per patient.
 5. **The clinic owns its patients.** No MediEase-branded marketplace between clinic and patient.
 6. **Clinical content is the doctor's.** MediEase formats, stores and delivers; it never suggests
    diagnoses, doses or drugs.
@@ -345,6 +365,25 @@ instruction appears under a "How to give" heading.
 | FR-AUD-02 | Audit entries are append-only and are not editable through any API. | P0 |
 | FR-AUD-03 | The owner can view and export the clinic's audit log. | P1 |
 
+### 8.13 v1.1 additions — `FR-AUTH-07`, `FR-PRT`, `FR-NTF`, `FR-AI`, `FR-BIL-WA`
+
+Detailed behaviour is specified per phase in `docs/specs/` (one spec per feature, SPECS.md).
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-AUTH-07 | Staff and patients can sign in with Google (OpenID Connect) as well as email and password. A Google sign-in never creates staff access by itself: it signs in an existing staff user whose verified email matches, or a patient account. | P1 |
+| FR-PRT-01 | A patient creates an account with Google or email and password; the account holds no clinic data until it is linked. | P1 |
+| FR-PRT-02 | An account is linked to a clinic's patient record only by proof the clinic gave the patient: a single-use clinic invite, or a prescription link after its last-4-digit check. One account may be linked to records in several clinics; each clinic's data stays separate. | P1 |
+| FR-PRT-03 | The patient sees, per linked clinic: upcoming and past appointments, issued prescriptions (the patient page and PDF), reminders and their status, and the medicine plan. Never the doctor's notes or diagnosis unless a later spec says so. | P1 |
+| FR-PRT-04 | The portal is mobile-first (360 px), in English and Hindi, WCAG 2.1 AA. | P1 |
+| FR-REM-03 | (existing) Medicine-course plan: daily times derived only from each prescribed line's frequency, timing and days, shown to the patient and optionally reminded in the app. | P1 |
+| FR-NTF-01 | In-app notifications for patients (appointment confirmed or moved, prescription ready, medicine due, follow-up due) and staff (booking request, failed message), with read state. | P1 |
+| FR-AI-01 | A patient or staff assistant answers through tools that call existing use cases with the user's own permissions; it can book, reschedule and cancel by chat after an explicit confirmation step. | P1 |
+| FR-AI-02 | The assistant never gives medical advice, diagnoses, suggests or changes drugs or doses, or interprets results; such questions get a fixed referral to the clinic. Guard-rail tests prove it. | P0 for FR-AI |
+| FR-AI-03 | The model is reached only through an LLM gateway port; the provider (Groq first, then DeepInfra, OpenAI or another OpenAI-compatible API) is a setting, not code. | P1 |
+| FR-BIL-WA-01 | Each clinic sends WhatsApp messages from its own number, connected through Meta's Embedded Signup; credentials, templates and webhook events are kept per clinic. | P2 |
+| FR-BIL-WA-02 | Every billable WhatsApp event is written to an append-only usage ledger per clinic (message, category, time, billing period, Meta cost, markup); one MediEase invoice per clinic per month adds the subscription. No clinic's usage can appear on another's invoice. | P2 |
+
 ## 9. Non-functional requirements
 
 | ID | Category | Requirement |
@@ -423,7 +462,7 @@ Properties are limited to IDs, enums, counts and durations.
 | Clinic | ₹1,499 / clinic / month | 3–4 doctors, everything in Starter |
 | Design-partner pilot | Free for 14 days | Full product, in-person onboarding |
 
-- Subscription only; no per-message or percentage fees to the clinic.
+- Subscription plus WhatsApp usage at cost and a stated markup, on one MediEase invoice (v1.1, C5).
 - Payment by UPI AutoPay / e-mandate is **manual in MVP** (invoice + UPI); automated billing is P2.
 - **First test:** offer the paid pilot to Aarogya Hospital (A13) and Apollo Diagnostic (A10), with
   Arvind Homoeopathy (A1) if either declines. Ask for payment, not feedback.
@@ -440,11 +479,13 @@ Detailed task breakdown: [TASKS.md](../TASKS.md).
 | **M2 Patients** | Registration, lookup, consent, CSV import | FR-PAT-01..06, 08 | 10k-patient lookup < 500 ms |
 | **M3 Appointments & queue** | Schedules, booking, token mode, live queue | FR-APT-01..07, FR-QUE-01..05 | Concurrency test passes; front desk books in ≤ 3 interactions |
 | **M4 Visits & prescriptions** | Visit record, Rx builder, PDF, patient link | FR-VIS-01..03, 05, FR-RX-01..10 | Patient page acceptance test on 360 px |
-| **M5 Messaging & reminders** | Messaging port + adapters, job worker, reminders, opt-out | FR-MSG, FR-REM-01, 02, 04, 05, 07, FR-APT-06 | End-to-end reminder delivered via WhatsApp sandbox |
-| **M6 Pilot hardening** | Backups, monitoring, ops health view, security review, deploy | NFR-03..07, FR-OPS-03 | Restore drill done; security checklist signed |
+| **M5 Messaging & reminders** | Messaging port + adapters, job worker, reminders, opt-out | FR-MSG, FR-REM-01, 02, 04, 05, 07, FR-APT-06 | End-to-end reminder delivered via WhatsApp sandbox (done in code; the live test is pending L-01, L-02) |
+| **M6 MVP demo: clinic and patient experience** (v1.1) | Design system, role dashboards, patient portal with Google and email sign-in, medicine planner, in-app notifications, public booking page | FR-AUTH-07, FR-PRT, FR-REM-03, FR-NTF, FR-PUB | Every journey demonstrable on the local stack; `make e2e` green |
+| **M7 AI assistant and pitch** (v1.1) | LLM gateway (Groq first), patient and staff assistant with tools, animated landing page | FR-AI | Booking by chat and the guard-rail tests pass |
+| **M8 Multi-clinic WhatsApp and consolidated billing** (v1.1) | Embedded Signup per clinic, per-clinic templates and webhooks, usage ledger, one MediEase invoice | FR-BIL-WA | Two clinics' usage billed separately with no mixing |
+| **M9 Pilot hardening** | Backups, monitoring, ops health view, security review, deploy | NFR-03..07, FR-OPS-03 | Restore drill done; security checklist signed |
 | **— Pilot launch —** | Two clinics live | G1–G5 | Scorecard §11.2 tracked weekly |
-| **M7 Public booking page** | Clinic landing page + booking requests | FR-PUB | First public request confirmed by a pilot clinic |
-| **M8+** | Vaccination, broadcasts, specialty templates, search, billing, analytics | FR-VAX, FR-BRD, FR-TPL, FR-PAT-07, FR-BIL, FR-ANL | Driven by pilot feedback |
+| **M10+** | Vaccination, broadcasts, specialty templates, search, analytics, pharmacy inventory | FR-VAX, FR-BRD, FR-TPL, FR-PAT-07, FR-ANL | Driven by pilot feedback |
 
 ## 14. Risks, assumptions and open questions
 
