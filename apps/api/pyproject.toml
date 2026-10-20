@@ -14,7 +14,7 @@ dependencies = [
     "python-ulid==4.0.1",
     # M0-P3 (issue #10). psycopg's binary wheel bundles libpq, so neither the
     # host nor the image needs PostgreSQL client libraries or a compiler.
-    "sqlalchemy==2.1.2",
+    "sqlalchemy==2.1.5",
     "psycopg[binary]==3.3.6",
     "alembic==1.20.0",
     # M1-P2 (issue #19). Argon2id password hashing through the reference C
