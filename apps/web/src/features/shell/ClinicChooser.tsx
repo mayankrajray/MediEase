@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { ROLE_LABELS } from "@/features/auth/labels";
-import { OPS_PATH, QUEUE_PATH, type ClinicStatus } from "@/features/auth/landing";
+import { OPS_PATH, TODAY_PATH, type ClinicStatus } from "@/features/auth/landing";
 import { useSession } from "@/features/auth/SessionProvider";
 
 import { SignOutButton } from "./SignOutButton";
@@ -26,7 +26,7 @@ export function ClinicChooser({ next }: { next: string }) {
   const skip = identity.user.is_platform_ops
     ? OPS_PATH
     : identity.memberships.length < 2
-      ? QUEUE_PATH
+      ? TODAY_PATH
       : null;
 
   useEffect(() => {

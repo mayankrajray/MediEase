@@ -50,7 +50,7 @@ describe("AcceptInviteForm", () => {
     expect(screen.getByText(/Sample Desk, you have been invited as/)).toHaveTextContent("Front desk");
   });
 
-  it("FR-ORG-04: sets the password, joins and lands on the queue signed in", async () => {
+  it("FR-ORG-04: sets the password, joins and lands on Today signed in (M6-P1)", async () => {
     const api = mockApi({ [DESCRIBE]: () => invite(), [ACCEPT]: () => joined() });
     render(<AcceptInviteForm token="tok-123" />);
     await screen.findByLabelText("Choose a password");
@@ -58,7 +58,7 @@ describe("AcceptInviteForm", () => {
     fill(PASSWORD, PASSWORD);
     fireEvent.click(screen.getByRole("button", { name: "Set password and join" }));
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/queue"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/today"));
     expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ password: PASSWORD });
   });
 
@@ -141,7 +141,7 @@ describe("AcceptInviteForm", () => {
     fireEvent.change(field, { target: { value: PASSWORD } });
     fireEvent.click(screen.getByRole("button", { name: "Join" }));
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/queue"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/today"));
     expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ password: PASSWORD });
   });
 

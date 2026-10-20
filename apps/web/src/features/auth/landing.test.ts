@@ -62,7 +62,8 @@ describe("postSignInPath", () => {
   });
 
   it("a multi-clinic user with nothing remembered chooses first, keeping the destination", () => {
-    expect(postSignInPath(person([a, b]), null, "/queue")).toBe("/select-clinic");
+    expect(postSignInPath(person([a, b]), null, "/today")).toBe("/select-clinic");
+    expect(postSignInPath(person([a, b]), null, "/queue")).toBe("/select-clinic?next=%2Fqueue");
     expect(postSignInPath(person([a, b]), null, "/patients?x=1")).toBe(
       "/select-clinic?next=%2Fpatients%3Fx%3D1",
     );
@@ -74,8 +75,8 @@ describe("postSignInPath", () => {
     expect(postSignInPath(ops(), null, "/opsy")).toBe("/ops");
   });
 
-  it("a clinic user is never sent into the ops console", () => {
-    expect(postSignInPath(person([a]), null, "/ops/clinics")).toBe("/queue");
+  it("a clinic user is never sent into the ops console; they land on Today (M6-P1)", () => {
+    expect(postSignInPath(person([a]), null, "/ops/clinics")).toBe("/today");
   });
 
   it("a person with no clinic lands on the queue, which explains they have no access", () => {

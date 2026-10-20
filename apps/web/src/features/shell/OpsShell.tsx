@@ -4,14 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
-import { QUEUE_PATH } from "@/features/auth/landing";
+import { TODAY_PATH } from "@/features/auth/landing";
+import { MotionProvider } from "@/components/ui/Motion";
 import { useSession } from "@/features/auth/SessionProvider";
 
 import { SignOutButton } from "./SignOutButton";
 
 /**
  * The ops console frame (platform staff only, spec R10). Clinic staff who land
- * here are sent to their queue. The screens are the clinics list, the Create
+ * here are sent to Today (M6-P1). The screens are the clinics list, the Create
  * clinic wizard (M1-P7) and the monthly messaging costs (M5-P6).
  */
 export function OpsShell({ children }: { children: ReactNode }) {
@@ -20,7 +21,7 @@ export function OpsShell({ children }: { children: ReactNode }) {
   const allowed = identity.user.is_platform_ops;
 
   useEffect(() => {
-    if (!allowed) router.replace(QUEUE_PATH);
+    if (!allowed) router.replace(TODAY_PATH);
   }, [allowed, router]);
 
   if (!allowed) {
@@ -28,7 +29,8 @@ export function OpsShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <MotionProvider>
+    <div className="flex min-h-screen flex-col bg-canvas">
       <header className="border-b border-slate-300 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-3">
@@ -55,5 +57,6 @@ export function OpsShell({ children }: { children: ReactNode }) {
         {children}
       </main>
     </div>
+    </MotionProvider>
   );
 }

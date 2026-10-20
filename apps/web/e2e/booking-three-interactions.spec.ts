@@ -5,22 +5,15 @@
  * synthetic patient (queue-support.ts), so it passes at any hour and on a reused database.
  */
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import { DESK, PASSWORD, newPatient, sessionRunningNow } from "./queue-support";
-
-async function signIn(page: Page, email: string) {
-  await page.goto("/sign-in");
-  await page.getByLabel("Email or phone number").fill(email);
-  await page.getByLabel("Password").fill(PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/queue$/);
-}
+import { DESK, newPatient, openQueue, sessionRunningNow, signInAs } from "./queue-support";
 
 test("AC6: booking from the queue takes at most three interactions", async ({ page, request }) => {
   await sessionRunningNow(request);
   const patient = await newPatient(request, "Divya");
-  await signIn(page, DESK);
+  await signInAs(page, DESK);
+  await openQueue(page);
   await expect(page.getByRole("heading", { name: "Today's queue" })).toBeVisible();
 
   let interactions = 0;

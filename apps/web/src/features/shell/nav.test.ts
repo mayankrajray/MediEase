@@ -22,15 +22,17 @@ describe("visibleNav", () => {
     ]);
   });
 
-  it("links only to pages that exist today", () => {
-    expect(visibleNav(["STAFF_MANAGE", "CLINIC_MANAGE"]).map((i) => i.href)).toEqual(["/queue"]);
+  it("links only to pages that exist today, Today first (M6-P1)", () => {
+    expect(visibleNav(["STAFF_MANAGE", "CLINIC_MANAGE"]).map((i) => i.href)).toEqual(["/today", "/queue"]);
     expect(visibleNav(["PATIENTS_MANAGE", "SCHEDULES_MANAGE"]).map((i) => i.href)).toEqual([
+      "/today",
       "/queue",
       "/patients",
       "/settings/schedule",
     ]);
     // M5-P6: every role holds REMINDERS_SCHEDULE, so every role sees Follow-ups.
     expect(visibleNav(["PATIENTS_MANAGE", "REMINDERS_SCHEDULE"]).map((i) => i.href)).toEqual([
+      "/today",
       "/queue",
       "/patients",
       "/follow-ups",

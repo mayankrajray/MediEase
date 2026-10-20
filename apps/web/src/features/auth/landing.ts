@@ -18,7 +18,8 @@ export type ClinicStatus = components["schemas"]["ClinicStatus"];
 /** What `POST /auth/sign-in` and `GET /me` both tell us about the person. */
 export type PersonAccess = Pick<Identity, "user" | "memberships">;
 
-export const QUEUE_PATH = "/queue";
+/** M6-P1 (decision 6A): where every clinic member lands. The queue keeps its own URL. */
+export const TODAY_PATH = "/today";
 export const OPS_PATH = "/ops";
 export const SELECT_CLINIC_PATH = "/select-clinic";
 
@@ -84,11 +85,11 @@ export function postSignInPath(
     case "ops":
       return insideOps(next) ? next : OPS_PATH;
     case "choose":
-      return next === QUEUE_PATH
+      return next === TODAY_PATH
         ? SELECT_CLINIC_PATH
         : `${SELECT_CLINIC_PATH}?next=${encodeURIComponent(next)}`;
     case "none":
     case "active":
-      return insideOps(next) ? QUEUE_PATH : next;
+      return insideOps(next) ? TODAY_PATH : next;
   }
 }

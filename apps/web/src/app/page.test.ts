@@ -11,8 +11,8 @@ vi.mock("next/navigation", () => ({ redirect }));
 import Home from "./page";
 
 describe("home page", () => {
-  it("sends everyone to the clinic queue (the proxy and session provider handle signed-out visitors)", () => {
-    expect(() => Home()).toThrow("NEXT_REDIRECT /queue");
-    expect(redirect).toHaveBeenCalledWith("/queue");
+  it("sends everyone to Today (M6-P1; the proxy and session provider handle signed-out visitors)", () => {
+    expect(() => Home()).toThrow("NEXT_REDIRECT /today");
+    expect(redirect).toHaveBeenCalledWith("/today");
   });
 });
