@@ -125,6 +125,10 @@ def test_m5_p6_seed_leaves_one_overdue_follow_up_once(
         )
         assert pending.follow_up_date == today - timedelta(days=3)
         assert pending.patient_name == "Deepa Nair" and pending.reminder_status is None
+        [appointment] = uow.tenant(clinic.id).appointments.list_for_patient(
+            pending.patient_id, limit=5
+        )
+        assert appointment.status.value == "COMPLETED"  # the no-show sweep leaves it alone
 
 
 def test_seed_refuses_outside_local(

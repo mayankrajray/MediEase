@@ -39,6 +39,8 @@ from zoneinfo import ZoneInfo
 from mediease_api.bootstrap import SeedDependencies, build_seed_dependencies
 from mediease_api.config.settings import AppEnv, load_settings
 from mediease_api.domain.appointments.appointment import Appointment
+from mediease_api.domain.appointments.queue import transition
+from mediease_api.domain.appointments.status import AppointmentStatus
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
@@ -366,6 +368,22 @@ def _seed_overdue_follow_up(deps: SeedDependencies, uow: UnitOfWork) -> int:
     appointment = Appointment.book(
         session, id=deps.ids.new_id(), patient_id=patient.id, active=[], now=starts
     )
+    # Seen and done that day, so the no-show sweep leaves it alone.
+    for step, (seen, to) in enumerate(
+        (
+            (AppointmentStatus.BOOKED, AppointmentStatus.ARRIVED),
+            (AppointmentStatus.ARRIVED, AppointmentStatus.IN_CONSULTATION),
+            (AppointmentStatus.IN_CONSULTATION, AppointmentStatus.COMPLETED),
+        )
+    ):
+        transition(
+            appointment,
+            session,
+            seen=seen,
+            to=to,
+            now=starts + timedelta(minutes=5 * step),
+            today=day,
+        )
     staff.sessions.update(session)
     staff.appointments.add(appointment)
     visit = Visit(
@@ -391,6 +409,7 @@ def _seed_overdue_follow_up(deps: SeedDependencies, uow: UnitOfWork) -> int:
     staff.visits.add(visit)
     visit.complete(starts + timedelta(minutes=10))
     staff.visits.update(visit)
+    staff.appointments.update(appointment)
     rx = Prescription.first_draft(
         visit, id=deps.ids.new_id(), created_by=doctor.user_id, now=starts
     )
