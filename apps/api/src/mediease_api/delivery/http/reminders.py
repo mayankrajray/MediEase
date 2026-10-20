@@ -6,9 +6,11 @@
 | ``POST /api/v1/patients/{patient_id}/reminders`` | ``REMINDERS_SCHEDULE`` |
 | ``PATCH /api/v1/reminders/{reminder_id}`` | ``REMINDERS_SCHEDULE`` |
 | ``GET /api/v1/follow-ups/pending`` | ``REMINDERS_SCHEDULE`` |
+| ``GET /api/v1/patients/{patient_id}/messages`` | ``REMINDERS_SCHEDULE`` (M5-P6) |
 
 Every role holds ``REMINDERS_SCHEDULE``. Another clinic's patient or reminder is a 404 (NFR-08).
-The bodies carry dates, IDs and statuses only: nothing clinical.
+The bodies carry dates, IDs and statuses only: nothing clinical, and a message's variables and
+number never appear.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from pydantic import BaseModel, ConfigDict
 from mediease_api.application.reminders.use_cases import (
     ChangeCommand,
     ChangeReminder,
+    ListPatientMessages,
     ListPatientReminders,
     ListPendingFollowUps,
     ScheduleCommand,
@@ -31,6 +34,7 @@ from mediease_api.application.reminders.use_cases import (
 from mediease_api.delivery.http.access import clinic, current_context
 from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.identity.permissions import Permission
+from mediease_api.domain.messaging.message import Message
 from mediease_api.domain.shared.errors import InvalidValue
 from mediease_api.ports.reminders import PendingFollowUp, ReminderRead
 
@@ -42,6 +46,7 @@ class ReminderUseCases(Protocol):
     def change_reminder(self) -> ChangeReminder: ...
     def list_patient_reminders(self) -> ListPatientReminders: ...
     def list_pending_follow_ups(self) -> ListPendingFollowUps: ...
+    def list_patient_messages(self) -> ListPatientMessages: ...
 
 
 class ScheduleRequest(BaseModel):
@@ -90,6 +95,28 @@ def pending_body(item: PendingFollowUp) -> dict[str, Any]:
         "visit_id": str(item.visit_id),
         "follow_up_date": item.follow_up_date.isoformat(),
         "reminder_status": item.reminder_status,
+    }
+
+
+def _iso(value: Any) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def message_body(m: Message) -> dict[str, Any]:
+    """Status only (decision 1A): never the variables or the number."""
+    return {
+        "id": str(m.id),
+        "template_key": m.template_key,
+        "source_type": m.source_type.value,
+        "source_id": str(m.source_id),
+        "channel": m.channel.value,
+        "status": m.status.value,
+        "error_code": m.error_code,
+        "created_at": m.created_at.isoformat(),
+        "sent_at": _iso(m.sent_at),
+        "delivered_at": _iso(m.delivered_at),
+        "read_at": _iso(m.read_at),
+        "failed_at": _iso(m.failed_at),
     }
 
 
@@ -151,5 +178,13 @@ def create_reminders_blueprint(use_cases: ReminderUseCases) -> Blueprint:
         return jsonify(
             {"items": [pending_body(i) for i in items], "limit": limit, "offset": offset}
         )
+
+    @bp.get("/patients/<uuid:patient_id>/messages")
+    @clinic(Permission.REMINDERS_SCHEDULE)
+    def list_patient_messages(patient_id: UUID) -> Response:
+        messages = use_cases.list_patient_messages().execute(
+            current_context(), patient_id=patient_id
+        )
+        return jsonify({"items": [message_body(m) for m in messages]})
 
     return bp

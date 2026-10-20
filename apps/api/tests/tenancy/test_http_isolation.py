@@ -78,6 +78,8 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/rx-templates/<uuid:template_id>": lambda w: _library_url(w, "rx-templates"),
     # M5-P4: a patient's reminders and one reminder of clinic B.
     "/api/v1/patients/<uuid:patient_id>/reminders": lambda w: f"{_patient_url(w)}/reminders",
+    # M5-P6: a patient's message history.
+    "/api/v1/patients/<uuid:patient_id>/messages": lambda w: f"{_patient_url(w)}/messages",
     "/api/v1/reminders/<uuid:reminder_id>": lambda w: _reminder_url(w),
 }
 

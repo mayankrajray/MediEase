@@ -81,6 +81,10 @@ class MessageRepository(Protocol):
 
     def get(self, message_id: UUID, *, for_update: bool = False) -> Message | None: ...
 
+    def list_for_patient(self, patient_id: UUID, *, limit: int) -> Sequence[Message]:
+        """The patient's messages, newest first (M5-P6, FR-MSG-04: status only is shown)."""
+        ...
+
 
 class MessageLookup(Protocol):
     """Which clinic a provider status belongs to (M5-P3).

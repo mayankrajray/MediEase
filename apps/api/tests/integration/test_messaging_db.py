@@ -490,3 +490,39 @@ def test_the_request_id_travels_from_the_booking_to_the_job_and_the_message(
     _rig(session_factory).booking(job)
     assert _messages(db, key)[0].request_id == "req-m5p2-0001"
     assert isinstance(job.clinic_id, UUID)
+
+
+# --- Message history (M5-P6 decision 1A; R16; FR-MSG-04) -----------------------------------------
+
+
+def test_r16_a_patients_messages_are_listed_with_status_only(
+    world: World, db: Engine, session_factory: sessionmaker[Session]
+) -> None:
+    desk, appointment_id = _booked(world)
+    key = f"booking_confirmed:{appointment_id}"
+    _rig(session_factory).booking(_job(db, key))
+    [row] = _messages(db, key)
+
+    resp = desk.get(f"/api/v1/patients/{row.patient_id}/messages")
+    assert resp.status_code == 200
+    assert resp.headers["Cache-Control"] == "no-store"
+    [item] = resp.get_json()["items"]
+    assert item == {
+        "id": str(row.id),
+        "template_key": "booking_confirmed",
+        "source_type": "APPOINTMENT",
+        "source_id": appointment_id,
+        "channel": "CONSOLE",
+        "status": "SENT",
+        "error_code": None,
+        "created_at": row.created_at.isoformat(),
+        "sent_at": row.sent_at.isoformat(),
+        "delivered_at": None,
+        "read_at": None,
+        "failed_at": None,
+    }
+    text = resp.get_data(as_text=True)
+    for secret in (world.a.clinic.name, world.a.doctor.display_name, "to_phone", "variables"):
+        assert secret not in text
+    unknown = desk.get("/api/v1/patients/00000000-0000-0000-0000-000000000001/messages")
+    assert unknown.status_code == 404

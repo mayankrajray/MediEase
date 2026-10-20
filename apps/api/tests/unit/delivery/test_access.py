@@ -87,6 +87,7 @@ EXPECTED_POLICIES = {
     "reminders.schedule_reminder": (Access.CLINIC, Permission.REMINDERS_SCHEDULE),
     "reminders.change_reminder": (Access.CLINIC, Permission.REMINDERS_SCHEDULE),
     "reminders.list_pending_follow_ups": (Access.CLINIC, Permission.REMINDERS_SCHEDULE),
+    "reminders.list_patient_messages": (Access.CLINIC, Permission.REMINDERS_SCHEDULE),
     "rx_library.list_favourites": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "rx_library.create_favourite": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "rx_library.replace_favourite": (Access.CLINIC, Permission.CLINICAL_WRITE),
