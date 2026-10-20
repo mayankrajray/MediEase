@@ -28,6 +28,7 @@ import structlog
 
 from mediease_api.application.context import RequestInfo
 from mediease_api.application.messaging.opt_out import OptOutByReply
+from mediease_api.application.reminders.fallback import SmsFallback
 from mediease_api.domain.jobs.job import WEBHOOK_KIND, ClaimedJob, NewJob
 from mediease_api.domain.jobs.retry import JobFailure
 from mediease_api.domain.messaging.errors import (
@@ -38,7 +39,7 @@ from mediease_api.domain.messaging.errors import (
     WebhookSignatureInvalid,
     WebhookVerifyFailed,
 )
-from mediease_api.domain.messaging.message import SourceType, StatusUpdate
+from mediease_api.domain.messaging.message import MessageStatus, SourceType, StatusUpdate
 from mediease_api.domain.messaging.webhook import WebhookEvent
 from mediease_api.domain.prescriptions.prescription import LinkDelivery
 from mediease_api.ports.clock import ClockPort
@@ -171,11 +172,13 @@ class ProcessWebhookEvent:
         clock: ClockPort,
         parser: WebhookParser,
         opt_outs: OptOutByReply,
+        fallback: SmsFallback | None = None,
     ) -> None:
         self._uow = uow
         self._clock = clock
         self._parser = parser
         self._opt_outs = opt_outs
+        self._fallback = fallback
 
     def __call__(self, job: ClaimedJob) -> None:
         event_id = UUID(str(job.payload["event_id"]))
@@ -192,7 +195,7 @@ class ProcessWebhookEvent:
                 for s in stops
             )
             updates = self._parser.statuses(event.payload)
-            unmatched = sum(0 if self._apply(uow, u) else 1 for u in updates)
+            unmatched = sum(0 if self._apply(uow, u, job.request_id) else 1 for u in updates)
             if unmatched and job.attempts < job.max_attempts:
                 uow.commit()  # the statuses that matched are kept; the retry repeats harmlessly
                 logger.info("webhook.unmatched", event_id=str(event_id), unmatched=unmatched)
@@ -215,7 +218,7 @@ class ProcessWebhookEvent:
             opt_outs_unmatched=stops_unmatched,
         )
 
-    def _apply(self, uow: UnitOfWork, update: StatusUpdate) -> bool:
+    def _apply(self, uow: UnitOfWork, update: StatusUpdate, request_id: str | None) -> bool:
         found = uow.message_lookup.find(
             message_id=update.message_id, provider_message_id=update.provider_message_id
         )
@@ -232,6 +235,12 @@ class ProcessWebhookEvent:
         if not message.apply_status(update, now):
             return True
         tenant.messages.update(message)
+        if (
+            self._fallback is not None
+            and before is not MessageStatus.FAILED
+            and message.status is MessageStatus.FAILED
+        ):
+            self._fallback.enqueue(uow, message, request_id=request_id, now=now)
         if not was_accepted and message.is_accepted:
             logger.info(
                 "message.acceptance_learned",

@@ -31,6 +31,7 @@ from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork, build_se
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
 from mediease_api.adapters.messaging.catalog import YamlTemplateCatalog
 from mediease_api.adapters.messaging.console import ConsoleMessagingAdapter
+from mediease_api.adapters.messaging.console_sms import ConsoleSmsAdapter
 from mediease_api.adapters.messaging.whatsapp_cloud import WhatsAppCloudAdapter
 from mediease_api.adapters.messaging.whatsapp_webhook import PROVIDER as WHATSAPP_PROVIDER
 from mediease_api.adapters.messaging.whatsapp_webhook import (
@@ -116,6 +117,7 @@ from mediease_api.application.prescriptions.use_cases import (
     ReplaceDraft,
     RevisePrescription,
 )
+from mediease_api.application.reminders.fallback import SendSmsFallback, SmsFallback
 from mediease_api.application.reminders.send import SendReminder
 from mediease_api.application.reminders.use_cases import (
     ChangeReminder,
@@ -170,6 +172,7 @@ from mediease_api.domain.messaging.jobs import (
     OPT_OUT_CONFIRMATION_KIND,
     REMINDER_KIND,
     RX_LINK_KIND,
+    SMS_FALLBACK_KIND,
 )
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -569,6 +572,19 @@ def build_messaging(settings: AppSettings) -> MessagingPort:
     return ConsoleMessagingAdapter()
 
 
+def build_sms(settings: AppSettings) -> MessagingPort | None:
+    """The SMS fallback's provider, or None while ``MESSAGING_SMS_FALLBACK_ENABLED`` is off (M5-P5).
+
+    Only the console exists until L-03; it is refused in production, so the fallback cannot be
+    turned on there and silently send nothing.
+    """
+    if not settings.MESSAGING_SMS_FALLBACK_ENABLED:
+        return None
+    if settings.APP_ENV is AppEnv.PRODUCTION:
+        raise ValueError("SMS_PROVIDER=console sends nothing; the SMS fallback is refused")
+    return ConsoleSmsAdapter()
+
+
 def _messaging_handlers(
     settings: AppSettings,
     factory: sessionmaker[Session],
@@ -578,24 +594,41 @@ def _messaging_handlers(
     """The M5-P2 send jobs. Templates are loaded and checked here, so a bad file stops start-up."""
     messaging = build_messaging(settings)
     phones = FernetPhoneCipher(settings.messaging_phone_keys())
+    templates = YamlTemplateCatalog.from_package()
     sender = MessageSender(
         uow=SqlAlchemyUnitOfWork(factory),
         clock=clock,
         ids=ids,
         messaging=messaging,
-        templates=YamlTemplateCatalog.from_package(),
+        templates=templates,
         phones=phones,
     )
+    sms = build_sms(settings)
+    sms_sender = (
+        MessageSender(
+            uow=SqlAlchemyUnitOfWork(factory),
+            clock=clock,
+            ids=ids,
+            messaging=sms,
+            templates=templates,
+            phones=phones,
+        )
+        if sms is not None
+        else None
+    )
+    fallback = SmsFallback(ids=ids) if sms is not None else None
     return {
         WEBHOOK_KIND: ProcessWebhookEvent(
             uow=SqlAlchemyUnitOfWork(factory),
             clock=clock,
             parser=WhatsAppWebhookParser(phones),
             opt_outs=OptOutByReply(ids=ids, phones=phones),
+            fallback=fallback,
         ),
         OPT_OUT_CONFIRMATION_KIND: SendOptOutConfirmation(sender=sender),
+        SMS_FALLBACK_KIND: SendSmsFallback(sender=sms_sender, ids=ids),
         RECONCILE_KIND: ReconcileMessages(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
-        REMINDER_KIND: SendReminder(sender=sender, ids=ids),
+        REMINDER_KIND: SendReminder(sender=sender, ids=ids, fallback=fallback),
         NO_SHOW_SWEEP_KIND: SweepNoShows(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
         MARK_NO_SHOWS_KIND: MarkNoShows(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
         BOOKING_CONFIRMATION_KIND: SendBookingConfirmation(sender=sender),

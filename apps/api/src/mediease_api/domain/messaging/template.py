@@ -69,15 +69,26 @@ class LocalisedBody:
     body: str
 
 
+def _require_placeholders(text: str, names: list[str], where: str) -> None:
+    used = list(dict.fromkeys(_PLACEHOLDER.findall(text)))
+    if used != names:
+        raise InvalidValue(where, "must use each variable once, in order")
+
+
 @dataclass(frozen=True, slots=True)
 class MessageTemplate:
-    """One template in every language it exists in. Build with ``MessageTemplate.create``."""
+    """One template in every language it exists in. Build with ``MessageTemplate.create``.
+
+    ``sms`` (M5-P5, FR-REM-06) is the optional SMS wording per language, for templates a reminder
+    may fall back with; it uses the same variables in the same order and never carries a link.
+    """
 
     key: str
     version: int
     category: TemplateCategory
     variables: tuple[Variable, ...]
     languages: Mapping[Language, LocalisedBody]
+    sms: Mapping[Language, str] = MappingProxyType({})
 
     @classmethod
     def create(
@@ -88,6 +99,7 @@ class MessageTemplate:
         category: TemplateCategory,
         variables: tuple[Variable, ...],
         languages: Mapping[Language, LocalisedBody],
+        sms: Mapping[Language, str] | None = None,
     ) -> MessageTemplate:
         if not _KEY.fullmatch(key):
             raise InvalidValue("key", "must be 3-64 lowercase letters, digits or underscores")
@@ -103,18 +115,30 @@ class MessageTemplate:
                 raise InvalidValue(f"{key}.{language.value}.provider_name", "must not be empty")
             # Placeholders in order of first use must be exactly the declared variables in order:
             # providers bind parameters by position.
-            used = list(dict.fromkeys(_PLACEHOLDER.findall(body.body)))
-            if used != names:
-                raise InvalidValue(
-                    f"{key}.{language.value}.body", "must use each variable once, in order"
-                )
+            _require_placeholders(body.body, names, f"{key}.{language.value}.body")
+        if sms:
+            if set(sms) != set(Language):
+                raise InvalidValue(f"{key}.sms", "must have exactly en and hi")
+            if any(v.kind is VariableKind.LINK for v in variables):
+                raise InvalidValue(f"{key}.sms", "a template with a link has no SMS wording")
+            for language, text in sms.items():
+                _require_placeholders(text, names, f"{key}.sms.{language.value}")
         return cls(
             key=key,
             version=version,
             category=category,
             variables=variables,
             languages=MappingProxyType(dict(languages)),
+            sms=MappingProxyType(dict(sms or {})),
         )
+
+    @property
+    def has_sms(self) -> bool:
+        return bool(self.sms)
+
+    def render_sms(self, language: Language, values: Mapping[str, str]) -> str:
+        """The SMS text with values filled in; ``KeyError`` if the template has none."""
+        return _PLACEHOLDER.sub(lambda m: values[m.group(1)], self.sms[language])
 
     def body(self, language: Language) -> LocalisedBody:
         return self.languages[language]
