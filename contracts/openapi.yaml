@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.20.0
+  version: 0.21.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -3304,6 +3304,41 @@ paths:
           $ref: '#/components/responses/AuthError'
         '422':
           $ref: '#/components/responses/ReminderError'
+  /api/v1/patients/{patient_id}/messages:
+    get:
+      tags: [reminders]
+      operationId: listPatientMessages
+      summary: The patient's messages, status only
+      description: |
+        FR-MSG-04; spec R16; M5-P6 decision 1A. Newest first, at most 50: what each message was
+        about (`source_type`, `source_id`), its channel, status, error code and times. Never its
+        variables or the number it went to. Permission REMINDERS_SCHEDULE.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+      responses:
+        '200':
+          description: The patient's messages
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientMessageList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
   /api/v1/follow-ups/pending:
     get:
       tags: [reminders]
@@ -3818,6 +3853,38 @@ components:
             $ref: '#/components/schemas/PendingFollowUp'
         limit: {type: integer}
         offset: {type: integer}
+    PatientMessage:
+      type: object
+      additionalProperties: false
+      description: M5-P6. Status only; never the variables or the number.
+      required: [id, template_key, source_type, source_id, channel, status, error_code,
+                 created_at, sent_at, delivered_at, read_at, failed_at]
+      properties:
+        id: {type: string, format: uuid}
+        template_key:
+          type: string
+          description: booking_confirmed, rx_ready, rx_updated, follow_up_due or opt_out_confirmed
+        source_type: {type: string, enum: [APPOINTMENT, PRESCRIPTION, REMINDER, OPT_OUT]}
+        source_id: {type: string, format: uuid}
+        channel: {type: string, enum: [WHATSAPP, SMS, CONSOLE]}
+        status: {type: string, enum: [QUEUED, SENT, DELIVERED, READ, FAILED]}
+        error_code:
+          description: MSG_* when it failed or a send was refused, else null
+          type: [string, 'null']
+        created_at: {type: string, format: date-time}
+        sent_at: {type: [string, 'null'], format: date-time}
+        delivered_at: {type: [string, 'null'], format: date-time}
+        read_at: {type: [string, 'null'], format: date-time}
+        failed_at: {type: [string, 'null'], format: date-time}
+    PatientMessageList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PatientMessage'
     LibraryItem:
       description: A line's body without its identity (the fields of PrescriptionItemOutput)
       type: object

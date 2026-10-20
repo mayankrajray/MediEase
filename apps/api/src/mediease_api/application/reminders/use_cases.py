@@ -20,6 +20,7 @@ from mediease_api.application.context import RequestContext
 from mediease_api.application.reminders.scheduling import audit, enqueue_send
 from mediease_api.application.scheduling.schedules import load_clinic, load_doctor
 from mediease_api.domain.audit.actions import AuditAction
+from mediease_api.domain.messaging.message import Message
 from mediease_api.domain.patients.patient import Patient
 from mediease_api.domain.reminders.errors import ClinicPhoneMissing, InPast, NoConsent
 from mediease_api.domain.reminders.reminder import Reminder, ReminderSource
@@ -173,6 +174,20 @@ class ListPatientReminders(_UseCase):
             tenant = uow.tenant(ctx.clinic_id)
             _patient(tenant, ctx.clinic_id, patient_id)
             return tenant.reminders.list_for_patient(patient_id, limit=LIST_LIMIT)
+
+
+class ListPatientMessages(_UseCase):
+    """The patient's messages, newest first (M5-P6 decision 1A; R16; FR-MSG-04).
+
+    The caller shows status only: what a message was about, its channel, status, error code and
+    times. Its variables and number never leave the API.
+    """
+
+    def execute(self, ctx: RequestContext, *, patient_id: UUID) -> Sequence[Message]:
+        with self._uow as uow:
+            tenant = uow.tenant(ctx.clinic_id)
+            _patient(tenant, ctx.clinic_id, patient_id)
+            return tenant.messages.list_for_patient(patient_id, limit=LIST_LIMIT)
 
 
 class ListPendingFollowUps(_UseCase):

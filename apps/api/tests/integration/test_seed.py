@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
@@ -15,6 +15,7 @@ from mediease_api.domain.clinics.clinic import ClinicStatus
 from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.domain.shared.time import local_date
 from tests.conftest import TEST_IP_SALT, TEST_SIGNING_KEY, SetEnv, UowFactory
 
 
@@ -107,6 +108,23 @@ def test_seed_adds_only_the_missing_clinic_to_a_database_seeded_before_clinic_tw
         first = uow.clinics.get_by_slug(seed.DEMO_SLUG)
         assert first is not None
         assert len(uow.tenant(first.id).memberships.list()) == 3  # untouched, not duplicated
+
+
+def test_m5_p6_seed_leaves_one_overdue_follow_up_once(
+    seed_env: dict[str, str], uow_factory: UowFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert seed.main([]) == 0
+    assert seed.main([]) == 0  # still one: nothing added while it is pending
+    assert capsys.readouterr().out.count("overdue follow-up") == 1
+    with uow_factory() as uow:
+        clinic = uow.clinics.get_by_slug(seed.DEMO_SLUG)
+        assert clinic is not None
+        today = local_date(datetime.now(UTC), clinic.timezone)
+        [pending] = uow.tenant(clinic.id).reminders.pending_follow_ups(
+            today=today, timezone=clinic.timezone, limit=10, offset=0
+        )
+        assert pending.follow_up_date == today - timedelta(days=3)
+        assert pending.patient_name == "Deepa Nair" and pending.reminder_status is None
 
 
 def test_seed_refuses_outside_local(

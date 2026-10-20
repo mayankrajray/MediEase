@@ -122,6 +122,7 @@ from mediease_api.application.reminders.fallback import SendSmsFallback, SmsFall
 from mediease_api.application.reminders.send import SendReminder
 from mediease_api.application.reminders.use_cases import (
     ChangeReminder,
+    ListPatientMessages,
     ListPatientReminders,
     ListPendingFollowUps,
     ScheduleReminder,
@@ -230,6 +231,9 @@ class _UseCases:
 
     def list_pending_follow_ups(self) -> ListPendingFollowUps:
         return ListPendingFollowUps(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def list_patient_messages(self) -> ListPatientMessages:
+        return ListPatientMessages(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def verify_whatsapp_subscription(self) -> VerifyWebhookSubscription:
         return VerifyWebhookSubscription(verify_token=self.whatsapp_verify_token)

@@ -109,6 +109,15 @@ class SqlAlchemyMessageRepository(TenantScopedRepository[MessageRow]):
     def get(self, message_id: UUID, *, for_update: bool = False) -> Message | None:
         return self._one(self._scoped_select().where(MessageRow.id == message_id), for_update)
 
+    def list_for_patient(self, patient_id: UUID, *, limit: int) -> Sequence[Message]:
+        query = (
+            self._scoped_select()
+            .where(MessageRow.patient_id == patient_id)
+            .order_by(MessageRow.created_at.desc(), MessageRow.id.desc())
+            .limit(limit)
+        )
+        return [_from_row(row) for row in self._session.scalars(query)]
+
     def _one(self, query: Select[MessageRow], for_update: bool) -> Message | None:
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
