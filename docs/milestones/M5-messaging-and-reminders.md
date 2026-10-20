@@ -2,12 +2,12 @@
 
 | Field | Value |
 |---|---|
-| Status | In progress — M5 opened 18 Oct 2026 after M4 merged (PR #39); plan and spec approved; M5-P1 approved (1A–5A with four refinements) implemented and confirmed by the developer 18 Oct 2026; M5-P2 design proposed |
+| Status | Closed 20 Oct 2026 by the developer: P1–P6 implemented, verified and confirmed. **Pending:** the live WhatsApp test (the exit criterion's send through Meta's test number), once the developer provides the credentials (L-01, L-02); the real SMS provider (L-03). See "Pending after M5" at the end |
 | Spec | `docs/specs/reminders-and-messaging.md` (Approved 2026-10-18) |
 | ADR | ADR-0005 (PostgreSQL-backed job queue), ADR-0007 (messaging port, WhatsApp first) |
 | Covers | FR-MSG-01..05, FR-MSG-07, FR-REM-01, 02, 04, 05, 07, FR-APT-06, NFR-13 |
 | Issue / branch / PR | #40 · `m5/40-messaging-and-reminders` · one PR for the whole milestone (ADR-0011) |
-| Exit criterion | A reminder scheduled in the app is delivered through the WhatsApp test number, status flows back through the webhook, and opt-out stops further sends |
+| Exit criterion | A reminder scheduled in the app is delivered through the WhatsApp test number, status flows back through the webhook, and opt-out stops further sends. **Met in code** against the console provider and a fake Graph API (P3–P6 stack checks); **pending live** through Meta |
 | Outside dependencies | L-01 (Meta business account, number) and L-02 (approved templates) for P3; L-03 (SMS, DLT) only for P5's SMS fallback |
 
 ## Phase plan
@@ -625,3 +625,20 @@ Not verified in a browser:
 - the STOP journey, because the webhook needs the app secret to sign it; it is covered at the API
   level (`test_opt_out_db.py`, AC5) and on the stack in P5;
 - a reminder delivered and read through Meta, which needs L-01 and L-02.
+
+---
+
+## Pending after M5
+
+On 20 Oct 2026 the developer confirmed P6 and closed M5. Two parts wait for outside accounts and
+are done later on a follow-up branch, without reopening #40.
+
+| # | What | Needs | How |
+|---|---|---|---|
+| 1 | **Live WhatsApp test.** Meta's test number receives a reminder scheduled in the app; `sent`, `delivered` and `read` come back through the webhook; a STOP reply opts the patient out and their next reminder is `SKIPPED_NO_CONSENT`; a delivered message is priced | L-01 (Meta business account, number, credentials) and L-02 (the five templates approved, en and hi) | RUNBOOK §9: set `MESSAGING_PROVIDER=whatsapp_cloud` and the `WHATSAPP_*` values, expose the webhook through a tunnel, then repeat P3's and P5's stack steps against Meta instead of the fake Graph API |
+| 2 | **Real SMS provider** for the fallback | L-03 (provider, DLT entity, sender ID, template IDs) | An adapter behind the SMS port (beside `console_sms.py`), its prices in `prices.yaml`, and `POST /webhooks/sms/{provider}` for delivery reports |
+
+Also still open:
+
+- the Hindi wording reviewed by the pilot clinics (L-02);
+- the M4-P3 suggestions timing test, flaky on CI against its 150 ms bound.

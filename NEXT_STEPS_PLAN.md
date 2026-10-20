@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | M5 opened 18 Oct 2026 after M4 merged (PR #39). Plan and `docs/specs/reminders-and-messaging.md` approved by the developer, with decisions 1A–5A and four refinements to the job queue; M5-P1 confirmed by the developer on 18 Oct 2026; M5-P2 confirmed and pushed (PR #41); M5-P3 confirmed and pushed (PR #41); M5-P5 confirmed and pushed (PR #41); M5-P6 approved and implemented, awaiting the developer's confirmation |
+| Status | **M5 closed 20 Oct 2026** by the developer: P1–P6 implemented, verified and confirmed (PR #41 ready for review). The live WhatsApp test (L-01, L-02) and the real SMS provider (L-03) are pending the developer's credentials (`docs/milestones/M5-messaging-and-reminders.md`, "Pending after M5"). Next: the M6 plan, to be proposed and approved |
 | Scope | Milestone 5 in phase detail; M6 as a roadmap only. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39, merged 18 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
 | Design notes | `docs/milestones/M5-messaging-and-reminders.md` |
@@ -50,9 +50,9 @@ Milestone issue #40 → branch m5/40-messaging-and-reminders (from origin/main a
 
 | # | Needed | State |
 |---|---|---|
-| L-01 | Meta Business account, business verification, WhatsApp number | Open; needed by P3 |
-| L-02 | Utility templates (booking confirmation, prescription ready, prescription updated, follow-up due) approved in English and Hindi | Open; needed by P3 |
-| L-03 | SMS provider and DLT registration | Open; needed only for P5's SMS fallback (behind a flag) |
+| L-01 | Meta Business account, business verification, WhatsApp number | **Pending after M5:** the developer provides the credentials later; then the live test (RUNBOOK §9) |
+| L-02 | Utility templates (booking confirmation, prescription ready, prescription updated, follow-up due) approved in English and Hindi | **Pending after M5**, with L-01 |
+| L-03 | SMS provider and DLT registration | **Pending after M5:** the real SMS adapter; the fallback stays off |
 | W-5 | Branch protection / CODEOWNERS enforcement on `main` | **Open:** not available for a private repo on GitHub Free (HTTP 403) |
 | — | `@akhtarjamal10` write access, so their CODEOWNERS entry takes effect | Open |
 | L-04, L-07 | Counsel's review of the prescription format; pilot clinics' formats | Open; gates for M6 |
@@ -154,3 +154,4 @@ start. P1 is designed and approved in full.
 | 20 Oct 2026 | M5-P5 confirmed by the developer and pushed to PR #41 (CI: every job green except the API job, where only the known M4-P3 suggestions timing test failed, 253 ms and 274 ms against its 150 ms bound; it passes locally 3 of 3 and P5 does not touch that query). M5-P6 (web: reminder and message status, pending follow-ups with Book follow-up, ops messaging costs, Playwright) designed; awaiting approval | #40 | P5 done |
 | 20 Oct 2026 | Correction to the row above: PR #41's CI for M5-P5 went fully green (7/7) on the second rerun of the API job; the two failures were only the known suggestions timing test | #40 | — |
 | 20 Oct 2026 | M5-P6 approved (1A–7A) and implemented: `GET /patients/{id}/messages` (contract 0.21.0); the reminder chip on the consultation; reminders (move, cancel, add) and message history on the profile; failed messages in plain words with Call patient; `/follow-ups` with Book follow-up; `/ops/messaging-costs`; one overdue follow-up in `make seed`. API 1578 tests at 98.22%, web 446, `make e2e` 11 of 11 (twice); stack checks; one seed bug found and fixed (the seeded appointment left `BOOKED`) | #40 | P6 done; awaiting confirmation |
+| 20 Oct 2026 | M5-P6 confirmed by the developer; M5 closed with the live WhatsApp test and the real SMS provider recorded as pending (credentials to follow: L-01, L-02, L-03). Last commit carries `Closes #40`; PR #41 marked ready for review. Next: the M6 plan | #40 | M5 done |

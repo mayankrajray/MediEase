@@ -14,6 +14,8 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M5 closed (#40): P1–P6 complete. Pending, with credentials to follow: the live WhatsApp test
+  through Meta's test number (L-01, L-02) and the real SMS provider (L-03).
 - M5-P6 (#40): the reminder and message screens (FR-REM-02, 05, 07; FR-MSG-04; spec R16-R18).
   The consultation shows the issued prescription's reminder as a chip beside its follow-up date;
   the patient profile lists reminders (move, cancel, add a manual one) and the message history,

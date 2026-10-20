@@ -11,14 +11,14 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M5 — Messaging and reminders** (issue #40, branch `m5/40-messaging-and-reminders`, one PR for the milestone). M4 merged in PR #39 on 18 Oct 2026 |
-| Active phase | **M5-P6 — Web: reminder and message status, pending follow-ups, ops costs:** M5-P5 confirmed by the developer and pushed to PR #41 on 20 Oct 2026; P6 approved (1A–7A) and implemented 20 Oct 2026, verified on the stack and with `make e2e`, awaiting the developer's confirmation. Closing M5 then needs the developer's decision on the live WhatsApp test (L-01, L-02) |
-| Design notes | `docs/milestones/M5-messaging-and-reminders.md` |
+| Active milestone | **None active.** M5 — Messaging and reminders closed by the developer on 20 Oct 2026 (issue #40, PR #41 ready for review), with the live WhatsApp test pending (below). **Next: M6 — Pilot hardening and deployment**, whose plan awaits the developer's approval |
+| Active phase | — (M6 starts with its plan and spec, `/plan-phase`) |
+| Design notes | `docs/milestones/M5-messaging-and-reminders.md` (M5, closed) |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M5 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | None open for P1. L-01/L-02 (Meta account, approved templates) are needed before P3; L-03 (SMS/DLT) only for P5's fallback. Follow-up outside M5: #30 (an import over 2 MB through the web origin can answer 500 instead of 413) |
-| Last updated | 18 Oct 2026 |
+| Open decisions | M6 plan (to be proposed). Pending from M5 (developer's decision, 20 Oct 2026): the live WhatsApp send and webhook test through Meta's test number, once the developer provides the credentials (L-01, L-02; RUNBOOK §9); the real SMS provider (L-03). Follow-up outside M5: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test is flaky on CI (150 ms bound) |
+| Last updated | 20 Oct 2026 |
 
 
 ---
@@ -115,7 +115,7 @@ PDF prints correctly; patient link passes the 360-px acceptance test.
 | M4-P5 | Signed patient links, last-4-digit check, open audit; bilingual patient page; `scripts/inspect_link_token.py` | ✅ |
 | M4-P6 | Web: consultation screen (history + notes + Rx builder), keyboard-first | ✅ |
 
-## M5 — Messaging and reminders  `▶ ACTIVE`
+## M5 — Messaging and reminders  `✅ (live WhatsApp test pending)`
 
 **Covers:** FR-MSG-01..05, FR-MSG-07, FR-REM-01, 02, 04, 05, 07, FR-APT-06.
 **Exit:** a reminder scheduled in the app is delivered through the WhatsApp test number, status
@@ -128,7 +128,8 @@ flows back through the webhook, and opt-out stops further sends. Depends on L-01
 | M5-P3 | WhatsApp Cloud API adapter; webhook signature verification; idempotent status updates; status reconciliation job | ✅ (live Meta test pending L-01/L-02) |
 | M5-P4 | Reminder scheduling rules (quiet hours, consent, follow-up defaults); pending follow-ups list; automatic no-show job | ✅ |
 | M5-P5 | Inbound STOP handling; SMS adapter (fallback behind a flag); per-clinic cost ledger | ✅ (real SMS provider pending L-03) |
-| M5-P6 | Web: reminder status on patient profile and visit; pending follow-ups page; ops monthly messaging costs (P5 decision 7A) | ▶ |
+| M5-P6 | Web: reminder status on patient profile and visit; pending follow-ups page; ops monthly messaging costs (P5 decision 7A) | ✅ |
+| M5 pending | **Live WhatsApp test** through Meta's test number: a reminder scheduled in the app delivered, its statuses back through the webhook, a STOP stopping further sends (the exit criterion). Needs the developer's credentials (L-01, L-02); procedure RUNBOOK §9. Also the real SMS provider (L-03) | ⏳ pending credentials |
 
 ## M6 — Pilot hardening and deployment  `☐`
 
@@ -175,3 +176,4 @@ drill completed; security checklist signed; two pilot clinics onboarded.
 | **M0 — Foundation** (exit criteria met: fresh clone → `make up` → all healthy; CI green) | 2 Oct 2026 | #6, #8, #10, #12, #14 |
 | M1 — Identity, tenancy and audit (merged in PR #20) | 3 Oct 2026 | #19 |
 | **M2 — Patients** (exit criteria met: register, find and update patients; shared phones surfaced; 10,000-patient lookup p95 well under 500 ms) | 17 Oct 2026 | #21 / PR #22 |
+| **M5 — Messaging and reminders** (code complete and verified against the console provider and a fake Graph API; closed by the developer with the live WhatsApp test pending L-01/L-02 and the real SMS provider pending L-03) | 20 Oct 2026 | #40 / PR #41 |
