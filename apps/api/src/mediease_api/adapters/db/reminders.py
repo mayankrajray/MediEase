@@ -78,7 +78,8 @@ _PENDING = text(
               LEFT JOIN messages m ON m.clinic_id = :clinic AND m.source_type = 'REMINDER'
                                   AND m.source_id = r.id
              WHERE first.clinic_id = :clinic AND first.visit_id = l.visit_id AND first.version = 1
-             ORDER BY r.created_at DESC, m.created_at DESC NULLS LAST, m.id DESC LIMIT 1) AS reminder_status
+             ORDER BY r.created_at DESC, m.created_at DESC NULLS LAST, m.id DESC
+             LIMIT 1) AS reminder_status
     FROM latest l
     JOIN patients pt ON pt.id = l.patient_id AND pt.clinic_id = :clinic
     WHERE NOT EXISTS (
