@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 
+import { AuthFrame } from "@/components/ui/AuthFrame";
+
+/** Sign-in and invitations: a centred card under the brand (M6-P2, decision 8A). */
 export default function AuthLayout({ children }: Readonly<{ children: ReactNode }>) {
-  return <main className="flex min-h-screen items-start justify-center pt-12">{children}</main>;
+  return <AuthFrame>{children}</AuthFrame>;
 }
