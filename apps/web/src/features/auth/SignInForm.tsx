@@ -94,13 +94,13 @@ export function SignInForm({ next, reason }: { next: string; reason?: SignInReas
   const invalid = error instanceof ApiError && error.code === AUTH_INVALID_CREDENTIALS;
 
   return (
-    <section aria-labelledby="sign-in-heading" className="mx-auto w-full max-w-sm space-y-5 p-6">
-      <h1 id="sign-in-heading" className="text-2xl font-bold">
+    <section aria-labelledby="sign-in-heading" className="space-y-5 p-6 sm:p-8">
+      <h1 id="sign-in-heading" className="text-2xl font-bold tracking-tight">
         Sign in to MediEase
       </h1>
 
       {reason !== undefined && error === null && (
-        <p role="status" className="rounded border border-slate-400 bg-slate-50 p-3">
+        <p role="status" className="rounded-lg border border-slate-300 bg-slate-50 p-3">
           {SIGN_IN_REASONS[reason]}
         </p>
       )}
@@ -131,7 +131,7 @@ export function SignInForm({ next, reason }: { next: string; reason?: SignInReas
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
             aria-describedby={error !== null ? ERROR_ID : undefined}
-            className="w-full rounded border border-slate-500 px-3 py-2"
+            className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
           />
         </div>
 
@@ -151,13 +151,13 @@ export function SignInForm({ next, reason }: { next: string; reason?: SignInReas
               onChange={(event) => setPassword(event.target.value)}
               aria-invalid={invalid ? true : undefined}
               aria-describedby={error !== null ? ERROR_ID : undefined}
-              className="w-full rounded border border-slate-500 px-3 py-2"
+              className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
             />
             <button
               type="button"
               aria-pressed={showPassword}
               onClick={() => setShowPassword((shown) => !shown)}
-              className="rounded border border-slate-500 px-3 py-2"
+              className="shrink-0 whitespace-nowrap rounded-lg border border-slate-400 px-3 py-2"
             >
               {showPassword ? "Hide password" : "Show password"}
             </button>
@@ -167,7 +167,7 @@ export function SignInForm({ next, reason }: { next: string; reason?: SignInReas
         <button
           type="submit"
           disabled={submitting || locked}
-          className="w-full rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-slate-500"
+          className="w-full inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
         >
           {submitting ? "Signing in…" : "Sign in"}
         </button>

@@ -1,7 +1,7 @@
 import type { PlatformStatus } from "./status";
 
 const BADGE = {
-  ok: "bg-green-100 text-green-900 ring-green-700",
+  ok: "bg-green-100 text-emerald-900 ring-green-700",
   warn: "bg-amber-100 text-amber-900 ring-amber-700",
   bad: "bg-red-100 text-red-900 ring-red-700",
 } as const;
@@ -25,7 +25,7 @@ export function StatusView({ status }: { status: PlatformStatus }) {
 
   return (
     <section aria-labelledby="status-heading" className="mx-auto max-w-xl space-y-4 p-6">
-      <h1 id="status-heading" className="text-2xl font-bold">
+      <h1 id="status-heading" className="text-2xl font-bold tracking-tight">
         System status
       </h1>
 
@@ -40,7 +40,7 @@ export function StatusView({ status }: { status: PlatformStatus }) {
       </p>
 
       {status.state !== "healthy" && (
-        <div className="rounded border border-slate-300 p-4">
+        <div className="rounded-card border border-slate-200 bg-white p-4">
           <p>{status.message}</p>
           <p className="mt-1 text-sm text-slate-700">
             Code: <code className="font-mono">{status.code}</code>
@@ -49,7 +49,7 @@ export function StatusView({ status }: { status: PlatformStatus }) {
       )}
 
       <p>
-        <a href="/status" className="text-blue-800 underline">
+        <a href="/status" className="text-brand-800 underline">
           Check again
         </a>
       </p>

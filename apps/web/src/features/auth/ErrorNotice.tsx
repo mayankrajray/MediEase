@@ -33,7 +33,7 @@ export function ErrorNotice({
       ref={ref}
       role="alert"
       tabIndex={-1}
-      className="rounded border border-red-700 bg-red-50 p-4 text-red-950"
+      className="rounded-lg border border-red-700 bg-red-50 p-4 text-red-950"
     >
       <p className="font-medium">{message}</p>
       {requestId !== "" && (
