@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { TABLE, TABLE_WRAP, TD, TH, TR } from "@/components/ui/table";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import type { GetResponse } from "@/lib/api/client";
@@ -53,12 +54,12 @@ export function ClinicList() {
   return (
     <section aria-labelledby="clinics-heading" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 id="clinics-heading" className="text-2xl font-bold">
+        <h1 id="clinics-heading" className="text-2xl font-bold tracking-tight">
           Clinics
         </h1>
         <Link
           href="/ops/clinics/new"
-          className="rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900"
+          className="rounded-lg bg-brand-700 px-4 py-2 font-semibold text-white hover:bg-brand-800"
         >
           Create clinic
         </Link>
@@ -87,22 +88,22 @@ export function ClinicList() {
       )}
 
       {load.status === "ready" && load.items.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left">
+        <div className={TABLE_WRAP}>
+          <table role="table" className={TABLE}>
             <caption className="sr-only">Clinics, newest first</caption>
-            <thead>
-              <tr className="border-b border-slate-400">
-                <th scope="col" className="py-2 pr-4">Clinic</th>
-                <th scope="col" className="py-2 pr-4">Status</th>
-                <th scope="col" className="py-2 pr-4">Started</th>
-                <th scope="col" className="py-2 pr-4">Steps done</th>
-                <th scope="col" className="py-2 pr-4">Start to invitation</th>
-                <th scope="col" className="py-2">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" scope="col" className={TH}>Clinic</th>
+                <th role="columnheader" scope="col" className={TH}>Status</th>
+                <th role="columnheader" scope="col" className={TH}>Started</th>
+                <th role="columnheader" scope="col" className={TH}>Steps done</th>
+                <th role="columnheader" scope="col" className={TH}>Start to invitation</th>
+                <th role="columnheader" scope="col" className={TH}>
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody role="rowgroup">
               {load.items.map((clinic) => (
                 <ClinicRow key={clinic.id} clinic={clinic} />
               ))}
@@ -122,16 +123,16 @@ function ClinicRow({ clinic }: { clinic: Row }) {
       : undefined;
 
   return (
-    <tr className="border-b border-slate-200 align-top">
-      <th scope="row" className="py-2 pr-4 font-medium">
+    <tr role="row" className={TR}>
+      <th role="rowheader" scope="row" className={`${TD} font-medium`}>
         {clinic.name}
         <span className="block font-mono text-sm font-normal text-slate-700">{clinic.slug}</span>
       </th>
-      <td className="py-2 pr-4">{STATUS_LABEL[clinic.status]}</td>
-      <td className="py-2 pr-4">
+      <td role="cell" data-label="Status" className={TD}>{STATUS_LABEL[clinic.status]}</td>
+      <td role="cell" data-label="Started" className={TD}>
         {checklist === null ? "–" : formatDateTime(checklist.started_at, clinic.timezone)}
       </td>
-      <td className="py-2 pr-4">
+      <td role="cell" data-label="Steps done" className={TD}>
         {checklist === null ? (
           "–"
         ) : (
@@ -144,12 +145,12 @@ function ClinicRow({ clinic }: { clinic: Row }) {
           </>
         )}
       </td>
-      <td className="py-2 pr-4">{toInvite === undefined ? "–" : formatDuration(toInvite)}</td>
-      <td className="py-2">
+      <td role="cell" data-label="Start to invitation" className={TD}>{toInvite === undefined ? "–" : formatDuration(toInvite)}</td>
+      <td role="cell" data-label="" className={TD}>
         {clinic.status === "ONBOARDING" && (
           <Link
             href={`/ops/clinics/new?clinic=${encodeURIComponent(clinic.id)}`}
-            className="text-blue-800 underline"
+            className="text-brand-800 underline"
           >
             Continue setup{" "}
             <span className="sr-only">for {clinic.name}</span>

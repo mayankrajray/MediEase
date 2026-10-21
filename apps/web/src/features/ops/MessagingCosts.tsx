@@ -58,7 +58,7 @@ export function MessagingCosts() {
     <section aria-labelledby="costs-heading" className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 id="costs-heading" className="text-2xl font-bold">
+          <h1 id="costs-heading" className="text-2xl font-bold tracking-tight">
             Messaging costs
           </h1>
           <p className="text-slate-800">Per clinic, excluding GST. A message is priced once its delivery is reported.</p>
@@ -76,7 +76,7 @@ export function MessagingCosts() {
               setLoad({ status: "loading" });
               setMonth(event.target.value);
             }}
-            className="rounded border border-slate-500 px-2 py-1.5"
+            className="rounded-lg border border-slate-400 px-2 py-1.5"
           />
         </div>
       </div>
