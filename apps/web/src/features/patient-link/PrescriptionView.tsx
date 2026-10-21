@@ -48,7 +48,7 @@ export function PrescriptionView({
           </h2>
           <ol className="mt-2 space-y-3">
             {page.medicines.map((m) => (
-              <li key={m.number} className="rounded border border-slate-300 p-3">
+              <li key={m.number} className="rounded-card border border-slate-200 p-3">
                 <h3 className="font-bold [overflow-wrap:anywhere]">
                   {m.number}. {m.name}
                   {m.form_strength !== null && <span className="font-normal"> ({m.form_strength})</span>}
@@ -103,7 +103,7 @@ export function PrescriptionView({
         <p className="mt-5">
           <a
             href={`tel:${page.clinic_phone_e164}`}
-            className="inline-block rounded bg-blue-800 px-4 py-3 font-semibold text-white"
+            className="inline-block rounded-lg bg-brand-700 px-4 py-3 font-semibold text-white"
           >
             {page.call_label}
           </a>
