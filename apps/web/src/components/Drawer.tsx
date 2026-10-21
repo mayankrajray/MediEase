@@ -6,7 +6,8 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
  * A side panel on a native `<dialog>` opened with `showModal()`: the browser keeps
  * focus inside it, makes the page behind inert and closes it on Escape, with no
  * library. A descendant marked data-autofocus takes the focus once it is open; otherwise the
- * browser's choice stands. Focus returns to whatever opened it. Render it only while open.
+ * browser's choice stands. Focus returns to whatever opened it. Render it only while open. It slides
+ * in from its side with CSS (M6-P2 decision 3A, `.me-overlay` in globals.css), not with reduced motion.
  */
 export function Drawer({
   title,
@@ -47,16 +48,16 @@ export function Drawer({
         event.preventDefault();
         onClose();
       }}
-      className={`${side === "left" ? "ml-0 mr-auto max-w-xs" : "ml-auto mr-0 max-w-lg"} h-full max-h-none w-full overflow-y-auto bg-white p-0 shadow-xl backdrop:bg-slate-900/40`}
+      className={`me-overlay ${side === "left" ? "me-drawer-left ml-0 mr-auto max-w-xs" : "me-drawer-right ml-auto mr-0 max-w-lg"} h-full max-h-none w-full overflow-y-auto bg-white p-0 shadow-xl backdrop:bg-slate-900/40`}
     >
-      <div className="flex items-center justify-between border-b border-slate-300 px-5 py-3">
-        <h2 id={titleId} className="text-xl font-bold">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
+        <h2 id={titleId} className="text-lg font-semibold">
           {title}
         </h2>
         <button
           type="button"
           onClick={onClose}
-          className="rounded border border-slate-500 px-3 py-1 hover:bg-slate-100"
+          className="min-h-8 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium hover:bg-slate-100"
         >
           Close
         </button>

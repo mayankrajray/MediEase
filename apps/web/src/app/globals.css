@@ -40,3 +40,96 @@
     @apply outline-2 outline-offset-2 outline-brand-700;
   }
 }
+
+/* M6-P2 decision 3A: drawers and dialogs animate in with CSS only. They stay native
+   <dialog>s opened with showModal(), so the browser keeps focus inside, makes the page inert
+   and closes them on Escape. @starting-style gives the first frame of the opening; with
+   "reduce motion" they simply appear. They are unmounted on close, so there is no exit
+   animation to wait for (focus returns to the opener at once). */
+@layer components {
+  .me-overlay {
+    transition:
+      opacity 180ms ease-out,
+      transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      overlay 220ms allow-discrete,
+      display 220ms allow-discrete;
+  }
+  .me-overlay::backdrop {
+    transition:
+      background-color 220ms ease-out,
+      overlay 220ms allow-discrete,
+      display 220ms allow-discrete;
+  }
+  @starting-style {
+    .me-overlay[open] {
+      opacity: 0;
+    }
+    .me-overlay[open]::backdrop {
+      background-color: transparent;
+    }
+    .me-dialog[open] {
+      transform: translateY(8px) scale(0.97);
+    }
+    .me-drawer-right[open] {
+      transform: translateX(100%);
+    }
+    .me-drawer-left[open] {
+      transform: translateX(-100%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .me-overlay,
+    .me-overlay::backdrop {
+      transition: none;
+    }
+  }
+
+  /* M6-P2 decision 2A: one markup per list. From 768 px a table; below it each row is a card
+     and each cell shows its column's name from data-label. The explicit ARIA roles on the
+     table's parts keep it a table for assistive technology whatever `display` does. */
+  @media (max-width: 767.98px) {
+    .me-table,
+    .me-table > tbody,
+    .me-table > tbody > tr,
+    .me-table > tbody > tr > td,
+    .me-table > tbody > tr > th {
+      display: block;
+    }
+    .me-table > thead {
+      display: block;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .me-table > tbody > tr {
+      margin-bottom: 0.75rem;
+      border: 1px solid var(--color-slate-200);
+      border-radius: var(--radius-card);
+      background: white;
+      padding: 0.5rem 0.75rem;
+      box-shadow: var(--shadow-card);
+    }
+    .me-table > tbody > tr > td,
+    .me-table > tbody > tr > th {
+      padding: 0.25rem 0;
+      border: 0;
+    }
+    /* A named cell is one line: its column's name, then the value. */
+    .me-table > tbody > tr > td[data-label]:not([data-label=""]) {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .me-table > tbody > tr > td[data-label]:not([data-label=""])::before {
+      content: attr(data-label);
+      flex: 0 0 6.5rem;
+      font-size: 0.875rem;
+      color: var(--color-slate-600);
+    }
+    .me-table > tbody > tr > td[data-label=""]:empty {
+      display: none;
+    }
+  }
+}
