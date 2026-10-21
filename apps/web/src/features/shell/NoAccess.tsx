@@ -9,7 +9,7 @@ export function NoAccess() {
   const { identity } = useSession();
   return (
     <main className="mx-auto max-w-xl space-y-4 p-6">
-      <h1 className="text-2xl font-bold">No clinic access yet</h1>
+      <h1 className="text-2xl font-bold tracking-tight">No clinic access yet</h1>
       <p>
         {identity.user.full_name}, you are signed in, but you are not a member of any clinic. Ask your
         clinic owner to invite you, or contact MediEase support.

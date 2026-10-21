@@ -18,7 +18,7 @@ export function EmptyQueue() {
 
   return (
     <section aria-labelledby="queue-heading" className="space-y-4">
-      <h1 id="queue-heading" className="text-2xl font-bold">
+      <h1 id="queue-heading" className="text-2xl font-bold tracking-tight">
         Today&apos;s queue
       </h1>
       <p className="text-lg">

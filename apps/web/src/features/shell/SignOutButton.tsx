@@ -17,7 +17,7 @@ export function SignOutButton() {
         setPending(true);
         void signOut();
       }}
-      className="rounded border border-slate-500 px-3 py-1.5 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-600"
+      className="rounded-lg border border-slate-400 px-3 py-1.5 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-600"
     >
       {pending ? "Signing out…" : "Sign out"}
     </button>

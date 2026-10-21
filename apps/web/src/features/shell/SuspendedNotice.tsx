@@ -8,7 +8,7 @@ import { ErrorNotice } from "@/features/auth/ErrorNotice";
 export function SuspendedNotice({ clinicName, error }: { clinicName: string; error: unknown }) {
   return (
     <section aria-labelledby="suspended-heading" className="max-w-xl space-y-3">
-      <h1 id="suspended-heading" className="text-2xl font-bold">
+      <h1 id="suspended-heading" className="text-2xl font-bold tracking-tight">
         {clinicName} is suspended
       </h1>
       <ErrorNotice error={error} />
