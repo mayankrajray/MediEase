@@ -4,8 +4,13 @@ import Link from "next/link";
 
 import { useClinic } from "@/features/shell/ClinicGate";
 import { Menu, type MenuItem } from "@/components/Menu";
+import { buttonClasses } from "@/components/ui/Button";
+import { LIST_ITEM } from "@/components/ui/LayoutMotion";
+import { m } from "@/components/ui/Motion";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { TD, TR } from "@/components/ui/table";
 import { useNow } from "@/components/useNow";
-import { STATUS_LABELS, placeText, type AppointmentStatus } from "@/features/appointments/api";
+import { STATUS_LABELS, STATUS_TONES, placeText, type AppointmentStatus } from "@/features/appointments/api";
 import { patientPath } from "@/features/patients/RegisterPatientDrawer";
 import { formatClock, formatDuration } from "@/lib/format/time";
 
@@ -44,7 +49,8 @@ export interface RowActions {
 
 /**
  * One appointment on the board (FR-QUE-01): place, patient, status, wait, the next step as a
- * single button, and the rest in a menu. State is text, not colour alone.
+ * single button, and the rest in a menu. State is text, not colour alone. M6-P2: a card on a phone
+ * (decision 2A), and it glides to its new place when the queue reorders (decision 4A).
  */
 export function QueueRow({ entry, session, actions }: { entry: QueueEntry; session: QueueSession; actions: RowActions }) {
   const clinic = useClinic();
@@ -83,30 +89,38 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
       : entry.wait_minutes;
 
   return (
-    <tr className="border-t border-slate-200 align-middle">
-      <td className="py-3 pr-3 font-semibold">{placeText(entry, (iso) => formatClock(iso, clinic.timezone))}</td>
-      <td className="py-3 pr-3">
-        <Link href={patientPath(entry.patient.id)} className="font-semibold text-blue-900 underline">
+    <m.tr {...LIST_ITEM} role="row" className={`${TR} align-middle`}>
+      <td role="cell" data-label="Place" className={`${TD} font-semibold tabular-nums`}>
+        {placeText(entry, (iso) => formatClock(iso, clinic.timezone))}
+      </td>
+      <td role="cell" data-label="Patient" className={TD}>
+        <div>
+        <Link href={patientPath(entry.patient.id)} className="font-semibold text-brand-800 underline-offset-2 hover:underline">
           {who}
         </Link>
         <span className="block text-sm text-slate-700">
           {entry.patient.code} · {entry.patient.age_years} y{entry.source === "WALK_IN" ? " · walk-in" : ""}
         </span>
+        </div>
       </td>
-      <td className="py-3 pr-3">
-        {STATUS_LABELS[status]}
-        {entry.prescription !== null && <span className="block text-sm font-medium text-slate-800">Prescription issued</span>}
+      <td role="cell" data-label="Status" className={TD}>
+        <div>
+        <StatusBadge tone={STATUS_TONES[status]}>{STATUS_LABELS[status]}</StatusBadge>
+        {entry.prescription !== null && <span className="mt-1 block text-sm font-medium text-slate-800">Prescription issued</span>}
+        </div>
       </td>
-      <td className="py-3 pr-3 text-slate-800">{waited === null ? "" : formatDuration(waited)}</td>
-      <td className="py-3">
-        <div className="flex items-center justify-end gap-3">
+      <td role="cell" data-label={waited === null ? "" : "Waiting"} className={`${TD} text-slate-800`}>
+        {waited === null ? "" : formatDuration(waited)}
+      </td>
+      <td role="cell" data-label="" className={TD}>
+        <div className="flex flex-wrap items-center gap-2 pt-1 md:justify-end md:pt-0">
           {mine && status === "IN_CONSULTATION" && (
             <button
               type="button"
               aria-label={`Open ${who}'s consultation`}
               disabled={actions.busy}
               onClick={() => actions.onOpen?.(entry)}
-              className="min-w-24 rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900 disabled:bg-slate-400"
+              className={`${buttonClasses("primary")} min-w-24`}
             >
               Open
             </button>
@@ -117,7 +131,7 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
               aria-label={step.name(who)}
               disabled={actions.busy}
               onClick={() => actions.onStep(entry, step.to)}
-              className="min-w-24 rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900 disabled:bg-slate-400"
+              className={`${buttonClasses("primary")} min-w-24`}
             >
               {step.text}
             </button>
@@ -125,6 +139,6 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
           {menu.length > 0 && <Menu label={`More actions for ${who}`} items={menu} />}
         </div>
       </td>
-    </tr>
+    </m.tr>
   );
 }

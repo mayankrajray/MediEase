@@ -7,6 +7,7 @@
 
 import { useMemo } from "react";
 
+import type { Tone } from "@/components/ui/StatusBadge";
 import { useSession } from "@/features/auth/SessionProvider";
 import type { RequestOptions } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
@@ -101,6 +102,16 @@ export function useAppointmentApi(): AppointmentApi {
     };
   }, [clinicId]);
 }
+
+/** One accent per status (M6-P1 decision 1A); the badge always says the status in words. */
+export const STATUS_TONES: Readonly<Record<AppointmentStatus, Tone>> = {
+  BOOKED: "neutral",
+  ARRIVED: "waiting",
+  IN_CONSULTATION: "active",
+  COMPLETED: "done",
+  NO_SHOW: "missed",
+  CANCELLED: "neutral",
+};
 
 export const STATUS_LABELS: Readonly<Record<AppointmentStatus, string>> = {
   BOOKED: "Booked",
