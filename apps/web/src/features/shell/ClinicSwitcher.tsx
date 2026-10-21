@@ -29,7 +29,7 @@ export function ClinicSwitcher({
         id="clinic-switcher"
         value={activeClinicId}
         onChange={(event) => onSelect(event.target.value)}
-        className="rounded border border-slate-500 bg-white px-2 py-1"
+        className="rounded-lg border border-slate-400 bg-white px-2 py-1"
       >
         {memberships.map((m) => (
           <option key={m.clinic_id} value={m.clinic_id}>
