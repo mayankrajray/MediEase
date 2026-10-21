@@ -12,12 +12,12 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M6 — MVP demo: clinic and patient experience** (issue #49, branch `m6/49-mvp-demo`, one PR for the milestone). M5 merged in PR #41 on 20 Oct 2026. Product rules changed to PRD v1.1 the same day |
-| Active phase | **M6-P2 — The design system across the existing screens:** approved 20 Oct 2026 (A on all eight) and built; verified locally, awaiting the developer's confirmation. M6-P1 confirmed 20 Oct 2026 and pushed (draft PR #50) |
+| Active phase | **M6-P3 — Accounts: Google sign-in for staff and patients, patient email and password:** designed (`docs/milestones/M6-mvp-demo.md`, ADR-0015 Proposed), awaiting the developer's approval. M6-P1 and M6-P2 confirmed and pushed (draft PR #50) |
 | Design notes | `docs/milestones/M6-mvp-demo.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M6 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | The developer's confirmation of M6-P2. Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test is flaky on CI (150 ms bound) |
+| Open decisions | M6-P3 design (8 decisions) and ADR-0015. Real Google sign-in needs L-09 (the fake provider covers local use); patient password reset needs an email provider (not yet chosen). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test is flaky on CI (150 ms bound) |
 | Last updated | 21 Oct 2026 |
 
 
@@ -146,8 +146,8 @@ notifications arrive in the app; a public booking request is confirmed by the fr
 | Phase | Scope | Status |
 |---|---|---|
 | M6-P1 | Design system (tokens, primitives, Motion, responsive shell); *Today* dashboards for front desk, doctor and owner | ✅ (confirmed 20 Oct 2026; PR #50) |
-| M6-P2 | The design system across the existing screens; mobile layouts; motion for drawers, dialogs and lists | ▶ (built and verified locally, awaiting confirmation) |
-| M6-P3 | Google sign-in for staff and patients; patient email and password; separate patient sessions | ☐ |
+| M6-P2 | The design system across the existing screens; mobile layouts; motion for drawers, dialogs and lists | ✅ (confirmed 21 Oct 2026; PR #50) |
+| M6-P3 | Google sign-in for staff and patients; patient email and password; separate patient sessions | ▶ (designed, awaiting approval) |
 | M6-P4 | Linking a patient account by clinic invite or prescription link; the patient API | ☐ |
 | M6-P5 | Patient portal web (mobile-first, English and Hindi) | ☐ |
 | M6-P6 | Medicine planner (FR-REM-03) | ☐ |

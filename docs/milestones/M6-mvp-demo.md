@@ -2,9 +2,9 @@
 
 | Field | Value |
 |---|---|
-| Status | Opened 20 Oct 2026 (issue #49, branch `m6/49-mvp-demo`); plan approved by the developer (items D2–D5 of the demo plan); M6-P1 confirmed by the developer 20 Oct 2026 and pushed (draft PR #50); M6-P2 approved (A on all eight) and built 21 Oct 2026, awaiting confirmation |
+| Status | Opened 20 Oct 2026 (issue #49, branch `m6/49-mvp-demo`); plan approved by the developer (items D2–D5 of the demo plan); M6-P1 confirmed by the developer 20 Oct 2026 and pushed (draft PR #50); M6-P2 confirmed 21 Oct 2026 and pushed; M6-P3 designed (ADR-0015 Proposed), awaiting approval |
 | PRD | v1.1 §0 (C1–C3), §8.13 |
-| ADR | ADR-0013 (for M7), ADR-0014 (for M8); patient accounts and Google sign-in get an ADR in P3 |
+| ADR | ADR-0013 (for M7), ADR-0014 (for M8); patient accounts and Google sign-in: ADR-0015 (Proposed, P3) |
 | Covers | FR-AUTH-07, FR-PRT-01..04, FR-REM-03, FR-NTF-01, FR-PUB-01..04 |
 | Issue / branch / PR | #49 · `m6/49-mvp-demo` · one PR for the milestone (ADR-0011) |
 | Exit criterion | On the local stack: each role lands on its own dashboard; a patient signs in with Google or email, links a clinic record by invite or prescription link, and sees appointments, prescriptions, reminders and a medicine plan; notifications arrive in the app; a public booking request is confirmed by the front desk; `make e2e` green |
@@ -15,8 +15,8 @@
 | Phase | Builds | Design |
 |---|---|---|
 | P1 | Design system (tokens, primitives, Motion, responsive shell) and the role dashboards' first screen: *Today* for front desk, doctor and owner | Below (confirmed 20 Oct 2026) |
-| P2 | The design system across the existing screens (queue, patients, consultation, schedule, follow-ups, ops); mobile layouts; motion for drawers, dialogs and list changes | Below (approved 20 Oct 2026; built, awaiting confirmation) |
-| P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR) | At its start |
+| P2 | The design system across the existing screens (queue, patients, consultation, schedule, follow-ups, ops); mobile layouts; motion for drawers, dialogs and list changes | Below (confirmed 21 Oct 2026) |
+| P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR) | Below (awaiting approval) |
 | P4 | Linking a patient account to a clinic's record by clinic invite or prescription link; the patient API (appointments, prescriptions, reminders, per clinic) | At its start |
 | P5 | Patient portal web: mobile-first, English and Hindi, with Motion | At its start |
 | P6 | Medicine planner (FR-REM-03): a dose schedule derived only from the prescribed lines | At its start |
@@ -239,3 +239,76 @@ Planned verification:
   - The local database was reset (`docker compose down -v`, then `make seed`). Repeated runs on
     one day had filled the e2e extra session, so `sessionRunningNow` hit `SCH_OVERLAP`. This is a
     limit of that test helper with reused local data, not of the app.
+
+Confirmed by the developer on 21 Oct 2026 and pushed to draft PR #50.
+
+---
+
+## M6-P3 — Accounts: Google sign-in for staff and patients, patient email and password
+
+Proposed 21 Oct 2026. Recommendations are marked (rec). ADR-0015 (Proposed) records decisions
+1–4 and 6. Covers FR-AUTH-07 and FR-PRT-01. Linking an account to a clinic's record is P4; the
+portal screens are P5. P3 delivers only the sign-in, sign-up and sign-out screens and an account
+page that says no clinic is linked yet.
+
+Facts the design rests on:
+
+- **Staff today** (ADR-0006, M1):
+  - **Accounts and cookies:** every signed-in person is a `users` row. They sign in with an
+    email or phone number and a password (Argon2id; five failures lock the account for 15
+    minutes). The JWT (audience `mediease`) travels in `me_access` on `/api`, the rotating
+    refresh token in `me_refresh` on `/api/v1/auth`, and `me_csrf` on `/`.
+  - **Every request:** the API re-reads the session, the user and the memberships; clinic access
+    exists only through an active membership.
+- **Nothing to sign in with yet.** There is no OAuth client (L-09 is pending) and no email
+  provider, so no email can be verified or sent.
+- **Already available.** The API already has PyJWT with `cryptography` (RS256, `PyJWKClient`)
+  and calls out with `urllib`. Public routes have a PostgreSQL rate limiter (M4-P5).
+- **The proxy.** It sends anyone without `me_csrf` to `/sign-in`, except on public paths.
+
+| # | Question | A (rec) | Rejected |
+|---|---|---|---|
+| 1 | Where patient accounts live | A new `patient_accounts` table and `patient_refresh_tokens`, apart from `users`. They are not tenant data. A patient account has no memberships, so no staff route can ever serve it. The same person may have both a staff user and a patient account | B: `users` with a patient flag (one missed check gives a patient a staff route) |
+| 2 | Keeping the sessions apart | Portal cookies `me_pt_access` (Path `/api/v1/portal`), `me_pt_refresh` (Path `/api/v1/portal/auth`) and `me_pt_csrf`. JWT audience `mediease-portal`; each verifier refuses the other's audience (401). Portal routes under `/api/v1/portal/…` with a new `@patient` access policy, inside the existing default-deny check. Web pages under `/portal/…` with their own sign-in redirect in the proxy | B: the staff cookies with a role claim (every route would have to check it) |
+| 3 | How Google sign-in works | OpenID Connect Authorization Code flow with PKCE, run by the API. `GET /api/v1/auth/google/start?intent=staff\|patient&next=` redirects to Google; `state`, `nonce`, the PKCE verifier, the intent and `next` sit in a 10-minute signed HttpOnly cookie. `GET /api/v1/auth/google/callback` exchanges the code and verifies the ID token: RS256 against Google's JWKS, `iss`, `aud`, `exp`, `nonce` and `email_verified`. It then sets the staff or the portal cookies and redirects to a safe `next`. No Google script on our pages, so the CSP is unchanged. Behind an `OidcPort`; PyJWT and `urllib` only, no new dependency | B: Google Identity Services in the browser (a third-party script and CSP changes). C: Authlib (a dependency for one flow) |
+| 4 | Who a Google sign-in is | `external_identities` (provider, `sub`, and a staff user or a patient account).<br>**Staff:** the first sign-in links an existing active staff user whose email equals Google's verified email; after that only the `sub` is matched. It never creates staff access. An unknown address returns to `/sign-in` with "No MediEase staff account uses this Google address". Platform ops users may not use Google.<br>**Patients:** the first sign-in creates a patient account (the name and email from Google) | B: match staff by email every time (an address that moves at Google would move the access with it). C: let Google create staff accounts (against FR-AUTH-07) |
+| 5 | Patient email and password | Sign-up takes a name, email and password, then signs the patient in. The same Argon2id, 10-character minimum and five-failure lockout as staff. The email is stored unverified. There is no password reset by email until an email provider exists; a patient who forgets uses Google or a new clinic invite (P4). Google and password accounts are never merged automatically, even with the same address, so an unverified address cannot claim someone's account or their linked records | B: email verification and reset now (needs a paid email provider; noted as a later item). C: merge by email (account takeover by whoever registered the address first) |
+| 6 | Working without L-09 | `GOOGLE_OIDC_PROVIDER=google\|fake`. `fake` is allowed only with `APP_ENV` `local` or `test`, and start-up refuses it elsewhere. It skips Google: `/start` goes straight to `/callback` with a synthetic verified identity for the `login_hint` email, through the same matching and cookie code. With `google`, `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are required. The redirect URI is `PUBLIC_BASE_URL` + `/api/v1/auth/google/callback` (through the web origin's rewrite) | B: wait for L-09 (blocks the demo). C: a mock Google server container (more to run, and it proves little more) |
+| 7 | Abuse and privacy | Sign-up, sign-in and Google's start and callback are rate limited per caller fingerprint with the M4-P5 limiter. Errors are generic ("email or password is incorrect"). Audit events are `patient_account.created`, `patient.signed_in` and `staff.signed_in_google`, with a new actor type `PATIENT`; IDs only, no email. Sign-up does reveal that an address already has a password account; this is accepted and rate limited (ADR-0015) | B: a sign-up that hides existing addresses (needs email delivery to finish the sign-up) |
+| 8 | Web screens | `/sign-in` (staff) gains *Continue with Google*. New `/portal/sign-in` and `/portal/sign-up` in the `AuthFrame` card, with Google and email forms. `/portal` (the account) shows the name, how they signed in, *No clinic linked yet* with what P4 will offer, and *Sign out*. Mobile-first at 360 px; English only in P3 (Hindi arrives with the portal in P5) | B: one sign-in page that asks "staff or patient?" (staff and patients would see each other's options) |
+
+Fixed points:
+
+- **Contract.** 0.23.0 with the portal and Google routes; generated web types.
+- **Migration.** `0020`: `patient_accounts`, `patient_refresh_tokens`, `external_identities` and
+  the `PATIENT` actor type. `docs/DATA_MODEL.md` updated.
+- **Settings.** `GOOGLE_OIDC_PROVIDER`, `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in
+  `.env.example`. The secret is a `SecretStr` and never logged.
+- **Unchanged.** No staff behaviour changes for password sign-in. Every existing test and
+  journey passes.
+- **New error codes in `docs/ERRORS.md`:** `AUTH_GOOGLE_NO_STAFF_ACCOUNT`,
+  `AUTH_GOOGLE_FAILED`, `PRT_EMAIL_TAKEN` and `PRT_INVALID_CREDENTIALS`.
+
+Planned verification:
+
+- **Unit:**
+  - **ID token:** signature, `iss`, `aud`, `exp`, `nonce` and `email_verified`, each refused when
+    wrong, with test RSA keys and a fake JWKS.
+  - **Flow cookie:** `state` mismatch, an expired flow cookie, and PKCE.
+  - **Start-up:** the fake provider refused in production.
+- **Integration (PostgreSQL):**
+  - **Patient sign-up and sign-in:** sign up, sign in, the lockout, refresh rotation and reuse,
+    sign out.
+  - **Google staff matching:** a first sign-in links an active staff user by verified email,
+    later ones match by `sub`; ops users, unknown addresses and inactive users are refused.
+  - **Google patients:** the first sign-in creates the account.
+- **Separation (permanent suite):**
+  - A portal token is 401 on every staff and clinic route, and a staff token is 401 on every
+    portal route.
+  - A patient account never appears in clinic staff lists or memberships.
+- **Playwright:**
+  - A patient signs up by email, sees their account at 360 px and signs out.
+  - A patient signs in with Google (fake).
+  - The seeded doctor uses *Continue with Google* (fake) and lands on Today.
+  - Failure path: an unknown Google address on the staff page shows the message.
+- **Gates:** `make lint typecheck contract-check test` and `make e2e`.
