@@ -95,7 +95,7 @@ export function Menu({
             show(0);
           }
         }}
-        className="rounded border border-slate-500 px-3 py-1.5 hover:bg-slate-100"
+        className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
       >
         {text}
       </button>
@@ -105,7 +105,7 @@ export function Menu({
           role="menu"
           aria-label={label}
           onKeyDown={onMenuKey}
-          className="absolute right-0 z-20 mt-1 min-w-40 rounded border border-slate-400 bg-white py-1 shadow-lg"
+          className="absolute right-0 z-20 mt-1 min-w-40 rounded-lg border border-slate-300 bg-white py-1 shadow-lg"
         >
           {items.map((item, index) => (
             <button
@@ -121,7 +121,7 @@ export function Menu({
                 button.current?.focus();
                 item.onSelect();
               }}
-              className="block w-full px-4 py-2 text-left hover:bg-slate-100 focus:bg-blue-100"
+              className="block w-full px-4 py-2 text-left hover:bg-slate-100 focus:bg-brand-100"
             >
               {item.label}
             </button>
