@@ -24,7 +24,7 @@ export function AcceptLink({ url, name }: { url: string; name: string }) {
   }
 
   return (
-    <div className="space-y-2 rounded border border-slate-500 bg-slate-50 p-4">
+    <div className="space-y-2 rounded-lg border border-slate-400 bg-slate-50 p-4">
       <label htmlFor="accept-link" className="block font-medium">
         Invitation link for {name}
       </label>
@@ -35,12 +35,12 @@ export function AcceptLink({ url, name }: { url: string; name: string }) {
           readOnly
           value={url}
           onFocus={(event) => event.target.select()}
-          className="w-full rounded border border-slate-500 bg-white px-3 py-2 font-mono text-sm"
+          className="w-full rounded-lg border border-slate-400 bg-white px-3 py-2 font-mono text-sm"
         />
         <button
           type="button"
           onClick={() => void copy()}
-          className="rounded border border-slate-500 bg-white px-3 py-2 font-medium hover:bg-slate-100"
+          className="rounded-lg border border-slate-400 bg-white px-3 py-2 font-medium hover:bg-slate-100"
         >
           Copy link
         </button>

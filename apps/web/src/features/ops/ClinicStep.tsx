@@ -2,7 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 
-import { TextField } from "@/components/TextField";
+import { TextField } from "@/components/ui/Field";
 import { useFocusOnError } from "@/components/useFocusOnError";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -167,7 +167,7 @@ export function ClinicStep({ onCreated }: { onCreated: (clinic: NewClinicResult)
         <button
           type="submit"
           disabled={submitting}
-          className="rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-slate-500"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
         >
           {submitting ? "Creating…" : "Create clinic and continue"}
         </button>

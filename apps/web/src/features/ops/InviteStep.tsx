@@ -2,7 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 
-import { TextField } from "@/components/TextField";
+import { TextField } from "@/components/ui/Field";
 import { useFocusOnError } from "@/components/useFocusOnError";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { ROLE_LABELS } from "@/features/auth/labels";
@@ -106,14 +106,14 @@ export function InviteStep({
           <button
             type="button"
             onClick={inviteAnother}
-            className="rounded border border-blue-800 px-4 py-2 font-semibold text-blue-900 hover:bg-blue-50"
+            className="rounded-lg border border-brand-700 px-4 py-2 font-semibold text-brand-800 hover:bg-brand-50"
           >
             Invite another person
           </button>
           <button
             type="button"
             onClick={onFinish}
-            className="rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
           >
             Finish
           </button>
@@ -161,7 +161,7 @@ export function InviteStep({
             id="invite-role"
             value={role}
             onChange={(event) => setRole(event.target.value as Role)}
-            className="rounded border border-slate-500 bg-white px-3 py-2"
+            className="rounded-lg border border-slate-400 bg-white px-3 py-2"
           >
             {ROLES.map((value) => (
               <option key={value} value={value}>
@@ -194,7 +194,7 @@ export function InviteStep({
         <button
           type="submit"
           disabled={submitting}
-          className="rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-slate-500"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
         >
           {submitting ? "Inviting…" : "Create invitation"}
         </button>
@@ -205,7 +205,7 @@ export function InviteStep({
           <button
             type="button"
             onClick={onFinish}
-            className="rounded border border-slate-500 px-4 py-2 font-medium hover:bg-slate-100"
+            className="rounded-lg border border-slate-400 px-4 py-2 font-medium hover:bg-slate-100"
           >
             Finish without inviting anyone else
           </button>

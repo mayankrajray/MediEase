@@ -125,7 +125,7 @@ export function CreateClinicWizard({ resumeClinicId }: { resumeClinicId?: string
     return (
       <div className="max-w-xl space-y-3">
         <ErrorNotice error={resume.error} />
-        <Link href="/ops" className="text-blue-800 underline">
+        <Link href="/ops" className="text-brand-800 underline">
           Back to the clinics
         </Link>
       </div>
@@ -134,7 +134,7 @@ export function CreateClinicWizard({ resumeClinicId }: { resumeClinicId?: string
 
   return (
     <section aria-labelledby="wizard-title" className="space-y-5">
-      <h1 id="wizard-title" className="text-2xl font-bold">
+      <h1 id="wizard-title" className="text-2xl font-bold tracking-tight">
         Create clinic
       </h1>
 
@@ -204,7 +204,7 @@ export function CreateClinicWizard({ resumeClinicId }: { resumeClinicId?: string
           </p>
           <Link
             href="/ops"
-            className="inline-block rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900"
+            className="inline-block rounded bg-brand-700 px-4 py-2 font-semibold text-white hover:bg-brand-800"
           >
             Back to the clinics
           </Link>

@@ -2,7 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 
-import { TextField } from "@/components/TextField";
+import { TextField } from "@/components/ui/Field";
 import { useFocusOnError } from "@/components/useFocusOnError";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -150,7 +150,7 @@ export function DoctorsStep({
         <button
           type="submit"
           disabled={submitting}
-          className="rounded border border-blue-800 px-4 py-2 font-semibold text-blue-900 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-600"
+          className="rounded-lg border border-brand-700 px-4 py-2 font-semibold text-brand-800 hover:bg-brand-50 disabled:cursor-not-allowed disabled:text-slate-600"
         >
           {submitting ? "Adding…" : "Add doctor"}
         </button>
@@ -160,7 +160,7 @@ export function DoctorsStep({
         <button
           type="button"
           onClick={onContinue}
-          className="rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
         >
           {total > 0 ? "Continue to owner invitation" : "Skip for now"}
         </button>
