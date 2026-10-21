@@ -57,7 +57,7 @@ export function ChallengeForm({
             className="mt-1 w-32 rounded border border-slate-600 p-2 text-xl tracking-widest"
           />
           <input type="hidden" name="lang" value={language} />
-          <button type="submit" className="mt-4 block rounded bg-blue-800 px-4 py-3 font-semibold text-white">
+          <button type="submit" className="mt-4 block rounded-lg bg-brand-700 px-4 py-3 font-semibold text-white">
             {strings.open}
           </button>
         </form>
