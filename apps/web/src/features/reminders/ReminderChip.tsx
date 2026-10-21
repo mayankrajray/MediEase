@@ -7,7 +7,7 @@ import { REMINDER_STATUS_LABELS, explainFailure } from "./labels";
 
 /** Status in words first, colour only as a second signal (spec §6, apps/web/CLAUDE.md). */
 const TONE: Record<Reminder["status"], string> = {
-  SCHEDULED: "bg-blue-50 ring-blue-700 text-blue-950",
+  SCHEDULED: "bg-brand-50 ring-brand-600 text-brand-900",
   SENT: "bg-green-50 ring-green-700 text-green-950",
   DELIVERED: "bg-green-50 ring-green-700 text-green-950",
   READ: "bg-green-50 ring-green-700 text-green-950",

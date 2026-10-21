@@ -1,5 +1,6 @@
 "use client";
 
+import { TABLE, TD, TH, TR } from "@/components/ui/table";
 import { useEffect, useState } from "react";
 
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
@@ -50,7 +51,7 @@ export function PatientMessages({ patient }: Readonly<{ patient: Patient }>) {
   const anyFailed = items?.some((m) => shouldCall(m.status)) ?? false;
 
   return (
-    <section aria-labelledby="message-history-heading" className="space-y-2">
+    <section aria-labelledby="message-history-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
       <h2 id="message-history-heading" className="text-lg font-bold">
         Message history
       </h2>
@@ -58,30 +59,30 @@ export function PatientMessages({ patient }: Readonly<{ patient: Patient }>) {
       {items === undefined && error === undefined && <p className="text-slate-700">Loading messages…</p>}
       {items !== undefined && items.length === 0 && <p className="text-slate-700">No messages sent yet.</p>}
       {items !== undefined && items.length > 0 && (
-        <table className="w-full text-left">
+        <table role="table" className={TABLE}>
           <caption className="sr-only">Messages sent to the patient, newest first</caption>
-          <thead className="text-sm text-slate-700">
-            <tr>
-              <th scope="col">Message</th>
-              <th scope="col">Channel</th>
-              <th scope="col">Status</th>
-              <th scope="col">When</th>
+          <thead role="rowgroup">
+            <tr role="row">
+              <th role="columnheader" scope="col" className={TH}>Message</th>
+              <th role="columnheader" scope="col" className={TH}>Channel</th>
+              <th role="columnheader" scope="col" className={TH}>Status</th>
+              <th role="columnheader" scope="col" className={TH}>When</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody role="rowgroup">
             {items.map((m) => {
               const why = explainFailure(m.status, m.error_code);
               return (
-                <tr key={m.id} className="border-t border-slate-200 align-top">
-                  <th scope="row" className="py-2 pr-3 font-medium">
+                <tr role="row" key={m.id} className={TR}>
+                  <th role="rowheader" scope="row" className={`${TD} font-medium`}>
                     {templateLabel(m.template_key)}
                   </th>
-                  <td className="pr-3">{CHANNEL_LABELS[m.channel]}</td>
-                  <td className="pr-3">
+                  <td role="cell" data-label="Channel" className={TD}>{CHANNEL_LABELS[m.channel]}</td>
+                  <td role="cell" data-label="Status" className={TD}>
                     {MESSAGE_STATUS_LABELS[m.status]}
                     {why !== null && <span className="block text-sm text-slate-800">{why}</span>}
                   </td>
-                  <td>{formatDateTime(lastTime(m), clinic.timezone)}</td>
+                  <td role="cell" data-label="When" className={TD}>{formatDateTime(lastTime(m), clinic.timezone)}</td>
                 </tr>
               );
             })}
@@ -90,7 +91,7 @@ export function PatientMessages({ patient }: Readonly<{ patient: Patient }>) {
       )}
       {anyFailed && (
         <p>
-          <a href={`tel:${patient.phone_e164}`} className="font-medium text-blue-900 underline">
+          <a href={`tel:${patient.phone_e164}`} className="font-medium text-brand-800 underline">
             Call patient{" "}<span className="sr-only">on {formatPhone(patient.phone_e164)}</span>
           </a>{" "}
           if a message that did not arrive mattered.

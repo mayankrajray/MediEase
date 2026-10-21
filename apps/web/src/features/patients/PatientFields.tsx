@@ -1,6 +1,6 @@
 "use client";
 
-import { TextField } from "@/components/TextField";
+import { TextField } from "@/components/ui/Field";
 
 import {
   LANGUAGE_LABELS,
@@ -123,7 +123,7 @@ export function PatientFields({
             value={draft.sex}
             aria-invalid={problems["sex"] !== undefined ? true : undefined}
             onChange={(event) => set("sex", event.target.value as Sex | "")}
-            className="w-full rounded border border-slate-500 px-3 py-2"
+            className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
           >
             <option value="">Not recorded</option>
             {(Object.keys(SEX_LABELS) as Sex[]).map((sex) => (
@@ -142,7 +142,7 @@ export function PatientFields({
             id={id("language")}
             value={draft.language}
             onChange={(event) => set("language", event.target.value as Language)}
-            className="w-full rounded border border-slate-500 px-3 py-2"
+            className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
           >
             {(Object.keys(LANGUAGE_LABELS) as Language[]).map((language) => (
               <option key={language} value={language}>

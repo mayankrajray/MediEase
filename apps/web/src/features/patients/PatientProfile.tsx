@@ -64,7 +64,7 @@ export function PatientProfile({ patientId }: { patientId: string }) {
   if (load.status === "failed") {
     return isNotFound(load.error) ? (
       <section className="space-y-2">
-        <h1 className="text-2xl font-bold">Patient not found</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Patient not found</h1>
         <p>This patient is not registered in {clinic.name}. Search again with the phone number or code.</p>
       </section>
     ) : (
@@ -86,7 +86,7 @@ export function PatientProfile({ patientId }: { patientId: string }) {
     <article aria-labelledby="patient-heading" className="space-y-6">
       <header className="space-y-1">
         <p className="font-mono text-lg font-semibold text-slate-800">{patient.code}</p>
-        <h1 id="patient-heading" className="text-2xl font-bold">
+        <h1 id="patient-heading" className="text-2xl font-bold tracking-tight">
           {patient.full_name}
         </h1>
         <p className="text-slate-800">
@@ -95,7 +95,7 @@ export function PatientProfile({ patientId }: { patientId: string }) {
         </p>
       </header>
 
-      <section aria-labelledby="details-heading" className="space-y-3 rounded border border-slate-300 p-4">
+      <section aria-labelledby="details-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
         <div className="flex items-center justify-between">
           <h2 id="details-heading" className="text-lg font-bold">
             Details
@@ -104,7 +104,7 @@ export function PatientProfile({ patientId }: { patientId: string }) {
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="rounded border border-slate-600 px-3 py-1.5 font-medium hover:bg-slate-100"
+              className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
             >
               Edit details
             </button>
@@ -124,7 +124,7 @@ export function PatientProfile({ patientId }: { patientId: string }) {
           <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
             <dt className="font-medium">{patient.is_minor ? "Parent or guardian's phone" : "Phone"}</dt>
             <dd>
-              <a href={`tel:${patient.phone_e164}`} className="text-blue-900 underline">
+              <a href={`tel:${patient.phone_e164}`} className="text-brand-800 underline">
                 {formatPhone(patient.phone_e164)}
               </a>
             </dd>

@@ -169,13 +169,13 @@ export function PatientSearch({ debounceMs = SEARCH_DEBOUNCE_MS }: { debounceMs?
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
-        className="w-full rounded border border-slate-500 px-3 py-2"
+        className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
       />
       {expanded && (
         <div
           // Clicks inside the popup must not blur the input before they land.
           onMouseDown={(event) => event.preventDefault()}
-          className="absolute z-20 mt-1 max-h-96 w-full overflow-y-auto rounded border border-slate-400 bg-white shadow-lg"
+          className="absolute z-20 mt-1 max-h-96 w-full overflow-y-auto rounded-lg border border-slate-300 bg-white shadow-lg"
         >
           <ul id={listId} role="listbox" aria-label="Patients" aria-busy={search.status === "loading"}>
             {items.map((patient, index) => (
@@ -185,7 +185,7 @@ export function PatientSearch({ debounceMs = SEARCH_DEBOUNCE_MS }: { debounceMs?
                 role="option"
                 aria-selected={index === active}
                 onClick={() => openPatient(patient)}
-                className="cursor-pointer px-3 py-2 aria-selected:bg-blue-100 hover:bg-slate-100"
+                className="cursor-pointer px-3 py-2 aria-selected:bg-brand-100 hover:bg-slate-100"
               >
                 <span className="font-semibold">{patient.full_name}</span>{" "}
                 <span className="text-sm text-slate-700">
@@ -206,7 +206,7 @@ export function PatientSearch({ debounceMs = SEARCH_DEBOUNCE_MS }: { debounceMs?
                 <button
                   type="button"
                   onClick={registerFromSearch}
-                  className="rounded border border-blue-800 px-3 py-1.5 font-medium text-blue-900 hover:bg-blue-50"
+                  className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-brand-700 bg-white px-3 py-1 text-sm font-medium text-brand-800 transition-colors hover:bg-brand-50 motion-reduce:transition-none"
                 >
                   Register patient
                 </button>

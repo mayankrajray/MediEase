@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { TABLE, TABLE_WRAP, TD, TH, TR } from "@/components/ui/table";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { maskPhone } from "@/lib/format/phone";
@@ -51,14 +52,14 @@ export function PatientResults({ q }: { q: string }) {
   return (
     <section aria-labelledby="patients-heading" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 id="patients-heading" className="text-2xl font-bold">
+        <h1 id="patients-heading" className="text-2xl font-bold tracking-tight">
           Patients
         </h1>
         {register !== null && (
           <button
             type="button"
             onClick={register}
-            className="rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
           >
             Register patient
           </button>
@@ -84,33 +85,35 @@ export function PatientResults({ q }: { q: string }) {
           No patient matches “{text}”.
         </p>
       ) : (
-        <table className="w-full border-collapse text-left">
-          <caption className="sr-only">Patients matching “{text}”</caption>
-          <thead>
-            <tr className="border-b border-slate-400">
-              <th scope="col" className="py-2 pr-4">Name</th>
-              <th scope="col" className="py-2 pr-4">Code</th>
-              <th scope="col" className="py-2 pr-4">Age</th>
-              <th scope="col" className="py-2 pr-4">Sex</th>
-              <th scope="col" className="py-2">Phone</th>
-            </tr>
-          </thead>
-          <tbody>
-            {load.items.map((patient) => (
-              <tr key={patient.id} className="border-b border-slate-200">
-                <td className="py-2 pr-4">
-                  <Link href={patientPath(patient.id)} className="font-semibold text-blue-900 underline">
-                    {patient.full_name}
-                  </Link>
-                </td>
-                <td className="py-2 pr-4">{patient.code}</td>
-                <td className="py-2 pr-4">{ageText(patient)}</td>
-                <td className="py-2 pr-4">{SEX_LABELS[patient.sex]}</td>
-                <td className="py-2">{maskPhone(patient.phone_e164)}</td>
+        <div className={TABLE_WRAP}>
+          <table role="table" className={TABLE}>
+            <caption className="sr-only">Patients matching “{text}”</caption>
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" scope="col" className={TH}>Name</th>
+                <th role="columnheader" scope="col" className={TH}>Code</th>
+                <th role="columnheader" scope="col" className={TH}>Age</th>
+                <th role="columnheader" scope="col" className={TH}>Sex</th>
+                <th role="columnheader" scope="col" className={TH}>Phone</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody role="rowgroup">
+              {load.items.map((patient) => (
+                <tr role="row" key={patient.id} className={TR}>
+                  <td role="cell" data-label="" className={TD}>
+                    <Link href={patientPath(patient.id)} className="font-semibold text-brand-800 underline-offset-2 hover:underline">
+                      {patient.full_name}
+                    </Link>
+                  </td>
+                  <td role="cell" data-label="Code" className={TD}>{patient.code}</td>
+                  <td role="cell" data-label="Age" className={TD}>{ageText(patient)}</td>
+                  <td role="cell" data-label="Sex" className={TD}>{SEX_LABELS[patient.sex]}</td>
+                  <td role="cell" data-label="Phone" className={TD}>{maskPhone(patient.phone_e164)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );
