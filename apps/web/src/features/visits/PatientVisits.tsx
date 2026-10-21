@@ -59,7 +59,7 @@ export function PatientVisits({ patientId }: Readonly<{ patientId: string }>) {
   }
 
   return (
-    <section aria-labelledby="visits-heading" className="space-y-2">
+    <section aria-labelledby="visits-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
       <h2 id="visits-heading" className="text-lg font-bold">
         Visits
       </h2>
@@ -69,9 +69,9 @@ export function PatientVisits({ patientId }: Readonly<{ patientId: string }>) {
       {items !== undefined && items.length > 0 && (
         <ol className="space-y-3">
           {items.map((v) => (
-            <li key={v.id} className="rounded border border-slate-300 p-3">
+            <li key={v.id} className="rounded-card border border-slate-200 bg-white p-3">
               <p className="flex flex-wrap items-baseline justify-between gap-2">
-                <Link href={visitPath(v.id)} className="font-semibold text-blue-900 underline">
+                <Link href={visitPath(v.id)} className="font-semibold text-brand-800 underline">
                   {formatDateTime(v.started_at, clinic.timezone)}
                 </Link>
                 <span className="text-sm text-slate-800">{v.status === "OPEN" ? "In progress" : "Completed"}</span>
@@ -94,7 +94,7 @@ export function PatientVisits({ patientId }: Readonly<{ patientId: string }>) {
           type="button"
           disabled={loading}
           onClick={() => more(next)}
-          className="rounded border border-slate-600 px-3 py-1.5 font-medium hover:bg-slate-100 disabled:text-slate-500"
+          className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
         >
           {loading ? "Loading…" : "Show earlier visits"}
         </button>

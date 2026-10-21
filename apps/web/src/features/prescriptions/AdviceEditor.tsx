@@ -55,7 +55,7 @@ export function AdviceEditor({
               value={advice[box.key]}
               onChange={(e) => onAdvice({ ...advice, [box.key]: e.target.value })}
               onBlur={onLeave}
-              className="w-full rounded border border-slate-500 px-2 py-1.5"
+              className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
             />
           </div>
         ))}
@@ -74,7 +74,7 @@ export function AdviceEditor({
             value={followUp}
             onChange={(e) => onFollowUp(e.target.value)}
             onBlur={onLeave}
-            className="rounded border border-slate-500 px-2 py-1.5"
+            className="rounded-lg border border-slate-400 px-2 py-1.5"
           />
         </div>
         {SHORTCUTS.map((days) => (
@@ -84,7 +84,7 @@ export function AdviceEditor({
             disabled={disabled}
             aria-label={`Follow-up in ${days} days`}
             onClick={() => onFollowUp(addDays(today, days))}
-            className="rounded border border-slate-600 px-3 py-1.5 font-medium hover:bg-slate-100 disabled:text-slate-500"
+            className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
           >
             +{days} d
           </button>
@@ -94,7 +94,7 @@ export function AdviceEditor({
             type="button"
             disabled={disabled}
             onClick={() => onFollowUp("")}
-            className="rounded border border-slate-600 px-3 py-1.5 font-medium hover:bg-slate-100 disabled:text-slate-500"
+            className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
           >
             No follow-up
           </button>

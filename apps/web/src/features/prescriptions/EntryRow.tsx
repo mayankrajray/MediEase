@@ -107,10 +107,10 @@ export function EntryRow({
     [hint === true ? `${fieldId(name)}-hint` : "", errorOf(name) !== undefined ? `${fieldId(name)}-error` : ""].filter(Boolean).join(" ") ||
     undefined;
   const label = "block text-sm font-medium";
-  const input = "w-full rounded border border-slate-500 px-2 py-1.5";
+  const input = "w-full rounded-lg border border-slate-400 px-2 py-1.5";
 
   return (
-    <div role="group" aria-label="New medicine" onKeyDown={onKeyDown} className="space-y-2 rounded border border-slate-300 bg-slate-50 p-3">
+    <div role="group" aria-label="New medicine" onKeyDown={onKeyDown} className="space-y-2 rounded-card border border-slate-200 bg-white bg-slate-50 p-3">
       <div className="grid grid-cols-[minmax(12rem,2fr)_minmax(5rem,1fr)_minmax(7rem,1fr)_minmax(8rem,1fr)_minmax(5rem,0.7fr)_auto] items-start gap-2">
         <div>
           <label htmlFor={fieldId("name")} className={label}>
@@ -197,7 +197,7 @@ export function EntryRow({
           type="button"
           disabled={disabled}
           onClick={add}
-          className="mt-5 rounded bg-blue-800 px-3 py-1.5 font-semibold text-white hover:bg-blue-900 disabled:bg-slate-400"
+          className="mt-5 rounded bg-brand-700 px-3 py-1.5 font-semibold text-white hover:bg-brand-800 disabled:bg-slate-400"
         >
           Add line
         </button>

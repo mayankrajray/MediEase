@@ -88,9 +88,9 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
   if (load.status === "failed") {
     return isNotFound(load.error) ? (
       <section className="space-y-2">
-        <h1 className="text-2xl font-bold">Visit not found</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Visit not found</h1>
         <p>
-          This visit is not in {clinic.name}. <Link href="/queue" className="text-blue-900 underline">Back to the queue</Link>
+          This visit is not in {clinic.name}. <Link href="/queue" className="text-brand-800 underline">Back to the queue</Link>
         </p>
       </section>
     ) : (
@@ -135,8 +135,8 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-300 pb-3">
         <div>
           <p className="text-sm font-medium text-slate-700">Consultation</p>
-          <h1 id="consultation-heading" className="text-2xl font-bold">
-            <Link href={patientPath(patient.id)} className="text-blue-900 underline">
+          <h1 id="consultation-heading" className="text-2xl font-bold tracking-tight">
+            <Link href={patientPath(patient.id)} className="text-brand-800 underline">
               {patient.full_name}
             </Link>
           </h1>
@@ -149,7 +149,7 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
           <p className="font-medium">
             {visit.status === "OPEN" ? "In consultation" : locked ? "Completed · locked" : "Completed · notes editable for 24 hours"}
           </p>
-          <Link href="/queue" className="rounded border border-slate-500 px-3 py-2 hover:bg-slate-100">
+          <Link href="/queue" className="rounded-lg border border-slate-400 px-3 py-2 hover:bg-slate-100">
             Back to the queue
           </Link>
           {writer && visit.status === "OPEN" && (
@@ -157,7 +157,7 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
               type="button"
               disabled={completing}
               onClick={() => void complete(false)}
-              className="rounded bg-green-800 px-4 py-2 font-semibold text-white hover:bg-green-900 disabled:bg-slate-400"
+              className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-800 disabled:bg-slate-400"
             >
               {completing ? "Completing…" : "Complete visit"}
             </button>
@@ -166,7 +166,7 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
       </header>
       {completeError !== undefined && <ErrorNotice error={completeError} />}
       {!writer && (
-        <p className="rounded border border-slate-400 bg-slate-50 p-2">
+        <p className="rounded-lg border border-slate-300 bg-slate-50 p-2">
           {canWrite ? "This is another doctor's visit: you can read it but not change it." : "Read only."}
         </p>
       )}
@@ -205,7 +205,7 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
               chainId={(prescriptions.find((p) => p.version === 1) ?? issued).id}
             />
           ) : (
-            <section aria-labelledby="rx-heading">
+            <section aria-labelledby="rx-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
               <h2 id="rx-heading" className="text-lg font-bold">
                 Prescription
               </h2>
@@ -220,13 +220,13 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
         <Dialog title="Complete without issuing?" onClose={() => setConfirming(false)}>
           <p>The prescription is written but not issued, so the patient gets nothing to print or open. You can still issue it afterwards.</p>
           <div className="flex justify-end gap-2">
-            <button type="button" data-autofocus onClick={() => setConfirming(false)} className="rounded border border-slate-500 px-4 py-2">
+            <button type="button" data-autofocus onClick={() => setConfirming(false)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none">
               Go back
             </button>
             <button
               type="button"
               onClick={() => void complete(true)}
-              className="rounded bg-green-800 px-4 py-2 font-semibold text-white hover:bg-green-900"
+              className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-800"
             >
               Complete anyway
             </button>

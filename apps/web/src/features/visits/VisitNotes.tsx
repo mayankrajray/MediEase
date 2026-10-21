@@ -108,7 +108,7 @@ export function VisitNotes({
 
   if (!editable) {
     return (
-      <section aria-labelledby="notes-heading" className="space-y-2">
+      <section aria-labelledby="notes-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
         <h2 id="notes-heading" className="text-lg font-bold">
           Notes
         </h2>
@@ -132,7 +132,7 @@ export function VisitNotes({
 
   const vitalError = (v: (typeof VITALS)[number]) => vitalProblem(v, notes.vitals[v.key]);
   return (
-    <section aria-labelledby="notes-heading" className="space-y-3">
+    <section aria-labelledby="notes-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
       <div className="flex items-baseline justify-between gap-2">
         <h2 id="notes-heading" className="text-lg font-bold">
           Notes
@@ -142,7 +142,7 @@ export function VisitNotes({
         </p>
       </div>
       {stale && (
-        <div role="alert" className="rounded border border-amber-700 bg-amber-50 p-3">
+        <div role="alert" className="rounded-lg border border-amber-700 bg-amber-50 p-3">
           <p className="font-medium">{saveText(autosave.state)}</p>
           <button type="button" onClick={onReload} className="mt-2 rounded border border-amber-900 bg-white px-3 py-1.5 font-medium">
             Reload
@@ -163,7 +163,7 @@ export function VisitNotes({
                 disabled={stale}
                 onChange={(e) => update({ ...notes, [t.key]: e.target.value })}
                 onBlur={() => void flush()}
-                className="w-full rounded border border-slate-500 px-2 py-1.5"
+                className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
               />
             ) : (
               <textarea
@@ -174,7 +174,7 @@ export function VisitNotes({
                 disabled={stale}
                 onChange={(e) => update({ ...notes, [t.key]: e.target.value })}
                 onBlur={() => void flush()}
-                className="w-full rounded border border-slate-500 px-2 py-1.5"
+                className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
               />
             )}
           </div>
@@ -201,7 +201,7 @@ export function VisitNotes({
                   aria-describedby={problem === undefined ? undefined : `${id}-error`}
                   onChange={(e) => update({ ...notes, vitals: { ...notes.vitals, [v.key]: e.target.value } })}
                   onBlur={() => void flush()}
-                  className="w-full rounded border border-slate-500 px-2 py-1"
+                  className="w-full rounded-lg border border-slate-400 px-2 py-1"
                 />
                 {problem !== undefined && (
                   <p id={`${id}-error`} className="text-xs font-medium text-red-900">
