@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LIST_ITEM, LayoutMotion } from "@/components/ui/LayoutMotion";
+import { m } from "@/components/ui/Motion";
+import { TABLE, TABLE_WRAP, TD, TH, TR } from "@/components/ui/table";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { BookDrawer } from "@/features/appointments/BookDrawer";
@@ -78,12 +82,12 @@ export function PendingFollowUps() {
   return (
     <section aria-labelledby="follow-ups-heading" className="space-y-4">
       <div>
-        <h1 id="follow-ups-heading" className="text-2xl font-bold">
+        <h1 id="follow-ups-heading" className="text-2xl font-bold tracking-tight">
           Pending follow-ups
         </h1>
         <p className="text-slate-800">Patients whose follow-up date has passed without a visit since. Oldest first.</p>
       </div>
-      <p role="status" className="min-h-6 font-medium text-green-900">
+      <p role="status" className="min-h-6 font-medium text-emerald-900">
         {message}
       </p>
 
@@ -103,57 +107,59 @@ export function PendingFollowUps() {
           />
         </div>
       )}
-      {load.status === "ready" && load.items.length === 0 && <p className="text-lg">No follow-ups are overdue.</p>}
+      {load.status === "ready" && load.items.length === 0 && <EmptyState title="No follow-ups are overdue." />}
       {load.status === "ready" && load.items.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left">
+        <LayoutMotion>
+        <div className={TABLE_WRAP}>
+          <table role="table" className={TABLE}>
             <caption className="sr-only">Pending follow-ups, oldest first</caption>
-            <thead>
-              <tr className="border-b border-slate-400">
-                <th scope="col" className="py-2 pr-4">Patient</th>
-                <th scope="col" className="py-2 pr-4">Follow-up was due</th>
-                <th scope="col" className="py-2 pr-4">Doctor</th>
-                <th scope="col" className="py-2 pr-4">Reminder</th>
-                <th scope="col" className="py-2">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader" scope="col" className={TH}>Patient</th>
+                <th role="columnheader" scope="col" className={TH}>Follow-up was due</th>
+                <th role="columnheader" scope="col" className={TH}>Doctor</th>
+                <th role="columnheader" scope="col" className={TH}>Reminder</th>
+                <th role="columnheader" scope="col" className={TH}>
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody role="rowgroup">
               {load.items.map((item) => (
-                <tr key={item.patient_id} className="border-b border-slate-200 align-top">
-                  <th scope="row" className="py-2 pr-4 font-medium">
-                    <Link href={patientPath(item.patient_id)} className="text-blue-900 underline">
+                <m.tr {...LIST_ITEM} role="row" key={item.patient_id} className={TR}>
+                  <th role="rowheader" scope="row" className={`${TD} font-medium`}>
+                    <Link href={patientPath(item.patient_id)} className="text-brand-800 underline-offset-2 hover:underline">
                       {item.patient_name}
                     </Link>
                     <span className="block font-mono text-sm font-normal text-slate-700">{item.patient_code}</span>
                   </th>
-                  <td className="py-2 pr-4">{formatDay(item.follow_up_date)}</td>
-                  <td className="py-2 pr-4">{names.get(item.doctor_id) ?? "–"}</td>
-                  <td className="py-2 pr-4">
+                  <td role="cell" data-label="Follow-up was due" className={TD}>{formatDay(item.follow_up_date)}</td>
+                  <td role="cell" data-label="Doctor" className={TD}>{names.get(item.doctor_id) ?? "–"}</td>
+                  <td role="cell" data-label="Reminder" className={TD}>
                     {item.reminder_status === null ? "None" : REMINDER_STATUS_LABELS[item.reminder_status]}
                   </td>
-                  <td className="py-2">
+                  <td role="cell" data-label="" className={TD}>
                     {booked.has(item.patient_id) ? (
-                      <span className="font-medium text-green-900">{booked.get(item.patient_id)}</span>
+                      <span className="font-medium text-emerald-900">{booked.get(item.patient_id)}</span>
                     ) : (
                       canBook &&
                       active.length > 0 && (
                         <button
                           type="button"
                           onClick={() => setBooking(item)}
-                          className="rounded bg-blue-800 px-3 py-1.5 font-semibold text-white hover:bg-blue-900"
+                          className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg bg-brand-700 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
                         >
                           Book follow-up{" "}<span className="sr-only">for {item.patient_name}</span>
                         </button>
                       )
                     )}
                   </td>
-                </tr>
+                </m.tr>
               ))}
             </tbody>
           </table>
         </div>
+        </LayoutMotion>
       )}
       {load.status === "ready" && load.more && (
         <div className="space-y-2">
@@ -162,7 +168,7 @@ export function PendingFollowUps() {
             type="button"
             disabled={loadingMore}
             onClick={() => void showMore(load.items)}
-            className="rounded border border-slate-600 px-4 py-2 font-medium hover:bg-slate-100 disabled:text-slate-500"
+            className="rounded-lg border border-slate-400 px-4 py-2 font-medium hover:bg-slate-100 disabled:text-slate-500"
           >
             {loadingMore ? "Loading…" : "Show more"}
           </button>
