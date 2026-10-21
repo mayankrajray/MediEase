@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **M6 opened 20 Oct 2026** after M5 merged (PR #41, #40 closed). Plan approved by the developer: the demo plan's D2–D5 as M6, D6–D7 as M7, the multi-clinic WhatsApp and consolidated billing designed now as M8 and built later; deployment and hosting skipped for now. Product rules changed to PRD v1.1. M6-P1 confirmed and pushed (draft PR #50); M6-P2 approved and built, awaiting confirmation |
+| Status | **M6 opened 20 Oct 2026** after M5 merged (PR #41, #40 closed). Plan approved by the developer: the demo plan's D2–D5 as M6, D6–D7 as M7, the multi-clinic WhatsApp and consolidated billing designed now as M8 and built later; deployment and hosting skipped for now. Product rules changed to PRD v1.1. M6-P1 confirmed and pushed (draft PR #50); M6-P2 confirmed and pushed; M6-P3 designed (ADR-0015 Proposed), awaiting approval |
 | Scope | Milestone 6 in phase detail; M7–M9 as a roadmap. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39), M5 (PR #41, merged 20 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
 | Design notes | `docs/milestones/M6-mvp-demo.md`; M8: `docs/milestones/M8-multi-clinic-whatsapp.md` |
@@ -159,3 +159,4 @@ its start. P1 is designed and awaits approval.
 | 20 Oct 2026 | M6-P1 approved (A on all six; decision 2 amended by the developer: our own primitives, a headless primitive only where its accessibility justifies it, so Tabs on `@radix-ui/react-tabs` 1.2.1) and built: design tokens, `components/ui/`, `motion` 14.4.0, the responsive shell, `GET /api/v1/dashboard/today` (contract 0.22.0), `/today` as the landing page. Gates green; `make e2e` 13/13; stack checks done | #49 | M6-P1 built |
 | 20 Oct 2026 | M6-P1 confirmed by the developer; `m6/49-mvp-demo` pushed with permission and draft PR #50 opened. M6-P2 designed (8 decisions), awaiting approval | #49, PR #50 | M6-P1 confirmed |
 | 21 Oct 2026 | M6-P2 approved (A on all eight) and built: every clinic, ops and auth screen on the design system; responsive tables as cards; CSS motion for drawers and dialogs; lazily loaded list motion; a Field family; one `Shell` for clinic and ops; the sign-in card. Gates green; `make e2e` 16/16; patient page 153 KB | #49 | M6-P2 built |
+| 21 Oct 2026 | M6-P2 confirmed by the developer and pushed (PR #50 updated). M6-P3 designed (8 decisions) with ADR-0015 (Proposed): patient accounts and sessions apart from staff, Google OIDC through the API with a local fake provider | #49, PR #50 | M6-P2 confirmed |
