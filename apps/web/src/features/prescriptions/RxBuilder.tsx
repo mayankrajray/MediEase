@@ -182,7 +182,7 @@ export function RxBuilder({
     setMessage(`Template ${template.name} applied.`);
   }
 
-  const button = "rounded border border-slate-600 px-2 py-1 text-sm font-medium hover:bg-slate-100 disabled:text-slate-500";
+  const button = "rounded-lg border border-slate-400 px-2 py-1 text-sm font-medium hover:bg-slate-100 disabled:text-slate-500";
 
   return (
     <section aria-labelledby="rx-heading" className="space-y-3">
@@ -201,7 +201,7 @@ export function RxBuilder({
       </div>
 
       {stale && (
-        <div role="alert" className="rounded border border-amber-700 bg-amber-50 p-3">
+        <div role="alert" className="rounded-lg border border-amber-700 bg-amber-50 p-3">
           <p className="font-medium">{saveText(autosave.state)}</p>
           <button type="button" onClick={onReload} className="mt-2 rounded border border-amber-900 bg-white px-3 py-1.5 font-medium">
             Reload
@@ -216,7 +216,7 @@ export function RxBuilder({
               key={line.key}
               data-line-key={line.key}
               onKeyDown={(event) => onLineKey(event, index, line.key)}
-              className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-300 px-3 py-2"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-slate-200 bg-white px-3 py-2"
             >
               <span>
                 <span className="font-semibold">{index + 1}.</span> {lineSummary(line)}
@@ -304,7 +304,7 @@ export function RxBuilder({
           type="button"
           disabled={stale || isEmpty(body)}
           onClick={() => setOverlay({ kind: "review" })}
-          className="rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900 disabled:bg-slate-400"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
         >
           Review and issue
         </button>

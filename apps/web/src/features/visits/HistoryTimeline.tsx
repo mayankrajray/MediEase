@@ -19,7 +19,7 @@ export function HistoryTimeline({
   onRepeat,
 }: Readonly<{ history: readonly VisitSummary[]; timeZone: string; onRepeat?: ((visit: VisitSummary) => void) | undefined }>) {
   return (
-    <section aria-labelledby="history-heading" className="space-y-2">
+    <section aria-labelledby="history-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
       <h2 id="history-heading" className="text-lg font-bold">
         Earlier visits
       </h2>
@@ -28,8 +28,8 @@ export function HistoryTimeline({
         {history.map((v) => {
           const when = formatDateTime(v.started_at, timeZone);
           return (
-            <li key={v.id} className="rounded border border-slate-300 p-2">
-              <Link href={visitPath(v.id)} className="font-semibold text-blue-900 underline">
+            <li key={v.id} className="rounded-card border border-slate-200 bg-white p-2">
+              <Link href={visitPath(v.id)} className="font-semibold text-brand-800 underline">
                 {when}
               </Link>
               {v.chief_complaint !== null && <p className="text-sm">Complaint: {v.chief_complaint}</p>}
@@ -46,7 +46,7 @@ export function HistoryTimeline({
                       type="button"
                       aria-label={`Repeat the medicines of ${when}`}
                       onClick={() => onRepeat(v)}
-                      className="mt-1 rounded border border-slate-600 px-2 py-0.5 text-sm font-medium hover:bg-slate-100"
+                      className="mt-1 rounded-lg border border-slate-400 px-2 py-0.5 text-sm font-medium hover:bg-slate-100"
                     >
                       Repeat
                     </button>

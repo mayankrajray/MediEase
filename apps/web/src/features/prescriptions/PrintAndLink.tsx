@@ -60,7 +60,7 @@ export function PrintButton({ rxId, label = "Print", name }: Readonly<{ rxId: st
         aria-label={name}
         disabled={printing}
         onClick={() => print(rxId)}
-        className="rounded border border-slate-600 px-3 py-1.5 font-medium hover:bg-slate-100 disabled:text-slate-500"
+        className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
       >
         {printing ? "Preparing…" : label}
       </button>
@@ -121,7 +121,7 @@ export function LinkPanel({ rxId }: Readonly<{ rxId: string }>) {
       {qr !== undefined && (
         // A data: URL made here; next/image has nothing to optimise.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={qr} width={192} height={192} alt="QR code of the patient's prescription link" className="rounded border border-slate-300" />
+        <img src={qr} width={192} height={192} alt="QR code of the patient's prescription link" className="rounded-card border border-slate-200 bg-white" />
       )}
       <div className="min-w-0 flex-1 space-y-2">
         <p>The patient scans this, or you send the link. Opening it asks for the last 4 digits of their phone.</p>
@@ -129,11 +129,11 @@ export function LinkPanel({ rxId }: Readonly<{ rxId: string }>) {
           {link.url}
         </p>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => void copy(link.url)} className="rounded border border-slate-600 px-3 py-1.5 font-medium hover:bg-slate-100">
+          <button type="button" onClick={() => void copy(link.url)} className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none">
             Copy link
           </button>
           {link.locked && (
-            <button type="button" onClick={reset} className="rounded border border-slate-600 px-3 py-1.5 font-medium hover:bg-slate-100">
+            <button type="button" onClick={reset} className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none">
               Unlock link
             </button>
           )}

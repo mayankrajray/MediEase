@@ -44,7 +44,7 @@ export function IssuedActions({
 
   const advice = rx.advice;
   return (
-    <section aria-labelledby="rx-heading" className="space-y-3">
+    <section aria-labelledby="rx-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="rx-heading" className="text-lg font-bold">
           Prescription issued{rx.version > 1 ? ` · version ${rx.version}` : ""}
@@ -56,7 +56,7 @@ export function IssuedActions({
               type="button"
               disabled={busy}
               onClick={revise}
-              className="rounded border border-slate-600 px-3 py-1.5 font-medium hover:bg-slate-100 disabled:text-slate-500"
+              className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
             >
               Revise
             </button>

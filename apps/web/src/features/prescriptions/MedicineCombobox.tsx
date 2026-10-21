@@ -124,14 +124,14 @@ export function MedicineCombobox({
         }}
         onKeyDown={onKeyDown}
         onBlur={() => setOpen(false)}
-        className="w-full rounded border border-slate-500 px-2 py-1.5"
+        className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
       />
       <ul
         id={listId}
         role="listbox"
         aria-label="Suggestions from your favourites and this clinic's prescriptions"
         hidden={!shown}
-        className="absolute z-20 mt-1 max-h-64 w-full min-w-64 overflow-y-auto rounded border border-slate-400 bg-white py-1 shadow-lg"
+        className="absolute z-20 mt-1 max-h-64 w-full min-w-64 overflow-y-auto rounded-lg border border-slate-300 bg-white py-1 shadow-lg"
       >
         {items.map((s, i) => (
           <li
@@ -144,7 +144,7 @@ export function MedicineCombobox({
               event.preventDefault();
               pick(s);
             }}
-            className="cursor-pointer px-3 py-1.5 aria-selected:bg-blue-100"
+            className="cursor-pointer px-3 py-1.5 aria-selected:bg-brand-100"
           >
             {s.name}{" "}
             <span className="ml-1 text-sm text-slate-700">{s.source === "FAVOURITE" ? "· favourite" : "· used before"}</span>

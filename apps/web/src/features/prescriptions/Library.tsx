@@ -55,7 +55,7 @@ function NameDialog({
             maxLength={100}
             aria-describedby={`${id}-hint`}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded border border-slate-500 px-2 py-1.5"
+            className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
           />
           <p id={`${id}-hint`} className="text-sm text-slate-700">
             {hint}
@@ -63,13 +63,13 @@ function NameDialog({
         </div>
         {error !== undefined && <ErrorNotice error={error} />}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded border border-slate-500 px-4 py-2">
+          <button type="button" onClick={onClose} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none">
             Cancel
           </button>
           <button
             type="submit"
             disabled={name.trim() === "" || saving}
-            className="rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900 disabled:bg-slate-400"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
           >
             {saving ? "Saving…" : "Save"}
           </button>
@@ -173,7 +173,7 @@ export function LibraryDrawer({
 
   return (
     <Drawer title="Templates and favourites" onClose={onClose}>
-      <p role="status" className="min-h-6 font-medium text-green-900">
+      <p role="status" className="min-h-6 font-medium text-emerald-900">
         {message}
       </p>
       {error !== undefined && <ErrorNotice error={error} />}
@@ -185,7 +185,7 @@ export function LibraryDrawer({
         {templates.length > 0 && <p className="text-sm text-slate-700">Apply replaces the medicines, advice and follow-up being written.</p>}
         <ul className="space-y-2">
           {templates.map((t) => (
-            <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-300 p-2">
+            <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-slate-200 bg-white p-2">
               <span>
                 <span className="font-medium">{t.name}</span>
                 <span className="block text-sm text-slate-700">
@@ -198,7 +198,7 @@ export function LibraryDrawer({
                   type="button"
                   aria-label={`Apply template ${t.name}`}
                   onClick={() => onApply(t)}
-                  className="rounded bg-blue-800 px-3 py-1 font-semibold text-white hover:bg-blue-900"
+                  className="rounded-lg bg-brand-700 px-3 py-1 font-semibold text-white hover:bg-brand-800"
                 >
                   Apply
                 </button>
@@ -206,7 +206,7 @@ export function LibraryDrawer({
                   type="button"
                   aria-label={`Rename template ${t.name}`}
                   onClick={() => setRenaming(t)}
-                  className="rounded border border-slate-600 px-3 py-1 hover:bg-slate-100"
+                  className="rounded-lg border border-slate-400 px-3 py-1 hover:bg-slate-100"
                 >
                   Rename
                 </button>
@@ -214,7 +214,7 @@ export function LibraryDrawer({
                   type="button"
                   aria-label={`Delete template ${t.name}`}
                   onClick={() => remove(t.id, `Template ${t.name}`, () => api.deleteTemplate(t.id))}
-                  className="rounded border border-red-800 px-3 py-1 text-red-900 hover:bg-red-50"
+                  className="inline-flex min-h-8 items-center rounded-lg border border-red-700 bg-white px-3 py-1 text-sm font-medium text-red-900 hover:bg-red-50"
                 >
                   {confirming === t.id ? "Delete?" : "Delete"}
                 </button>
@@ -230,7 +230,7 @@ export function LibraryDrawer({
         {favourites.length === 0 && <p className="text-slate-700">None yet. Use Save as favourite on a line.</p>}
         <ul className="space-y-2">
           {favourites.map((f) => (
-            <li key={f.id} className="flex items-center justify-between gap-2 rounded border border-slate-300 p-2">
+            <li key={f.id} className="flex items-center justify-between gap-2 rounded-card border border-slate-200 bg-white p-2">
               <span>
                 <span className="font-medium">{f.name}</span>
                 <span className="block text-sm text-slate-700">{lineSummary(f.item)}</span>
@@ -239,7 +239,7 @@ export function LibraryDrawer({
                 type="button"
                 aria-label={`Delete favourite ${f.name}`}
                 onClick={() => remove(f.id, `Favourite ${f.name}`, () => api.deleteFavourite(f.id))}
-                className="rounded border border-red-800 px-3 py-1 text-red-900 hover:bg-red-50"
+                className="inline-flex min-h-8 items-center rounded-lg border border-red-700 bg-white px-3 py-1 text-sm font-medium text-red-900 hover:bg-red-50"
               >
                 {confirming === f.id ? "Delete?" : "Delete"}
               </button>

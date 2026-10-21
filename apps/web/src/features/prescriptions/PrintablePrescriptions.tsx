@@ -39,7 +39,7 @@ export function PrintablePrescriptions({ patientId }: Readonly<{ patientId: stri
   }, [api, patientId, endSession]);
 
   return (
-    <section aria-labelledby="printable-heading" className="space-y-2">
+    <section aria-labelledby="printable-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
       <h2 id="printable-heading" className="text-lg font-bold">
         Prescriptions to print
       </h2>
@@ -52,7 +52,7 @@ export function PrintablePrescriptions({ patientId }: Readonly<{ patientId: stri
             const when = formatDateTime(rx.issued_at, clinic.timezone);
             const title = `${when} · ${rx.doctor_display_name}${rx.version > 1 ? ` · version ${rx.version}` : ""}`;
             return (
-              <li key={rx.id} className="space-y-3 rounded border border-slate-300 p-3">
+              <li key={rx.id} className="space-y-3 rounded-card border border-slate-200 bg-white p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium">{title}</span>
                   <span className="flex flex-wrap items-start gap-2">
@@ -61,7 +61,7 @@ export function PrintablePrescriptions({ patientId }: Readonly<{ patientId: stri
                       type="button"
                       aria-expanded={showing === rx.id}
                       onClick={() => setShowing(showing === rx.id ? undefined : rx.id)}
-                      className="rounded border border-slate-600 px-3 py-1.5 font-medium hover:bg-slate-100"
+                      className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
                     >
                       {showing === rx.id ? "Hide link" : "Show link"}
                     </button>
