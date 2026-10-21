@@ -1,5 +1,7 @@
 "use client";
 
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { TABLE, TD, TH, TR } from "@/components/ui/table";
 import { useEffect, useState } from "react";
 
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
@@ -8,7 +10,7 @@ import { useClinic } from "@/features/shell/ClinicGate";
 import { formatClock, formatDay } from "@/lib/format/time";
 import { clinicToday, type Patient } from "@/features/patients/fields";
 
-import { STATUS_LABELS, placeText, useAppointmentApi, type Appointment, type Doctor } from "./api";
+import { STATUS_LABELS, STATUS_TONES, placeText, useAppointmentApi, type Appointment, type Doctor } from "./api";
 import { BookDrawer } from "./BookDrawer";
 
 /** D32: the patient's appointments on their profile, newest first, with Book for them. */
@@ -46,7 +48,7 @@ export function PatientAppointments({ patient }: { patient: Patient }) {
   const clock = (iso: string) => formatClock(iso, clinic.timezone);
 
   return (
-    <section aria-labelledby="appointments-heading" className="space-y-2">
+    <section aria-labelledby="appointments-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
       <div className="flex items-center justify-between gap-2">
         <h2 id="appointments-heading" className="text-lg font-bold">
           Appointments
@@ -55,35 +57,35 @@ export function PatientAppointments({ patient }: { patient: Patient }) {
           <button
             type="button"
             onClick={() => setBooking(true)}
-            className="rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
           >
             Book for {patient.full_name}
           </button>
         )}
       </div>
-      <p role="status" className="min-h-6 font-medium text-green-900">
+      <p role="status" className="min-h-6 font-medium text-emerald-900">
         {message}
       </p>
       {error !== undefined && <ErrorNotice error={error} />}
       {items === undefined && error === undefined && <p className="text-slate-700">Loading appointments…</p>}
       {items !== undefined && items.length === 0 && <p className="text-slate-700">No appointments yet.</p>}
       {items !== undefined && items.length > 0 && (
-        <table className="w-full text-left">
-          <thead className="text-sm text-slate-700">
-            <tr>
-              <th scope="col">Date</th>
-              <th scope="col">Doctor</th>
-              <th scope="col">Place</th>
-              <th scope="col">Status</th>
+        <table role="table" className={TABLE}>
+          <thead role="rowgroup">
+            <tr role="row">
+              <th role="columnheader" scope="col" className={TH}>Date</th>
+              <th role="columnheader" scope="col" className={TH}>Doctor</th>
+              <th role="columnheader" scope="col" className={TH}>Place</th>
+              <th role="columnheader" scope="col" className={TH}>Status</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody role="rowgroup">
             {items.map((a) => (
-              <tr key={a.id} className="border-t border-slate-200">
-                <td className="py-2">{formatDay(a.on_date)}</td>
-                <td>{names.get(a.doctor_id) ?? "–"}</td>
-                <td>{placeText(a, clock)}</td>
-                <td>{STATUS_LABELS[a.status]}</td>
+              <tr role="row" key={a.id} className={TR}>
+                <td role="cell" data-label="Date" className={TD}>{formatDay(a.on_date)}</td>
+                <td role="cell" data-label="Doctor" className={TD}>{names.get(a.doctor_id) ?? "–"}</td>
+                <td role="cell" data-label="Place" className={TD}>{placeText(a, clock)}</td>
+                <td role="cell" data-label="Status" className={TD}><StatusBadge tone={STATUS_TONES[a.status]}>{STATUS_LABELS[a.status]}</StatusBadge></td>
               </tr>
             ))}
           </tbody>

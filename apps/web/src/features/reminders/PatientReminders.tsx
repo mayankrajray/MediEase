@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useState } from "react";
 
+import { LIST_ITEM, LayoutMotion } from "@/components/ui/LayoutMotion";
+import { m } from "@/components/ui/Motion";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { useAppointmentApi, type Doctor } from "@/features/appointments/api";
@@ -74,7 +76,7 @@ export function PatientReminders({ patient }: Readonly<{ patient: Patient }>) {
   }
 
   return (
-    <section aria-labelledby="reminders-heading" className="space-y-2">
+    <section aria-labelledby="reminders-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
       <div className="flex items-center justify-between gap-2">
         <h2 id="reminders-heading" className="text-lg font-bold">
           Reminders
@@ -83,13 +85,13 @@ export function PatientReminders({ patient }: Readonly<{ patient: Patient }>) {
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="rounded border border-slate-600 px-3 py-1.5 font-medium hover:bg-slate-100"
+            className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
           >
             Add follow-up reminder
           </button>
         )}
       </div>
-      <p role="status" className="min-h-6 font-medium text-green-900">
+      <p role="status" className="min-h-6 font-medium text-emerald-900">
         {message}
       </p>
       {error !== undefined && <ErrorNotice error={error} />}
@@ -107,6 +109,7 @@ export function PatientReminders({ patient }: Readonly<{ patient: Patient }>) {
       {items === undefined && loadError === undefined && <p className="text-slate-700">Loading reminders…</p>}
       {items !== undefined && items.length === 0 && <p className="text-slate-700">No reminders.</p>}
       {items !== undefined && items.length > 0 && (
+        <LayoutMotion>
         <ul className="space-y-3">
           {items.map((r) => (
             <ReminderRow
@@ -121,6 +124,7 @@ export function PatientReminders({ patient }: Readonly<{ patient: Patient }>) {
             />
           ))}
         </ul>
+        </LayoutMotion>
       )}
     </section>
   );
@@ -149,7 +153,7 @@ function ReminderRow({
   const scheduled = reminder.status === "SCHEDULED";
 
   return (
-    <li className="space-y-2 rounded border border-slate-300 p-3">
+    <m.li {...LIST_ITEM} className="space-y-2 rounded-card border border-slate-200 bg-white p-3">
       <ReminderChip reminder={reminder} timeZone={timeZone} />
       <p className="text-slate-800">
         Follow-up on {formatDay(reminder.follow_up_date)}
@@ -157,17 +161,17 @@ function ReminderRow({
       </p>
       {shouldCall(reminder.status) && (
         <p>
-          <a href={`tel:${phone}`} className="font-medium text-blue-900 underline">
+          <a href={`tel:${phone}`} className="font-medium text-brand-800 underline">
             Call patient{" "}<span className="sr-only">on {formatPhone(phone)}</span>
           </a>
         </p>
       )}
       {scheduled && !moving && (
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setMoving(true)} className="rounded border border-slate-600 px-3 py-1 hover:bg-slate-100">
+          <button type="button" onClick={() => setMoving(true)} className="rounded-lg border border-slate-400 px-3 py-1 hover:bg-slate-100">
             Move
           </button>
-          <button type="button" onClick={onCancel} className="rounded border border-red-800 px-3 py-1 text-red-900 hover:bg-red-50">
+          <button type="button" onClick={onCancel} className="inline-flex min-h-8 items-center rounded-lg border border-red-700 bg-white px-3 py-1 text-sm font-medium text-red-900 hover:bg-red-50">
             Cancel reminder
           </button>
         </div>
@@ -192,18 +196,18 @@ function ReminderRow({
               min={min}
               value={date}
               onChange={(event) => setDate(event.target.value)}
-              className="rounded border border-slate-500 px-2 py-1"
+              className="rounded-lg border border-slate-400 px-2 py-1"
             />
           </div>
-          <button type="submit" className="rounded bg-blue-800 px-3 py-1.5 font-semibold text-white hover:bg-blue-900">
+          <button type="submit" className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg bg-brand-700 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none">
             Save
           </button>
-          <button type="button" onClick={() => setMoving(false)} className="rounded border border-slate-600 px-3 py-1.5">
+          <button type="button" onClick={() => setMoving(false)} className="rounded-lg border border-slate-400 px-3 py-1.5">
             Keep it
           </button>
         </form>
       )}
-    </li>
+    </m.li>
   );
 }
 
@@ -225,7 +229,7 @@ function AddReminder({
   return (
     <form
       aria-label="Add follow-up reminder"
-      className="flex flex-wrap items-end gap-3 rounded border border-slate-300 p-3"
+      className="flex flex-wrap items-end gap-3 rounded-card border border-slate-200 bg-white p-3"
       onSubmit={(event) => {
         event.preventDefault();
         onAdd(doctorId, date);
@@ -239,7 +243,7 @@ function AddReminder({
           id={ids.doctor}
           value={doctorId}
           onChange={(event) => setDoctorId(event.target.value)}
-          className="rounded border border-slate-500 px-2 py-1.5"
+          className="rounded-lg border border-slate-400 px-2 py-1.5"
         >
           {doctors.map((d) => (
             <option key={d.id} value={d.id}>
@@ -259,14 +263,14 @@ function AddReminder({
           min={min}
           value={date}
           onChange={(event) => setDate(event.target.value)}
-          className="rounded border border-slate-500 px-2 py-1"
+          className="rounded-lg border border-slate-400 px-2 py-1"
         />
       </div>
       <p className="w-full text-sm text-slate-700">Sent on WhatsApp at 09:00 the day before, if the patient agreed to messages.</p>
-      <button type="submit" className="rounded bg-blue-800 px-3 py-1.5 font-semibold text-white hover:bg-blue-900">
+      <button type="submit" className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg bg-brand-700 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none">
         Add reminder
       </button>
-      <button type="button" onClick={onCancel} className="rounded border border-slate-600 px-3 py-1.5">
+      <button type="button" onClick={onCancel} className="rounded-lg border border-slate-400 px-3 py-1.5">
         Cancel
       </button>
     </form>

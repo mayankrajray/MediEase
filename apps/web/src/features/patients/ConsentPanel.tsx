@@ -78,7 +78,7 @@ export function ConsentPanel({
     "rounded px-4 py-2 font-semibold disabled:cursor-not-allowed disabled:bg-slate-500";
 
   return (
-    <section aria-labelledby="consent-heading" className="space-y-3 rounded border border-slate-300 p-4">
+    <section aria-labelledby="consent-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
       <h2 id="consent-heading" className="text-lg font-bold">
         Messages
       </h2>
@@ -96,27 +96,27 @@ export function ConsentPanel({
 
       {mode === "record" || mode === "opt-in" ? (
         <form onSubmit={onSubmit} className="space-y-3">
-          <p className="rounded bg-slate-100 p-3">
+          <p className="rounded-lg bg-slate-100 p-3">
             Ask {who}: “May the clinic send you appointment and prescription messages on WhatsApp? And by SMS?
             You can ask us to stop at any time.”
           </p>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={whatsapp} onChange={(event) => setWhatsapp(event.target.checked)} />
+          <label className="flex min-h-10 items-center gap-3 font-medium">
+            <input type="checkbox" className="size-5 accent-brand-700" checked={whatsapp} onChange={(event) => setWhatsapp(event.target.checked)} />
             WhatsApp: yes
           </label>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={sms} onChange={(event) => setSms(event.target.checked)} />
+          <label className="flex min-h-10 items-center gap-3 font-medium">
+            <input type="checkbox" className="size-5 accent-brand-700" checked={sms} onChange={(event) => setSms(event.target.checked)} />
             SMS: yes
           </label>
           <p className="text-sm text-slate-700">Leave both unticked if the answer is no: that is recorded as declined.</p>
           <div className="flex gap-3">
-            <button type="submit" disabled={submitting} className={`${button} bg-blue-800 text-white hover:bg-blue-900`}>
+            <button type="submit" disabled={submitting} className={`${button} bg-brand-700 text-white hover:bg-brand-800`}>
               {submitting ? "Saving…" : mode === "opt-in" ? "Opt back in" : "Save answer"}
             </button>
             <button
               type="button"
               onClick={() => setMode("view")}
-              className="rounded border border-slate-500 px-4 py-2 hover:bg-slate-100"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
             >
               Cancel
             </button>
@@ -130,14 +130,14 @@ export function ConsentPanel({
               type="button"
               disabled={submitting}
               onClick={() => void act(() => api.optOut(patient.id))}
-              className={`${button} bg-red-800 text-white hover:bg-red-900`}
+              className={`${button} bg-red-700 text-white hover:bg-red-800`}
             >
               {submitting ? "Saving…" : "Yes, opt out"}
             </button>
             <button
               type="button"
               onClick={() => setMode("view")}
-              className="rounded border border-slate-500 px-4 py-2 hover:bg-slate-100"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
             >
               Cancel
             </button>
@@ -153,7 +153,7 @@ export function ConsentPanel({
                 setSms(false);
                 setMode("opt-in");
               }}
-              className="rounded border border-blue-800 px-4 py-2 font-medium text-blue-900 hover:bg-blue-50"
+              className="rounded-lg border border-brand-700 px-4 py-2 font-medium text-brand-800 hover:bg-brand-50"
             >
               Opt back in
             </button>
@@ -166,14 +166,14 @@ export function ConsentPanel({
                   setSms(patient.sms_consent);
                   setMode("record");
                 }}
-                className="rounded border border-blue-800 px-4 py-2 font-medium text-blue-900 hover:bg-blue-50"
+                className="rounded-lg border border-brand-700 px-4 py-2 font-medium text-brand-800 hover:bg-brand-50"
               >
                 {patient.consent_recorded_at === null ? "Record consent" : "Change consent"}
               </button>
               <button
                 type="button"
                 onClick={() => setMode("confirm-opt-out")}
-                className="rounded border border-red-800 px-4 py-2 font-medium text-red-900 hover:bg-red-50"
+                className="rounded-lg border border-red-800 px-4 py-2 font-medium text-red-900 hover:bg-red-50"
               >
                 Opt out of all messages
               </button>

@@ -64,11 +64,11 @@ export function EditPatientForm({
           <button
             type="submit"
             disabled={submitting}
-            className="rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-slate-500"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
           >
             {submitting ? "Saving…" : "Save changes"}
           </button>
-          <button type="button" onClick={onCancel} className="rounded border border-slate-500 px-4 py-2 hover:bg-slate-100">
+          <button type="button" onClick={onCancel} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none">
             Cancel
           </button>
         </div>
