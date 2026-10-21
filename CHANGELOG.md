@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes are recorded here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow milestones until the
@@ -14,6 +14,14 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6-P2 (#49): every clinic, ops and sign-in screen on the design system (decisions 1A–8A). Lists
+  (queue, patient search, follow-ups, ops clinics, a patient's appointments and messages) are
+  tables from 768 px and cards below, from one markup with explicit ARIA roles; drawers and
+  dialogs slide or fade in with CSS only (none with reduced motion); the queue, follow-ups and
+  reminders glide when they reorder, with Motion's layout features loaded on first use; form
+  fields share components/ui/Field; the clinic and ops consoles share one responsive Shell;
+  sign-in, invitations and the clinic chooser sit in a centred card. The patient page takes the
+  colours only (153 KB first visit). No API change.
 - M6-P1 (#49): the design system and *Today* (decisions 1A–6A, decision 2 amended by the
   developer). Tokens in Tailwind's `@theme` (teal brand, slate, one accent per status, system
   fonts); our own primitives in `apps/web/src/components/ui/` (Button, Card, StatTile,

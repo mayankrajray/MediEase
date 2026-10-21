@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Opened 20 Oct 2026 (issue #49, branch `m6/49-mvp-demo`); plan approved by the developer (items D2–D5 of the demo plan); M6-P1 confirmed by the developer 20 Oct 2026 and pushed (draft PR #50); M6-P2 designed, awaiting approval |
+| Status | Opened 20 Oct 2026 (issue #49, branch `m6/49-mvp-demo`); plan approved by the developer (items D2–D5 of the demo plan); M6-P1 confirmed by the developer 20 Oct 2026 and pushed (draft PR #50); M6-P2 approved (A on all eight) and built 21 Oct 2026, awaiting confirmation |
 | PRD | v1.1 §0 (C1–C3), §8.13 |
 | ADR | ADR-0013 (for M7), ADR-0014 (for M8); patient accounts and Google sign-in get an ADR in P3 |
 | Covers | FR-AUTH-07, FR-PRT-01..04, FR-REM-03, FR-NTF-01, FR-PUB-01..04 |
@@ -15,7 +15,7 @@
 | Phase | Builds | Design |
 |---|---|---|
 | P1 | Design system (tokens, primitives, Motion, responsive shell) and the role dashboards' first screen: *Today* for front desk, doctor and owner | Below (confirmed 20 Oct 2026) |
-| P2 | The design system across the existing screens (queue, patients, consultation, schedule, follow-ups, ops); mobile layouts; motion for drawers, dialogs and list changes | Below (awaiting approval) |
+| P2 | The design system across the existing screens (queue, patients, consultation, schedule, follow-ups, ops); mobile layouts; motion for drawers, dialogs and list changes | Below (approved 20 Oct 2026; built, awaiting confirmation) |
 | P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR) | At its start |
 | P4 | Linking a patient account to a clinic's record by clinic invite or prescription link; the patient API (appointments, prescriptions, reminders, per clinic) | At its start |
 | P5 | Patient portal web: mobile-first, English and Hindi, with Motion | At its start |
@@ -135,6 +135,8 @@ Confirmed by the developer on 20 Oct 2026. Pushed to `m6/49-mvp-demo`; draft PR 
 
 Proposed 20 Oct 2026. Recommendations are marked (rec). No API or contract change is expected.
 
+**Approved by the developer 20 Oct 2026: A on all eight.**
+
 Facts the design rests on:
 
 - **Screens still in the old style.** About 45 components still use the plain M1–M5 look:
@@ -194,3 +196,46 @@ Planned verification:
 - **Failure paths:**
   - An API error inside a drawer still shows the Ref and keeps focus in the drawer.
   - A dialog closed with Escape returns focus to its opener (the existing tests).
+
+### M6-P2 — as built (21 Oct 2026)
+
+- **Foundations.**
+  - Drawers and dialogs animate in with CSS (`.me-overlay`, `@starting-style`), with no
+    transition under reduced motion.
+  - The form fields are in `components/ui/Field`; `components/TextField.tsx` was removed and its
+    four users moved over.
+  - Responsive tables use `components/ui/table` with `.me-table` in `globals.css`: cards below
+    768 px, each cell on one line with its column's name, and explicit ARIA roles.
+  - List motion uses `LayoutMotion`. Motion's `domMax` features are a separate chunk loaded on
+    first use, by `motion-max.ts`.
+  - `AuthFrame` is the frame of the sign-in, invitation and clinic chooser screens.
+- **Shell.** `features/shell/Shell.tsx` is shared by `AppShell` and `OpsShell`. The ops console
+  now has the sidebar and the Menu drawer.
+- **Screens.**
+  - Every clinic, ops and auth component moved to the tokens: the brand colour, rounded-lg
+    controls, cards for each section and 40 px buttons.
+  - A class-name codemod did most of this, and each screen was then reviewed in screenshots at
+    1366 and 360 px.
+  - On phones, these lists show as cards: the queue, patient search results, pending follow-ups,
+    the ops clinic list, a patient's appointments and their message history.
+  - Statuses appear as `StatusBadge`; `STATUS_TONES` is in `features/appointments/api.ts`.
+  - The queue, the follow-ups and a patient's reminders glide when they reorder.
+  - The consent checkboxes became 40 px targets.
+  - The patient page `/p/…` took the colour tokens only.
+- **No new headless primitive and no API change.** No test was loosened. One empty-state wording
+  was kept on purpose so a test still names it. The e2e phone check now looks at the hidden
+  header row (`thead`), not a cell, because visually hidden content keeps its box.
+- **Verification.**
+  - `make lint typecheck contract-check test` are green (API 1588 tests at 98.26%; web 463).
+  - `make e2e` is 16/16, including the new `phone-layouts.spec.ts`. That journey covers:
+    - the queue as cards, with a card marking its patient arrived;
+    - the profile and follow-ups at 360 px, with consent recorded from the phone;
+    - reduced motion: the drawer's `transition-duration` is 0 s with reduce and non-zero without.
+  - NFR-02: the patient page's first visit is 153,127 bytes on the wire, under 200 KB (147 KB in
+    M4).
+  - One-off stack checks, not committed: an owner saved the weekly hours, and ops created a
+    clinic up to step 2. The doctor's consultation and issue journey is in
+    `consultation-keyboard.spec.ts`.
+  - The local database was reset (`docker compose down -v`, then `make seed`). Repeated runs on
+    one day had filled the e2e extra session, so `sessionRunningNow` hit `SCH_OVERLAP`. This is a
+    limit of that test helper with reused local data, not of the app.
