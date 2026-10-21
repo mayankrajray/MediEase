@@ -80,7 +80,7 @@ function KeptSessions({ sessions }: { sessions: readonly DoctorSession[] }) {
   if (sessions.length === 0) return null;
   const clock = (iso: string) => formatClock(iso, clinic.timezone);
   return (
-    <div role="alert" className="rounded border border-amber-700 bg-amber-50 p-4">
+    <div role="alert" className="rounded-lg border border-amber-700 bg-amber-50 p-4">
       <p className="font-semibold">
         {sessions.length === 1 ? "One session has" : `${sessions.length} sessions have`} bookings and
         {sessions.length === 1 ? " was" : " were"} kept. They take no new bookings; reschedule those patients from the queue.
@@ -177,7 +177,7 @@ export function ScheduleSettings() {
   return (
     <section aria-labelledby="schedule-heading" className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 id="schedule-heading" className="text-2xl font-bold">
+        <h1 id="schedule-heading" className="text-2xl font-bold tracking-tight">
           Schedule
         </h1>
         {doctors !== undefined && doctors.length > 0 && (
@@ -193,7 +193,7 @@ export function ScheduleSettings() {
                 setKept([]);
                 setMessage("");
               }}
-              className="rounded border border-slate-500 px-2 py-2"
+              className="rounded-lg border border-slate-400 px-2 py-2"
             >
               {doctors.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -207,7 +207,7 @@ export function ScheduleSettings() {
       </div>
       <p className="text-slate-700">Times are the clinic&apos;s ({clinic.timezone}). An end before the start means the next day, up to 12 hours.</p>
 
-      <p role="status" aria-live="polite" className="min-h-6 font-medium text-green-900">
+      <p role="status" aria-live="polite" className="min-h-6 font-medium text-emerald-900">
         {message}
       </p>
       {problem !== undefined && (
@@ -221,7 +221,7 @@ export function ScheduleSettings() {
       {doctors !== undefined && doctors.length === 0 && <p>No doctors yet.</p>}
       {schedule !== undefined && doctorId !== undefined && (
         <>
-          <section aria-labelledby="week-heading" className="space-y-3 rounded border border-slate-300 p-4">
+          <section aria-labelledby="week-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
             <h2 id="week-heading" className="text-lg font-bold">
               Weekly hours for {doctorName}
             </h2>
@@ -231,7 +231,7 @@ export function ScheduleSettings() {
                 <legend className="sr-only">Block {index + 1}</legend>
                 <label className="text-sm">
                   <span className="block font-medium">Day</span>
-                  <select value={d.weekday} onChange={(e) => set(d.key, "weekday", e.target.value)} className="rounded border border-slate-500 px-2 py-1.5">
+                  <select value={d.weekday} onChange={(e) => set(d.key, "weekday", e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1.5">
                     {WEEKDAYS.map((name, i) => (
                       <option key={name} value={i}>
                         {name}
@@ -241,25 +241,25 @@ export function ScheduleSettings() {
                 </label>
                 <label className="text-sm">
                   <span className="block font-medium">From</span>
-                  <input type="time" value={d.start} onChange={(e) => set(d.key, "start", e.target.value)} className="rounded border border-slate-500 px-2 py-1" />
+                  <input type="time" value={d.start} onChange={(e) => set(d.key, "start", e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1" />
                 </label>
                 <label className="text-sm">
                   <span className="block font-medium">To</span>
-                  <input type="time" value={d.end} onChange={(e) => set(d.key, "end", e.target.value)} className="rounded border border-slate-500 px-2 py-1" />
+                  <input type="time" value={d.end} onChange={(e) => set(d.key, "end", e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1" />
                 </label>
                 <label className="text-sm">
                   <span className="block font-medium">Slot minutes</span>
-                  <input inputMode="numeric" value={d.slot} onChange={(e) => set(d.key, "slot", e.target.value)} className="w-20 rounded border border-slate-500 px-2 py-1" />
+                  <input inputMode="numeric" value={d.slot} onChange={(e) => set(d.key, "slot", e.target.value)} className="w-20 rounded-lg border border-slate-400 px-2 py-1" />
                 </label>
                 <label className="text-sm">
                   <span className="block font-medium">Tokens</span>
-                  <input inputMode="numeric" value={d.capacity} onChange={(e) => set(d.key, "capacity", e.target.value)} className="w-20 rounded border border-slate-500 px-2 py-1" />
+                  <input inputMode="numeric" value={d.capacity} onChange={(e) => set(d.key, "capacity", e.target.value)} className="w-20 rounded-lg border border-slate-400 px-2 py-1" />
                 </label>
                 <button
                   type="button"
                   aria-label={`Remove block ${index + 1}`}
                   onClick={() => setDrafts((list) => list.filter((x) => x.key !== d.key))}
-                  className="rounded border border-slate-500 px-3 py-1.5"
+                  className="rounded-lg border border-slate-400 px-3 py-1.5"
                 >
                   Remove
                 </button>
@@ -271,7 +271,7 @@ export function ScheduleSettings() {
                 onClick={() =>
                   setDrafts((list) => [...list, { key: newKey(), weekday: "0", start: "10:00", end: "13:00", slot: "15", capacity: "12" }])
                 }
-                className="rounded border border-blue-800 px-3 py-1.5 font-medium text-blue-900"
+                className="rounded-lg border border-brand-700 px-3 py-1.5 font-medium text-brand-800"
               >
                 Add hours
               </button>
@@ -284,7 +284,7 @@ export function ScheduleSettings() {
                     return { kept: change.kept_sessions, text: `Weekly hours for ${doctorName} saved.` };
                   })
                 }
-                className="rounded bg-blue-800 px-4 py-1.5 font-semibold text-white disabled:bg-slate-400"
+                className="rounded-lg bg-brand-700 px-4 py-1.5 font-semibold text-white disabled:bg-slate-400"
               >
                 Save weekly hours
               </button>
@@ -348,7 +348,7 @@ function ExceptionsSection({
   const ids = { kind: useId(), date: useId(), note: useId() };
 
   return (
-    <section aria-labelledby="exceptions-heading" className="space-y-3 rounded border border-slate-300 p-4">
+    <section aria-labelledby="exceptions-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
       <h2 id="exceptions-heading" className="text-lg font-bold">
         Leave and extra sessions
       </h2>
@@ -367,7 +367,7 @@ function ExceptionsSection({
                 disabled={saving}
                 aria-label={`Remove the ${e.kind === "LEAVE" ? "leave" : "extra session"} on ${formatDay(e.on_date)}`}
                 onClick={() => onRemove(e.id, e.on_date)}
-                className="rounded border border-slate-500 px-3 py-1"
+                className="rounded-lg border border-slate-400 px-3 py-1"
               >
                 Remove
               </button>
@@ -380,7 +380,7 @@ function ExceptionsSection({
           <label htmlFor={ids.kind} className="block text-sm font-medium">
             Add
           </label>
-          <select id={ids.kind} value={kind} onChange={(e) => setKind(e.target.value as "LEAVE" | "EXTRA")} className="rounded border border-slate-500 px-2 py-1.5">
+          <select id={ids.kind} value={kind} onChange={(e) => setKind(e.target.value as "LEAVE" | "EXTRA")} className="rounded-lg border border-slate-400 px-2 py-1.5">
             <option value="LEAVE">Leave (whole day)</option>
             <option value="EXTRA">Extra session</option>
           </select>
@@ -389,25 +389,25 @@ function ExceptionsSection({
           <label htmlFor={ids.date} className="block text-sm font-medium">
             On
           </label>
-          <input id={ids.date} type="date" value={onDate} onChange={(e) => setOnDate(e.target.value)} className="rounded border border-slate-500 px-2 py-1" />
+          <input id={ids.date} type="date" value={onDate} onChange={(e) => setOnDate(e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1" />
         </div>
         {kind === "EXTRA" && (
           <>
             <label className="text-sm">
               <span className="block font-medium">From</span>
-              <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="rounded border border-slate-500 px-2 py-1" />
+              <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1" />
             </label>
             <label className="text-sm">
               <span className="block font-medium">To</span>
-              <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="rounded border border-slate-500 px-2 py-1" />
+              <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1" />
             </label>
             <label className="text-sm">
               <span className="block font-medium">Slot minutes</span>
-              <input inputMode="numeric" value={slot} onChange={(e) => setSlot(e.target.value)} className="w-20 rounded border border-slate-500 px-2 py-1" />
+              <input inputMode="numeric" value={slot} onChange={(e) => setSlot(e.target.value)} className="w-20 rounded-lg border border-slate-400 px-2 py-1" />
             </label>
             <label className="text-sm">
               <span className="block font-medium">Tokens</span>
-              <input inputMode="numeric" value={capacity} onChange={(e) => setCapacity(e.target.value)} className="w-20 rounded border border-slate-500 px-2 py-1" />
+              <input inputMode="numeric" value={capacity} onChange={(e) => setCapacity(e.target.value)} className="w-20 rounded-lg border border-slate-400 px-2 py-1" />
             </label>
           </>
         )}
@@ -415,7 +415,7 @@ function ExceptionsSection({
           <label htmlFor={ids.note} className="block text-sm font-medium">
             Note (optional)
           </label>
-          <input id={ids.note} maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} className="rounded border border-slate-500 px-2 py-1" />
+          <input id={ids.note} maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1" />
         </div>
         <button
           type="button"
@@ -435,7 +435,7 @@ function ExceptionsSection({
                   },
             )
           }
-          className="rounded bg-blue-800 px-4 py-1.5 font-semibold text-white disabled:bg-slate-400"
+          className="rounded-lg bg-brand-700 px-4 py-1.5 font-semibold text-white disabled:bg-slate-400"
         >
           Add {kind === "LEAVE" ? "leave" : "extra session"}
         </button>
@@ -458,13 +458,13 @@ function BookingModeSection({
   const other: BookingMode = mode === "SLOTS" ? "TOKENS" : "SLOTS";
   const words = (m: BookingMode) => (m === "SLOTS" ? "time slots" : "tokens");
   return (
-    <section aria-labelledby="mode-heading" className="space-y-2 rounded border border-slate-300 p-4">
+    <section aria-labelledby="mode-heading" className="space-y-2 rounded-card border border-slate-200 bg-white p-4">
       <h2 id="mode-heading" className="text-lg font-bold">
         How patients are booked
       </h2>
       <p>The clinic books by {words(mode)}.</p>
       {canSet && (
-        <button type="button" disabled={saving} onClick={() => onSet(other)} className="rounded border border-blue-800 px-3 py-1.5 font-medium text-blue-900 disabled:text-slate-500">
+        <button type="button" disabled={saving} onClick={() => onSet(other)} className="rounded-lg border border-brand-700 px-3 py-1.5 font-medium text-brand-800 disabled:text-slate-500">
           Switch to {words(other)}
         </button>
       )}
