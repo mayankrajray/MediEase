@@ -140,7 +140,7 @@ export function BookDrawer({
             {patient !== undefined && <span className="text-sm text-slate-700"> · {patient.code}</span>}
           </span>
           {target.kind === "book" && (
-            <button type="button" onClick={() => setPatient(undefined)} className="text-blue-900 underline">
+            <button type="button" onClick={() => setPatient(undefined)} className="text-brand-800 underline">
               Change patient
             </button>
           )}
@@ -156,7 +156,7 @@ export function BookDrawer({
             id={ids.doctor}
             value={doctorId}
             onChange={(event) => setDoctorId(event.target.value)}
-            className="w-full rounded border border-slate-500 px-2 py-2"
+            className="w-full rounded-lg border border-slate-400 px-2 py-2"
           >
             {doctors.map((d) => (
               <option key={d.id} value={d.id}>
@@ -174,7 +174,7 @@ export function BookDrawer({
             type="date"
             value={date}
             onChange={(event) => event.target.value !== "" && setDate(event.target.value)}
-            className="w-full rounded border border-slate-500 px-2 py-2"
+            className="w-full rounded-lg border border-slate-400 px-2 py-2"
           />
         </div>
       </div>
@@ -220,7 +220,7 @@ export function BookDrawer({
                     slots.map((slot) => (
                       <label
                         key={slot.starts_at}
-                        className="flex items-center gap-1 rounded border border-slate-400 px-2 py-1 has-[:checked]:border-blue-800 has-[:checked]:bg-blue-50"
+                        className="flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1 has-[:checked]:border-brand-700 has-[:checked]:bg-brand-50"
                       >
                         <input
                           type="radio"
@@ -244,7 +244,7 @@ export function BookDrawer({
         type="button"
         disabled={saving || choice === undefined || chosen === undefined || (target.kind === "book" && patient === undefined)}
         onClick={() => void confirm()}
-        className="w-full rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900 disabled:bg-slate-400"
+        className="w-full rounded bg-brand-700 px-4 py-2 font-semibold text-white hover:bg-brand-800 disabled:bg-slate-400"
       >
         {saving ? "Saving…" : target.kind === "book" ? "Confirm booking" : "Confirm new time"}
       </button>

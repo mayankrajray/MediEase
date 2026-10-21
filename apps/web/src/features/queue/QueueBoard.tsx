@@ -4,6 +4,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 
 import { Dialog } from "@/components/Dialog";
+import { buttonClasses } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { INPUT, LABEL } from "@/components/ui/Field";
+import { LayoutMotion } from "@/components/ui/LayoutMotion";
+import { TABLE, TH } from "@/components/ui/table";
 import { useNow } from "@/components/useNow";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -199,7 +204,7 @@ export function QueueBoard() {
     <section aria-labelledby="queue-heading" className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 id="queue-heading" className="text-2xl font-bold">
+          <h1 id="queue-heading" className="text-2xl font-bold tracking-tight text-slate-900">
             {isToday ? "Today's queue" : `Queue for ${formatDay(date)}`}
           </h1>
           <p className="text-slate-700">{formatDay(date)}</p>
@@ -207,14 +212,14 @@ export function QueueBoard() {
         <div className="flex flex-wrap items-end gap-3">
           {doctors !== undefined && doctors.filter((d) => d.is_active).length > 1 && (
             <div>
-              <label htmlFor={pickerId} className="block text-sm font-medium">
+              <label htmlFor={pickerId} className={`${LABEL} text-sm`}>
                 Doctor
               </label>
               <select
                 id={pickerId}
                 value={doctorId ?? ""}
                 onChange={(event) => chooseDoctor(event.target.value)}
-                className="rounded border border-slate-500 px-2 py-2"
+                className={INPUT}
               >
                 {doctors
                   .filter((d) => d.is_active)
@@ -226,12 +231,12 @@ export function QueueBoard() {
               </select>
             </div>
           )}
-          <nav aria-label="Day" className="flex items-end gap-1">
-            <button type="button" onClick={() => setDate(addDays(date, -1))} className="rounded border border-slate-500 px-3 py-2">
+          <nav aria-label="Day" className="flex flex-wrap items-end gap-2">
+            <button type="button" onClick={() => setDate(addDays(date, -1))} className={buttonClasses("secondary")}>
               Previous day
             </button>
             <div>
-              <label htmlFor={dateId} className="block text-sm font-medium">
+              <label htmlFor={dateId} className={`${LABEL} text-sm`}>
                 Date
               </label>
               <input
@@ -239,14 +244,14 @@ export function QueueBoard() {
                 type="date"
                 value={date}
                 onChange={(event) => event.target.value !== "" && setDate(event.target.value)}
-                className="rounded border border-slate-500 px-2 py-1.5"
+                className={INPUT}
               />
             </div>
-            <button type="button" onClick={() => setDate(addDays(date, 1))} className="rounded border border-slate-500 px-3 py-2">
+            <button type="button" onClick={() => setDate(addDays(date, 1))} className={buttonClasses("secondary")}>
               Next day
             </button>
             {!isToday && (
-              <button type="button" onClick={() => setDate(today)} className="rounded border border-slate-500 px-3 py-2">
+              <button type="button" onClick={() => setDate(today)} className={buttonClasses("secondary")}>
                 Today
               </button>
             )}
@@ -255,7 +260,7 @@ export function QueueBoard() {
             <button
               type="button"
               onClick={() => setOverlay({ kind: "book", target: { kind: "book" } })}
-              className="rounded bg-blue-800 px-4 py-2 font-semibold text-white hover:bg-blue-900"
+              className={buttonClasses("primary")}
             >
               Book
             </button>
@@ -264,7 +269,7 @@ export function QueueBoard() {
             <button
               type="button"
               onClick={() => setOverlay({ kind: "walk-in" })}
-              className="rounded border border-blue-800 px-4 py-2 font-semibold text-blue-900 hover:bg-blue-50"
+              className={`${buttonClasses("secondary")} border-brand-700 text-brand-800 hover:bg-brand-50`}
             >
               Add walk-in
             </button>
@@ -272,7 +277,7 @@ export function QueueBoard() {
         </div>
       </div>
 
-      <p role="status" aria-live="polite" className="min-h-6 font-medium text-green-900">
+      <p role="status" aria-live="polite" className="min-h-6 font-medium text-emerald-900">
         {message}
       </p>
       {actionError !== undefined && <ErrorNotice error={actionError} />}
@@ -286,14 +291,16 @@ export function QueueBoard() {
         />
       )}
 
-      {doctors !== undefined && doctorId === undefined && <p>No active doctors yet. Ask the clinic owner to add one.</p>}
+      {doctors !== undefined && doctorId === undefined && (
+        <EmptyState title="No active doctors yet">Ask the clinic owner to add one.</EmptyState>
+      )}
       {doctorId !== undefined && queue === undefined && error === undefined && (
         <p role="status" className="text-slate-700">
           Loading the queue…
         </p>
       )}
       {queue !== undefined && sessions.length === 0 && (
-        <p>No sessions for this doctor on {formatDay(date)}.</p>
+        <EmptyState title={`No sessions for this doctor on ${formatDay(date)}.`}>Sessions come from the doctor&apos;s weekly schedule.</EmptyState>
       )}
 
       {sessions.map((session) => {
@@ -302,31 +309,33 @@ export function QueueBoard() {
           (now >= new Date(session.starts_at).getTime() && now < new Date(session.ends_at).getTime());
         const rows = session.appointments;
         return (
-          <section key={session.id} aria-label={`Session ${clock(session.starts_at)} to ${clock(session.ends_at)}`} className="rounded border border-slate-300">
-            <h2 className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-300 bg-slate-50 px-4 py-2">
-              <span className="font-bold">
+          <section key={session.id} aria-label={`Session ${clock(session.starts_at)} to ${clock(session.ends_at)}`} className="overflow-hidden rounded-card border border-slate-200 bg-white shadow-card">
+            <h2 className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 px-4 py-3">
+              <span className="font-semibold tabular-nums">
                 {clock(session.starts_at)}–{clock(session.ends_at)}
               </span>
-              <span className="text-sm text-slate-800">
+              <span className="text-sm text-slate-700">
                 {session.mode === "TOKENS" ? "Tokens" : `${session.slot_minutes ?? ""}-minute slots`} · {session.booked_count} of {session.capacity} booked
                 {session.status === "CLOSED" && " · closed to new bookings"}
               </span>
             </h2>
             {rows.length === 0 ? (
-              <p className="px-4 py-3 text-slate-700">Nobody booked yet.</p>
+              <p className="px-4 py-4 text-slate-700">Nobody booked yet.</p>
             ) : (
-              <table className="w-full px-4">
+              <LayoutMotion>
+              <div className="p-3 md:p-0">
+              <table role="table" className={TABLE}>
                 <caption className="sr-only">Appointments in this session</caption>
-                <thead className="text-left text-sm text-slate-700">
-                  <tr>
-                    <th scope="col" className="px-4 py-2">Place</th>
-                    <th scope="col" className="py-2">Patient</th>
-                    <th scope="col" className="py-2">Status</th>
-                    <th scope="col" className="py-2">Waiting</th>
-                    <th scope="col" className="py-2 pr-4 text-right">Actions</th>
+                <thead role="rowgroup">
+                  <tr role="row">
+                    <th role="columnheader" scope="col" className={TH}>Place</th>
+                    <th role="columnheader" scope="col" className={TH}>Patient</th>
+                    <th role="columnheader" scope="col" className={TH}>Status</th>
+                    <th role="columnheader" scope="col" className={TH}>Waiting</th>
+                    <th role="columnheader" scope="col" className={`${TH} text-right`}>Actions</th>
                   </tr>
                 </thead>
-                <tbody className="[&_td:first-child]:px-4 [&_td:last-child]:pr-4">
+                <tbody role="rowgroup">
                   {rows.map((entry) => (
                     <QueueRow
                       key={entry.id}
@@ -353,6 +362,8 @@ export function QueueBoard() {
                   ))}
                 </tbody>
               </table>
+              </div>
+              </LayoutMotion>
             )}
           </section>
         );
@@ -383,14 +394,14 @@ export function QueueBoard() {
             arrive later today you can still mark them arrived.
           </p>
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setOverlay(undefined)} className="rounded border border-slate-500 px-4 py-2">
+            <button type="button" onClick={() => setOverlay(undefined)} className={buttonClasses("secondary")}>
               Go back
             </button>
             <button
               type="button"
               disabled={busy}
               onClick={() => void step(overlay.entry, "NO_SHOW")}
-              className="rounded bg-red-800 px-4 py-2 font-semibold text-white disabled:bg-slate-400"
+              className={buttonClasses("danger")}
             >
               Mark no-show
             </button>
@@ -431,7 +442,7 @@ function WalkInDialog({ doctorId, onDone, onClose }: { doctorId: string; onDone:
       {saving && error === undefined && <p role="status">Adding…</p>}
       {error !== undefined && <ErrorNotice error={error} />}
       <div className="flex justify-end">
-        <button type="button" onClick={onClose} className="rounded border border-slate-500 px-4 py-2">
+        <button type="button" onClick={onClose} className={buttonClasses("secondary")}>
           Close
         </button>
       </div>

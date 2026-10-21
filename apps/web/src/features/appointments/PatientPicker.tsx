@@ -72,7 +72,7 @@ export function PatientPicker({
         placeholder="Phone, code or name"
         value={text}
         onChange={(event) => setText(event.target.value)}
-        className="w-full rounded border border-slate-500 px-3 py-2"
+        className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
       />
       {q !== "" && current === null && (
         <p role="status" className="text-slate-700">
@@ -84,13 +84,13 @@ export function PatientPicker({
         (current.items.length === 0 ? (
           <p role="status">No patient matches. Register them from the header first.</p>
         ) : (
-          <ul aria-label="Matching patients" className="divide-y divide-slate-200 rounded border border-slate-300">
+          <ul aria-label="Matching patients" className="divide-y divide-slate-200 rounded-card border border-slate-200 bg-white">
             {current.items.map((patient) => (
               <li key={patient.id}>
                 <button
                   type="button"
                   onClick={() => onPick(patient)}
-                  className="w-full px-3 py-2 text-left hover:bg-slate-100 focus:bg-blue-100"
+                  className="w-full px-3 py-2 text-left hover:bg-slate-100 focus:bg-brand-100"
                 >
                   <span className="font-semibold">{patient.full_name}</span>{" "}
                   <span className="text-sm text-slate-700">
