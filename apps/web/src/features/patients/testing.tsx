@@ -53,6 +53,8 @@ export const workspaceRoutes = {
   [`GET /api/v1/patients/${PATIENT_ID}/reminders`]: () => json(200, { items: [] }),
   [`GET /api/v1/patients/${PATIENT_ID}/messages`]: () => json(200, { items: [] }),
   "GET /api/v1/clinic/doctors": () => json(200, { items: [] }),
+  // M6a-P7: the header's notification bell.
+  "GET /api/v1/notifications/summary": () => json(200, { unread: 0, latest_id: null }),
   "GET /api/v1/me": () => json(200, person([desk])),
   "GET /api/v1/clinic": () =>
     json(200, {

@@ -59,7 +59,14 @@ type Overlay =
  * refreshes and says so. Each action is reported in a status message naming the patient and the
  * time, so a slip is seen at once (the safeguard for single-click steps, D29).
  */
-export function QueueBoard({ initialOverlay }: { initialOverlay?: "book" | "walk-in" } = {}) {
+export function QueueBoard({
+  initialOverlay,
+  initialDate,
+}: {
+  initialOverlay?: "book" | "walk-in";
+  /** M6a-P7: a notification's link opens the queue on its day (`/queue?date=YYYY-MM-DD`). */
+  initialDate?: string;
+} = {}) {
   const clinic = useClinic();
   const { identity, clinic: choice, endSession } = useSession();
   const api = useAppointmentApi();
@@ -78,7 +85,7 @@ export function QueueBoard({ initialOverlay }: { initialOverlay?: "book" | "walk
   const [doctors, setDoctors] = useState<readonly Doctor[] | undefined>(undefined);
   const [doctorsError, setDoctorsError] = useState<unknown>(undefined);
   const [doctorId, setDoctorId] = useState<string | undefined>(undefined);
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(initialDate ?? today);
   const [overlay, setOverlay] = useState<Overlay | undefined>(undefined);
   const [message, setMessage] = useState("");
   const [actionError, setActionError] = useState<unknown>(undefined);
