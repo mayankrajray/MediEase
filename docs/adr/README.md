@@ -18,7 +18,7 @@
 | [0014](0014-multi-clinic-whatsapp-and-consolidated-billing.md) | Each clinic's own WhatsApp number, and one consolidated MediEase invoice | Proposed (built in M8) |
 | [0015](0015-patient-accounts-and-google-sign-in.md) | Patient accounts apart from staff, and Google sign-in through the API | Accepted (M6a-P3) |
 | [0016](0016-email-port-smtp-and-auth-emails.md) | Email behind a port, sent over SMTP from the job queue | Accepted (M6a-P4) |
-| [0017](0017-notification-service.md) | Domain events and a notification service, dispatched in the publishing transaction | Proposed (M6a-P7) |
+| [0017](0017-notification-service.md) | Domain events and a notification service, dispatched in the publishing transaction | Accepted (M6a-P7) |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, and add a row here.
 Accepted ADRs are never edited; supersede them with a new ADR.

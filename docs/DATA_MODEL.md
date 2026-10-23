@@ -1,4 +1,4 @@
-﻿# MediEase — Data Model
+# MediEase — Data Model
 
 Target schema for the MVP (M1–M5). Tables are created milestone by milestone through Alembic;
 the **Milestone** column says when each table appears. Update this file in the same change as
@@ -645,6 +645,47 @@ migration: only system kinds are listed in `ck_jobs_system_kind`, so a clinic ki
 schema change. Invitation rate limits use `public_rate_limits` with hour windows
 (`staff-invite:<clinic>` and `staff-invite-resend:<membership>`).
 
+## M6a — Notifications (migration `0023`, M6a-P7, ADR-0017)
+
+### `notifications`
+Tenant-scoped (`SqlAlchemyNotificationRepository`); each query is also filtered by recipient, so
+another member's notification is "not found".
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | |
+| recipient_user_id | uuid FK users not null | The staff member told |
+| kind | text not null | `appointment.booked` \| `appointment.rescheduled` \| `appointment.cancelled` \| `appointment.arrived` \| `message.failed` \| `staff.joined` (CHECK) |
+| event_key | text not null | `<kind>:<entity id>` (a staff join adds the acceptance time) |
+| title | text not null | ≤ 160 chars, from the typed catalogue: "Asha · SC-0004 booked for 23 Oct, token 4"; never clinical |
+| link | text not null | An in-app path (`/queue?date=…`, `/patients/{id}`, `/team`) |
+| entity_type, entity_id | text, uuid not null | `appointment`, `message` or `clinic_membership` |
+| created_at | timestamptz not null | Index for the purge |
+| read_at | timestamptz null | Set once; reading again keeps the first time |
+
+Unique `(clinic_id, recipient_user_id, event_key)`: a replayed event inserts nothing
+(`ON CONFLICT DO NOTHING`). Index `(clinic_id, recipient_user_id, created_at DESC)` for the list
+and the unread count. Purged 90 days after creation.
+
+### `notification_preferences`
+Tenant-scoped (`SqlAlchemyPreferenceRepository`). A row only once a member changes a kind from its
+default (on).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | |
+| user_id | uuid FK users not null | |
+| kind | text not null | As `notifications.kind` (CHECK) |
+| channel | text not null | `IN_APP` \| `WHATSAPP` \| `EMAIL` \| `SMS` (CHECK); only `IN_APP` is offered (decision 5A) |
+| enabled | boolean not null | |
+| created_at, updated_at | timestamptz not null | |
+
+Unique `(clinic_id, user_id, kind, channel)` (an upsert). Kept while the membership exists. A
+patient's WhatsApp preference is their consent (`patients`), not a row here. Changing a choice is
+audited as `notification.preferences_changed` (metadata: the kinds turned on and off).
+
 ---
 
 ## Retention and erasure
@@ -657,6 +698,7 @@ schema change. Invitation rate limits use `public_rate_limits` with hour windows
 | Refresh tokens | 30 days after expiry | Purge job (staff and, from M6a-P3, portal sessions) |
 | Email tokens | 30 days after expiry | Purge job (M6a-P4) |
 | Patient links | 30 days after expiry | Purge job |
+| Notifications | 90 days after creation | Purge job (M6a-P7) |
 
 Erasure requests are executed by a reviewed, audited procedure (`scripts/erase_patient.py`, M6)
 that respects legally required clinical retention — confirm with counsel (L-04).

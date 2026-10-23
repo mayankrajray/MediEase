@@ -478,3 +478,27 @@ patient's code and first name only. `follow_ups_pending` is the clinic's, as
 `/follow-ups/pending` lists them. `week` (the last 7 days ending today, oldest first) needs
 `USAGE_METRICS_VIEW` and is null without it; in scope `DOCTOR` its `messages_sent` are null. Like
 the queue, a strong ETag and a bodiless 304 for `If-None-Match`; `Cache-Control: no-store`.
+
+### Notifications (M6a-P7)
+
+| Method | Path | Purpose | Req |
+|---|---|---|---|
+| GET | `/api/v1/notifications?limit=` | My latest notifications, newest first (default 30, 1–50) | FR-NTF-03 |
+| GET | `/api/v1/notifications/summary` | `{unread, latest_id}` for the bell; ETag and 304 | FR-NTF-03 |
+| POST | `/api/v1/notifications/{notification_id}/read` | Mark one read (reading again keeps the first time) | FR-NTF-03 |
+| POST | `/api/v1/notifications/read-all` | Mark all mine read; `{updated}` | FR-NTF-03 |
+| GET/PUT | `/api/v1/notifications/preferences` | My choice per kind, in the app | FR-NTF-05 |
+
+Contract 0.27.0. Every route needs `CLINIC_VIEW` (every role) and acts on the caller's own
+notifications in the request's clinic: another member's or another clinic's is a 404
+`REQ_NOT_FOUND`. A notification is `{id, kind, title, link, entity_type, entity_id, created_at,
+read_at}`; titles come from a typed, non-clinical catalogue. `latest_id` changes when one arrives,
+so the summary's ETag does too. `PUT /preferences` takes `{items: [{kind, channel?, enabled}]}`
+(channel `IN_APP`, the default; any other is 409 `CLN_INVALID_TRANSITION`; an unknown kind or an
+empty list is 422) and returns every kind with its label. A change is audited
+(`notification.preferences_changed`); reading is not. `Cache-Control: no-store`.
+
+Notifications are written by the features' own transactions (ADR-0017): a booking, a
+reschedule, a cancellation and an arrival or walk-in tell the appointment's doctor; a message
+that fails tells the owners and the front desk; an accepted invitation tells the owners. The
+member who made the change is never told.

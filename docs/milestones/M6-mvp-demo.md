@@ -928,3 +928,75 @@ Planned verification:
   - failure path: with the doctor's *Appointment booked* preference turned off, a booking adds
     nothing.
 - **Gates:** `make lint typecheck contract-check test` and `make e2e`.
+
+### M6a-P7 — as built (24 Oct 2026)
+
+Approved A on all eight. Where the build differs from the text above:
+
+- **The channels are two code paths in `NotificationService`, not an interface.** In-app writes
+  rows; WhatsApp calls the M5 `enqueue_booking_confirmation` and `enqueue_rx_link`. A `Channel`
+  protocol waits for a third channel that delivers something (ADR-0017 "As built").
+- **Which failures notify.** `MessageFailed` is published where a message turns `FAILED` after a
+  definite answer: the sender's final failure and the webhook's `FAILED` status. An unknown outcome
+  (`MSG_OUTCOME_UNKNOWN`, the message may have arrived) and a send skipped because consent or the
+  facts changed do not, as with the SMS fallback.
+- **`ProcessWebhookEvent` now requires the ID port**, so no wiring can silently skip the notice.
+- **A staff join's key includes the acceptance time**, so somebody invited back after a
+  deactivation is announced again.
+- **`/queue?date=YYYY-MM-DD`** opens the queue on that day (anything else is ignored); the page is
+  keyed by the day, so a second link followed from the queue shows the new day.
+
+What was built:
+
+- **API.**
+  - `domain/notifications/`: the seven events (`events.py`), `NotificationKind`, `Channel`,
+    `KINDS` (label, `respects_quiet_hours`), the typed title values `PatientRef`, `Place`,
+    `PersonName` and `RoleLabel`, the title functions, `Notification` and `Preference`.
+  - `ports/notifications.py`: `NotificationRepository` and `PreferenceRepository`, reached as
+    `uow.tenant(...).notifications` and `.notification_preferences`.
+  - `adapters/db/notifications.py`: insert with `ON CONFLICT DO NOTHING`, the preference upsert.
+    Migration `0023` (two tables, CHECKs on kinds and channels).
+  - `application/notifications/service.py`: `publish` and `NotificationService.dispatch`.
+    Recipients: the appointment's doctor (when linked to an active member), or the active owners
+    and front desk. The actor and members who turned the kind off are dropped. One query per
+    lookup.
+  - Call sites: `BookAppointment`, `RescheduleAppointment`, `CancelAppointment`,
+    `TransitionAppointment` (to `ARRIVED`), `AddWalkIn`, `IssuePrescription`, `AcceptInvite`,
+    the sender's `_finish` and `ProcessWebhookEvent`.
+  - `application/notifications/use_cases.py` and `delivery/http/notifications.py`: the six
+    routes, all `CLINIC_VIEW`. Contract 0.27.0.
+  - Retention: `notifications` purged 90 days after creation by the existing purge job; audit
+    action `notification.preferences_changed`.
+- **Web.**
+  - `features/notifications/`: `NotificationBell` (header identity group, visible at every width;
+    the summary polled every 15 s with its ETag; a drawer with the latest 30, unread first in
+    weight and in words; *Mark all as read*; a polite live region for arrivals) and
+    `NotificationPreferences` at `/settings/notifications` (one checkbox per kind, saved at once).
+  - *Notifications* is the last item of every workspace's navigation.
+- **Journey helper fix (no assertion changed).** `sessionRunningNow` failed with `SCH_OVERLAP`
+  when the last extra session had ended under 10 minutes earlier; it now starts the new one at
+  that end (docs/DEBUG_JOURNAL.md, 24 Oct 2026).
+- **Verification.**
+  - **Gates.** `make lint typecheck contract-check test` green. API: 1,775 tests (before the
+    reschedule test was added), 97.50% package coverage, 97% on `domain/` + `application/`. Web:
+    56 files, 536 tests.
+  - **New tests.** `tests/integration/test_notifications_http.py` (16): a desk booking tells the
+    doctor and queues the same confirmation job; a reschedule, an arrival, a walk-in and a
+    cancellation tell the doctor; publishing again adds nothing and a rollback leaves nothing; the
+    actor is not told; a failed send tells the owners and desk once; an accepted invitation tells
+    the owners; a preference turned off stops it and is audited once; the channel and body checks;
+    summary ETag and 304, read, another member's 404, read-all; the limit; four statements per
+    dispatch; the 90-day purge. Plus the webhook `FAILED` path (`test_webhooks_http.py`), the
+    repository and HTTP tenancy suites, migration `0023` up and down, and the domain unit tests.
+  - **Stack.** `make up`, `make seed` and `make smoke` green. Full Playwright suite 29/29, with
+    `notifications.spec.ts`:
+    - the front desk books with *Dr. Sample Doctor*; within one poll the doctor's bell reads
+      "Notifications, 1 unread"; the drawer shows "Notify · SC-… booked for …"; opening it goes to
+      `/queue?date=…` (*Today's queue*) and the count clears;
+    - failure path: with *A patient is booked with me* off, a booking adds nothing; it is turned
+      back on afterwards.
+  - **Run note.** The journeys ran with the Playwright image mounting the Windows path, because
+    the WSL path mount came up empty in this session (`make e2e` uses the WSL path). Same image,
+    same tests, same stack.
+  - **Not verified.** The live-region announcement of a new arrival has no automated test (it
+    needs a second poll); it was not checked with a screen reader.

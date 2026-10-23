@@ -157,6 +157,14 @@ window the patient's own STOP message opens:
   attempt) — at send time or by webhook — gets one SMS (`sms:<reminder>`), if the patient consented
   to SMS, outside the quiet hours. Never after `MSG_OUTCOME_UNKNOWN`. The reminder then shows the
   SMS's status. Only a console SMS provider exists until L-03; it is refused in production.
+- **R20** *Through the notification service (M6a-P7, ADR-0017; FR-NTF-02, FR-NTF-04).* The booking
+  confirmation and the prescription link are no longer enqueued by their features: booking,
+  rescheduling and issuing publish an event, and the notification service enqueues the same job
+  with the same key, in the same transaction. Consent, the facts and at-most-once sending are still
+  checked by the handlers (R5, R6). A message that becomes `FAILED` (at the sender's final
+  failure or by webhook) also tells the clinic's owners and front desk in the app, once each
+  (`message.failed`, linking to the patient). Reminders, the SMS fallback and the STOP
+  confirmation are unchanged.
 
 ## 5. API surface
 See API.md "Reminders and messaging".
@@ -176,6 +184,7 @@ See API.md "Reminders and messaging".
 | Reminder scheduled / cancelled | `reminder.scheduled` / `reminder.cancelled` | `reminder_scheduled` |
 | Message status change | — | `message_status_changed` |
 | Opt-out | `patient.opted_out` | `patient_opted_out` |
+| Message `FAILED` (M6a-P7) | — (an in-app notification to owners and front desk) | `notification.dispatched` log |
 
 ## 8. Edge cases
 | Case | Expected outcome |

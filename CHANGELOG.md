@@ -14,6 +14,21 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6a-P7 (#49): the notification service and notification centre (FR-NTF-02..06; ADR-0017
+  Accepted; decisions 1A–8A). Features publish domain events in their own transaction
+  (`publish(uow, event)`); `NotificationService` writes in-app notifications and is now the only
+  path from a feature to WhatsApp. It enqueues the M5 booking confirmation and prescription link
+  with their unchanged keys and consent checks. A booking, reschedule, cancellation, arrival or
+  walk-in tells the appointment's doctor. A failed message (sender or webhook) tells the owners
+  and front desk. An accepted invitation tells the owners. The member who made the change is
+  never told. Titles come from a typed catalogue ("Asha · SC-0004 booked for 23 Oct, token 4"),
+  never clinical. New tables `notifications` and `notification_preferences` (migration `0023`;
+  90-day purge). Six routes under `/api/v1/notifications` (list, summary with ETag, read,
+  read-all, preferences), contract 0.27.0. Audit action `notification.preferences_changed`. The
+  web header gets a bell with the unread count (polled every 15 s, a drawer of the latest 30,
+  *Mark all as read*, a polite live region), each workspace's menu gets *Notifications*
+  (`/settings/notifications`, one switch per kind), and `/queue?date=` opens a day. Reminders,
+  the SMS fallback and the STOP confirmation are unchanged. No new dependency.
 - M6a-P6 (#49): role workspaces (FR-UX-01..06, FR-ORG-03, FR-ONB-08; decisions 1A–8A). Owner,
   Doctor and Front desk each get their own navigation, Today and three quick actions; a
   workspace is a web view and never changes permissions. A practising owner (an owner with a
