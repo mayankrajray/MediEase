@@ -14,7 +14,16 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
-- M6a-P4 (#49): email verification and password reset (FR-AUTH-08, FR-AUTH-05; ADR-0016
+- M6a-P5 (#49): the owner's Team page (FR-ORG-07, decisions 1A–8A). `/team` (sidebar *Team*,
+  owners only) lists every member with role, status, email or phone, invitation expiry and a
+  *Doctor profile* badge, as a table from 768 px and cards below. Owners invite (an email address
+  gets an email from the worker, new clinic job `send_staff_invite`, with the secret made at send
+  time and never shown; phone-only shows the link once), resend (the old link stops working at
+  once), change a role (warned before demoting themselves), deactivate (not their own row) and
+  invite a deactivated member back (`DEACTIVATED → INVITED`, `staff.reinvited`). Limits: 10
+  invitations an hour per clinic, 3 resends per member (`CLN_INVITE_RATE_LIMITED`). Contract
+  0.25.0 (fuller `StaffMember`, `TeamInvitation`, `POST /clinic/staff/{id}/resend`). No
+  migration and no new dependency. Ops invitations still show the link (until M6c). (FR-AUTH-08, FR-AUTH-05; ADR-0016
   Accepted, decisions 1A–8A). An `EmailPort` with one standard-library SMTP adapter (Brevo free
   for the pilot, L-11; Resend or SES Mumbai by settings), and a pinned Mailpit container
   (`axllent/mailpit:v1.32.0`) catching mail locally at localhost:8025. Requests enqueue the new

@@ -126,8 +126,9 @@ Any tenant resource outside the request's clinic returns `404 REQ_NOT_FOUND` (R8
 | POST | `/api/v1/clinic/doctors` | Add a doctor | OWNER (`CLINIC_MANAGE`) | Implemented (M1-P5) |
 | GET | `/api/v1/clinic/doctors/{doctor_id}` | One doctor | every role (`DOCTORS_VIEW`) | Implemented (M1-P3) |
 | PATCH | `/api/v1/clinic/doctors/{doctor_id}` | Edit or deactivate a doctor | OWNER (`CLINIC_MANAGE`) | Implemented (M1-P5) |
-| GET | `/api/v1/clinic/staff` | List staff with roles | OWNER (`STAFF_MANAGE`) | Implemented (M1-P3) |
-| POST | `/api/v1/clinic/staff` | Invite staff | OWNER (`STAFF_MANAGE`) | Implemented (M1-P5) |
+| GET | `/api/v1/clinic/staff` | List staff with roles; from M6a-P5 also email, phone, invitation expiry and a doctor-profile flag | OWNER (`STAFF_MANAGE`) | Implemented (M1-P3, M6a-P5) |
+| POST | `/api/v1/clinic/staff` | Invite staff, or invite a deactivated member back; emailed when they have an email address (`delivery: email`), else the link once (`delivery: link`); 10 an hour per clinic | OWNER (`STAFF_MANAGE`) | Implemented (M1-P5, M6a-P5) |
+| POST | `/api/v1/clinic/staff/{membership_id}/resend` | A pending invitation again; the old link stops working; 3 an hour per member | OWNER (`STAFF_MANAGE`) | Implemented (M6a-P5) |
 | PATCH | `/api/v1/clinic/staff/{membership_id}` | Change role and/or deactivate | OWNER (`STAFF_MANAGE`) | Implemented (M1-P4, M1-P5) |
 | GET | `/api/v1/clinic/audit-events` | Audit log | OWNER | FR-AUD-03 (P1) — backlog; not in the P0 permission matrix |
 
