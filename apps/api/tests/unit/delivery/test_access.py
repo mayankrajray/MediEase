@@ -35,6 +35,14 @@ EXPECTED_POLICIES = {
     "portal.refresh": (Access.PUBLIC, None),
     "portal.sign_out": (Access.PUBLIC, None),
     "portal.me": (Access.PATIENT, None),
+    # M6a-P4: the emailed links' endpoints are public (the token is the authority); the resend
+    # is the signed-in patient's.
+    "auth.request_password_reset": (Access.PUBLIC, None),
+    "auth.complete_password_reset": (Access.PUBLIC, None),
+    "portal.request_password_reset": (Access.PUBLIC, None),
+    "portal.complete_password_reset": (Access.PUBLIC, None),
+    "portal.verify_email": (Access.PUBLIC, None),
+    "portal.resend_verification": (Access.PATIENT, None),
     # The authority is the invitation secret in the URL, not a session.
     "invites.describe_invite": (Access.PUBLIC, None),
     "invites.accept_invite": (Access.PUBLIC, None),

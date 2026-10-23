@@ -44,6 +44,18 @@ x-api-environment: &api-environment
   WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
   WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
   WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+  # M6a-P3: Google sign-in; `fake` locally (refused when deployed), `google` after L-09.
+  GOOGLE_OIDC_PROVIDER: ${GOOGLE_OIDC_PROVIDER:-fake}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  # M6a-P4 (ADR-0016): the worker sends account emails; locally into Mailpit (localhost:8025).
+  EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}
+  EMAIL_FROM: ${EMAIL_FROM:-MediEase <no-reply@mediease.example>}
+  SMTP_HOST: ${SMTP_HOST:-mailpit}
+  SMTP_PORT: ${SMTP_PORT:-1025}
+  SMTP_SECURITY: ${SMTP_SECURITY:-none}
+  SMTP_USERNAME: ${SMTP_USERNAME:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
 
 # Least privilege for our own containers (CLAUDE.md): read-only root
 # filesystem, no Linux capabilities, no privilege escalation. Writable scratch
@@ -153,6 +165,24 @@ services:
       start_period: 20s
     # SIGTERM lets the job in hand finish; the rest are handed back.
     stop_grace_period: 30s
+    restart: unless-stopped
+
+  # M6a-P4 (ADR-0016 decision 3): catches every email the worker sends locally. SMTP on the
+  # compose network only; the inbox and its API on localhost:8025 (and mailpit:8025 for e2e).
+  mailpit:
+    <<: *hardened
+    image: axllent/mailpit:v1.32.0
+    environment:
+      MP_MAX_MESSAGES: "500"
+    tmpfs: ["/tmp", "/data"]
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
 
   web:

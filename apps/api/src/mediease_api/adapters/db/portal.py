@@ -15,10 +15,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from mediease_api.adapters.db.models import (
+    EmailTokenRow,
     ExternalIdentityRow,
     PatientAccountRow,
     PatientRefreshTokenRow,
 )
+from mediease_api.domain.identity.email_token import EmailToken, EmailTokenPurpose
 from mediease_api.domain.identity.external import ExternalIdentity, IdentityProvider
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.portal.account import (
@@ -103,6 +105,19 @@ class SqlAlchemyPatientAccountRepository:
             PatientAccountRow.sign_in_method == SignInMethod.PASSWORD.value,
         )
         return self._one(query, for_update)
+
+    def find_google_account(self, email: EmailAddress) -> PatientAccount | None:
+        query = (
+            select(PatientAccountRow)
+            .where(
+                PatientAccountRow.email == email.value,
+                PatientAccountRow.sign_in_method == SignInMethod.GOOGLE.value,
+            )
+            .order_by(PatientAccountRow.created_at)
+            .limit(1)
+        )
+        row = self._session.scalars(query).first()
+        return _account_from_row(row) if row else None
 
     def update(self, account: PatientAccount) -> None:
         row = self._session.get(PatientAccountRow, account.id)
@@ -194,6 +209,91 @@ class SqlAlchemyPatientRefreshTokenRepository:
             )
         )
         return bool(self._session.scalar(query))
+
+    def revoke_all_for_owner(self, owner_id: UUID, *, now: datetime) -> int:
+        result = self._session.execute(
+            update(PatientRefreshTokenRow)
+            .where(
+                PatientRefreshTokenRow.account_id == owner_id,
+                PatientRefreshTokenRow.revoked_at.is_(None),
+            )
+            .values(revoked_at=now, updated_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        return int(result.rowcount)  # type: ignore[attr-defined]
+
+
+# --- Email tokens (M6a-P4) -------------------------------------------------------------------
+
+
+def _email_token_from_row(row: EmailTokenRow) -> EmailToken:
+    return EmailToken(
+        id=row.id,
+        purpose=EmailTokenPurpose(row.purpose),
+        user_id=row.user_id,
+        patient_account_id=row.patient_account_id,
+        email=EmailAddress(row.email),
+        token_hash=row.token_hash,
+        expires_at=_utc(row.expires_at),
+        created_at=_utc(row.created_at),
+        used_at=_utc_or_none(row.used_at),
+        superseded_at=_utc_or_none(row.superseded_at),
+    )
+
+
+class SqlAlchemyEmailTokenRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, token: EmailToken) -> None:
+        self._session.add(
+            EmailTokenRow(
+                id=token.id,
+                purpose=token.purpose.value,
+                user_id=token.user_id,
+                patient_account_id=token.patient_account_id,
+                email=token.email.value,
+                token_hash=token.token_hash,
+                expires_at=token.expires_at,
+                created_at=token.created_at,
+                used_at=token.used_at,
+                superseded_at=token.superseded_at,
+            )
+        )
+        self._session.flush()
+
+    def get_by_hash(self, token_hash: str, *, for_update: bool = False) -> EmailToken | None:
+        query = select(EmailTokenRow).where(EmailTokenRow.token_hash == token_hash)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        row = self._session.scalars(query).one_or_none()
+        return _email_token_from_row(row) if row else None
+
+    def update(self, token: EmailToken) -> None:
+        row = self._session.get(EmailTokenRow, token.id)
+        if row is None:
+            raise NotFound("email token")
+        row.used_at = token.used_at
+        row.superseded_at = token.superseded_at
+        self._session.flush()
+
+    def supersede_active(
+        self, *, purpose: EmailTokenPurpose, owner_id: UUID, staff: bool, now: datetime
+    ) -> int:
+        owner = EmailTokenRow.user_id if staff else EmailTokenRow.patient_account_id
+        result = self._session.execute(
+            update(EmailTokenRow)
+            .where(
+                owner == owner_id,
+                EmailTokenRow.purpose == purpose.value,
+                EmailTokenRow.used_at.is_(None),
+                EmailTokenRow.superseded_at.is_(None),
+                EmailTokenRow.expires_at > now,
+            )
+            .values(superseded_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        return int(result.rowcount)  # type: ignore[attr-defined]
 
 
 # --- External identities ---------------------------------------------------------------------

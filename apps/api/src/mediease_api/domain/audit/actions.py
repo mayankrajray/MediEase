@@ -107,3 +107,10 @@ class AuditAction(StrEnum):
     PATIENT_SIGNED_OUT = "patient.signed_out"
     PATIENT_REFRESH_REUSED = "patient.refresh_reused"
     STAFF_SIGNED_IN_GOOGLE = "staff.signed_in_google"
+    # M6a-P4 (ADR-0016): password reset and email verification. Written as STAFF or PATIENT about
+    # the account itself. Metadata: which email, how many sessions a reset ended; never an
+    # address or a token. A request for an address with no account writes nothing.
+    AUTH_PASSWORD_RESET_REQUESTED = "auth.password_reset_requested"
+    AUTH_PASSWORD_RESET = "auth.password_reset"
+    PATIENT_PASSWORD_RESET = "patient.password_reset"
+    PATIENT_EMAIL_VERIFIED = "patient.email_verified"

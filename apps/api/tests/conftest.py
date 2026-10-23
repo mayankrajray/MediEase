@@ -80,6 +80,13 @@ _MANAGED_VARS = (
     "GOOGLE_OIDC_PROVIDER",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
+    "EMAIL_PROVIDER",
+    "EMAIL_FROM",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_SECURITY",
+    "SMTP_USERNAME",
+    "SMTP_PASSWORD",
 )
 
 # Synthetic, test-only secrets (>= 32 characters each).

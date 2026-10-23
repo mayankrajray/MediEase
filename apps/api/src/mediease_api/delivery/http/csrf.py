@@ -35,6 +35,12 @@ _EXEMPT_PATHS = frozenset(
         "/api/v1/auth/sign-in",
         "/api/v1/portal/auth/sign-in",
         "/api/v1/portal/auth/sign-up",
+        # M6a-P4: anonymous by nature; the authority is the address or the emailed token.
+        "/api/v1/auth/password-reset",
+        "/api/v1/auth/password-reset/complete",
+        "/api/v1/portal/auth/password-reset",
+        "/api/v1/portal/auth/password-reset/complete",
+        "/api/v1/portal/auth/verify-email",
     }
 )
 # The token is in the path, so the exemption is by prefix.

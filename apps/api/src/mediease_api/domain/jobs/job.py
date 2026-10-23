@@ -32,11 +32,14 @@ RECONCILE_KIND = "reconcile_messages"
 # works only on that clinic's rows.
 NO_SHOW_SWEEP_KIND = "schedule_no_shows"
 MARK_NO_SHOWS_KIND = "mark_no_shows"
+# M6a-P4 (ADR-0016): verification and password-reset emails. They belong to an account, not a
+# clinic, so they are system kinds.
+AUTH_EMAIL_KIND = "send_auth_email"
 
 # R9d: the only kinds allowed to have no clinic. The database CHECK ``ck_jobs_system_kind`` lists
 # the same kinds; a test keeps the two in step, and adding a kind is a migration.
 SYSTEM_KINDS: frozenset[str] = frozenset(
-    {PURGE_KIND, WEBHOOK_KIND, RECONCILE_KIND, NO_SHOW_SWEEP_KIND}
+    {PURGE_KIND, WEBHOOK_KIND, RECONCILE_KIND, NO_SHOW_SWEEP_KIND, AUTH_EMAIL_KIND}
 )
 
 DEFAULT_MAX_ATTEMPTS = 5

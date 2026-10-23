@@ -28,6 +28,7 @@ from mediease_api.adapters.db.messages import (
     SqlAlchemyWebhookEventRepository,
 )
 from mediease_api.adapters.db.portal import (
+    SqlAlchemyEmailTokenRepository,
     SqlAlchemyExternalIdentityRepository,
     SqlAlchemyPatientAccountRepository,
     SqlAlchemyPatientRefreshTokenRepository,
@@ -182,6 +183,8 @@ class _OpenUnit:
         self.patient_accounts = SqlAlchemyPatientAccountRepository(session)
         self.patient_refresh_tokens = SqlAlchemyPatientRefreshTokenRepository(session)
         self.external_identities = SqlAlchemyExternalIdentityRepository(session)
+        # M6a-P4: email verification and password-reset tokens.
+        self.email_tokens = SqlAlchemyEmailTokenRepository(session)
         self.staff_invites = SqlAlchemyStaffInviteRepository(session)
         self.rate_limits = SqlAlchemyRateLimitRepository(session)
         # Shares the session, so an audit row commits with the change (R11).
@@ -253,6 +256,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def external_identities(self) -> SqlAlchemyExternalIdentityRepository:
         return self._require_open().external_identities
+
+    @property
+    def email_tokens(self) -> SqlAlchemyEmailTokenRepository:
+        return self._require_open().email_tokens
 
     @property
     def staff_invites(self) -> SqlAlchemyStaffInviteRepository:

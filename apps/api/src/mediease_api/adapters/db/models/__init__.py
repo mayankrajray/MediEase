@@ -14,6 +14,7 @@ from mediease_api.adapters.db.models.links import PatientLinkRow, PublicRateLimi
 from mediease_api.adapters.db.models.messages import MessageRow, WebhookEventRow
 from mediease_api.adapters.db.models.patients import PatientRow
 from mediease_api.adapters.db.models.portal import (
+    EmailTokenRow,
     ExternalIdentityRow,
     PatientAccountRow,
     PatientRefreshTokenRow,
@@ -37,6 +38,7 @@ __all__ = [
     "ClinicRow",
     "DoctorRow",
     "DoctorScheduleRow",
+    "EmailTokenRow",
     "ExternalIdentityRow",
     "JobRow",
     "MessageRow",

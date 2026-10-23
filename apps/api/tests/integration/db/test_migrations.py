@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0020"
+HEAD = "0021"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -41,6 +41,7 @@ M5_P4_TABLES = sorted([*M5_P3_TABLES, "reminders"])
 M6A_P3_TABLES = sorted(
     [*M5_P4_TABLES, "external_identities", "patient_accounts", "patient_refresh_tokens"]
 )
+M6A_P4_TABLES = sorted([*M6A_P3_TABLES, "email_tokens"])
 
 
 @pytest.fixture
@@ -628,9 +629,27 @@ def test_0020_adds_patient_accounts_sessions_and_identities(
         engine.dispose()
 
 
+def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    command.upgrade(alembic_config, "0021")
+    assert _tables(scratch_database_url) == M6A_P4_TABLES
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            assert "send_auth_email" in _check(conn, "ck_jobs_system_kind")
+            assert "RESET_PASSWORD" in _check(conn, "ck_email_tokens_purpose")
+        command.downgrade(alembic_config, "0020")
+        assert _tables(scratch_database_url) == M6A_P3_TABLES
+        with engine.connect() as conn:
+            assert "send_auth_email" not in _check(conn, "ck_jobs_system_kind")
+    finally:
+        engine.dispose()
+
+
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6A_P3_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6A_P4_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:

@@ -13,6 +13,7 @@ from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mediease_api.adapters.db.models.base import Base, Keyed, Timestamps, enum_check
+from mediease_api.domain.identity.email_token import EmailTokenPurpose
 from mediease_api.domain.identity.external import IdentityProvider
 from mediease_api.domain.portal.account import AccountStatus, SignInMethod
 
@@ -101,3 +102,29 @@ class ExternalIdentityRow(Keyed, Base):
     patient_account_id: Mapped[UUID | None] = mapped_column(ForeignKey("patient_accounts.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_used_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class EmailTokenRow(Keyed, Base):
+    """A single-use verification or reset token, stored as a digest (migration 0021, M6a-P4)."""
+
+    __tablename__ = "email_tokens"
+    __table_args__ = (
+        enum_check("purpose", EmailTokenPurpose),
+        CheckConstraint(
+            "(user_id IS NULL) <> (patient_account_id IS NULL)", name="exactly_one_owner"
+        ),
+        CheckConstraint("email = lower(email)", name="email_lower_case"),
+        Index("ix_email_tokens_user_id", "user_id"),
+        Index("ix_email_tokens_patient_account_id", "patient_account_id"),
+        Index("ix_email_tokens_expires_at", "expires_at"),
+    )
+
+    purpose: Mapped[str] = mapped_column(Text)
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    patient_account_id: Mapped[UUID | None] = mapped_column(ForeignKey("patient_accounts.id"))
+    email: Mapped[str] = mapped_column(Text)
+    token_hash: Mapped[str] = mapped_column(Text, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

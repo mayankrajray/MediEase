@@ -10,6 +10,7 @@ from openapi_core.contrib.werkzeug import WerkzeugOpenAPIRequest, WerkzeugOpenAP
 from werkzeug.test import EnvironBuilder, TestResponse
 from werkzeug.wrappers import Request
 
+from tests.conftest import UowFactory
 from tests.contract.test_auth_contract import _BASE_URL, _check, _post, openapi  # noqa: F401
 from tests.integration.test_portal_http import EMAIL, PASSWORD
 
@@ -98,3 +99,52 @@ def test_adr_0008_google_start_and_callback_redirects_match_contract(
     assert finished.status_code == 302
     assert finished.headers["Location"] == "/portal"
     _check_get(openapi, finished)
+
+
+def test_adr_0008_password_reset_and_verification_match_contract(
+    openapi: OpenAPI,  # noqa: F811
+    db_client: FlaskClient,
+    uow_factory: UowFactory,
+) -> None:
+    from tests.integration.test_password_reset_http import Mailbox, _token
+
+    mailbox = Mailbox(uow_factory)
+    created = _post(db_client, SIGN_UP, json=BODY)
+    assert created.status_code == 201
+    token = _token(mailbox.deliver()[0], "/portal/verify-email")
+
+    resent = _post(
+        db_client, "/api/v1/portal/auth/verify-email/resend", headers=_portal_csrf(db_client)
+    )
+    assert resent.status_code == 202
+    _check(openapi, resent)
+
+    unknown = _post(db_client, "/api/v1/portal/auth/verify-email", json={"token": "nope"})
+    assert unknown.status_code == 404
+    _check(openapi, unknown)
+    newest = _token(mailbox.deliver()[0], "/portal/verify-email")
+    stale = _post(db_client, "/api/v1/portal/auth/verify-email", json={"token": token})
+    assert stale.status_code == 404  # sending the new link retired it
+    verified = _post(db_client, "/api/v1/portal/auth/verify-email", json={"token": newest})
+    assert verified.status_code == 204
+    _check(openapi, verified)
+
+    for path in ("/api/v1/auth/password-reset", "/api/v1/portal/auth/password-reset"):
+        accepted = _post(db_client, path, json={"email": EMAIL})
+        assert accepted.status_code == 202
+        _check(openapi, accepted)
+    reset = _token(mailbox.deliver()[-1], "/portal/reset-password")
+    done = _post(
+        db_client,
+        "/api/v1/portal/auth/password-reset/complete",
+        json={"token": reset, "password": "a-brand-new-synthetic-pass"},
+    )
+    assert done.status_code == 204
+    _check(openapi, done)
+    again = _post(
+        db_client,
+        "/api/v1/auth/password-reset/complete",
+        json={"token": reset, "password": "a-brand-new-synthetic-pass"},
+    )
+    assert again.status_code == 404
+    _check(openapi, again)

@@ -266,11 +266,17 @@ class SqlAlchemyRetentionRepository:
                 {"cutoff": cutoffs.webhook_events},
             )
             events = deleted.rowcount  # type: ignore[attr-defined]
+        # M6a-P4: email tokens follow the refresh tokens' 30 days after expiry.
+        email_tokens = self._session.execute(
+            text("DELETE FROM email_tokens WHERE expires_at < :cutoff"),
+            {"cutoff": cutoffs.refresh_tokens},
+        )
         return PurgeCounts(
             refresh_tokens=tokens.rowcount + patient_tokens.rowcount,  # type: ignore[attr-defined]
             patient_links=links.rowcount,  # type: ignore[attr-defined]
             jobs=jobs.rowcount,  # type: ignore[attr-defined]
             webhook_events=events,
+            email_tokens=email_tokens.rowcount,  # type: ignore[attr-defined]
         )
 
 

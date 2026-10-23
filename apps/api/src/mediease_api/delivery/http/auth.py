@@ -15,10 +15,15 @@ from typing import Any, Protocol
 from flask import Blueprint, Response, jsonify, request
 from pydantic import BaseModel, ConfigDict, Field
 
+from mediease_api.application.auth.emails import Owner
 from mediease_api.application.auth.errors import (
     AccountDisabled,
     RefreshTokenReused,
     SessionExpired,
+)
+from mediease_api.application.auth.password_reset import (
+    CompletePasswordReset,
+    RequestPasswordReset,
 )
 from mediease_api.application.auth.refresh_session import RefreshSession
 from mediease_api.application.auth.sign_in import SignIn, SignInCommand
@@ -42,6 +47,24 @@ class AuthUseCases(Protocol):
     def sign_in(self) -> SignIn: ...
     def refresh(self) -> RefreshSession: ...
     def sign_out(self) -> SignOut: ...
+    def request_password_reset(self) -> RequestPasswordReset: ...
+    def complete_password_reset(self) -> CompletePasswordReset: ...
+
+
+class PasswordResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=254)
+
+
+class PasswordResetCompletion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+ACCEPTED_BODY = {"accepted": True}
 
 
 class SignInRequest(BaseModel):
@@ -92,6 +115,25 @@ def create_auth_blueprint(use_cases: AuthUseCases, *, cookie_secure: bool) -> Bl
         response = Response(status=204)
         clear_session_cookies(response, secure=cookie_secure)
         return response
+
+    @bp.post("/password-reset")
+    @public
+    def request_password_reset() -> tuple[Response, int]:
+        """FR-AUTH-05: the same 202 whether or not the address has an account (ADR-0016 7)."""
+        body = parse_json(PasswordResetRequest)
+        use_cases.request_password_reset().execute(
+            body.email, owner=Owner.STAFF, info=request_info()
+        )
+        return jsonify(ACCEPTED_BODY), 202
+
+    @bp.post("/password-reset/complete")
+    @public
+    def complete_password_reset() -> Response:
+        body = parse_json(PasswordResetCompletion)
+        use_cases.complete_password_reset().execute(
+            body.token, body.password, owner=Owner.STAFF, info=request_info()
+        )
+        return Response(status=204)
 
     return bp
 

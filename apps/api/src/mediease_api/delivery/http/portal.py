@@ -14,7 +14,14 @@ from typing import Any, Protocol
 from flask import Blueprint, Response, jsonify, request
 from pydantic import BaseModel, ConfigDict, Field
 
+from mediease_api.application.auth.emails import Owner
 from mediease_api.application.auth.errors import RefreshTokenReused, SessionExpired
+from mediease_api.application.auth.password_reset import (
+    CompletePasswordReset,
+    RequestPasswordReset,
+    ResendVerification,
+    VerifyEmail,
+)
 from mediease_api.application.portal.errors import PortalAccountDisabled
 from mediease_api.application.portal.use_cases import (
     PortalSignInCommand,
@@ -28,6 +35,11 @@ from mediease_api.application.portal.use_cases import (
 from mediease_api.application.portal.views import PatientAccountView, PatientSessionResult
 from mediease_api.delivery.errors import domain_error_response
 from mediease_api.delivery.http.access import current_patient, patient, public
+from mediease_api.delivery.http.auth import (
+    ACCEPTED_BODY,
+    PasswordResetCompletion,
+    PasswordResetRequest,
+)
 from mediease_api.delivery.http.request_info import request_info
 from mediease_api.delivery.http.session_cookies import (
     PORTAL_COOKIES,
@@ -43,6 +55,16 @@ class PortalUseCases(Protocol):
     def sign_in_patient(self) -> SignInPatient: ...
     def refresh_patient(self) -> RefreshPatientSession: ...
     def sign_out_patient(self) -> SignOutPatient: ...
+    def request_password_reset(self) -> RequestPasswordReset: ...
+    def complete_password_reset(self) -> CompletePasswordReset: ...
+    def verify_email(self) -> VerifyEmail: ...
+    def resend_verification(self) -> ResendVerification: ...
+
+
+class VerifyEmailRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1, max_length=128)
 
 
 class SignUpRequest(BaseModel):
@@ -145,5 +167,36 @@ def create_portal_blueprint(use_cases: PortalUseCases, *, cookie_secure: bool) -
     @patient
     def me() -> Response:
         return jsonify({"account": account_body(account_view(current_patient()))})
+
+    @bp.post("/auth/password-reset")
+    @public
+    def request_password_reset() -> tuple[Response, int]:
+        body = parse_json(PasswordResetRequest)
+        use_cases.request_password_reset().execute(
+            body.email, owner=Owner.PATIENT, info=request_info()
+        )
+        return jsonify(ACCEPTED_BODY), 202
+
+    @bp.post("/auth/password-reset/complete")
+    @public
+    def complete_password_reset() -> Response:
+        body = parse_json(PasswordResetCompletion)
+        use_cases.complete_password_reset().execute(
+            body.token, body.password, owner=Owner.PATIENT, info=request_info()
+        )
+        return Response(status=204)
+
+    @bp.post("/auth/verify-email")
+    @public
+    def verify_email() -> Response:
+        body = parse_json(VerifyEmailRequest)
+        use_cases.verify_email().execute(body.token, request_info())
+        return Response(status=204)
+
+    @bp.post("/auth/verify-email/resend")
+    @patient
+    def resend_verification() -> tuple[Response, int]:
+        sent = use_cases.resend_verification().execute(current_patient(), request_info())
+        return jsonify({"accepted": sent}), 202
 
     return bp

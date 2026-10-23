@@ -229,6 +229,137 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/auth/password-reset": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Email a password-reset link to a staff member
+         * @description M6a-P4, FR-AUTH-05, ADR-0016 decision 7. Always 202 with the same body, whether or not
+         *     the address belongs to an active staff user with a password (ops users and phone-only
+         *     users get nothing). The worker sends a single-use link that lasts 30 minutes. Exempt
+         *     from the CSRF header. Rate limited per caller (429) and, silently, per account (3 an hour).
+         */
+        readonly post: operations["requestStaffPasswordReset"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/auth/password-reset/complete": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Choose a new password with the emailed link's token
+         * @description The password policy applies (12 characters). Clears the lockout, ends every session of
+         *     the account and emails "your password was changed". Does not sign in. 404
+         *     AUTH_TOKEN_INVALID for an unknown, used or superseded link, or one for another address;
+         *     410 AUTH_TOKEN_EXPIRED. Exempt from the CSRF header.
+         */
+        readonly post: operations["completeStaffPasswordReset"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/auth/password-reset": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Email a password-reset link to a patient
+         * @description As the staff route. A Google-only account gets a "you sign in with Google" email instead
+         *     of a link.
+         */
+        readonly post: operations["requestPatientPasswordReset"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/auth/password-reset/complete": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Choose a new password with the emailed link's token
+         * @description As the staff route; it also marks the email verified, which the link just proved.
+         */
+        readonly post: operations["completePatientPasswordReset"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/auth/verify-email": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Confirm a patient password account's email with the emailed token
+         * @description M6a-P4, FR-AUTH-08. The emailed link opens a page that POSTs here, so a scanner that
+         *     pre-fetches the link verifies nothing. 404 AUTH_TOKEN_INVALID, 410 AUTH_TOKEN_EXPIRED.
+         *     Exempt from the CSRF header.
+         */
+        readonly post: operations["verifyPatientEmail"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/auth/verify-email/resend": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Send a new verification link to the signed-in patient
+         * @description @patient. `accepted` is false when there is nothing to verify (already verified, or a
+         *     Google account). At most 3 an hour per account (429 AUTH_RATE_LIMITED). Needs
+         *     X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly post: operations["resendPatientVerification"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/portal/me": {
         readonly parameters: {
             readonly query?: never;
@@ -2291,6 +2422,24 @@ export interface components {
         readonly PatientMe: {
             readonly account: components["schemas"]["PatientAccount"];
         };
+        readonly PasswordResetRequest: {
+            readonly email: string;
+        };
+        readonly PasswordResetCompletion: {
+            /** @description From the emailed link; never logged */
+            readonly token: string;
+            /**
+             * Format: password
+             * @description At least 12 characters; checked by the API
+             */
+            readonly password: string;
+        };
+        readonly VerifyEmailRequest: {
+            readonly token: string;
+        };
+        readonly Accepted: {
+            readonly accepted: boolean;
+        };
         readonly Session: {
             readonly user: components["schemas"]["SessionUser"];
             /** @description Active clinic memberships, ordered by clinic name */
@@ -3130,6 +3279,16 @@ export interface components {
         };
     };
     responses: {
+        /** @description Accepted for sending; the same answer whether or not an email goes out */
+        readonly Accepted: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["Accepted"];
+            };
+        };
         /** @description Portal session started or renewed; me_pt_access, me_pt_refresh and me_pt_csrf are set */
         readonly PatientSessionStarted: {
             headers: {
@@ -3143,7 +3302,8 @@ export interface components {
         };
         /**
          * @description PRT_INVALID_CREDENTIALS, AUTH_SESSION_EXPIRED, AUTH_REFRESH_REUSED (401);
-         *     AUTH_ACCOUNT_DISABLED, AUTH_CSRF_INVALID (403); PRT_EMAIL_TAKEN (409);
+         *     AUTH_ACCOUNT_DISABLED, AUTH_CSRF_INVALID (403); AUTH_TOKEN_INVALID (404);
+         *     PRT_EMAIL_TAKEN (409); AUTH_TOKEN_EXPIRED (410);
          *     REQ_UNSUPPORTED_MEDIA_TYPE (415); REQ_VALIDATION_FAILED (422); AUTH_LOCKED (423);
          *     AUTH_RATE_LIMITED (429, with Retry-After)
          */
@@ -3742,6 +3902,163 @@ export interface operations {
                 content?: never;
             };
             readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly requestStaffPasswordReset: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        readonly responses: {
+            readonly 202: components["responses"]["Accepted"];
+            readonly 415: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
+            readonly 429: components["responses"]["PortalError"];
+        };
+    };
+    readonly completeStaffPasswordReset: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PasswordResetCompletion"];
+            };
+        };
+        readonly responses: {
+            /** @description Password changed */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 404: components["responses"]["PortalError"];
+            readonly 410: components["responses"]["PortalError"];
+            readonly 415: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
+            readonly 429: components["responses"]["PortalError"];
+        };
+    };
+    readonly requestPatientPasswordReset: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        readonly responses: {
+            readonly 202: components["responses"]["Accepted"];
+            readonly 415: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
+            readonly 429: components["responses"]["PortalError"];
+        };
+    };
+    readonly completePatientPasswordReset: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PasswordResetCompletion"];
+            };
+        };
+        readonly responses: {
+            /** @description Password changed */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 404: components["responses"]["PortalError"];
+            readonly 410: components["responses"]["PortalError"];
+            readonly 415: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
+            readonly 429: components["responses"]["PortalError"];
+        };
+    };
+    readonly verifyPatientEmail: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["VerifyEmailRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Email verified */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 404: components["responses"]["PortalError"];
+            readonly 410: components["responses"]["PortalError"];
+            readonly 415: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
+            readonly 429: components["responses"]["PortalError"];
+        };
+    };
+    readonly resendPatientVerification: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            readonly 202: components["responses"]["Accepted"];
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 429: components["responses"]["PortalError"];
         };
     };
     readonly getPortalMe: {

@@ -39,6 +39,7 @@ from mediease_api.ports.repositories import (
     ClinicAccessRepository,
     ClinicRepository,
     DoctorRepository,
+    EmailTokenRepository,
     ExternalIdentityRepository,
     FavouriteRepository,
     MembershipRepository,
@@ -126,6 +127,11 @@ class UnitOfWork(Protocol):
     @property
     def external_identities(self) -> ExternalIdentityRepository:
         """Google identities of staff users and patient accounts (M6a-P3)."""
+        ...
+
+    @property
+    def email_tokens(self) -> EmailTokenRepository:
+        """Email verification and password-reset tokens (M6a-P4)."""
         ...
 
     @property
