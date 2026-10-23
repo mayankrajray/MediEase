@@ -38,7 +38,8 @@ test("M6a-P4: a patient confirms their email from the link and the banner goes",
 });
 
 test("M6a-P4: a staff member resets a forgotten password, and the old session ends", async ({ browser, request }) => {
-  // A fresh front-desk member, so the seeded accounts keep the demo password.
+  // A fresh front-desk member, so the seeded accounts keep the demo password. From M6a-P5 the
+  // owner's invitation is emailed, so the token comes from Mailpit.
   const csrf = await signInApi(request, OWNER);
   const email = uniqueEmail("desk.reset");
   const invited = await request.post("/api/v1/clinic/staff", {
@@ -46,7 +47,7 @@ test("M6a-P4: a staff member resets a forgotten password, and the old session en
     headers: { "X-CSRF-Token": csrf },
   });
   expect(invited.status()).toBe(201);
-  const token = ((await invited.json()) as { accept_url: string }).accept_url.split("/invite/")[1] ?? "";
+  const token = linkPath(await waitForEmail(request, email, "on MediEase"), "/invite").split("/invite/")[1] ?? "";
   const member = await browser.newContext();
   const accepted = await member.request.post(`/api/v1/auth/invites/${token}/accept`, {
     data: { password: "an-old-synthetic-password" },

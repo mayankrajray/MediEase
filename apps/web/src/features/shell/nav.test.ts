@@ -23,7 +23,7 @@ describe("visibleNav", () => {
   });
 
   it("links only to pages that exist today, Today first (M6-P1)", () => {
-    expect(visibleNav(["STAFF_MANAGE", "CLINIC_MANAGE"]).map((i) => i.href)).toEqual(["/today", "/queue"]);
+    expect(visibleNav(["STAFF_MANAGE", "CLINIC_MANAGE"]).map((i) => i.href)).toEqual(["/today", "/queue", "/team"]);
     expect(visibleNav(["PATIENTS_MANAGE", "SCHEDULES_MANAGE"]).map((i) => i.href)).toEqual([
       "/today",
       "/queue",

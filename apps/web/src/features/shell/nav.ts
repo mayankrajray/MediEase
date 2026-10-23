@@ -21,6 +21,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // M5-P6: every role holds REMINDERS_SCHEDULE.
   { href: "/follow-ups", label: "Follow-ups", requires: "REMINDERS_SCHEDULE" },
   { href: "/settings/schedule", label: "Schedule", requires: "SCHEDULES_MANAGE" },
+  // M6a-P5: the owner's Team page; STAFF_MANAGE is the owner's alone.
+  { href: "/team", label: "Team", requires: "STAFF_MANAGE" },
 ];
 
 /**
