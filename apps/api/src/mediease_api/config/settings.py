@@ -67,6 +67,8 @@ BlobBackend = Literal["local", "s3"]
 MessagingProvider = Literal["console", "whatsapp_cloud"]
 # M5-P5: the SMS fallback's provider; a real one follows L-03.
 SmsProvider = Literal["console"]
+# M6a-P3: Google sign-in, or the local-only fake (ADR-0015 decision 6).
+OidcProvider = Literal["fake", "google"]
 # M5-P3: Graph API v26.0 (released July 2026); overridable without a code change.
 _WHATSAPP_API_VERSION = "v26.0"
 _WHATSAPP_GRAPH_URL = "https://graph.facebook.com"
@@ -157,6 +159,34 @@ class AppSettings(BaseSettings):
     WHATSAPP_ACCESS_TOKEN: SecretStr = SecretStr("")
     WHATSAPP_APP_SECRET: SecretStr = SecretStr("")
     WHATSAPP_VERIFY_TOKEN: SecretStr = SecretStr("")
+    # Google sign-in (M6a-P3, ADR-0015 decision 6). `fake` skips Google and signs in the email
+    # given as the login hint; the composition root refuses it outside APP_ENV local and test.
+    # `google` needs the OAuth client (L-09); its redirect URI is PUBLIC_BASE_URL +
+    # /api/v1/auth/google/callback.
+    GOOGLE_OIDC_PROVIDER: OidcProvider = "fake"
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: SecretStr = SecretStr("")
+
+    @field_validator("GOOGLE_CLIENT_ID")
+    @classmethod
+    def _google_client_id(cls, value: str, info: ValidationInfo) -> str:
+        value = value.strip()
+        if not value and info.data.get("GOOGLE_OIDC_PROVIDER") == "google":
+            raise ValueError("is required when GOOGLE_OIDC_PROVIDER=google")
+        return value
+
+    @field_validator("GOOGLE_CLIENT_SECRET")
+    @classmethod
+    def _google_client_secret(cls, value: SecretStr, info: ValidationInfo) -> SecretStr:
+        raw = value.get_secret_value().strip()
+        if not raw:
+            if info.data.get("GOOGLE_OIDC_PROVIDER") == "google":
+                raise ValueError("is required when GOOGLE_OIDC_PROVIDER=google")
+            return SecretStr("")
+        env = _app_env(info)
+        if _PLACEHOLDER in raw and env is not AppEnv.LOCAL and env is not AppEnv.TEST:
+            raise ValueError(f"contains a '{_PLACEHOLDER}' placeholder; set the real value")
+        return SecretStr(raw)
 
     @field_validator("WHATSAPP_API_VERSION", mode="before")
     @classmethod

@@ -98,3 +98,12 @@ class AuditAction(StrEnum):
     REMINDER_SCHEDULED = "reminder.scheduled"
     REMINDER_RESCHEDULED = "reminder.rescheduled"
     REMINDER_CANCELLED = "reminder.cancelled"
+    # M6a-P3 (ADR-0015): patient accounts, written as PATIENT on the ``patient_account`` entity,
+    # and staff Google sign-in, written as STAFF. Metadata: the sign-in method, the session ID,
+    # whether a Google identity was linked now, a failure reason; never an email or a name.
+    PATIENT_ACCOUNT_CREATED = "patient_account.created"
+    PATIENT_SIGNED_IN = "patient.signed_in"
+    PATIENT_SIGN_IN_FAILED = "patient.sign_in_failed"
+    PATIENT_SIGNED_OUT = "patient.signed_out"
+    PATIENT_REFRESH_REUSED = "patient.refresh_reused"
+    STAFF_SIGNED_IN_GOOGLE = "staff.signed_in_google"

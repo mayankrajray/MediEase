@@ -91,6 +91,165 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/auth/google/start": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Start a Google sign-in (a browser navigation, not an API call)
+         * @description M6a-P3, FR-AUTH-07, ADR-0015 decision 3. Seals state, nonce, the PKCE verifier, the
+         *     intent and next into the me_oidc cookie (10 minutes, HttpOnly, path
+         *     /api/v1/auth/google) and redirects to Google, or with the local-only fake provider
+         *     straight to the callback. A bad intent or too many attempts redirects to the sign-in
+         *     page with a reason instead.
+         */
+        readonly get: operations["startGoogleSignIn"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/auth/google/callback": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Finish a Google sign-in and redirect
+         * @description ADR-0015 decisions 3, 4. Checks state against me_oidc, exchanges the code, verifies the
+         *     ID token (signature, iss, aud, exp, nonce, email_verified) and redirects to next with
+         *     the staff cookies (an existing active staff user: linked by sub, or on first use by
+         *     Google's verified email; never created; ops users refused) or the portal cookies (a
+         *     patient account, created on first use). Failures redirect to /sign-in or
+         *     /portal/sign-in with reason google_failed, google_cancelled, google_no_account,
+         *     account_disabled or too_many_attempts. me_oidc is always cleared.
+         */
+        readonly get: operations["completeGoogleSignIn"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/auth/sign-up": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Create a patient account with an email and a password, and sign in
+         * @description M6a-P3, FR-PRT-01, ADR-0015 decision 5. The staff password policy (12 characters
+         *     minimum). The email is stored unverified until M6a-P4. 409 PRT_EMAIL_TAKEN when a
+         *     password account already uses it (accepted and rate limited, decision 7). Sets
+         *     me_pt_access, me_pt_refresh and me_pt_csrf. Exempt from the CSRF header. Rate limited
+         *     per caller (429 AUTH_RATE_LIMITED with Retry-After).
+         */
+        readonly post: operations["portalSignUp"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/auth/sign-in": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Sign a patient in with an email and a password
+         * @description M6a-P3. 401 PRT_INVALID_CREDENTIALS for an unknown email, a Google-only account or a
+         *     wrong password (one message for all). Five wrong passwords lock for 15 minutes (423
+         *     AUTH_LOCKED). Sets the portal cookies. Exempt from the CSRF header. Rate limited.
+         */
+        readonly post: operations["portalSignIn"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/auth/refresh": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Rotate the portal refresh token
+         * @description Reads me_pt_refresh. Reuse of a rotated token revokes the session
+         *     (AUTH_REFRESH_REUSED). On any 401/403 from the session itself the portal cookies are
+         *     cleared. Needs X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly post: operations["portalRefresh"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/auth/sign-out": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * End the portal session
+         * @description Idempotent; clears the portal cookies. Needs X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly post: operations["portalSignOut"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/me": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The signed-in patient account
+         * @description @patient: only a portal session (audience mediease-portal); a staff session is 401.
+         *     The account holds no clinic data yet (linking is M6b). Cache-Control: no-store.
+         */
+        readonly get: operations["getPortalMe"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/clinic": {
         readonly parameters: {
             readonly query?: never;
@@ -2091,6 +2250,47 @@ export interface components {
             /** Format: password */
             readonly password: string;
         };
+        readonly PatientSignUpRequest: {
+            readonly full_name: string;
+            /** @example patient@example.test */
+            readonly email: string;
+            /**
+             * Format: password
+             * @description At least 12 characters (the staff policy); checked by the API
+             */
+            readonly password: string;
+        };
+        readonly PatientSignInRequest: {
+            readonly email: string;
+            /** Format: password */
+            readonly password: string;
+        };
+        /**
+         * @description How the patient account was created and signs in (M6a-P3)
+         * @enum {string}
+         */
+        readonly SignInMethod: "PASSWORD" | "GOOGLE";
+        readonly PatientAccount: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly full_name: string;
+            readonly email: string;
+            readonly sign_in_method: components["schemas"]["SignInMethod"];
+            /** @description Google accounts are verified; password accounts from M6a-P4 */
+            readonly email_verified: boolean;
+        };
+        readonly PatientSession: {
+            readonly account: components["schemas"]["PatientAccount"];
+            readonly session: {
+                /** Format: date-time */
+                readonly access_expires_at: string;
+                /** Format: date-time */
+                readonly refresh_expires_at: string;
+            };
+        };
+        readonly PatientMe: {
+            readonly account: components["schemas"]["PatientAccount"];
+        };
         readonly Session: {
             readonly user: components["schemas"]["SessionUser"];
             /** @description Active clinic memberships, ordered by clinic name */
@@ -2930,6 +3130,48 @@ export interface components {
         };
     };
     responses: {
+        /** @description Portal session started or renewed; me_pt_access, me_pt_refresh and me_pt_csrf are set */
+        readonly PatientSessionStarted: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly "Cache-Control": components["headers"]["NoStore"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["PatientSession"];
+            };
+        };
+        /**
+         * @description PRT_INVALID_CREDENTIALS, AUTH_SESSION_EXPIRED, AUTH_REFRESH_REUSED (401);
+         *     AUTH_ACCOUNT_DISABLED, AUTH_CSRF_INVALID (403); PRT_EMAIL_TAKEN (409);
+         *     REQ_UNSUPPORTED_MEDIA_TYPE (415); REQ_VALIDATION_FAILED (422); AUTH_LOCKED (423);
+         *     AUTH_RATE_LIMITED (429, with Retry-After)
+         */
+        readonly PortalError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                /** @description Seconds to wait (423 and 429 only) */
+                readonly "Retry-After"?: string;
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description A redirect: to Google (or the callback with the fake provider), to next after a
+         *     sign-in, or to /sign-in or /portal/sign-in with a reason. Sets or clears me_oidc and,
+         *     after a sign-in, the staff or the portal session cookies.
+         */
+        readonly GoogleRedirect: {
+            headers: {
+                readonly Location: string;
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly "Cache-Control": components["headers"]["NoStore"];
+                readonly [name: string]: unknown;
+            };
+            content?: never;
+        };
         /** @description Session started or renewed; me_access, me_refresh and me_csrf are set */
         readonly SessionStarted: {
             headers: {
@@ -3365,6 +3607,168 @@ export interface operations {
             };
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["AuthError"];
+        };
+    };
+    readonly startGoogleSignIn: {
+        readonly parameters: {
+            readonly query: {
+                readonly intent: "staff" | "patient";
+                /**
+                 * @description A same-origin path to land on: outside /portal for staff (default /today), inside
+                 *     it for patients (default /portal). Anything else is replaced by the default.
+                 */
+                readonly next?: string;
+                /** @description An email to pre-select at Google; the fake provider signs this email in. */
+                readonly login_hint?: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            readonly 302: components["responses"]["GoogleRedirect"];
+        };
+    };
+    readonly completeGoogleSignIn: {
+        readonly parameters: {
+            readonly query?: {
+                readonly state?: string;
+                readonly code?: string;
+                readonly error?: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            readonly 302: components["responses"]["GoogleRedirect"];
+        };
+    };
+    readonly portalSignUp: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PatientSignUpRequest"];
+            };
+        };
+        readonly responses: {
+            readonly 201: components["responses"]["PatientSessionStarted"];
+            readonly 409: components["responses"]["PortalError"];
+            readonly 415: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
+            readonly 429: components["responses"]["PortalError"];
+        };
+    };
+    readonly portalSignIn: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PatientSignInRequest"];
+            };
+        };
+        readonly responses: {
+            readonly 200: components["responses"]["PatientSessionStarted"];
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 415: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
+            readonly 423: components["responses"]["PortalError"];
+            readonly 429: components["responses"]["PortalError"];
+        };
+    };
+    readonly portalRefresh: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            readonly 200: components["responses"]["PatientSessionStarted"];
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly portalSignOut: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Signed out */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly getPortalMe: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The account */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientMe"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
         };
     };
     readonly getClinic: {

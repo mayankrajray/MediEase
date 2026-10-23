@@ -8,6 +8,12 @@ Every view declares one policy with a decorator:
 | ``@authenticated`` | any signed-in user | ``current_principal()`` |
 | ``@clinic(Permission.X)`` | a member of the clinic who holds ``X`` | ``current_context()`` |
 | ``@ops`` | platform ops users (``is_platform_ops``) | ``current_principal()`` |
+| ``@patient`` | a signed-in patient portal account (M6a-P3) | ``current_patient()`` |
+
+A ``@patient`` route reads only the portal access cookie (``me_pt_access``, audience
+``mediease-portal``) and every other route only the staff one (``me_access``, audience
+``mediease``), so neither kind of session can reach the other's routes (ADR-0015 decision 2).
+A patient account has no memberships, so even a mistake here could not resolve a clinic.
 
 One ``before_request`` hook enforces them, so a route is protected by
 declaring its policy, not by remembering to call a check. Two safety nets make
@@ -35,8 +41,10 @@ from structlog.contextvars import bind_contextvars
 from mediease_api.application.auth.authenticate import AuthenticateRequest, resolve_clinic
 from mediease_api.application.auth.errors import PermissionDenied
 from mediease_api.application.context import Principal, RequestContext
+from mediease_api.application.portal.use_cases import AuthenticatePatient
+from mediease_api.application.portal.views import PatientPrincipal
 from mediease_api.delivery.http.request_info import request_info
-from mediease_api.delivery.http.session_cookies import ACCESS_COOKIE
+from mediease_api.delivery.http.session_cookies import ACCESS_COOKIE, PORTAL_ACCESS_COOKIE
 from mediease_api.domain.identity.permissions import Permission
 
 logger = structlog.get_logger(__name__)
@@ -47,6 +55,7 @@ CLINIC_HEADER = "X-Clinic-ID"
 _POLICY_ATTR = "_mediease_access_policy"
 _PRINCIPAL = "mediease_principal"
 _CONTEXT = "mediease_request_context"
+_PATIENT = "mediease_patient_principal"
 
 
 class Access(StrEnum):
@@ -54,6 +63,7 @@ class Access(StrEnum):
     AUTHENTICATED = "AUTHENTICATED"
     CLINIC = "CLINIC"
     OPS = "OPS"
+    PATIENT = "PATIENT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +80,7 @@ class MissingAccessPolicy(RuntimeError):
         listed = ", ".join(sorted(endpoints))
         super().__init__(
             f"no access policy on: {listed}. Decorate the view with @public, "
-            "@authenticated, @clinic(Permission.X) or @ops."
+            "@authenticated, @clinic(Permission.X), @ops or @patient."
         )
 
 
@@ -97,6 +107,11 @@ def authenticated[ViewT: Callable[..., object]](view: ViewT) -> ViewT:
 def ops[ViewT: Callable[..., object]](view: ViewT) -> ViewT:
     """Platform ops only (R10); clinic staff are refused even as owners."""
     return _tagged(view, AccessPolicy(Access.OPS))
+
+
+def patient[ViewT: Callable[..., object]](view: ViewT) -> ViewT:
+    """A signed-in patient portal account (M6a-P3); staff sessions are refused."""
+    return _tagged(view, AccessPolicy(Access.PATIENT))
 
 
 def clinic[ViewT: Callable[..., object]](permission: Permission) -> Callable[[ViewT], ViewT]:
@@ -132,6 +147,14 @@ def current_context() -> RequestContext:
     return context
 
 
+def current_patient() -> PatientPrincipal:
+    """The authenticated portal account. Only on ``@patient`` routes."""
+    principal = g.get(_PATIENT)
+    if not isinstance(principal, PatientPrincipal):
+        raise RuntimeError("no patient principal on this request: is the route @patient?")
+    return principal
+
+
 # --- Enforcement -----------------------------------------------------------------------------
 
 
@@ -139,6 +162,7 @@ class Authenticator(Protocol):
     """What the hook needs from the composition root: a fresh use case per request."""
 
     def authenticate(self) -> AuthenticateRequest: ...
+    def authenticate_patient(self) -> AuthenticatePatient: ...
 
 
 def register_access_control(app: Flask, authenticator: Authenticator) -> None:
@@ -152,6 +176,13 @@ def register_access_control(app: Flask, authenticator: Authenticator) -> None:
         if policy is None:
             raise MissingAccessPolicy([request.endpoint])
         if policy.access is Access.PUBLIC:
+            return
+        if policy.access is Access.PATIENT:
+            account = authenticator.authenticate_patient().execute(
+                request.cookies.get(PORTAL_ACCESS_COOKIE)
+            )
+            setattr(g, _PATIENT, account)
+            bind_contextvars(patient_account_id=str(account.account_id))
             return
 
         principal = authenticator.authenticate().execute(request.cookies.get(ACCESS_COOKIE))

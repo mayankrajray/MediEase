@@ -42,6 +42,9 @@ class ActorType(StrEnum):
     PATIENT_LINK = "PATIENT_LINK"
     # Used from M5: a job or scheduled task with no human actor.
     SYSTEM = "SYSTEM"
+    # M6a-P3 (ADR-0015): a signed-in patient account. Not a staff user, so ``actor_user_id`` stays
+    # empty; the account is the event's entity (``patient_account``).
+    PATIENT = "PATIENT"
 
     @property
     def is_human(self) -> bool:

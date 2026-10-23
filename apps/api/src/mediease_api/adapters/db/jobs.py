@@ -238,6 +238,15 @@ class SqlAlchemyRetentionRepository:
             ),
             {"cutoff": cutoffs.refresh_tokens},
         )
+        # M6a-P3: portal sessions follow the same rule and count with the staff ones.
+        patient_tokens = self._session.execute(
+            text(
+                "DELETE FROM patient_refresh_tokens t WHERE t.expires_at < :cutoff AND NOT EXISTS ("
+                "SELECT 1 FROM patient_refresh_tokens r"
+                " WHERE r.replaced_by_id = t.id AND r.expires_at >= :cutoff)"
+            ),
+            {"cutoff": cutoffs.refresh_tokens},
+        )
         links = self._session.execute(
             text("DELETE FROM patient_links WHERE expires_at < :cutoff"),
             {"cutoff": cutoffs.patient_links},
@@ -258,7 +267,7 @@ class SqlAlchemyRetentionRepository:
             )
             events = deleted.rowcount  # type: ignore[attr-defined]
         return PurgeCounts(
-            refresh_tokens=tokens.rowcount,  # type: ignore[attr-defined]
+            refresh_tokens=tokens.rowcount + patient_tokens.rowcount,  # type: ignore[attr-defined]
             patient_links=links.rowcount,  # type: ignore[attr-defined]
             jobs=jobs.rowcount,  # type: ignore[attr-defined]
             webhook_events=events,

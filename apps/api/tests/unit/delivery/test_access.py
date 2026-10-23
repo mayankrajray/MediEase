@@ -26,6 +26,15 @@ EXPECTED_POLICIES = {
     "auth.sign_in": (Access.PUBLIC, None),
     "auth.refresh": (Access.PUBLIC, None),
     "auth.sign_out": (Access.PUBLIC, None),
+    # M6a-P3: Google sign-in (the authority is the flow cookie and Google's ID token) and the
+    # patient portal, whose only non-public route takes a portal session.
+    "google.start": (Access.PUBLIC, None),
+    "google.callback": (Access.PUBLIC, None),
+    "portal.sign_up": (Access.PUBLIC, None),
+    "portal.sign_in": (Access.PUBLIC, None),
+    "portal.refresh": (Access.PUBLIC, None),
+    "portal.sign_out": (Access.PUBLIC, None),
+    "portal.me": (Access.PATIENT, None),
     # The authority is the invitation secret in the URL, not a session.
     "invites.describe_invite": (Access.PUBLIC, None),
     "invites.accept_invite": (Access.PUBLIC, None),

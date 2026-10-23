@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0019"
+HEAD = "0020"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -38,6 +38,9 @@ M5_P1_TABLES = sorted([*M4_P5_TABLES, "jobs"])
 M5_P2_TABLES = sorted([*M5_P1_TABLES, "messages"])
 M5_P3_TABLES = sorted([*M5_P2_TABLES, "webhook_events"])
 M5_P4_TABLES = sorted([*M5_P3_TABLES, "reminders"])
+M6A_P3_TABLES = sorted(
+    [*M5_P4_TABLES, "external_identities", "patient_accounts", "patient_refresh_tokens"]
+)
 
 
 @pytest.fixture
@@ -601,9 +604,33 @@ def test_0019_keeps_costs_in_millipaise_with_the_monthly_index(
         engine.dispose()
 
 
+def test_0020_adds_patient_accounts_sessions_and_identities(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    command.upgrade(alembic_config, "0020")
+    assert _tables(scratch_database_url) == M6A_P3_TABLES
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            indexes = {i["name"]: i for i in inspect(conn).get_indexes("patient_accounts")}
+            assert indexes["uq_patient_accounts_password_email"]["unique"]
+            identity_indexes = {
+                i["name"]: i for i in inspect(conn).get_indexes("external_identities")
+            }
+            assert identity_indexes["uq_external_identities_staff_subject"]["unique"]
+            assert identity_indexes["uq_external_identities_patient_subject"]["unique"]
+            assert "'PATIENT'" in _check(conn, "ck_audit_events_actor_type")
+        command.downgrade(alembic_config, "0019")
+        assert _tables(scratch_database_url) == M5_P4_TABLES
+        with engine.connect() as conn:
+            assert "'PATIENT'" not in _check(conn, "ck_audit_events_actor_type")
+    finally:
+        engine.dispose()
+
+
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M5_P4_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6A_P3_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:

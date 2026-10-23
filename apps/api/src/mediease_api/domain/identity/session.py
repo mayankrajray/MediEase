@@ -10,6 +10,10 @@ States, derived rather than stored, so they can never disagree::
     ROTATED  already replaced by a successor — presenting it again is reuse
     REVOKED  ended by sign-out or by a family-wide revocation
     EXPIRED  past expires_at
+
+The same rules serve patient portal sessions (M6a-P3, ADR-0015): there ``user_id`` holds the
+owning patient account's ID, and the tokens live in their own table (``patient_refresh_tokens``),
+so a staff family and a patient family can never be confused.
 """
 
 from __future__ import annotations

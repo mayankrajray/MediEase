@@ -93,3 +93,16 @@ class ClinicSuspended(DomainError):
 
     def __init__(self) -> None:
         super().__init__("This clinic is suspended. Contact MediEase support.")
+
+
+class AuthRateLimited(DomainError):
+    """Too many sign-up, sign-in or Google attempts from one caller (M6a-P3, decision 7)."""
+
+    code = "AUTH_RATE_LIMITED"
+
+    def __init__(self, retry_after_seconds: int) -> None:
+        super().__init__(
+            "Too many attempts. Wait a minute and try again.",
+            retry_after_seconds=str(retry_after_seconds),
+        )
+        self.retry_after_seconds = retry_after_seconds

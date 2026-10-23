@@ -77,6 +77,9 @@ _MANAGED_VARS = (
     "WHATSAPP_ACCESS_TOKEN",
     "WHATSAPP_APP_SECRET",
     "WHATSAPP_VERIFY_TOKEN",
+    "GOOGLE_OIDC_PROVIDER",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
 )
 
 # Synthetic, test-only secrets (>= 32 characters each).
