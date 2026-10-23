@@ -16,13 +16,22 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 
-import { CSRF_COOKIE } from "@/lib/api/csrf";
+import { CSRF_COOKIE, PORTAL_CSRF_COOKIE } from "@/lib/api/csrf";
+import { isPortalPath } from "@/lib/auth/safe-next";
 import { buildContentSecurityPolicy, newNonce } from "@/lib/security/headers";
 
 export const CSP_HEADER = "Content-Security-Policy";
 
 const SIGN_IN_PATH = "/sign-in";
-const PUBLIC_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, "/status", "/livez"]);
+const PORTAL_SIGN_IN_PATH = "/portal/sign-in";
+const PUBLIC_PATHS: ReadonlySet<string> = new Set([
+  SIGN_IN_PATH,
+  "/status",
+  "/livez",
+  // M6a-P3: the patient portal's own sign-in and sign-up.
+  PORTAL_SIGN_IN_PATH,
+  "/portal/sign-up",
+]);
 // /p/<token>: the patient's prescription page (M4-P5); the token and the last-4 check guard it.
 const PUBLIC_PREFIXES: readonly string[] = ["/invite/", "/p/"];
 
@@ -37,11 +46,15 @@ export function proxy(request: NextRequest): NextResponse {
   });
 
   const { pathname, search } = request.nextUrl;
-  const hasSessionHint = Boolean(request.cookies.get(CSRF_COOKIE)?.value);
+  // The portal has its own session (ADR-0015 decision 2): its pages look for the portal's
+  // CSRF cookie and send a signed-out visitor to the portal's sign-in, never the staff one.
+  const portal = isPortalPath(pathname);
+  const hint = portal ? PORTAL_CSRF_COOKIE : CSRF_COOKIE;
+  const hasSessionHint = Boolean(request.cookies.get(hint)?.value);
 
   if (!hasSessionHint && !isPublicPath(pathname)) {
-    const signIn = new URL(SIGN_IN_PATH, request.url);
-    if (pathname !== "/") {
+    const signIn = new URL(portal ? PORTAL_SIGN_IN_PATH : SIGN_IN_PATH, request.url);
+    if (pathname !== "/" && pathname !== "/portal") {
       signIn.searchParams.set("next", `${pathname}${search}`);
     }
     const redirect = NextResponse.redirect(signIn);

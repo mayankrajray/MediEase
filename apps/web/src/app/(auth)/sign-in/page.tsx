@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { parseSignInReason } from "@/features/auth/messages";
 import { SignInForm } from "@/features/auth/SignInForm";
 import { TODAY_PATH } from "@/features/auth/landing";
-import { safeNextPath } from "@/lib/auth/safe-next";
+import { safeStaffNextPath } from "@/lib/auth/safe-next";
 
 export const metadata: Metadata = { title: "Sign in · MediEase" };
 
@@ -22,7 +22,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Query
   const reason = parseSignInReason(first(query.reason));
   return (
     <SignInForm
-      next={safeNextPath(first(query.next), TODAY_PATH)}
+      next={safeStaffNextPath(first(query.next), TODAY_PATH)}
       {...(reason === undefined ? {} : { reason })}
     />
   );

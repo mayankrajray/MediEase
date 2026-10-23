@@ -5,7 +5,14 @@ import type { ReactNode } from "react";
  * invitation, choosing a clinic. A centred card on the canvas under the brand mark; no image,
  * no web font. It is the page's `main`.
  */
-export function AuthFrame({ children }: { children: ReactNode }) {
+export function AuthFrame({
+  children,
+  tagline = "The clinic's day, in one place",
+}: {
+  children: ReactNode;
+  /** The line under the brand mark; the patient portal has its own (M6a-P3). */
+  tagline?: string;
+}) {
   return (
     <main className="flex min-h-screen flex-col items-center bg-canvas px-4 py-10 sm:py-16">
       <p className="flex items-center gap-2 text-xl font-bold text-slate-900">
@@ -14,7 +21,7 @@ export function AuthFrame({ children }: { children: ReactNode }) {
         </span>
         MediEase
       </p>
-      <p className="mt-1 text-sm text-slate-700">The clinic&apos;s day, in one place</p>
+      <p className="mt-1 text-sm text-slate-700">{tagline}</p>
       <div className="mt-6 w-full max-w-md rounded-card border border-slate-200 bg-white shadow-card">{children}</div>
     </main>
   );

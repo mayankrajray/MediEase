@@ -68,8 +68,44 @@ describe("proxy (sign-in hint)", () => {
   );
 
   it("isPublicPath names exactly the public pages", () => {
-    expect(["/sign-in", "/status", "/livez", "/invite/x", "/p/x"].every(isPublicPath)).toBe(true);
-    expect(["/", "/queue", "/ops", "/invite"].some(isPublicPath)).toBe(false);
+    expect(
+      ["/sign-in", "/status", "/livez", "/invite/x", "/p/x", "/portal/sign-in", "/portal/sign-up"].every(
+        isPublicPath,
+      ),
+    ).toBe(true);
+    expect(["/", "/queue", "/ops", "/invite", "/portal", "/portal/x"].some(isPublicPath)).toBe(false);
+  });
+});
+
+describe("proxy (patient portal, M6a-P3, ADR-0015)", () => {
+  const portal = (url: string, cookie: string) => new NextRequest(url, { headers: { cookie } });
+
+  it("FR-PRT-01: sends a signed-out visitor to the portal's own sign-in, never the staff one", () => {
+    const response = proxy(signedOut("http://localhost:3000/portal/appointments?x=1"));
+
+    expect(response.status).toBe(307);
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.pathname).toBe("/portal/sign-in");
+    expect(location.searchParams.get("next")).toBe("/portal/appointments?x=1");
+  });
+
+  it("does not remember the portal home", () => {
+    const response = proxy(signedOut("http://localhost:3000/portal"));
+
+    expect(response.headers.get("location")).toBe("http://localhost:3000/portal/sign-in");
+  });
+
+  it("ADR-0015: a staff session hint does not open the portal, nor a portal hint the staff pages", () => {
+    expect(proxy(portal("http://localhost:3000/portal", "me_csrf=staff")).status).toBe(307);
+    expect(proxy(portal("http://localhost:3000/queue", "me_pt_csrf=patient")).status).toBe(307);
+  });
+
+  it("lets a visitor with the portal hint through to the portal", () => {
+    expect(proxy(portal("http://localhost:3000/portal", "me_pt_csrf=patient")).status).toBe(200);
+  });
+
+  it.each(["/portal/sign-in", "/portal/sign-up"])("never redirects %s", (path) => {
+    expect(proxy(signedOut(`http://localhost:3000${path}`)).status).toBe(200);
   });
 });
 
