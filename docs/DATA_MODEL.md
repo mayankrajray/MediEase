@@ -383,7 +383,9 @@ The clinical record of one appointment (spec prescriptions R1-R3; M4-P1 decision
 | created_at, updated_at | timestamptz | |
 
 Index `ix_visits_clinic_id_patient_id_started_at (clinic_id, patient_id, started_at DESC, id DESC)`
-serves the history (newest first, keyset pages).
+serves the history (newest first, keyset pages). Migration `0022` (M6a-P6) adds
+`ix_visits_clinic_id_doctor_id_started_at (clinic_id, doctor_id, started_at DESC)` for *My
+Patients* (`GET /my-patients`: one doctor's visits grouped by patient). An index only.
 
 ### `visit_addenda` (migration `0009`, M4-P1)
 `id, clinic_id, visit_id, author_user_id, body text (1–5,000), created_at`; index

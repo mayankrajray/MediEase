@@ -5,7 +5,7 @@
 | Requirements | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08 |
 | Milestone / phases | M1 / P1–P6 |
 | Status | Approved (developer sign-off 2026-10-02) |
-| Last updated | 2026-10-23 (M6a-P5, approved by the developer: §3 a deactivated membership can be invited back (`DEACTIVATED → INVITED`), §7 `staff.reinvited`, §8 owners' invitations to an email address are emailed and never shown; earlier: 2026-10-03 §4 R13 and §8, accepting an invitation for an existing account needs that account's current password — a security amendment; §7, §8 and §10 recorded the M1-P4 and M1-P5 audit actions, invitation flow and `auth.rejected` event) |
+| Last updated | 2026-10-23 (M6a-P6: §8 the practising owner's switch and "Doctor 1" linked by the owner's invitation; M6a-P5, approved by the developer: §3 a deactivated membership can be invited back (`DEACTIVATED → INVITED`), §7 `staff.reinvited`, §8 owners' invitations to an email address are emailed and never shown; earlier: 2026-10-03 §4 R13 and §8, accepting an invitation for an existing account needs that account's current password — a security amendment; §7, §8 and §10 recorded the M1-P4 and M1-P5 audit actions, invitation flow and `auth.rejected` event) |
 
 ## 1. Context
 Clinics must trust that only their own staff can see their patients, and that each staff member
@@ -77,7 +77,7 @@ See API.md "Auth and session", "Clinic administration", "Ops console".
 | Case | Expected outcome |
 |---|---|
 | Same phone used by a doctor in two clinics | One user, two memberships; switcher shown |
-| Owner is also a doctor | Owner membership + linked Doctor profile; doctor permissions apply to clinical actions |
+| Owner is also a doctor | Owner membership + linked Doctor profile; doctor permissions apply to clinical actions. From M6a-P6 `/me` names the profile (`doctor_id`), the owner gets an Owner / Doctor switch that changes the view only, and ops can link the invited owner to "Doctor 1" in the invitation itself (`doctor_id`; the only link made to a member not yet `ACTIVE`, effective when they accept) |
 | An invited member never accepts | The invitation expires after 7 days; the clinic invites them again, which retires the old link (M1-P5) |
 | An invitation link is used twice | The second attempt is refused as already used; they sign in instead (M1-P5) |
 | An invitation is for an email or phone that already has an account | The page asks for that account's current password instead of a new one (R13); a wrong one is refused and counted, and the invitation stays pending |

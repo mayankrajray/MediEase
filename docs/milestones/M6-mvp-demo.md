@@ -23,7 +23,7 @@ notifications for patients, public booking) moved to M6b.
 | P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR-0015) | Below (approved 22 Oct 2026; built 23 Oct 2026) |
 | P4 | Email provider behind a port: email verification, password reset by link (FR-AUTH-08, FR-AUTH-05) | Below (approved and built 23 Oct 2026) |
 | P5 | Owner Team page: invite, change role, deactivate (FR-ORG-07) | Below (approved and built 23 Oct 2026) |
-| P6 | Role workspaces (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); owner as Doctor 1 in the ops wizard (FR-ORG-03) | Below (awaiting approval) |
+| P6 | Role workspaces (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); owner as Doctor 1 in the ops wizard (FR-ORG-03) | Below (approved and built 23 Oct 2026) |
 | P7 | Notification service, domain events, in-app channel, notification centre (FR-NTF-02..06) | At its start |
 | P8 | Appointment reminders (FR-APT-08), doctor-leave conflicts (FR-APT-09), owner audit view (FR-AUD-03) | At its start |
 
@@ -686,7 +686,8 @@ Confirmed by the developer on 23 Oct 2026 and pushed to draft PR #50.
 
 ## M6a-P6 — Role workspaces, the practising owner's switch, owner as Doctor 1
 
-Proposed 23 Oct 2026. Recommendations are marked (rec). Covers FR-UX-01..06, FR-ORG-03 and the
+Proposed 23 Oct 2026; approved by the developer the same day (A on all eight). Recommendations
+are marked (rec). Covers FR-UX-01..06, FR-ORG-03 and the
 "Doctor 1" part of FR-ONB-08 (PRD v1.2). No ADR: no new dependency, no change to the
 permission model (one role per membership stays).
 
@@ -769,3 +770,70 @@ Planned verification:
   - failure path: an owner without a profile sees no switch, and `/my-patients` explains that
     it is for doctors.
 - **Gates:** `make lint typecheck contract-check test` and `make e2e`.
+
+### M6a-P6 — as built (23 Oct 2026)
+
+Approved A on all eight. Where the build differs from the text above:
+
+- **The seeded clinic is `sample-family-clinic`, not a solo one.** It has the practising owner
+  ("Dr. Family Owner"), a second doctor and a front desk. With a colleague in the same clinic,
+  "only my sessions and patients" is actually tested.
+- **The page heading stays *Today*.** Each workspace's home differs in its subtitle (*Clinic
+  overview*, *My day*, *Front desk*), its content and its three quick actions. That is what the
+  FR-UX-05 journey compares.
+- **Quick actions open their drawers** through `?invite=1` on `/team` and `?book=1` or
+  `?walk-in=1` on `/queue`. The *Open the queue* header button became the owner's *See the
+  queue* action.
+
+What was built:
+
+- **API.**
+  - `ClinicAccess`, `MembershipView` and `/me` carry `doctor_id`.
+  - `GetToday` takes `View`: `_doctor_view` gives a `DOCTOR` with a profile their own day as
+    before; an owner with an active profile gets theirs with `view=doctor`; otherwise
+    `view=doctor` raises `NoDoctorProfile` (`CLN_NO_DOCTOR_PROFILE`, 409).
+  - `ListMyPatients` (`application/patients/my_patients.py`) uses the lookup box's parsing and
+    `VisitRepository.patients_seen_by` (a grouped read: last visit and count). The route is
+    `GET /api/v1/my-patients` (`CLINICAL_VIEW`). Migration `0022` adds
+    `ix_visits_clinic_id_doctor_id_started_at`.
+  - `GET /follow-ups/pending` takes `doctor_id`.
+  - `InviteStaffCommand.doctor_id` on both invitation routes. `InviteStaff._link_doctor` accepts
+    an owner's invitation only, and an active doctor profile that is unlinked or already this
+    person's. It records `doctor.updated` (`via: owner_invite`) and adds `doctor_id` to the
+    invitation's audit metadata.
+  - Seed: `_Person.practises` and a per-person registration number.
+  - Contract 0.26.0.
+- **Web.**
+  - `features/shell/workspace.ts`: the workspace from the role and the remembered choice, each
+    workspace's navigation and quick actions.
+  - `WorkspaceProvider`, mounted per clinic by `WorkspaceGuard`.
+  - `WorkspaceSwitch`: a radio group in the header that announces "Doctor view".
+  - `nav.ts` keeps only `visibleNav`.
+  - Today: the workspace subtitle, quick actions, and the owner's *Team* tile from
+    `GET /clinic/staff`; `useToday` sends `view=doctor` for a practising owner's Doctor view.
+  - New pages `/my-patients` (`MyPatients`) and `/my-schedule` (`MySchedule`, read-only).
+  - *My follow-ups*: an *Only my patients* checkbox, on by default.
+  - The ops wizard's invite step: *The owner also practises here*, with a choice of the doctors
+    from step 2, Doctor 1 preselected.
+  - Team: *Link doctor profile* (and "I also practise here" on your own row) through the
+    existing `PATCH /clinic/doctors/{id}`.
+- **Journey hardening (no assertion loosened).** These failures showed up from rerunning the
+  journeys many times on one database within the hour:
+  - `password-reset.spec.ts` now invites through the second clinic's owner, so reruns use up the
+    first clinic's 10-an-hour invitation limit more slowly. It retries filling the email field
+    if the page hydrates after the fill and clears it.
+  - `sessionRunningNow` waits out an earlier run's extra session that is about to end instead of
+    failing with `SCH_OVERLAP`.
+  - Rerunning the journeys more than about five times within one hour on the same database still
+    reaches that invitation limit, by design.
+- **Verification.**
+  - **Gates.** `make lint typecheck contract-check test` green. API: 1,743 tests, 97.46%
+    package coverage, 97% on `domain/` + `application/`. Web: 55 files, 530 tests.
+  - **Stack.** `make up`, `make seed` (adds `sample-family-clinic`) and `make smoke` green.
+    `make e2e` 27/27 with `workspaces.spec.ts` at 1366×768:
+    - the owner, the doctor and the front desk have different menus and first three actions;
+    - the practising owner switches to Doctor, sees only *Dr. Family Owner*'s sessions and only
+      their own patient (not the colleague's), switches back, and the choice survives a reload;
+    - failure path: an owner without a profile has no switch, and `/my-patients` says why.
+  - **Not verified.** The ops wizard's Doctor 1 path in a browser journey; it is covered by the
+    wizard's unit tests and the API integration test.

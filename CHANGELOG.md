@@ -14,6 +14,17 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6a-P6 (#49): role workspaces (FR-UX-01..06, FR-ORG-03, FR-ONB-08; decisions 1A–8A). Owner,
+  Doctor and Front desk each get their own navigation, Today and three quick actions; a
+  workspace is a web view and never changes permissions. A practising owner (an owner with a
+  linked doctor profile, `doctor_id` now on `/me`) gets an Owner | Doctor switch, remembered per
+  clinic; the Doctor view shows only their own sessions (`GET /dashboard/today?view=doctor`),
+  *My patients* (new `GET /my-patients`: patients this doctor has seen, latest visit first, who
+  and when only; index in migration `0022`), *My follow-ups* (`doctor_id` on pending
+  follow-ups) and a read-only *My schedule*. The ops wizard links an invited owner to Doctor 1
+  (`doctor_id` on the invitation), and Team gets *Link doctor profile*. New error
+  `CLN_NO_DOCTOR_PROFILE`; contract 0.26.0; a seeded `sample-family-clinic` with a practising
+  owner. No new dependency.
 - M6a-P5 (#49): the owner's Team page (FR-ORG-07, decisions 1A–8A). `/team` (sidebar *Team*,
   owners only) lists every member with role, status, email or phone, invitation expiry and a
   *Doctor profile* badge, as a table from 768 px and cards below. Owners invite (an email address
