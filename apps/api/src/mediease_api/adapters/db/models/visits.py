@@ -37,6 +37,13 @@ class VisitRow(TenantOwned, Timestamps, Base):
             text("started_at DESC"),
             text("id DESC"),
         ),
+        # M6a-P6 *My Patients*: "the patients this doctor has seen" (migration 0022).
+        Index(
+            "ix_visits_clinic_id_doctor_id_started_at",
+            "clinic_id",
+            "doctor_id",
+            text("started_at DESC"),
+        ),
         enum_check("status", VisitStatus),
         CheckConstraint(
             "(status = 'COMPLETED') = (completed_at IS NOT NULL)", name="completed_has_time"

@@ -26,6 +26,8 @@ class ClinicAccess:
     role: Role
     # The user also has a doctor profile at this clinic (owner-who-is-a-doctor, spec §8).
     has_doctor_profile: bool = False
+    # M6a-P6 (decision 2A): that profile's ID, for the web's workspaces and *My Patients*.
+    doctor_id: UUID | None = None
 
     @property
     def permissions(self) -> frozenset[Permission]:

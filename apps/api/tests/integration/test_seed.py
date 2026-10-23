@@ -83,6 +83,24 @@ def test_seed_creates_a_second_clinic_sharing_the_doctor_so_the_switcher_can_be_
         assert owner is not None and len(uow.clinic_access.list_active_for_user(owner.id)) == 1
 
 
+def test_fr_org_03_seed_adds_a_clinic_with_a_practising_owner(
+    seed_env: dict[str, str], uow_factory: UowFactory
+) -> None:
+    """M6a-P6: an OWNER with a linked doctor profile, a second doctor and a front desk."""
+    assert seed.main([]) == 0
+
+    with uow_factory() as uow:
+        owner = uow.users.get_by_email(EmailAddress.parse("owner@sample-family-clinic.example"))
+        assert owner is not None
+        [access] = uow.clinic_access.list_active_for_user(owner.id)
+        assert access.role is Role.OWNER and access.doctor_id is not None
+        clinic = uow.clinics.get_by_slug(seed.THIRD_SLUG)
+        assert clinic is not None and clinic.status is ClinicStatus.ACTIVE
+        doctors = uow.tenant(clinic.id).doctors.list()
+        assert len(doctors) == 2
+        assert len({d.registration_number for d in doctors}) == 2
+
+
 def test_seed_adds_only_the_missing_clinic_to_a_database_seeded_before_clinic_two(
     seed_env: dict[str, str],
     uow_factory: UowFactory,
@@ -210,7 +228,9 @@ def test_seed_gives_every_seeded_doctor_a_weekly_schedule_once(
     seed_env: dict[str, str], uow_factory: UowFactory, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert seed.main([]) == 0
-    assert "gave 2 doctors a Monday-Saturday 10:00-13:00 schedule" in capsys.readouterr().out
+    # Two seeded doctors in sample-clinic and -two (one person), and two in the M6a-P6 family
+    # clinic (the practising owner and their colleague).
+    assert "gave 4 doctors a Monday-Saturday 10:00-13:00 schedule" in capsys.readouterr().out
     assert seed.main([]) == 0
     assert "gave" not in capsys.readouterr().out
 

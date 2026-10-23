@@ -58,6 +58,7 @@ EXPECTED_POLICIES = {
     "clinic.change_membership": (Access.CLINIC, Permission.STAFF_MANAGE),
     "clinic.resend_invite": (Access.CLINIC, Permission.STAFF_MANAGE),
     "patients.register_patient": (Access.CLINIC, Permission.PATIENTS_MANAGE),
+    "my_patients.list_my_patients": (Access.CLINIC, Permission.CLINICAL_VIEW),
     "patients.lookup_patients": (Access.CLINIC, Permission.PATIENTS_MANAGE),
     "patients.get_patient": (Access.CLINIC, Permission.PATIENTS_MANAGE),
     "patients.update_patient": (Access.CLINIC, Permission.PATIENTS_MANAGE),

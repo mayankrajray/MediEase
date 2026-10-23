@@ -64,3 +64,14 @@ class InviteUsed(DomainError):
 
     def __init__(self) -> None:
         super().__init__("This invitation has already been used. Sign in instead.")
+
+
+class NoDoctorProfile(DomainError):
+    """M6a-P6: a doctor's view (Today's ``view=doctor``, *My Patients*) without a doctor profile."""
+
+    code = "CLN_NO_DOCTOR_PROFILE"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "You have no doctor profile in this clinic. The owner can link one on the Team page."
+        )

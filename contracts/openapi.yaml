@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.25.0
+  version: 0.26.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -3765,12 +3765,17 @@ paths:
       description: |
         FR-REM-07; spec R17. One row per patient (their latest overdue follow-up), oldest
         follow-up date first. `reminder_status` is that chain's latest reminder's visible status.
-        Permission REMINDERS_SCHEDULE.
+        Permission REMINDERS_SCHEDULE. M6a-P6: doctor_id keeps one doctor's follow-ups (the
+        Doctor workspace's "My follow-ups").
       security:
         - sessionCookie: []
       parameters:
         - $ref: '#/components/parameters/RequestId'
         - $ref: '#/components/parameters/ClinicId'
+        - name: doctor_id
+          in: query
+          required: false
+          schema: {type: string, format: uuid}
         - name: limit
           in: query
           required: false
@@ -3813,11 +3818,19 @@ paths:
         scope DOCTOR its messages_sent are null. follow_ups_pending is the clinic's, as
         GET /follow-ups/pending lists them. Counts exclude cancelled appointments. Like the
         queue, the 200 carries a strong ETag and an unchanged answer is a bodiless 304.
+        M6a-P6 (decision 4A): view=doctor asks for the caller's own doctor's day, the Doctor
+        workspace of a practising owner (an OWNER with a doctor profile); without a doctor
+        profile, or as front desk, it is 409 CLN_NO_DOCTOR_PROFILE. view=clinic, or no view,
+        keeps the role's default. A DOCTOR with a profile always gets scope DOCTOR.
       security:
         - sessionCookie: []
       parameters:
         - $ref: '#/components/parameters/RequestId'
         - $ref: '#/components/parameters/ClinicId'
+        - name: view
+          in: query
+          required: false
+          schema: {type: string, enum: [clinic, doctor]}
         - name: If-None-Match
           in: header
           required: false
@@ -3853,6 +3866,60 @@ paths:
           $ref: '#/components/responses/AuthError'
         '403':
           $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+  /api/v1/my-patients:
+    get:
+      tags: [patients]
+      operationId: listMyPatients
+      summary: The patients the caller has seen as a doctor
+      description: |
+        M6a-P6 (FR-UX-02, FR-UX-06; decision 5A). Patients with at least one visit by the
+        caller's own doctor profile in this clinic, most recent visit first. q narrows them by
+        the lookup box's rules (phone, then code, then name prefix). Permission CLINICAL_VIEW
+        (doctors and owners; front desk 403); a caller with no doctor profile here is 409
+        CLN_NO_DOCTOR_PROFILE. No clinical content; not audited, like the lookup.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - name: q
+          in: query
+          required: false
+          schema: {type: string, maxLength: 100}
+        - name: limit
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - name: offset
+          in: query
+          required: false
+          schema: {type: integer, minimum: 0, default: 0}
+      responses:
+        '200':
+          description: My patients
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyPatientList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/AuthError'
 components:
   securitySchemes:
     sessionCookie:
@@ -4074,7 +4141,8 @@ components:
       description: |
         The change conflicts with a clinic rule: CLN_LAST_OWNER (a clinic needs at least one
         active owner), CLN_INVALID_TRANSITION (the entity's state does not allow it),
-        CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here)
+        CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here),
+        CLN_NO_DOCTOR_PROFILE (a doctor's view without a doctor profile, M6a-P6)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -5219,7 +5287,8 @@ components:
           type: boolean
     Membership:
       type: object
-      required: [membership_id, clinic_id, clinic_name, clinic_status, role, permissions]
+      required: [membership_id, clinic_id, clinic_name, clinic_status, role, permissions,
+                 doctor_id]
       properties:
         membership_id:
           type: string
@@ -5238,6 +5307,12 @@ components:
           description: What this role may do at this clinic (PRD §8.1), sorted
           items:
             $ref: '#/components/schemas/Permission'
+        doctor_id:
+          description: |
+            M6a-P6: the member's active doctor profile at this clinic, or null. A role OWNER with
+            one is a practising owner and gets the Owner / Doctor switch (FR-UX-06).
+          type: [string, 'null']
+          format: uuid
     Role:
       type: string
       enum: [OWNER, DOCTOR, FRONT_DESK]
@@ -5666,6 +5741,38 @@ components:
           maxItems: 20
           items:
             $ref: '#/components/schemas/Patient'
+    MyPatient:
+      type: object
+      additionalProperties: false
+      description: A patient the caller has seen as a doctor (M6a-P6). Who and when, never what.
+      required: [id, code, full_name, sex, age_years, age_is_estimated, last_visit_at, visits]
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string}
+        full_name: {type: string}
+        sex:
+          $ref: '#/components/schemas/Sex'
+        age_years: {type: integer, minimum: 0}
+        age_is_estimated: {type: boolean}
+        last_visit_at:
+          description: When the latest visit with this doctor started
+          type: string
+          format: date-time
+        visits:
+          description: Visits with this doctor, any status
+          type: integer
+          minimum: 1
+    MyPatientList:
+      type: object
+      required: [items, limit, offset]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/MyPatient'
+        limit: {type: integer}
+        offset: {type: integer}
     PatientCandidate:
       type: object
       required: [id, code, full_name, age_years]
@@ -5845,6 +5952,14 @@ components:
           type: [string, 'null']
           maxLength: 20
           description: Indian 10-digit input accepted; normalised to E.164
+        doctor_id:
+          description: |
+            M6a-P6 (FR-ORG-03, FR-ONB-08). Role OWNER only: the owner also practises here as this
+            active, unlinked doctor profile ("Doctor 1"). It is linked to the invitee in the same
+            request and grants CLINICAL_WRITE once the invitation is accepted. Unknown, inactive,
+            linked to someone else, or sent with another role: 422 on doctor_id.
+          type: [string, 'null']
+          format: uuid
     Invite:
       type: object
       required: [clinic_name, full_name, role, expires_at, has_password]

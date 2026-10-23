@@ -1874,7 +1874,8 @@ export interface paths {
          * Patients whose follow-up date passed without a completed visit since
          * @description FR-REM-07; spec R17. One row per patient (their latest overdue follow-up), oldest
          *     follow-up date first. `reminder_status` is that chain's latest reminder's visible status.
-         *     Permission REMINDERS_SCHEDULE.
+         *     Permission REMINDERS_SCHEDULE. M6a-P6: doctor_id keeps one doctor's follow-ups (the
+         *     Doctor workspace's "My follow-ups").
          */
         readonly get: operations["listPendingFollowUps"];
         readonly put?: never;
@@ -1902,8 +1903,36 @@ export interface paths {
          *     scope DOCTOR its messages_sent are null. follow_ups_pending is the clinic's, as
          *     GET /follow-ups/pending lists them. Counts exclude cancelled appointments. Like the
          *     queue, the 200 carries a strong ETag and an unchanged answer is a bodiless 304.
+         *     M6a-P6 (decision 4A): view=doctor asks for the caller's own doctor's day, the Doctor
+         *     workspace of a practising owner (an OWNER with a doctor profile); without a doctor
+         *     profile, or as front desk, it is 409 CLN_NO_DOCTOR_PROFILE. view=clinic, or no view,
+         *     keeps the role's default. A DOCTOR with a profile always gets scope DOCTOR.
          */
         readonly get: operations["getDashboardToday"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/my-patients": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The patients the caller has seen as a doctor
+         * @description M6a-P6 (FR-UX-02, FR-UX-06; decision 5A). Patients with at least one visit by the
+         *     caller's own doctor profile in this clinic, most recent visit first. q narrows them by
+         *     the lookup box's rules (phone, then code, then name prefix). Permission CLINICAL_VIEW
+         *     (doctors and owners; front desk 403); a caller with no doctor profile here is 409
+         *     CLN_NO_DOCTOR_PROFILE. No clinical content; not audited, like the lookup.
+         */
+        readonly get: operations["listMyPatients"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -2501,6 +2530,12 @@ export interface components {
             readonly role: components["schemas"]["Role"];
             /** @description What this role may do at this clinic (PRD §8.1), sorted */
             readonly permissions: readonly components["schemas"]["Permission"][];
+            /**
+             * Format: uuid
+             * @description M6a-P6: the member's active doctor profile at this clinic, or null. A role OWNER with
+             *     one is a practising owner and gets the Owner / Doctor switch (FR-UX-06).
+             */
+            readonly doctor_id: string | null;
         };
         /** @enum {string} */
         readonly Role: "OWNER" | "DOCTOR" | "FRONT_DESK";
@@ -2701,6 +2736,28 @@ export interface components {
         readonly PatientList: {
             readonly items: readonly components["schemas"]["Patient"][];
         };
+        /** @description A patient the caller has seen as a doctor (M6a-P6). Who and when, never what. */
+        readonly MyPatient: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly code: string;
+            readonly full_name: string;
+            readonly sex: components["schemas"]["Sex"];
+            readonly age_years: number;
+            readonly age_is_estimated: boolean;
+            /**
+             * Format: date-time
+             * @description When the latest visit with this doctor started
+             */
+            readonly last_visit_at: string;
+            /** @description Visits with this doctor, any status */
+            readonly visits: number;
+        };
+        readonly MyPatientList: {
+            readonly items: readonly components["schemas"]["MyPatient"][];
+            readonly limit: number;
+            readonly offset: number;
+        };
         readonly PatientCandidate: {
             /** Format: uuid */
             readonly id: string;
@@ -2797,6 +2854,14 @@ export interface components {
             readonly email?: string | null;
             /** @description Indian 10-digit input accepted; normalised to E.164 */
             readonly phone?: string | null;
+            /**
+             * Format: uuid
+             * @description M6a-P6 (FR-ORG-03, FR-ONB-08). Role OWNER only: the owner also practises here as this
+             *     active, unlinked doctor profile ("Doctor 1"). It is linked to the invitee in the same
+             *     request and grants CLINICAL_WRITE once the invitation is accepted. Unknown, inactive,
+             *     linked to someone else, or sent with another role: 422 on doctor_id.
+             */
+            readonly doctor_id?: string | null;
         };
         readonly Invite: {
             readonly clinic_name: string;
@@ -3428,7 +3493,8 @@ export interface components {
         /**
          * @description The change conflicts with a clinic rule: CLN_LAST_OWNER (a clinic needs at least one
          *     active owner), CLN_INVALID_TRANSITION (the entity's state does not allow it),
-         *     CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here)
+         *     CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here),
+         *     CLN_NO_DOCTOR_PROFILE (a doctor's view without a doctor profile, M6a-P6)
          */
         readonly ConflictError: {
             headers: {
@@ -7250,6 +7316,7 @@ export interface operations {
     readonly listPendingFollowUps: {
         readonly parameters: {
             readonly query?: {
+                readonly doctor_id?: string;
                 readonly limit?: number;
                 readonly offset?: number;
             };
@@ -7287,7 +7354,9 @@ export interface operations {
     };
     readonly getDashboardToday: {
         readonly parameters: {
-            readonly query?: never;
+            readonly query?: {
+                readonly view?: "clinic" | "doctor";
+            };
             readonly header?: {
                 /** @description Correlation ID. Generated by the API when absent and always echoed back. */
                 readonly "X-Request-ID"?: components["parameters"]["RequestId"];
@@ -7330,6 +7399,48 @@ export interface operations {
             readonly 400: components["responses"]["PermissionError"];
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly listMyPatients: {
+        readonly parameters: {
+            readonly query?: {
+                readonly q?: string;
+                readonly limit?: number;
+                readonly offset?: number;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description My patients */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["MyPatientList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 422: components["responses"]["AuthError"];
         };
     };
 }

@@ -172,8 +172,13 @@ def create_reminders_blueprint(use_cases: ReminderUseCases) -> Blueprint:
     def list_pending_follow_ups() -> Response:
         limit = _int_arg("limit", PENDING_DEFAULT_LIMIT)
         offset = _int_arg("offset", 0)
+        raw_doctor = request.args.get("doctor_id")
+        try:
+            doctor_id = UUID(raw_doctor) if raw_doctor is not None else None
+        except ValueError:
+            raise InvalidValue("doctor_id", "must be a doctor's ID") from None
         items = use_cases.list_pending_follow_ups().execute(
-            current_context(), limit=limit, offset=offset
+            current_context(), limit=limit, offset=offset, doctor_id=doctor_id
         )
         return jsonify(
             {"items": [pending_body(i) for i in items], "limit": limit, "offset": offset}

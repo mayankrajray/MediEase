@@ -130,6 +130,8 @@ class NewInviteRequest(BaseModel):
     role: Role
     email: str | None = Field(default=None, max_length=254)
     phone: str | None = Field(default=None, max_length=20)
+    # M6a-P6 (decision 8A): the owner also practises here, as this doctor profile (Doctor 1).
+    doctor_id: UUID | None = None
 
 
 def create_ops_blueprint(use_cases: OpsUseCases, *, public_base_url: str) -> Blueprint:
@@ -218,7 +220,11 @@ def create_ops_blueprint(use_cases: OpsUseCases, *, public_base_url: str) -> Blu
             clinic_id=clinic_id,
             actor=_actor(),
             cmd=InviteStaffCommand(
-                full_name=body.full_name, role=body.role, email=body.email, phone=body.phone
+                full_name=body.full_name,
+                role=body.role,
+                email=body.email,
+                phone=body.phone,
+                doctor_id=body.doctor_id,
             ),
         )
         return jsonify(invitation_body(invitation, public_base_url)), 201

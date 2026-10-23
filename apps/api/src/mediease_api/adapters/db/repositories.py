@@ -92,7 +92,7 @@ from mediease_api.domain.shared.errors import NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.visits.visit import Visit, VisitAddendum, VisitStatus
 from mediease_api.domain.visits.vitals import Vitals
-from mediease_api.ports.repositories import RowLock
+from mediease_api.ports.repositories import PatientMatch, RowLock, SeenPatient
 
 
 def _utc(value: datetime) -> datetime:
@@ -383,6 +383,7 @@ class SqlAlchemyClinicAccessRepository:
                 clinic_status=ClinicStatus(clinic.status),
                 role=Role(membership.role),
                 has_doctor_profile=doctor_id is not None,
+                doctor_id=doctor_id,
             )
             for membership, clinic, doctor_id in self._session.execute(query)
         ]
@@ -1313,6 +1314,43 @@ class SqlAlchemyVisitRepository(TenantScopedRepository[VisitRow]):
             )
         query = query.order_by(VisitRow.started_at.desc(), VisitRow.id.desc()).limit(limit)
         return [_visit_from_row(row) for row in self._session.scalars(query)]
+
+    def patients_seen_by(
+        self, doctor_id: UUID, *, match: PatientMatch | None, limit: int, offset: int
+    ) -> Sequence[SeenPatient]:
+        # Both tables scoped to this clinic; ix_visits_clinic_id_doctor_id_started_at (0022)
+        # serves the aggregate.
+        seen = (
+            select(
+                VisitRow.patient_id.label("patient_id"),
+                func.max(VisitRow.started_at).label("last_visit_at"),
+                func.count().label("visits"),
+            )
+            .where(VisitRow.clinic_id == self.clinic_id, VisitRow.doctor_id == doctor_id)
+            .group_by(VisitRow.patient_id)
+            .subquery()
+        )
+        query = (
+            select(PatientRow, seen.c.last_visit_at, seen.c.visits)
+            .join(seen, seen.c.patient_id == PatientRow.id)
+            .where(PatientRow.clinic_id == self.clinic_id)
+        )
+        if match is not None and match.phone_e164 is not None:
+            query = query.where(PatientRow.phone_e164 == match.phone_e164)
+        elif match is not None and match.code is not None:
+            query = query.where(PatientRow.code == match.code)
+        elif match is not None and match.name_prefix is not None:
+            pattern = _like_prefix(match.name_prefix.lower())
+            query = query.where(func.lower(PatientRow.full_name).like(pattern, escape="\\"))
+        query = (
+            query.order_by(seen.c.last_visit_at.desc(), PatientRow.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return [
+            SeenPatient(patient=_patient_from_row(row), last_visit_at=_utc(last), visits=count)
+            for row, last, count in self._session.execute(query)
+        ]
 
 
 class SqlAlchemyVisitAddendumRepository(TenantScopedRepository[VisitAddendumRow]):

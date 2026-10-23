@@ -57,8 +57,16 @@ class ReminderRepository(Protocol):
     def list_for_patient(self, patient_id: UUID, *, limit: int) -> Sequence[ReminderRead]: ...
 
     def pending_follow_ups(
-        self, *, today: date, timezone: str, limit: int, offset: int
-    ) -> Sequence[PendingFollowUp]: ...
+        self,
+        *,
+        today: date,
+        timezone: str,
+        limit: int,
+        offset: int,
+        doctor_id: UUID | None = None,
+    ) -> Sequence[PendingFollowUp]:
+        """Oldest first; ``doctor_id`` keeps one doctor's (M6a-P6)."""
+        ...
 
 
 class NoShowSweep(Protocol):

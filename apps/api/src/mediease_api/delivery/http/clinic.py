@@ -109,6 +109,8 @@ class NewStaffRequest(BaseModel):
     role: Role
     email: str | None = Field(default=None, max_length=254)
     phone: str | None = Field(default=None, max_length=20)
+    # M6a-P6: an owner who is also this doctor profile (Doctor 1).
+    doctor_id: UUID | None = None
 
 
 class NewClinicDoctorRequest(BaseModel):
@@ -257,6 +259,7 @@ def create_clinic_blueprint(queries: ClinicUseCases, *, public_base_url: str) ->
                 email=body.email,
                 phone=body.phone,
                 by_owner=True,
+                doctor_id=body.doctor_id,
             ),
         )
         return jsonify(team_invitation_body(invitation, public_base_url)), 201

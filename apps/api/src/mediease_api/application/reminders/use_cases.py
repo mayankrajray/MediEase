@@ -191,7 +191,9 @@ class ListPatientMessages(_UseCase):
 
 
 class ListPendingFollowUps(_UseCase):
-    def execute(self, ctx: RequestContext, *, limit: int, offset: int) -> Sequence[PendingFollowUp]:
+    def execute(
+        self, ctx: RequestContext, *, limit: int, offset: int, doctor_id: UUID | None = None
+    ) -> Sequence[PendingFollowUp]:
         if not 1 <= limit <= PENDING_MAX_LIMIT:
             raise InvalidValue("limit", f"must be 1-{PENDING_MAX_LIMIT}")
         if offset < 0:
@@ -201,5 +203,9 @@ class ListPendingFollowUps(_UseCase):
             tenant = uow.tenant(ctx.clinic_id)
             today = local_date(self._clock.now(), clinic.timezone)
             return tenant.reminders.pending_follow_ups(
-                today=today, timezone=clinic.timezone, limit=limit, offset=offset
+                today=today,
+                timezone=clinic.timezone,
+                limit=limit,
+                offset=offset,
+                doctor_id=doctor_id,
             )
