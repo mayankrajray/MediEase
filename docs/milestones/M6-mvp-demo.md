@@ -1000,3 +1000,112 @@ What was built:
     same tests, same stack.
   - **Not verified.** The live-region announcement of a new arrival has no automated test (it
     needs a second poll); it was not checked with a screen reader.
+
+Confirmed by the developer on 24 Oct 2026 and pushed to draft PR #50 (`91f501e`).
+
+---
+
+## M6a-P8 — Appointment reminders, bookings to move after leave, the owner's audit log
+
+Proposed 24 Oct 2026. Recommendations are marked (rec). Covers FR-APT-08, FR-APT-09 and FR-AUD-03
+(PRD v1.2). It is the last M6a phase: when it is confirmed, PR #50 leaves draft.
+
+Facts the design rests on:
+
+- **Reminders (M5-P4) are follow-ups only.**
+  - `reminders.kind` is `FOLLOW_UP` and `source` is `PRESCRIPTION` or `MANUAL`. `source_id` is a
+    foreign key to prescriptions and `created_by` is required (migration `0017`).
+  - The `send_reminder` job carries a revision (an older job does nothing). It defers out of
+    21:00–08:00 to 08:00 (FR-REM-04), re-reads consent, needs the clinic's phone, and hands
+    `follow_up_due` to the sender. The SMS fallback (off by default) hangs off its failure.
+  - Booking, rescheduling and cancelling do not touch reminders.
+- **Templates.** `booking_confirmed`, `rx_ready`, `rx_updated`, `follow_up_due` and
+  `opt_out_confirmed` exist, in English and Hindi. There is no appointment-reminder and no
+  cancellation template. A new one is a data change plus Meta approval (L-02); the console
+  provider sends it locally.
+- **Leave over a booked day is allowed and cancels nothing** (appointments spec R16, R17). The
+  day's booked sessions become `CLOSED`, which refuses new bookings
+  (`APT_SESSION_CLOSED`). `AddException` returns those "kept" sessions, and the Schedule page lists
+  them for the owner. Nobody else sees them, and no list of the affected patients exists. A
+  weekly schedule change behaves the same way.
+- **Cancel and reschedule** work from a closed session. `CancelReason` already has
+  `DOCTOR_UNAVAILABLE` and `CLINIC_REQUEST`. Every role holds `APPOINTMENTS_MANAGE`. There is no
+  bulk action.
+- **Audit.** `audit_events` is append-only, with an index on `(clinic_id, occurred_at)`.
+  Metadata holds only IDs, enums and codes, never names, phones or clinical text. Nothing in the
+  application reads it (the tenancy suite's reviewed exception says FR-AUD-03 must scope its own
+  query and add cases there). Ops read it with psql (RUNBOOK §18). There is no `AUDIT_VIEW`
+  permission.
+- **The notification service (P7)** already receives `AppointmentBooked`, `AppointmentRescheduled`
+  and `AppointmentCancelled` in the change's transaction. ADR-0017 left reminders on their own
+  scheduler, because a reminder is due at a time rather than raised by a change.
+
+| # | Question | A (rec) | Rejected |
+|---|---|---|---|
+| 1 | Where appointment reminders live (FR-APT-08) | **The existing `reminders` table and send job.** Migration `0024` adds kind `APPOINTMENT`, source `APPOINTMENT` and a nullable `appointment_id` (foreign key, with a CHECK: set exactly for that source). `follow_up_date` holds the visit date for both kinds. `created_by` becomes nullable ("the system": a booking from the public page in M6b has no staff user). The status machine, revisions, quiet hours, consent, the clinic-phone check, the profile's *Reminders* list and the SMS fallback all apply unchanged | B: a separate `appointment_reminders` table (a second status machine, job, fallback and UI for the same idea) |
+| 2 | When they are sent (FR-APT-08 default "evening before + 2 hours before") | Two reminders per booking:<br>• **evening before** at 19:00 clinic time on the day before;<br>• **before the visit** a set number of hours before the slot, or before the session's start for tokens.<br>**Skipped** when the due time is less than 60 minutes after the booking or not before the visit; the confirmation has just said it. **Quiet hours** apply as for follow-ups: a 07:00 reminder for a 09:00 visit goes at 08:00, and one that the deferral would push to or past the start is not sent. Walk-ins get none | B: one reminder only (the PRD asks for two). C: a reminder the morning of the visit at a fixed hour (wrong for evening sessions) |
+| 3 | Configuring them (FR-APT-08 "configurable") | **Per clinic, by the owner**, on the Schedule settings page: *Evening before* on or off, and *Before the visit* off or 1–6 hours (default on and 2). Two columns on `clinics`, changed through the existing `PATCH /clinic` (`CLINIC_MANAGE`) and audited as `clinic.updated`. A change applies to bookings made or moved after it; reminders already scheduled stay as they are | B: per doctor (no demand yet). C: re-plan every future reminder on a change (a bulk job for a rare action) |
+| 4 | Keeping them in step with the booking | **The notification service schedules them**, since it already receives the events in the booking's transaction. `AppointmentBooked` creates the reminders. `AppointmentRescheduled` cancels the old appointment's and creates the new one's. `AppointmentCancelled` cancels them. Each change audits `reminder.scheduled` or `reminder.cancelled` as SYSTEM. **At send time** the job also checks that the appointment is still `BOOKED` and its session `OPEN`. Otherwise the reminder is cancelled by the system with `REM_APPOINTMENT_CHANGED`: an arrival, a no-show, or a session closed by leave. Staff may cancel one on the profile; moving one is refused with `REM_FOLLOWS_APPOINTMENT` (409, "move the appointment instead"). **No backfill:** bookings made before P8 ships get none | B: a sweep that finds due appointments every 5 minutes (a second source of truth beside the reminder rows; no per-reminder status to show) |
+| 5 | The message (FR-MSG-04) | New template **`appointment_reminder`** (utility, English and Hindi, version 1): "Reminder: your appointment at {{clinic_name}} with {{doctor_name}} is {{date_time_or_token}}. To change it, call {{clinic_phone}}." With the existing variable kinds, it is the same for both reminders, plus an SMS wording for the fallback. It needs Meta approval (L-02); the console sends it until then | B: two templates, "tomorrow" and "today" (twice the approvals for a word) |
+| 6 | Bookings to move after leave (FR-APT-09) | **A derived list, not a new table:** the live appointments (`BOOKED` or `ARRIVED`) from today on whose session is `CLOSED`. That covers leave and a changed weekly schedule alike.<br>• **API:** `GET /api/v1/appointments/to-move?doctor_id` (`APPOINTMENTS_MANAGE`), each with the patient's code, first name and masked phone, the doctor, the old place and the reason (`LEAVE` or `SCHEDULE_CHANGED`).<br>• **Web:** a *Bookings to move* page reached from a Today tile ("3 bookings to move") for the front desk and the owner, and a banner on the queue for that day. Each row has *Reschedule* (the existing drawer, the patient and doctor chosen) and *Cancel* (reason *Doctor unavailable* preselected).<br>• **Telling staff:** a new in-app kind `schedule.bookings_to_move` goes to the front desk and owners when a leave or schedule change closes booked sessions ("Dr. Sample on leave 24 Oct: 3 bookings to move"), except to the person who made it | B: cancel them all automatically (patients lose their place without a word). C: refuse leave over booked days (leave is a fact; the owner then cannot record it) |
+| 7 | Telling the patient (FR-APT-09 "patients are notified") | **Rescheduled:** the existing booking confirmation goes for the new place (P7, unchanged). **Cancelled by the clinic:** with reason `DOCTOR_UNAVAILABLE` or `CLINIC_REQUEST`, the service enqueues `send_cancellation_notice`, a new clinic job with key `appointment_cancelled:{appointment}`. It uses the new template **`appointment_cancelled`** ("Your appointment at {{clinic_name}} with {{doctor_name}} on {{date_time_or_token}} is cancelled. Please call {{clinic_phone}} to book again."). Consent is re-checked at send time, and quiet hours defer it to 08:00. A patient's own cancellation, a duplicate and `OTHER` send nothing. Needs L-02 | B: a message for every cancellation (a patient who cancelled does not need telling). C: in-app only (patients have no app yet; M6b) |
+| 8 | The owner's audit log (FR-AUD-03) | **A new permission `AUDIT_VIEW`, owners only.**<br>• **API:** `GET /api/v1/audit-events?from&to&category&actor_user_id&cursor` returns 50 a page, newest first, with a keyset cursor on `(occurred_at, id)` and a range of at most 92 days. `GET /api/v1/audit-events/export?from&to` returns CSV of at most 92 days and 20,000 rows; cells starting with `=`, `+`, `-` or `@` are prefixed with `'`. Both run through a reviewed read-only `SqlAlchemyAuditReader` that always filters by the request's clinic, with tenancy-suite cases.<br>• **Rows:** the time in the clinic's zone; who (the member's current name and role, or "MediEase support" for ops, "System", "Patient link"); the action as words from a catalogue grouped into categories (Sign-in, Team, Patients, Appointments, Clinical records, Prescriptions and links, Messages and reminders, Schedule, Settings); the record (type, and the patient's code for patient records); and the allow-listed metadata. IP hashes are never shown.<br>• **Exports are audited** (`audit.exported` with the range and row count, FR-AUD-01 "data exports"); viewing is not.<br>• **Web:** *Audit log* in the owner's menu (`/settings/audit`): filters, *Load more* and *Export CSV* | B: let doctors see their own actions (later, if asked). C: export as PDF (CSV opens in a spreadsheet, which is what an owner does with it). D: show raw JSON metadata (unreadable, and new keys would appear unreviewed) |
+
+Fixed points:
+
+- **Migration `0024`:**
+  - `reminders`: kind and source CHECKs, `appointment_id` and its CHECK, `created_by` nullable,
+    and an index on `(appointment_id)`;
+  - `clinics`: `reminder_evening_before` (boolean, default true) and `reminder_hours_before`
+    (smallint 0–6, default 2);
+  - `notifications` and `notification_preferences`: the kind CHECKs gain
+    `schedule.bookings_to_move`.
+- **Code.**
+  - `domain/reminders/rules.py`: `appointment_reminder_times`.
+  - `application/notifications/service.py`: schedules and cancels the reminders and enqueues
+    the cancellation notice.
+  - `SendReminder`: chooses its template by kind and checks the appointment.
+  - `application/appointments/to_move.py`.
+  - `application/audit/` read use cases with the action catalogue.
+  - `SqlAlchemyAuditReader`.
+  - `AUDIT_VIEW` in the permission matrix.
+- **Contract 0.28.0:** the clinic's two reminder settings; `kind` and `appointment_id` on
+  `Reminder`; `GET /appointments/to-move`; both audit routes; the new notification kind.
+- **Errors:** `REM_FOLLOWS_APPOINTMENT` (409), `AUD_RANGE_TOO_LONG` (422). `REM_APPOINTMENT_CHANGED`
+  is a reminder's error code, not an HTTP error.
+- **Templates:** `appointment_reminder` and `appointment_cancelled` in `templates.yaml` (L-02 adds
+  both to the approval list).
+- **Docs:** DATA_MODEL, API, ERRORS, the appointments and reminders specs (R16/R17 gain "listed
+  for the front desk"), RUNBOOK §18 (the owner's view) and a new RUNBOOK entry for reminders that
+  did not go, SECURITY_AND_COMPLIANCE (the export), and ADR-0017's consequences (appointment
+  reminders are scheduled by the service).
+- **Unchanged:** follow-up reminders, the booking confirmation, quiet hours, the SMS fallback rule,
+  and every existing test and journey.
+
+Planned verification:
+
+- **Unit:**
+  - reminder times for slots and tokens: evening before, hours before, the 60-minute skip,
+    quiet-hours deferral and the not-before-the-visit skip;
+  - the audit catalogue covering every `AuditAction` (a test fails when an action has no label);
+  - CSV cell escaping.
+- **Integration (PostgreSQL):**
+  - a booking schedules two reminders in its transaction, and a rollback leaves none;
+  - a reschedule cancels the old reminders and schedules the new ones;
+  - a cancellation cancels them;
+  - the send job skips and cancels an arrived or leave-closed booking;
+  - moving an appointment reminder is a 409;
+  - a clinic with both settings off schedules none;
+  - leave over a booked day lists the bookings, tells the desk and the owners, and a cancellation
+    with *Doctor unavailable* enqueues the notice while a patient's own cancellation does not;
+  - the audit list filters, pages and stays within the clinic;
+  - another clinic's events never appear (tenancy suite);
+  - the export is CSV, is bounded and is audited;
+  - front desk and doctors get 403.
+- **Playwright:**
+  - the owner adds leave on a booked day; the front desk sees the Today tile, opens *Bookings to
+    move*, reschedules one patient and cancels another, and the list empties;
+  - the owner opens *Audit log*, filters to Appointments and sees those changes with names, then
+    exports CSV;
+  - failure path: the front desk opening `/settings/audit` is told it is for owners.
+- **Gates:** `make lint typecheck contract-check test`, `make smoke` and `make e2e`.
