@@ -23,7 +23,7 @@ notifications for patients, public booking) moved to M6b.
 | P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR-0015) | Below (approved 22 Oct 2026; built 23 Oct 2026) |
 | P4 | Email provider behind a port: email verification, password reset by link (FR-AUTH-08, FR-AUTH-05) | Below (approved and built 23 Oct 2026) |
 | P5 | Owner Team page: invite, change role, deactivate (FR-ORG-07) | Below (approved and built 23 Oct 2026) |
-| P6 | Role workspaces (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); owner as Doctor 1 in the ops wizard (FR-ORG-03) | At its start |
+| P6 | Role workspaces (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); owner as Doctor 1 in the ops wizard (FR-ORG-03) | Below (awaiting approval) |
 | P7 | Notification service, domain events, in-app channel, notification centre (FR-NTF-02..06) | At its start |
 | P8 | Appointment reminders (FR-APT-08), doctor-leave conflicts (FR-APT-09), owner audit view (FR-AUD-03) | At its start |
 
@@ -679,3 +679,93 @@ What was built:
     A first `make e2e` run overlapped with the stack's containers being replaced and five
     journeys could not reach `web:3000`; the run straight after was 24/24 with no change.
   - **Not verified.** Real delivery through Brevo waits for L-11, as in P4.
+
+Confirmed by the developer on 23 Oct 2026 and pushed to draft PR #50.
+
+---
+
+## M6a-P6 — Role workspaces, the practising owner's switch, owner as Doctor 1
+
+Proposed 23 Oct 2026. Recommendations are marked (rec). Covers FR-UX-01..06, FR-ORG-03 and the
+"Doctor 1" part of FR-ONB-08 (PRD v1.2). No ADR: no new dependency, no change to the
+permission model (one role per membership stays).
+
+Facts the design rests on:
+
+- **Permissions.** `permissions_for` gives an `OWNER` with a linked doctor profile one extra
+  permission, `CLINICAL_WRITE`. Nothing else knows about a "practising owner".
+- **`/me`.** Each membership carries its role and permissions only: no `doctor_id`, no
+  `has_doctor_profile`. The web could only guess a practising owner from `CLINICAL_WRITE`.
+- **Today.** One endpoint shaped by role (M6-P1, 5A). Scope `DOCTOR` is given only to role
+  `DOCTOR` with a profile. A practising owner always gets the clinic view.
+- **Queue.** `GET /queue?doctor_id=` exists. The web opens on the doctor linked to the signed-in
+  user (D27), so a practising owner's queue already opens on their own day.
+- **Patients.** There is no patient list, only a search (`GET /patients?q=`, at most 20).
+  Nothing answers "the patients I have seen". `visits.doctor_id` holds the link, with no index
+  on it.
+- **Follow-ups.** `GET /follow-ups/pending` has no doctor filter.
+- **Schedules.** A doctor may read a schedule (`DOCTORS_VIEW`) but not change one
+  (`SCHEDULES_MANAGE` is the owner's).
+- **Navigation.** One list, `NAV_ITEMS`, filtered by permission. Every member lands on `/today`.
+  No role-specific nav, home or workspace exists.
+- **Linking a doctor profile.** `POST/PATCH .../doctors` accept `user_id`, but only for an
+  `ACTIVE` member. During ops onboarding the owner is still `INVITED`, so the wizard cannot
+  link them. Nothing links a profile when an invitation is accepted.
+- **Seed.** No practising owner exists. The seeded doctor works in two clinics.
+
+| # | Question | A (rec) | Rejected |
+|---|---|---|---|
+| 1 | What a workspace is | A **view** chosen in the web app, never a permission: `OWNER`, `DOCTOR` or `FRONT_DESK`, from the membership's role. A practising owner (role `OWNER` with a doctor profile) chooses `OWNER` or `DOCTOR`; the choice is remembered per clinic in the browser, and Owner is the default. The URLs stay the same (`/today`, `/queue`…); each workspace shapes them. The API never sees the view, apart from Today's `view` parameter (decision 4) | B: a URL tree per workspace (`/doctor/today`; every page and link doubled). C: the view in the session or the token (a "switch" that changes what the API allows, which FR-UX-06 forbids) |
+| 2 | How the web knows about the doctor profile | `/me` gains `doctor_id` (nullable) on each membership: the caller's active doctor profile at that clinic. It drives the switch, *My Patients* and the queue's default | B: infer it from `CLINICAL_WRITE` (true of every `DOCTOR` too, and gives no ID) |
+| 3 | Navigation per workspace (FR-UX-04) | Three lists; an item appears only once its page exists:<br>• **Owner:** Today, Queue, Patients, Follow-ups, Team, Schedule.<br>• **Doctor:** Today, My queue, My patients, My follow-ups, My schedule (read-only).<br>• **Front desk:** Today, Queue, Patients, Follow-ups.<br>Booking requests (M6b), payments (M8) and notifications (P7) join in their phases. A page left out of a workspace's nav stays reachable by URL when the role is allowed, because the switch changes the view only | B: one list with role badges (the same menu for everyone; FR-UX-05 asks for different ones) |
+| 4 | Each workspace's home (FR-UX-01..03, 05) | *Today*, shaped by workspace, with three quick actions:<br>• **Owner:** the clinic overview, 7-day strip and every doctor's sessions, plus a *Team* tile (active members, pending invitations, read from `GET /clinic/staff`). Actions: *Invite someone*, *Schedule settings*, *Open the queue*.<br>• **Doctor:** my sessions, my next patients, my week. Actions: *Open my queue*, *My patients*, *My follow-ups*.<br>• **Front desk:** today's counts as now. Actions: *Register a patient*, *Book an appointment*, *Add a walk-in* (the existing drawers).<br>API: `GET /dashboard/today?view=doctor\|clinic`. A `DOCTOR` with a profile always gets the doctor view. An owner with a profile may ask for either. `view=doctor` without a profile is 409 `CLN_NO_DOCTOR_PROFILE`. Front desk gets the clinic view only | B: separate home pages per role (three pages repeating one endpoint). C: an owner home with revenue and booking-request rates now (no data until M6b/M8; shown when it exists) |
+| 5 | *My Patients* (FR-UX-02, 06) | **`GET /api/v1/my-patients?q=&limit=&offset=`**: patients with at least one visit by the caller's own doctor profile in this clinic, most recent visit first. Each row: code, name, age and sex, the last visit's date and the number of visits. No clinical text. `q` narrows by name, code or phone. 50 a page. Needs `CLINICAL_VIEW` and a doctor profile (else 409 `CLN_NO_DOCTOR_PROFILE`). Not audited, like the search: it shows who, not what. Migration `0022` adds `ix_visits_clinic_id_doctor_id_started_at`. Web: `/my-patients`, rows open the patient profile | B: also patients only booked with me (a patient who never came is not "mine" yet; *My queue* shows them). C: audit every listing (one row per page view adds noise and no protection; opening a visit is already audited) |
+| 6 | The switch (FR-UX-06) | A two-option control, **Owner \| Doctor**, in the shell header next to the role pill. It is shown only for an `OWNER` with `doctor_id`, and works as a radio group from the keyboard. Switching opens that workspace's Today and announces "Doctor view". Permissions are unchanged in either view. An owner without a profile, a doctor and the front desk see no switch | B: in the user menu (hidden; an owner switches several times a day). C: a separate sign-in per view |
+| 7 | What "mine" means in the Doctor workspace | • *My queue*: the queue opened on my doctor, as D27 already does; the doctor picker stays so they can cover a colleague.<br>• *My follow-ups*: `GET /follow-ups/pending` gains an optional `doctor_id`; the Doctor workspace sends its own, with *All doctors* one click away.<br>• *My schedule*: my weekly hours, leave and extra sessions, read-only (the existing `GET` with `DOCTORS_VIEW`). Changing them stays the owner's (`SCHEDULES_MANAGE`) | B: lock a doctor to their own queue (cover between doctors is normal). C: let doctors edit their own schedule (a permission change; not asked for) |
+| 8 | Owner as Doctor 1, and linking later (FR-ORG-03, FR-ONB-08) | • **Ops wizard:** inviting the **owner** gets a checkbox *The owner also practises here* and a choice among the doctors added in step 2 (Doctor 1 preselected). The invitation request gains an optional `doctor_id`. The API then links that unlinked profile to the invited owner's user **in the same transaction**, allowed for an `INVITED` owner in this request only. The owner gains `CLINICAL_WRITE` once their membership is `ACTIVE`, that is on accepting. `staff.invited` and `doctor.updated` record it.<br>• **Afterwards:** the owner's Team page gets *Link doctor profile* for an active member with none (themselves included, "I also practise here"), using the existing `PATCH /clinic/doctors/{id}` with `user_id` | B: a pending link on the invitation, applied at acceptance (a new column and a second state for one fact). C: reorder the wizard to invite before adding doctors (breaks the M1-P7 flow and its journey) |
+
+Fixed points:
+
+- **Seed.** A third clinic, `sample-solo-clinic`: a practising owner
+  (`owner@sample-solo-clinic.example`, with a linked doctor profile) and a front desk. It is the
+  common solo-practice case, and idempotent per clinic, so existing databases gain it with
+  `make seed`. RUNBOOK §1 lists it.
+- **Contract 0.26.0.**
+  - `Membership.doctor_id`;
+  - `view` on Today;
+  - `GET /my-patients`;
+  - `doctor_id` on pending follow-ups;
+  - `doctor_id` on both invitation requests.
+- **Errors.** `CLN_NO_DOCTOR_PROFILE` (409). A `doctor_id` that is unknown, already linked, or
+  sent with a role other than owner is 422 `REQ_VALIDATION_FAILED` on `doctor_id`.
+- **Unchanged.**
+  - One role per membership and the permission matrix;
+  - the front desk never sees clinical content (§8.1);
+  - every page's API check.
+  - Every existing test and journey passes.
+
+Planned verification:
+
+- **Unit:**
+  - workspace resolution (role, `doctor_id`, the remembered choice, a stale choice ignored);
+  - each workspace's nav and quick actions;
+  - the switch's visibility and keyboard use;
+  - *My Patients* states.
+- **Integration (PostgreSQL):**
+  - Today `view=doctor` for a practising owner returns only their sessions, and is 409 without
+    a profile;
+  - `/my-patients` lists only patients this doctor saw, newest first, is 409 without a profile
+    and 403 for the front desk;
+  - another clinic's visits never appear (tenancy suite);
+  - the pending follow-ups' `doctor_id`;
+  - inviting an owner with `doctor_id` links the profile, and acceptance makes `CLINICAL_WRITE`
+    effective;
+  - the refusals on `doctor_id`.
+- **Playwright at 1366×768 (FR-UX-05):**
+  - the owner, the doctor and the front desk each sign in; the home heading, the nav and the
+    first three actions differ;
+  - the practising owner switches to Doctor and sees only their own sessions and patients, and
+    switching back restores the owner nav;
+  - failure path: an owner without a profile sees no switch, and `/my-patients` explains that
+    it is for doctors.
+- **Gates:** `make lint typecheck contract-check test` and `make e2e`.
