@@ -18,6 +18,7 @@ durable only after ``UnitOfWork.commit``.
 from __future__ import annotations
 
 from collections.abc import Collection, Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Protocol
@@ -45,6 +46,27 @@ from mediease_api.domain.scheduling.sessions import Session
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.visits.visit import Visit, VisitAddendum
+
+
+@dataclass(frozen=True, slots=True)
+class PatientMatch:
+    """How *My Patients* narrows its list: exactly one of the three, as the lookup box parses."""
+
+    phone_e164: str | None = None
+    code: str | None = None
+    name_prefix: str | None = None
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class SeenPatient:
+    """A patient one doctor has seen (M6a-P6): no clinical content, just when and how often."""
+
+    patient: Patient
+    last_visit_at: datetime
+    visits: int
+
+    def __repr__(self) -> str:
+        return f"SeenPatient(code={self.patient.code!r}, visits={self.visits})"
 
 
 class RowLock(StrEnum):
@@ -399,6 +421,12 @@ class VisitRepository(Protocol):
         self, patient_id: UUID, *, limit: int, before: tuple[datetime, UUID] | None = None
     ) -> Sequence[Visit]:
         """Newest first by ``(started_at, id)``; ``before`` continues after that position."""
+        ...
+
+    def patients_seen_by(
+        self, doctor_id: UUID, *, match: PatientMatch | None, limit: int, offset: int
+    ) -> Sequence[SeenPatient]:
+        """M6a-P6 *My Patients*: patients with a visit by this doctor, latest visit first."""
         ...
 
 

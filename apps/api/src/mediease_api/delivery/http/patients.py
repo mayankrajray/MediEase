@@ -18,7 +18,7 @@ capped at 20, so it needs no cursor yet.
 from __future__ import annotations
 
 from datetime import date
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from flask import Blueprint, Response, jsonify, request
@@ -30,6 +30,7 @@ from mediease_api.application.patients.consent import (
     OptOut,
     RecordConsent,
 )
+from mediease_api.application.patients.my_patients import ListMyPatients, MyPatientView
 from mediease_api.application.patients.queries import GetPatient, LookupPatients
 from mediease_api.application.patients.register_patient import (
     RegisterPatient,
@@ -41,8 +42,14 @@ from mediease_api.delivery.http.bodies import items_body, patient_body
 from mediease_api.delivery.http.validation import RequestValidationFailed, parse_json
 from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.patients.patient import Language, Sex
+from mediease_api.domain.shared.errors import InvalidValue
 
 MAX_QUERY_LENGTH = 100
+MY_PATIENTS_PAGE = 50
+
+
+class MyPatientsUseCases(Protocol):
+    def list_my_patients(self) -> ListMyPatients: ...
 
 
 class PatientUseCases(Protocol):
@@ -190,5 +197,56 @@ def create_patients_blueprint(use_cases: PatientUseCases) -> Blueprint:
             ConsentCommand(patient_id=patient_id, whatsapp=body.whatsapp, sms=body.sms),
         )
         return jsonify(patient_body(patient))
+
+    return bp
+
+
+def my_patient_body(p: MyPatientView) -> dict[str, Any]:
+    """Who and when, never what (M6a-P6)."""
+    return {
+        "id": str(p.id),
+        "code": p.code,
+        "full_name": p.full_name,
+        "sex": p.sex.value,
+        "age_years": p.age_years,
+        "age_is_estimated": p.age_is_estimated,
+        "last_visit_at": p.last_visit_at.isoformat(),
+        "visits": p.visits,
+    }
+
+
+def _int_arg(name: str, default: int) -> int:
+    raw = request.args.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise InvalidValue(name, "must be a whole number") from None
+
+
+def create_my_patients_blueprint(use_cases: MyPatientsUseCases) -> Blueprint:
+    """``GET /api/v1/my-patients`` (M6a-P6, decision 5A): ``CLINICAL_VIEW`` and a doctor profile."""
+    bp = Blueprint("my_patients", __name__, url_prefix="/api/v1")
+
+    @bp.after_request
+    def _no_store(response: Response) -> Response:
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @bp.get("/my-patients")
+    @clinic(Permission.CLINICAL_VIEW)
+    def list_my_patients() -> Response:
+        q = request.args.get("q")
+        if q is not None and len(q) > MAX_QUERY_LENGTH:
+            raise InvalidValue("q", f"must be at most {MAX_QUERY_LENGTH} characters")
+        limit = _int_arg("limit", MY_PATIENTS_PAGE)
+        offset = _int_arg("offset", 0)
+        items = use_cases.list_my_patients().execute(
+            current_context(), q=q, limit=limit, offset=offset
+        )
+        return jsonify(
+            {"items": [my_patient_body(i) for i in items], "limit": limit, "offset": offset}
+        )
 
     return bp

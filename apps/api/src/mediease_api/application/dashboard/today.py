@@ -5,6 +5,8 @@ zone. It is shaped by who asks:
 
 - A **doctor** sees their own sessions, their next patients and their own counts
   (``scope = DOCTOR``). A doctor account with no doctor profile sees the clinic, like an owner.
+  From M6a-P6 a **practising owner** (an owner with a doctor profile) sees the same with
+  ``view=doctor``, the Doctor workspace of their switch.
 - **Front desk** and **owners** see the whole clinic (``scope = CLINIC``), with today's failed
   messages.
 - The **7-day strip** comes only with ``USAGE_METRICS_VIEW`` (owners and doctors), for the same
@@ -22,6 +24,7 @@ from datetime import date, timedelta
 from enum import StrEnum
 from uuid import UUID
 
+from mediease_api.application.clinics.errors import NoDoctorProfile
 from mediease_api.application.context import RequestContext
 from mediease_api.application.scheduling.schedules import load_clinic
 from mediease_api.application.scheduling.sessions import sessions_for_date
@@ -32,6 +35,7 @@ from mediease_api.domain.shared.time import local_date, local_day_start
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.dashboard import DayTotals, NextPatient, StatusCounts
 from mediease_api.ports.ids import IdPort
+from mediease_api.ports.repositories import DoctorRepository
 from mediease_api.ports.unit_of_work import UnitOfWork
 
 NEXT_LIMIT = 3
@@ -41,6 +45,13 @@ WEEK_DAYS = 7
 class Scope(StrEnum):
     CLINIC = "CLINIC"
     DOCTOR = "DOCTOR"
+
+
+class View(StrEnum):
+    """What the caller asks to see (M6a-P6): the clinic, or their own doctor's day."""
+
+    CLINIC = "clinic"
+    DOCTOR = "doctor"
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,17 +82,14 @@ class GetToday:
         self._clock = clock
         self._ids = ids
 
-    def execute(self, ctx: RequestContext) -> TodayView:
+    def execute(self, ctx: RequestContext, view: View | None = None) -> TodayView:
         with self._uow as uow:
             clinic = load_clinic(uow, ctx.clinic_id)
             tenant = uow.tenant(ctx.clinic_id)
             now = self._clock.now()
             today = local_date(now, clinic.timezone)
 
-            doctor_id: UUID | None = None
-            if ctx.role is Role.DOCTOR:
-                profile = tenant.doctors.get_for_user(ctx.user_id)
-                doctor_id = profile.id if profile is not None else None
+            doctor_id = _doctor_view(tenant.doctors, ctx, view)
             scope = Scope.DOCTOR if doctor_id is not None else Scope.CLINIC
 
             sessions, _ = sessions_for_date(
@@ -95,7 +103,7 @@ class GetToday:
                 TodaySession(s, names.get(s.doctor_id, ""), by_session.get(s.id, StatusCounts()))
                 for s in sessions
             )
-            view = TodayView(
+            today_view = TodayView(
                 on_date=today,
                 scope=scope,
                 doctor_id=doctor_id,
@@ -128,4 +136,24 @@ class GetToday:
             )
             # Generating today's sessions may have inserted rows; keep them, as the queue does.
             uow.commit()
-        return view
+        return today_view
+
+
+def _doctor_view(doctors: DoctorRepository, ctx: RequestContext, view: View | None) -> UUID | None:
+    """Whose sessions Today shows: a doctor profile's ID, or None for the whole clinic.
+
+    M6a-P6 (decision 4A): a ``DOCTOR`` with a profile always gets their own day. An owner with an
+    active profile (a practising owner) gets it when they ask for ``view=doctor``, the switch's
+    Doctor workspace. Asking for it without a profile, or as front desk, is refused.
+    """
+    if ctx.role is Role.DOCTOR:
+        profile = doctors.get_for_user(ctx.user_id)
+        if profile is not None:
+            return profile.id
+    elif ctx.role is Role.OWNER and view is View.DOCTOR:
+        profile = doctors.get_for_user(ctx.user_id)
+        if profile is not None and profile.is_active:
+            return profile.id
+    if view is View.DOCTOR:
+        raise NoDoctorProfile()
+    return None

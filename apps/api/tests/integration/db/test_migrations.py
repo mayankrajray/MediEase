@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0021"
+HEAD = "0022"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -656,5 +656,24 @@ def test_models_match_migrations(alembic_config: Config, scratch_database_url: s
         with engine.connect() as conn:
             context = MigrationContext.configure(conn, opts={"compare_type": True})
             assert compare_metadata(context, Base.metadata) == []
+    finally:
+        engine.dispose()
+
+
+def test_0022_adds_the_index_for_a_doctors_patients(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    """M6a-P6 *My Patients*: an index only; no table changes."""
+    command.upgrade(alembic_config, "0022")
+    assert _tables(scratch_database_url) == M6A_P4_TABLES
+    engine = create_engine(scratch_database_url)
+    index = "SELECT count(*) FROM pg_indexes WHERE indexname = :name"
+    try:
+        with engine.connect() as conn:
+            name = {"name": "ix_visits_clinic_id_doctor_id_started_at"}
+            assert conn.execute(text(index), name).scalar_one() == 1
+        command.downgrade(alembic_config, "0021")
+        with engine.connect() as conn:
+            assert conn.execute(text(index), name).scalar_one() == 0
     finally:
         engine.dispose()

@@ -38,6 +38,7 @@ def membership_body(membership: MembershipView) -> dict[str, Any]:
         "clinic_status": membership.clinic_status.value,
         "role": membership.role.value,
         "permissions": [p.value for p in membership.permissions],
+        "doctor_id": str(membership.doctor_id) if membership.doctor_id else None,
     }
 
 

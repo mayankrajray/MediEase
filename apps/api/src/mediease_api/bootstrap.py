@@ -110,6 +110,7 @@ from mediease_api.application.messaging.webhooks import (
 from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics, MessagingCosts
 from mediease_api.application.patients.consent import OptIn, OptOut, RecordConsent
 from mediease_api.application.patients.import_patients import ImportPatients
+from mediease_api.application.patients.my_patients import ListMyPatients
 from mediease_api.application.patients.queries import GetPatient, LookupPatients
 from mediease_api.application.patients.register_patient import RegisterPatient
 from mediease_api.application.patients.update_patient import UpdatePatient
@@ -174,7 +175,10 @@ from mediease_api.delivery.http.google import create_google_blueprint
 from mediease_api.delivery.http.invites import create_invite_blueprint
 from mediease_api.delivery.http.me import create_me_blueprint
 from mediease_api.delivery.http.ops import create_ops_blueprint
-from mediease_api.delivery.http.patients import create_patients_blueprint
+from mediease_api.delivery.http.patients import (
+    create_my_patients_blueprint,
+    create_patients_blueprint,
+)
 from mediease_api.delivery.http.platform import create_platform_blueprint
 from mediease_api.delivery.http.portal import create_portal_blueprint
 from mediease_api.delivery.http.prescriptions import create_prescriptions_blueprint
@@ -457,6 +461,9 @@ class _UseCases:
 
     def lookup_patients(self) -> LookupPatients:
         return LookupPatients(uow=self._uow(), clock=self.clock)
+
+    def list_my_patients(self) -> ListMyPatients:
+        return ListMyPatients(uow=self._uow(), clock=self.clock)
 
     def record_consent(self) -> RecordConsent:
         return RecordConsent(uow=self._uow(), clock=self.clock, ids=self.ids)
@@ -966,6 +973,7 @@ def create_app(
         create_ops_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
     )
     app.register_blueprint(create_patients_blueprint(use_cases))
+    app.register_blueprint(create_my_patients_blueprint(use_cases))
     app.register_blueprint(create_scheduling_blueprint(use_cases))
     app.register_blueprint(create_appointments_blueprint(use_cases))
     app.register_blueprint(create_visits_blueprint(use_cases))

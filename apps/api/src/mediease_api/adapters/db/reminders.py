@@ -99,6 +99,8 @@ _PENDING = text(
     WHERE"""
     + _NOT_SEEN_SINCE
     + """
+      -- M6a-P6 (decision 7A): the Doctor workspace's "my follow-ups".
+      AND (CAST(:doctor AS uuid) IS NULL OR l.doctor_id = CAST(:doctor AS uuid))
     ORDER BY l.follow_up_date, l.patient_id
     LIMIT :limit OFFSET :offset
     """
@@ -184,7 +186,13 @@ class SqlAlchemyReminderRepository(TenantScopedRepository[ReminderRow]):
         ]
 
     def pending_follow_ups(
-        self, *, today: date, timezone: str, limit: int, offset: int
+        self,
+        *,
+        today: date,
+        timezone: str,
+        limit: int,
+        offset: int,
+        doctor_id: UUID | None = None,
     ) -> Sequence[PendingFollowUp]:
         rows = self._session.execute(
             _PENDING,
@@ -194,6 +202,7 @@ class SqlAlchemyReminderRepository(TenantScopedRepository[ReminderRow]):
                 "tz": timezone,
                 "limit": limit,
                 "offset": offset,
+                "doctor": doctor_id,
             },
         )
         return [

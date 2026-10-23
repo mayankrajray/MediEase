@@ -13,12 +13,13 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from flask import Blueprint, Response
+from flask import Blueprint, Response, request
 
-from mediease_api.application.dashboard.today import GetToday, TodaySession, TodayView
+from mediease_api.application.dashboard.today import GetToday, TodaySession, TodayView, View
 from mediease_api.delivery.http.access import clinic, current_context
 from mediease_api.delivery.http.etag import conditional_json
 from mediease_api.domain.identity.permissions import Permission
+from mediease_api.domain.shared.errors import InvalidValue
 from mediease_api.ports.dashboard import DayTotals, NextPatient, StatusCounts
 
 
@@ -100,7 +101,11 @@ def create_dashboard_blueprint(use_cases: DashboardUseCases) -> Blueprint:
     @bp.get("/dashboard/today")
     @clinic(Permission.CLINIC_VIEW)
     def get_today() -> Response:
-        view = use_cases.get_today().execute(current_context())
-        return conditional_json(today_body(view))
+        raw = request.args.get("view")
+        try:
+            view = View(raw) if raw is not None else None
+        except ValueError:
+            raise InvalidValue("view", "must be clinic or doctor") from None
+        return conditional_json(today_body(use_cases.get_today().execute(current_context(), view)))
 
     return bp

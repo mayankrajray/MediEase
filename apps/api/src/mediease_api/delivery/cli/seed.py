@@ -13,7 +13,9 @@ password:
   whose follow-up date was 3 days ago, so the pending follow-ups page has a row (M5-P6);
 - `sample-clinic-two`: its own owner, plus the *same* doctor user as a second
   membership, so one person belongs to two clinics and the web app's clinic
-  switcher can be tried (spec: "Same phone used by a doctor in two clinics").
+  switcher can be tried (spec: "Same phone used by a doctor in two clinics");
+- `sample-family-clinic` (M6a-P6): a practising owner (an owner with a linked doctor profile),
+  a second doctor and a front desk, for the Owner / Doctor switch and *My Patients*.
 
 Every name, email and ``+9190000000xx`` number is invented (CLAUDE.md "No real
 patient data outside production").
@@ -69,6 +71,9 @@ class _Person:
     phone: str
     name: str
     role: Role | None = None  # None = platform ops
+    # A doctor profile linked to this member: every DOCTOR, and a practising OWNER (M6a-P6).
+    practises: bool = False
+    registration: str | None = None  # defaults to the clinic's doctor registration
 
 
 @dataclass(frozen=True)
@@ -80,8 +85,11 @@ class _ClinicSpec:
     members: tuple[_Person, ...]
 
 
-_DOCTOR = _Person("doctor@sample-clinic.example", "+919000000002", "Dr. Sample Doctor", Role.DOCTOR)
+_DOCTOR = _Person(
+    "doctor@sample-clinic.example", "+919000000002", "Dr. Sample Doctor", Role.DOCTOR, True
+)
 _OPS = _Person("ops@mediease.example", "+919000000009", "Sample Ops")
+THIRD_SLUG = "sample-family-clinic"
 
 _CLINICS: tuple[_ClinicSpec, ...] = (
     _ClinicSpec(
@@ -113,6 +121,38 @@ _CLINICS: tuple[_ClinicSpec, ...] = (
                 Role.OWNER,
             ),
             _DOCTOR,
+        ),
+    ),
+    # M6a-P6 (decision 8A): a practising owner (an OWNER with a linked doctor profile, FR-ORG-03),
+    # a second doctor and a front desk, so the Owner / Doctor switch and "only my patients and
+    # sessions" can be tried (FR-UX-06).
+    _ClinicSpec(
+        THIRD_SLUG,
+        "Sample Family Clinic",
+        "+919000000020",
+        "SAMPLE-0003",
+        (
+            _Person(
+                "owner@sample-family-clinic.example",
+                "+919000000021",
+                "Dr. Family Owner",
+                Role.OWNER,
+                practises=True,
+            ),
+            _Person(
+                "doctor@sample-family-clinic.example",
+                "+919000000022",
+                "Dr. Family Colleague",
+                Role.DOCTOR,
+                practises=True,
+                registration="SAMPLE-0004",
+            ),
+            _Person(
+                "desk@sample-family-clinic.example",
+                "+919000000023",
+                "Family Front Desk",
+                Role.FRONT_DESK,
+            ),
         ),
     ),
 )
@@ -218,7 +258,7 @@ def _create_clinic(
         )
         membership.activate(now=now)
         staff.memberships.add(membership)
-        if person.role is Role.DOCTOR:
+        if person.practises:
             staff.doctors.add(
                 Doctor.create(
                     id=deps.ids.new_id(),
@@ -226,7 +266,7 @@ def _create_clinic(
                     user_id=user.id,
                     display_name=person.name,
                     qualification="MBBS",
-                    registration_number=spec.doctor_registration,
+                    registration_number=person.registration or spec.doctor_registration,
                     registration_council="Sample State Medical Council",
                     now=now,
                 )

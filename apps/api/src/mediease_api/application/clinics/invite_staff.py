@@ -78,6 +78,9 @@ class InviteStaffCommand:
     # An owner on the Team page (M6a-P5): an invitation to someone with an email is emailed, and
     # the clinic's hourly limit applies. Ops keep the shown link until M6c (FR-ONB-08).
     by_owner: bool = False
+    # M6a-P6 (decision 8A): the owner also practises here, as this unlinked doctor profile
+    # ("Doctor 1"). Linked in the same transaction; it counts once the owner accepts.
+    doctor_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,6 +186,14 @@ class InviteStaff:
                 )
 
             self._record_first_invite(uow, clinic_id, now)
+            metadata = {
+                "target_user_id": str(user.id),
+                "role": cmd.role.value,
+                "delivery": delivery.value,
+            }
+            if cmd.doctor_id is not None:
+                self._link_doctor(uow, clinic_id, actor, cmd, user, now)
+                metadata["doctor_id"] = str(cmd.doctor_id)
             record_event(
                 uow,
                 event_id=self._ids.new_id(),
@@ -192,11 +203,7 @@ class InviteStaff:
                 clinic_id=clinic_id,
                 entity_type=ENTITY_TYPE,
                 entity_id=membership.id,
-                metadata={
-                    "target_user_id": str(user.id),
-                    "role": cmd.role.value,
-                    "delivery": delivery.value,
-                },
+                metadata=metadata,
             )
             member = _member(uow, clinic_id, membership.id)
             uow.commit()
@@ -235,6 +242,49 @@ class InviteStaff:
         )
         uow.users.add(user)
         return user
+
+    def _link_doctor(
+        self,
+        uow: UnitOfWork,
+        clinic_id: UUID,
+        actor: Actor,
+        cmd: InviteStaffCommand,
+        user: User,
+        now: datetime,
+    ) -> None:
+        """Owner as Doctor 1 (FR-ORG-03, FR-ONB-08): link the named profile to the invitee.
+
+        The one place a profile is linked to a member who is not ``ACTIVE`` yet: the invited
+        owner's user exists, and an ``INVITED`` membership grants nothing until it is accepted,
+        so ``CLINICAL_WRITE`` starts exactly when they join.
+        """
+        assert cmd.doctor_id is not None
+        if cmd.role is not Role.OWNER:
+            raise InvalidValue("doctor_id", "only an owner's invitation can name a doctor profile")
+        doctors = uow.tenant(clinic_id).doctors
+        doctor = doctors.get(cmd.doctor_id)
+        if doctor is None or not doctor.is_active:
+            raise InvalidValue("doctor_id", "must be an active doctor of this clinic")
+        if doctor.user_id is not None and doctor.user_id != user.id:
+            raise InvalidValue("doctor_id", "is already linked to someone else")
+        linked = doctors.get_for_user(user.id)
+        if linked is not None and linked.id != doctor.id:
+            raise InvalidValue("doctor_id", "this person already has a doctor profile here")
+        if doctor.user_id == user.id:
+            return
+        doctor.update_details(now=now, user_id=user.id)
+        doctors.update(doctor)
+        record_event(
+            uow,
+            event_id=self._ids.new_id(),
+            action=AuditAction.DOCTOR_UPDATED,
+            actor=actor,
+            now=now,
+            clinic_id=clinic_id,
+            entity_type="doctor",
+            entity_id=doctor.id,
+            metadata={"fields": "user_id", "is_active": "true", "via": "owner_invite"},
+        )
 
     def _record_first_invite(self, uow: UnitOfWork, clinic_id: UUID, now: datetime) -> None:
         checklist = uow.tenant(clinic_id).checklist

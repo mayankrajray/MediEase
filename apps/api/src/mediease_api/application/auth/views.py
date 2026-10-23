@@ -48,6 +48,8 @@ class MembershipView:
     role: Role
     # Sorted, so the body is stable and diffable; the matrix is PRD §8.1.
     permissions: tuple[Permission, ...]
+    # M6a-P6: the member's active doctor profile here, if any (a doctor, or a practising owner).
+    doctor_id: UUID | None = None
 
     @classmethod
     def of(cls, access: ClinicAccess) -> MembershipView:
@@ -58,6 +60,7 @@ class MembershipView:
             clinic_status=access.clinic_status,
             role=access.role,
             permissions=tuple(sorted(access.permissions)),
+            doctor_id=access.doctor_id,
         )
 
 
