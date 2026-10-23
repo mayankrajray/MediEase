@@ -77,6 +77,13 @@ def staff_body(member: StaffMember) -> dict[str, Any]:
         "full_name": member.full_name,
         "role": member.role.value,
         "status": member.status.value,
+        # M6a-P5: the Team page. Owners only (STAFF_MANAGE); the ops answers carry them too.
+        "email": member.email,
+        "phone_e164": member.phone_e164,
+        "invite_expires_at": (
+            member.invite_expires_at.isoformat() if member.invite_expires_at else None
+        ),
+        "has_doctor_profile": member.has_doctor_profile,
     }
 
 

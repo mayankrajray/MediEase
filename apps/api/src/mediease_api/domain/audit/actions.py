@@ -33,6 +33,9 @@ class AuditAction(StrEnum):
     STAFF_ACCEPTED = "staff.accepted"
     STAFF_ROLE_CHANGED = "staff.role_changed"
     STAFF_DEACTIVATED = "staff.deactivated"
+    # M6a-P5: a deactivated member invited back (DEACTIVATED -> INVITED). Like staff.invited, the
+    # metadata holds the target user, the role and the delivery (email or link); never an address.
+    STAFF_REINVITED = "staff.reinvited"
     # M2-P2: patients. Metadata holds the code and field names, never a name or a phone number.
     PATIENT_CREATED = "patient.created"
     PATIENT_UPDATED = "patient.updated"

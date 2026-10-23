@@ -104,6 +104,55 @@ def test_r9_the_last_active_owner_cannot_be_deactivated() -> None:
     assert owner.status is MembershipStatus.ACTIVE
 
 
+# --- M6a-P5: emailed invitations and bringing someone back ------------------------------------
+
+
+def test_fr_org_07_withdrawing_an_invitation_retires_its_link_now() -> None:
+    membership = _invited()
+    membership.issue_invite(DIGEST, now=NOW)
+
+    membership.withdraw_invite(now=LATER)
+
+    assert membership.status is MembershipStatus.INVITED
+    assert (membership.invite_token_hash, membership.invite_expires_at) == (None, None)
+    assert membership.invite_state(LATER) is InviteState.NONE
+    assert membership.updated_at == LATER
+
+
+def test_only_a_pending_membership_can_have_its_invitation_withdrawn() -> None:
+    with pytest.raises(InvalidTransition):
+        a_membership(new_id(), new_id(), Role.DOCTOR).withdraw_invite(now=LATER)
+
+
+def test_fr_org_07_a_deactivated_member_is_invited_back_with_a_new_role() -> None:
+    membership = _invited()
+    membership.issue_invite(DIGEST, now=NOW)
+    membership.accept_invite(now=NOW)
+    membership.deactivate(active_owner_count=2, now=NOW)
+
+    membership.reinvite(Role.FRONT_DESK, now=LATER)
+
+    assert (membership.status, membership.role) == (MembershipStatus.INVITED, Role.FRONT_DESK)
+    # The old acceptance belongs to the old invitation; a new secret is needed.
+    assert membership.invite_accepted_at is None
+    assert membership.invite_state(LATER) is InviteState.NONE
+    membership.issue_invite("e" * 64, now=LATER)
+    membership.accept_invite(now=LATER)
+    assert membership.status is MembershipStatus.ACTIVE
+
+
+@pytest.mark.parametrize("status", [MembershipStatus.INVITED, MembershipStatus.ACTIVE])
+def test_only_a_deactivated_member_can_be_reinvited(status: MembershipStatus) -> None:
+    membership = (
+        _invited()
+        if status is MembershipStatus.INVITED
+        else a_membership(new_id(), new_id(), Role.DOCTOR)
+    )
+    with pytest.raises(InvalidTransition):
+        membership.reinvite(Role.DOCTOR, now=LATER)
+    assert membership.status is status
+
+
 # --- Password rule ----------------------------------------------------------------------------
 
 

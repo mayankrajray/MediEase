@@ -767,14 +767,41 @@ export interface paths {
         readonly put?: never;
         /**
          * Invite somebody to join this clinic
-         * @description FR-ORG-04. Permission: STAFF_MANAGE (owners). An email address or a phone number is
-         *     required, because that is how they will sign in (R1). A person who already has a
-         *     MediEase account keeps it and gains a membership; somebody who already belongs to
-         *     this clinic is refused (409 CLN_MEMBER_EXISTS); a still-pending invitation is
-         *     re-issued, which retires the previous link. The response carries accept_url — the one
-         *     place the invitation secret appears. Records staff.invited. Needs X-CSRF-Token.
+         * @description FR-ORG-04, FR-ORG-07. Permission: STAFF_MANAGE (owners). An email address or a phone
+         *     number is required, because that is how they will sign in (R1). A person who already has
+         *     a MediEase account keeps it and gains a membership; an active member is refused
+         *     (409 CLN_MEMBER_EXISTS); a still-pending invitation is re-issued, which retires the
+         *     previous link; a deactivated member is invited back (M6a-P5, staff.reinvited) and keeps
+         *     their history. From M6a-P5 an invitation to someone with an email address is emailed by
+         *     the worker (delivery email, accept_url null); a phone-only one returns accept_url, the
+         *     one place its secret appears. At most 10 an hour per clinic (429). Records staff.invited
+         *     or staff.reinvited. Needs X-CSRF-Token.
          */
         readonly post: operations["inviteStaff"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/staff/{membership_id}/resend": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Send a pending invitation again
+         * @description FR-ORG-07 (M6a-P5). Permission: STAFF_MANAGE (owners). Only for a member still INVITED
+         *     (409 CLN_INVALID_TRANSITION otherwise). The previous link stops working at once; the new
+         *     invitation is emailed when the member has an email address, otherwise its link is
+         *     returned once in accept_url. At most 3 an hour per member (429). Records staff.invited
+         *     with resent=true. No body. Needs X-CSRF-Token.
+         */
+        readonly post: operations["resendStaffInvite"];
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -798,9 +825,9 @@ export interface paths {
          * Change a member's role, deactivate them, or both
          * @description FR-ORG-04, FR-AUD-01. Permission: STAFF_MANAGE (owners only). Send a role, a status,
          *     or both; each change is written with its own audit event in one transaction, so it is
-         *     never unrecorded (spec R11). status accepts DEACTIVATED only: the lifecycle is
-         *     INVITED → ACTIVE → DEACTIVATED with no way back in M1, so somebody removed by mistake
-         *     is invited again. The last active owner can be neither demoted nor deactivated
+         *     never unrecorded (spec R11). status accepts DEACTIVATED only; bringing somebody back is
+         *     a new invitation (POST /api/v1/clinic/staff, M6a-P5), which they must accept. The last
+         *     active owner can be neither demoted nor deactivated
          *     (409 CLN_LAST_OWNER). The member keeps their session, but their next request is
          *     refused once deactivated, and a new role applies from their next request. Setting the
          *     role they already hold changes nothing and records nothing. Needs X-CSRF-Token.
@@ -2721,6 +2748,18 @@ export interface components {
             readonly full_name: string;
             readonly role: components["schemas"]["Role"];
             readonly status: components["schemas"]["MembershipStatus"];
+            /** @description The member's sign-in email, if they have one (M6a-P5) */
+            readonly email: string | null;
+            /** @description The member's sign-in phone, if they have one (M6a-P5) */
+            readonly phone_e164: string | null;
+            /**
+             * Format: date-time
+             * @description INVITED only: when the current invitation link stops working. Null while an emailed
+             *     invitation is still being sent, and for every other status.
+             */
+            readonly invite_expires_at: string | null;
+            /** @description An active doctor profile at this clinic is linked to the member */
+            readonly has_doctor_profile: boolean;
         };
         /** @description Send a role, a status, or both. status accepts DEACTIVATED only (M1). */
         readonly StaffMembershipUpdate: {
@@ -2735,6 +2774,21 @@ export interface components {
              *     is never stored in clear and never shown again.
              */
             readonly accept_url: string;
+        };
+        readonly TeamInvitation: components["schemas"]["StaffMember"] & {
+            /**
+             * @description email: the worker sends it (the secret is made at send time, ADR-0016). link: a
+             *     phone-only member; accept_url is the only copy of the secret.
+             * @enum {string}
+             */
+            readonly delivery: "email" | "link";
+            /** @description Where an emailed invitation goes (a***@example.com); null for a link */
+            readonly email_masked: string | null;
+            /**
+             * Format: uri
+             * @description The link for a phone-only invitation, shown once; null when emailed
+             */
+            readonly accept_url: string | null;
         };
         /** @description An email address or a phone number is required (it is how they sign in). */
         readonly NewStaffInvite: {
@@ -3386,6 +3440,21 @@ export interface components {
             };
         };
         /**
+         * @description CLN_INVITE_RATE_LIMITED (M6a-P5): more than 10 invitations in an hour for this clinic, or
+         *     more than 3 resends in an hour for one member. Retry-After gives the seconds.
+         */
+        readonly InviteRateLimited: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                /** @description Seconds until the hour's limit resets */
+                readonly "Retry-After"?: string;
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
          * @description SCH_INVALID_BLOCK (422: a block's times, length, slot length or capacity cannot be
          *     scheduled); SCH_OVERLAP (409: two blocks overlap, also across midnight and the week);
          *     SCH_LEAVE_EXISTS (409: leave on that date already); REQ_VALIDATION_FAILED (422)
@@ -3599,6 +3668,20 @@ export interface components {
             };
             content: {
                 readonly "application/json": components["schemas"]["StaffInvitation"];
+            };
+        };
+        /**
+         * @description The invited member and how the invitation travels (M6a-P5): emailed (accept_url is
+         *     null) or a link shown once (phone only)
+         */
+        readonly TeamInvited: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly "Cache-Control": components["headers"]["NoStore"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["TeamInvitation"];
             };
         };
         /**
@@ -4923,13 +5006,45 @@ export interface operations {
             };
         };
         readonly responses: {
-            readonly 201: components["responses"]["StaffInvited"];
+            readonly 201: components["responses"]["TeamInvited"];
             readonly 400: components["responses"]["PermissionError"];
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
             readonly 409: components["responses"]["ConflictError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["AuthError"];
+            readonly 429: components["responses"]["InviteRateLimited"];
+        };
+    };
+    readonly resendStaffInvite: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly membership_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            readonly 200: components["responses"]["TeamInvited"];
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 429: components["responses"]["InviteRateLimited"];
         };
     };
     readonly changeStaffMembership: {

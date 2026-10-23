@@ -42,7 +42,11 @@ from mediease_api.application.clinics.deactivate_staff import (
     DeactivateStaff,
     DeactivateStaffCommand,
 )
-from mediease_api.application.clinics.invite_staff import InviteStaff, InviteStaffCommand
+from mediease_api.application.clinics.invite_staff import (
+    InviteStaff,
+    InviteStaffCommand,
+    ResendStaffInvite,
+)
 from mediease_api.application.clinics.onboard_clinic import (
     AddDoctor,
     DoctorCommand,
@@ -54,7 +58,7 @@ from mediease_api.application.clinics.queries import GetClinic, GetDoctor, ListD
 from mediease_api.application.context import Actor
 from mediease_api.delivery.http.access import clinic, current_context
 from mediease_api.delivery.http.bodies import clinic_body, doctor_body, items_body, staff_body
-from mediease_api.delivery.http.ops import invitation_body
+from mediease_api.delivery.http.ops import team_invitation_body
 from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.clinics.clinic import PaperSize
 from mediease_api.domain.identity.membership import MembershipStatus, Role
@@ -74,6 +78,7 @@ class ClinicUseCases(Protocol):
     def update_doctor(self) -> UpdateDoctor: ...
     def list_staff(self) -> ListStaff: ...
     def invite_staff(self) -> InviteStaff: ...
+    def resend_staff_invite(self) -> ResendStaffInvite: ...
     def change_staff_role(self) -> ChangeStaffRole: ...
     def deactivate_staff(self) -> DeactivateStaff: ...
 
@@ -84,7 +89,8 @@ class StaffMembershipRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     role: Role | None = None
-    # DEACTIVATED only: the lifecycle has no way back in M1 (spec §3).
+    # DEACTIVATED only. Bringing a member back is a new invitation (POST /staff, M6a-P5), which
+    # they must accept, so there is no status to PATCH back.
     status: MembershipStatus | None = None
 
     @model_validator(mode="after")
@@ -246,10 +252,20 @@ def create_clinic_blueprint(queries: ClinicUseCases, *, public_base_url: str) ->
             clinic_id=ctx.clinic_id,
             actor=Actor.staff(ctx),
             cmd=InviteStaffCommand(
-                full_name=body.full_name, role=body.role, email=body.email, phone=body.phone
+                full_name=body.full_name,
+                role=body.role,
+                email=body.email,
+                phone=body.phone,
+                by_owner=True,
             ),
         )
-        return jsonify(invitation_body(invitation, public_base_url)), 201
+        return jsonify(team_invitation_body(invitation, public_base_url)), 201
+
+    @bp.post("/staff/<uuid:membership_id>/resend")
+    @clinic(Permission.STAFF_MANAGE)
+    def resend_invite(membership_id: UUID) -> Response:
+        invitation = queries.resend_staff_invite().execute(current_context(), membership_id)
+        return jsonify(team_invitation_body(invitation, public_base_url))
 
     @bp.patch("/staff/<uuid:membership_id>")
     @clinic(Permission.STAFF_MANAGE)

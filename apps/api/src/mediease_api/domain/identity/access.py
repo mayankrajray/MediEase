@@ -9,6 +9,7 @@ built by a tenant repository. Both carry IDs, names and enums only.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from mediease_api.domain.clinics.clinic import ClinicStatus
@@ -38,3 +39,10 @@ class StaffMember:
     full_name: str
     role: Role
     status: MembershipStatus
+    # M6a-P5 (decision 2A): what the owner's Team page needs to tell two people apart. The contact
+    # details are the member's sign-in identifiers; the owner already knows them.
+    email: str | None = None
+    phone_e164: str | None = None
+    # When a pending invitation's link stops working; None while an emailed one is being sent.
+    invite_expires_at: datetime | None = None
+    has_doctor_profile: bool = False

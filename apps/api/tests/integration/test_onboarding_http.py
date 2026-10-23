@@ -22,6 +22,7 @@ from mediease_api.adapters.security.refresh_secrets import Sha256RefreshTokenSec
 from mediease_api.domain.identity.membership import Role
 from tests.builders import NOW, a_membership, a_user
 from tests.conftest import DEMO_PASSWORD, UowFactory, World
+from tests.integration.test_team_http import InviteMailbox, invite_token
 
 OPS_CLINICS = "/api/v1/ops/clinics"
 CLINIC = "/api/v1/clinic"
@@ -99,9 +100,10 @@ def _events(session_factory: SessionFactory, action: str) -> list[dict[str, Any]
 
 
 def test_fr_ops_01_ops_onboards_a_clinic_and_every_role_signs_in(
-    world: World, session_factory: SessionFactory
+    world: World, session_factory: SessionFactory, uow_factory: UowFactory
 ) -> None:
     ops = world.client_for(world.ops)
+    mailbox = InviteMailbox(uow_factory)
 
     clinic = _new_clinic(ops)
     assert clinic["status"] == "ONBOARDING"
@@ -145,15 +147,17 @@ def test_fr_ops_01_ops_onboards_a_clinic_and_every_role_signs_in(
     # I1: the clinic is active now that it has an active owner.
     assert invitee.get(CLINIC).get_json()["status"] == "ACTIVE"
 
-    # The owner invites the front desk, who accepts and signs in.
+    # The owner invites the front desk by email (M6a-P5: the worker sends it), who accepts the
+    # emailed link and signs in.
     desk_invite = _post(
         invitee,
         STAFF,
         {"full_name": "New Desk", "role": "FRONT_DESK", "email": "new-desk@example.test"},
     )
     assert desk_invite.status_code == 201
+    assert desk_invite.get_json()["accept_url"] is None
     desk = world.anonymous()
-    assert _accept(desk, _token_from(desk_invite)).status_code == 200
+    assert _accept(desk, invite_token(mailbox.deliver()[0])).status_code == 200
     assert desk.get(CLINIC).status_code == 200
     # ... and sees only what the front desk may see.
     assert desk.get(STAFF).status_code == 403
@@ -266,20 +270,15 @@ def test_r13_the_invite_link_alone_cannot_take_over_an_existing_account(
 ) -> None:
     """The regression for the M1-P5 hole: whoever holds the link must know the password.
 
-    An owner of clinic B invites the email of a doctor who already works at clinic A. The link
-    comes back to the owner, who tries to accept it with a password of their own choosing.
+    Somebody invites the email of a doctor who already works at clinic A and holds the link
+    themselves, then tries to accept it with a password of their own choosing. From M6a-P5 an
+    owner's invitation to an email address is emailed to that address and never shown, so the
+    link-holder here is ops, whose invitations are still shown as a link (until M6c).
     """
-    owner_b = world.client_for(world.b.owner)
+    ops = world.client_for(world.ops)
+    clinic = _new_clinic(ops, slug="takeover-attempt")
     assert world.a.doctor_user.email is not None
-    invited = _post(
-        owner_b,
-        STAFF,
-        {
-            "full_name": "Dr. Target",
-            "role": Role.DOCTOR.value,
-            "email": world.a.doctor_user.email.value,
-        },
-    )
+    invited = _invite(ops, clinic["id"], Role.DOCTOR, world.a.doctor_user.email.value, "Dr. Target")
     assert invited.status_code == 201, invited.get_json()
     token = _token_from(invited)
 
