@@ -1,4 +1,4 @@
-﻿# MediEase — Operations Runbook
+# MediEase — Operations Runbook
 
 Step-by-step procedures for operating MediEase. Each procedure states **when to use it**, the
 **steps**, and **how to confirm** it worked. Production procedures become live in M6; local ones
@@ -409,3 +409,28 @@ there. Read them at **http://localhost:8025** (nothing leaves the machine). Link
 
    `SMTP_SECURITY=none` and `EMAIL_PROVIDER=console` are refused when deployed. To process in
    India instead, point the same settings at Amazon SES in `ap-south-1` (ADR-0016).
+
+### 21. Notifications in the app (M6a-P7)
+
+Staff see a bell in the header with their unread count; it refreshes every 15 seconds.
+Notifications are written in the same transaction as the change that caused them (ADR-0017).
+
+**Somebody expected a notification and got none:**
+1. **Who is told.** A booking, a move, a cancellation and an arrival or walk-in tell the
+   appointment's doctor, and only if that doctor profile is linked to an active member. A failed
+   message tells the owners and the front desk. An accepted invitation tells the owners. The
+   person who made the change is never told about it.
+2. **Their settings.** *Notifications* in the menu (`/settings/notifications`) shows what they
+   turned off. In `make psql`: `SELECT kind, enabled FROM notification_preferences WHERE user_id
+   = '<user>';` (no row means on).
+3. **The rows.** `SELECT kind, title, created_at, read_at FROM notifications WHERE
+   recipient_user_id = '<user>' ORDER BY created_at DESC LIMIT 10;`. `make logs` shows one
+   `notification.dispatched` per event with `recipients`, `written` and `muted` counts (no
+   names).
+4. **The patient's WhatsApp** for a booking or a prescription is still the M5 job: see §9 and the
+   `send_booking_confirmation` / `send_rx_link` jobs.
+
+Notifications are purged 90 days after creation by the retention job (`purge_expired_auth_and_links`,
+whose `retention.purged` log and SYSTEM audit row count `notifications`). Titles never hold clinical text; if one ever
+does, handle it as a data-handling incident (§15) and fix the catalogue in
+`domain/notifications/notification.py`.

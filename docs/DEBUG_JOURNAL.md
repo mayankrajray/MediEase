@@ -1,4 +1,4 @@
-﻿# MediEase — Debug Journal
+# MediEase — Debug Journal
 
 A running record of real bugs: what we saw, why it happened, how we fixed it, and what stops it
 coming back. Search this file **before** debugging — the same failure may already be solved.
@@ -29,6 +29,27 @@ Rules:
 
 ---
 
+### 2026-10-24 — journeys fail setting up a running session after midnight (`SCH_OVERLAP`)
+
+- **Milestone / area:** M6a-P7 / Playwright helper `sessionRunningNow` (`apps/web/e2e/queue-support.ts`)
+- **Symptom:** a full `make e2e` at 02:12 IST failed 14 of 29 journeys at setup with
+  `SCH_OVERLAP` from `POST /clinic/doctors/{id}/schedule-exceptions`. The notification journeys
+  passed alone a few minutes earlier.
+- **Impact:** local only; no product code involved.
+- **Reproduction:** run the journeys when the sample doctor's last extra session ended under
+  10 minutes ago. The helper's new session starts up to 10 minutes back (5 minutes, rounded down
+  to 5), so it overlaps the one that just ended.
+- **Investigation:** the sessions table showed an extra session ending at 02:10 and none running.
+  The helper's retry only waited for a session *about to* end, then tried the same start again.
+  A first fix started the new session at `max(now, last end)` rounded up a minute, which put it
+  in the future, so it was not "running" and the next journeys overlapped it.
+- **Root cause:** the new extra session's start ignored a session that had just ended.
+- **Fix:** on `SCH_OVERLAP`, wait for any session ending within 2 minutes, then start no earlier
+  than the latest end among sessions that ended in the last 10 minutes. No assertion changed.
+- **Guard:** the full `make e2e` (29/29 after the fix).
+- **Prevention / follow-up:** a helper that creates time-boxed data must look at what ended just
+  before, not only at what is running.
+- **Search keywords:** e2e, SCH_OVERLAP, extra session, sessionRunningNow, midnight, flaky
 ### 2026-10-20 — web tests timing out on a many-core machine (M6-P1, no error code)
 
 - **Milestone / area:** M6-P1 / web test runner

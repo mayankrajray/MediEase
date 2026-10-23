@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Proposed (M6a-P7 design, 23 Oct 2026) |
+| Status | Accepted (M6a-P7, approved and built 23 Oct 2026) |
 | Date | 2026-10-23 |
 | Related | PRD v1.2 C11, FR-NTF-02..06, FR-MSG-04, FR-REM-04, NFR-13; ADR-0005 (job queue), ADR-0007 (messaging port), ADR-0016 (email port); M6a-P7 design |
 
@@ -68,3 +68,14 @@ enqueued it, and a dedupe key makes it idempotent.
   time, not raised by a change. P8 reviews whether due-time notifications join the service. The
   STOP reply's confirmation is a protocol answer, not a notification, and stays as it is.
 - The notification text is English at MVP (NFR-11).
+
+## As built (M6a-P7)
+
+- **Channels are two code paths in `NotificationService`, not an interface.** `IN_APP` writes
+  `notifications` rows; `WHATSAPP` calls the M5 `enqueue_booking_confirmation` and
+  `enqueue_rx_link`. `EMAIL` and `SMS` exist only as preference channels. A `Channel` protocol
+  is worth adding when a third channel delivers something; until then it would have one caller.
+- **One dispatch costs one query per lookup**, whatever the number of recipients (a test counts
+  four statements for a failed message: patient, members, their choices, one insert).
+- **A failed message is published from both places a message fails**: the sender's final failure
+  and the webhook's `FAILED` transition. `ProcessWebhookEvent` now requires the ID port.

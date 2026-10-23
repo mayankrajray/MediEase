@@ -372,8 +372,8 @@ class MessagingPort(Protocol):
   (3) Accepted → `SENT` (and the prescription's `link_delivery` → `SENT` in the same
   transaction); refused and retryable → not started, the job retries; refused for good, out of
   attempts, timed out or unknown → `FAILED`.
-- Jobs enqueued in the change's own transaction: `send_booking_confirmation` (booking and
-  reschedule, when the patient allows WhatsApp) and `send_rx_link` (issue with `link_delivery =
+- Jobs enqueued in the change's own transaction (from M6a-P7 by the notification service):
+  `send_booking_confirmation` (booking and reschedule, when the patient allows WhatsApp) and `send_rx_link` (issue with `link_delivery =
   PENDING`; sent only within `RX_LINK_SEND_WINDOW_HOURS`, else `EXPIRED` audited as SYSTEM).
 - Templates are declared in `apps/api/src/mediease_api/adapters/messaging/templates.yaml` with the
   provider template name, language, category (utility) and variable schema. Adding a template is a
@@ -414,6 +414,16 @@ class MessagingPort(Protocol):
   (`application/reminders/fallback.py`).
 - Costs (M5-P5): `prices.yaml` is loaded once into a domain `PriceTable`; the sender prices at
   acceptance or failure and the webhook processor at delivery, once per message, in millipaise.
+- Notifications (M6a-P7, ADR-0017, `application/notifications/`): a use case calls
+  `publish(uow, event, …)` in its own transaction with a frozen event of IDs
+  (`domain/notifications/events.py`). `NotificationService.dispatch` resolves recipients (the
+  appointment's doctor, or the owners and front desk), drops the member who made the change and
+  anyone who turned the kind off, and writes `notifications` rows (unique per recipient and event
+  key, so a replay adds nothing), one query per lookup. For a booking, reschedule or issued
+  prescription it also enqueues the M5 WhatsApp job with its M5 key; this is now the only path
+  from a feature to WhatsApp. The sender's final failure and the webhook's `FAILED` transition
+  publish `MessageFailed`. Reminders keep their scheduler. The web bell polls
+  `GET /notifications/summary` every 15 s with its ETag.
 
 ## 9. Security architecture
 
