@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.23.0
+  version: 0.24.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -371,6 +371,178 @@ paths:
             X-Request-ID:
               $ref: '#/components/headers/RequestId'
         '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/auth/password-reset:
+    post:
+      tags: [auth]
+      operationId: requestStaffPasswordReset
+      summary: Email a password-reset link to a staff member
+      description: |
+        M6a-P4, FR-AUTH-05, ADR-0016 decision 7. Always 202 with the same body, whether or not
+        the address belongs to an active staff user with a password (ops users and phone-only
+        users get nothing). The worker sends a single-use link that lasts 30 minutes. Exempt
+        from the CSRF header. Rate limited per caller (429) and, silently, per account (3 an hour).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '415':
+          $ref: '#/components/responses/PortalError'
+        '422':
+          $ref: '#/components/responses/PortalError'
+        '429':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/auth/password-reset/complete:
+    post:
+      tags: [auth]
+      operationId: completeStaffPasswordReset
+      summary: Choose a new password with the emailed link's token
+      description: |
+        The password policy applies (12 characters). Clears the lockout, ends every session of
+        the account and emails "your password was changed". Does not sign in. 404
+        AUTH_TOKEN_INVALID for an unknown, used or superseded link, or one for another address;
+        410 AUTH_TOKEN_EXPIRED. Exempt from the CSRF header.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetCompletion'
+      responses:
+        '204':
+          description: Password changed
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '404':
+          $ref: '#/components/responses/PortalError'
+        '410':
+          $ref: '#/components/responses/PortalError'
+        '415':
+          $ref: '#/components/responses/PortalError'
+        '422':
+          $ref: '#/components/responses/PortalError'
+        '429':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/auth/password-reset:
+    post:
+      tags: [portal]
+      operationId: requestPatientPasswordReset
+      summary: Email a password-reset link to a patient
+      description: |
+        As the staff route. A Google-only account gets a "you sign in with Google" email instead
+        of a link.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '415':
+          $ref: '#/components/responses/PortalError'
+        '422':
+          $ref: '#/components/responses/PortalError'
+        '429':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/auth/password-reset/complete:
+    post:
+      tags: [portal]
+      operationId: completePatientPasswordReset
+      summary: Choose a new password with the emailed link's token
+      description: As the staff route; it also marks the email verified, which the link just proved.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetCompletion'
+      responses:
+        '204':
+          description: Password changed
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '404':
+          $ref: '#/components/responses/PortalError'
+        '410':
+          $ref: '#/components/responses/PortalError'
+        '415':
+          $ref: '#/components/responses/PortalError'
+        '422':
+          $ref: '#/components/responses/PortalError'
+        '429':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/auth/verify-email:
+    post:
+      tags: [portal]
+      operationId: verifyPatientEmail
+      summary: Confirm a patient password account's email with the emailed token
+      description: |
+        M6a-P4, FR-AUTH-08. The emailed link opens a page that POSTs here, so a scanner that
+        pre-fetches the link verifies nothing. 404 AUTH_TOKEN_INVALID, 410 AUTH_TOKEN_EXPIRED.
+        Exempt from the CSRF header.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+      responses:
+        '204':
+          description: Email verified
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '404':
+          $ref: '#/components/responses/PortalError'
+        '410':
+          $ref: '#/components/responses/PortalError'
+        '415':
+          $ref: '#/components/responses/PortalError'
+        '422':
+          $ref: '#/components/responses/PortalError'
+        '429':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/auth/verify-email/resend:
+    post:
+      tags: [portal]
+      operationId: resendPatientVerification
+      summary: Send a new verification link to the signed-in patient
+      description: |
+        @patient. `accepted` is false when there is nothing to verify (already verified, or a
+        Google account). At most 3 an hour per account (429 AUTH_RATE_LIMITED). Needs
+        X-CSRF-Token equal to me_pt_csrf.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '429':
           $ref: '#/components/responses/PortalError'
   /api/v1/portal/me:
     get:
@@ -3768,6 +3940,15 @@ components:
       required: true
       schema: {type: string, format: uuid}
   responses:
+    Accepted:
+      description: Accepted for sending; the same answer whether or not an email goes out
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Accepted'
     PatientSessionStarted:
       description: Portal session started or renewed; me_pt_access, me_pt_refresh and me_pt_csrf are set
       headers:
@@ -3782,7 +3963,8 @@ components:
     PortalError:
       description: |
         PRT_INVALID_CREDENTIALS, AUTH_SESSION_EXPIRED, AUTH_REFRESH_REUSED (401);
-        AUTH_ACCOUNT_DISABLED, AUTH_CSRF_INVALID (403); PRT_EMAIL_TAKEN (409);
+        AUTH_ACCOUNT_DISABLED, AUTH_CSRF_INVALID (403); AUTH_TOKEN_INVALID (404);
+        PRT_EMAIL_TAKEN (409); AUTH_TOKEN_EXPIRED (410);
         REQ_UNSUPPORTED_MEDIA_TYPE (415); REQ_VALIDATION_FAILED (422); AUTH_LOCKED (423);
         AUTH_RATE_LIMITED (429, with Retry-After)
       headers:
@@ -4876,6 +5058,47 @@ components:
       properties:
         account:
           $ref: '#/components/schemas/PatientAccount'
+    PasswordResetRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          minLength: 3
+          maxLength: 254
+    PasswordResetCompletion:
+      type: object
+      additionalProperties: false
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: From the emailed link; never logged
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          format: password
+          description: At least 12 characters; checked by the API
+    VerifyEmailRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 128
+    Accepted:
+      type: object
+      additionalProperties: false
+      required: [accepted]
+      properties:
+        accepted:
+          type: boolean
     Session:
       type: object
       required: [user, memberships, session]

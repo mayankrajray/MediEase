@@ -130,3 +130,9 @@ class User:
         self.last_signed_in_at = now
         self.failed_sign_in_count = 0
         self.locked_until = None
+
+    def clear_lockout(self, *, now: datetime) -> None:
+        """A completed password reset (M6a-P4) starts the failure count afresh."""
+        self.updated_at = require_utc(now, "now")
+        self.failed_sign_in_count = 0
+        self.locked_until = None

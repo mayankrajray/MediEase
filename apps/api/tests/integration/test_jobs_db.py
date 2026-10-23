@@ -574,6 +574,7 @@ def test_retention_writes_one_system_audit_event_with_counts_only(
         "patient_links": "0",
         "jobs": "0",
         "webhook_events": "0",
+        "email_tokens": "0",
     }
 
 

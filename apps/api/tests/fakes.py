@@ -178,6 +178,16 @@ class _RefreshTokens:
             for t in self._store.refresh_tokens.values()
         )
 
+    def revoke_all_for_owner(self, owner_id: UUID, *, now: datetime) -> int:
+        live = [
+            t
+            for t in self._store.refresh_tokens.values()
+            if t.user_id == owner_id and t.revoked_at is None
+        ]
+        for token in live:
+            token.revoked_at = token.updated_at = now
+        return len(live)
+
 
 class _ClinicAccess:
     def __init__(self, store: Store) -> None:

@@ -28,6 +28,7 @@ from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist
 from mediease_api.domain.identity.access import ClinicAccess, StaffMember
+from mediease_api.domain.identity.email_token import EmailToken, EmailTokenPurpose
 from mediease_api.domain.identity.external import ExternalIdentity, IdentityProvider
 from mediease_api.domain.identity.membership import ClinicMembership
 from mediease_api.domain.identity.session import RefreshToken
@@ -102,6 +103,23 @@ class RefreshTokenRepository(Protocol):
         """True while the session has an unrevoked, unexpired token (checked per request)."""
         ...
 
+    def revoke_all_for_owner(self, owner_id: UUID, *, now: datetime) -> int:
+        """End every session of one user or account (a password reset, M6a-P4); returns how many."""
+        ...
+
+
+class EmailTokenRepository(Protocol):
+    """Verification and reset tokens (M6a-P4, ADR-0016); found by digest, not by clinic."""
+
+    def add(self, token: EmailToken) -> None: ...
+    def get_by_hash(self, token_hash: str, *, for_update: bool = False) -> EmailToken | None: ...
+    def update(self, token: EmailToken) -> None: ...
+    def supersede_active(
+        self, *, purpose: EmailTokenPurpose, owner_id: UUID, staff: bool, now: datetime
+    ) -> int:
+        """Retire the owner's unused, unexpired tokens of ``purpose``; returns how many."""
+        ...
+
 
 class PatientAccountRepository(Protocol):
     """Patient portal accounts (M6a-P3, ADR-0015). Platform data, never tenant data."""
@@ -115,6 +133,10 @@ class PatientAccountRepository(Protocol):
         self, email: EmailAddress, *, for_update: bool = False
     ) -> PatientAccount | None:
         """The ``PASSWORD`` account with this email (unique among them), if any."""
+        ...
+
+    def find_google_account(self, email: EmailAddress) -> PatientAccount | None:
+        """A ``GOOGLE`` account with this email, if any (a reset asked for it gets a notice)."""
         ...
 
     def update(self, account: PatientAccount) -> None: ...

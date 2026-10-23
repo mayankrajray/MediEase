@@ -19,6 +19,7 @@ from dataclasses import dataclass
 
 import structlog
 
+from mediease_api.application.auth.emails import AuthEmail, Owner, enqueue_auth_email
 from mediease_api.application.auth.errors import (
     AccountLocked,
     RefreshTokenReused,
@@ -124,6 +125,16 @@ class SignUpPatient:
             account.record_successful_sign_in(now=now)
             uow.patient_accounts.add(account)  # EmailTaken if a parallel sign-up won
             session_id, result = self._sessions.start(uow, account, now=now)
+            # M6a-P4: the verification email, sent by the worker (ADR-0016).
+            enqueue_auth_email(
+                uow,
+                ids=self._ids,
+                email=AuthEmail.VERIFY_EMAIL,
+                owner=Owner.PATIENT,
+                account_id=account.id,
+                now=now,
+                request_id=info.request_id,
+            )
             method = SignInMethod.PASSWORD.value
             record_patient_event(
                 uow,

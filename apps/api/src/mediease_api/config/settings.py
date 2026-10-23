@@ -69,6 +69,9 @@ MessagingProvider = Literal["console", "whatsapp_cloud"]
 SmsProvider = Literal["console"]
 # M6a-P3: Google sign-in, or the local-only fake (ADR-0015 decision 6).
 OidcProvider = Literal["fake", "google"]
+# M6a-P4: email over SMTP, or the console for tests (ADR-0016).
+EmailProvider = Literal["console", "smtp"]
+SmtpSecurity = Literal["starttls", "tls", "none"]
 # M5-P3: Graph API v26.0 (released July 2026); overridable without a code change.
 _WHATSAPP_API_VERSION = "v26.0"
 _WHATSAPP_GRAPH_URL = "https://graph.facebook.com"
@@ -166,6 +169,54 @@ class AppSettings(BaseSettings):
     GOOGLE_OIDC_PROVIDER: OidcProvider = "fake"
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: SecretStr = SecretStr("")
+    # Email (M6a-P4, ADR-0016). `smtp` sends through SMTP_* (Brevo, Resend, SES, or the local
+    # Mailpit); `console` only logs and is refused in production by the worker. Only the worker
+    # sends: the API enqueues.
+    EMAIL_PROVIDER: EmailProvider = "console"
+    EMAIL_FROM: str = "MediEase <no-reply@mediease.example>"
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = Field(default=587, ge=1, le=65535)
+    SMTP_SECURITY: SmtpSecurity = "starttls"
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: SecretStr = SecretStr("")
+
+    @field_validator("EMAIL_FROM")
+    @classmethod
+    def _email_from(cls, value: str) -> str:
+        value = value.strip()
+        if "@" not in value or any(c in value for c in "\r\n"):
+            raise ValueError("must be an address like 'MediEase <no-reply@example.com>'")
+        return value
+
+    @field_validator("SMTP_HOST")
+    @classmethod
+    def _smtp_host(cls, value: str, info: ValidationInfo) -> str:
+        value = value.strip()
+        if not value and info.data.get("EMAIL_PROVIDER") == "smtp":
+            raise ValueError("is required when EMAIL_PROVIDER=smtp")
+        return value
+
+    @field_validator("SMTP_SECURITY")
+    @classmethod
+    def _smtp_security(cls, value: str, info: ValidationInfo) -> str:
+        env = _app_env(info)
+        if (
+            value == "none"
+            and env is not None
+            and env is not AppEnv.LOCAL
+            and env is not AppEnv.TEST
+        ):
+            raise ValueError(f"must be starttls or tls when APP_ENV={env.value}")
+        return value
+
+    @field_validator("SMTP_PASSWORD")
+    @classmethod
+    def _smtp_password(cls, value: SecretStr, info: ValidationInfo) -> SecretStr:
+        raw = value.get_secret_value().strip()
+        env = _app_env(info)
+        if raw and _PLACEHOLDER in raw and env is not AppEnv.LOCAL and env is not AppEnv.TEST:
+            raise ValueError(f"contains a '{_PLACEHOLDER}' placeholder; set the real value")
+        return SecretStr(raw)
 
     @field_validator("GOOGLE_CLIENT_ID")
     @classmethod

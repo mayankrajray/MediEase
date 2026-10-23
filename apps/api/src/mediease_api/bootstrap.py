@@ -28,6 +28,8 @@ from mediease_api.adapters.db.engine import build_engine
 from mediease_api.adapters.db.jobs import SqlAlchemyJobStore
 from mediease_api.adapters.db.readiness import SqlAlchemyDatabaseCheck
 from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork, build_session_factory
+from mediease_api.adapters.email.console import ConsoleEmailAdapter
+from mediease_api.adapters.email.smtp import SmtpEmailAdapter
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
 from mediease_api.adapters.messaging.catalog import YamlTemplateCatalog
 from mediease_api.adapters.messaging.console import ConsoleMessagingAdapter
@@ -59,7 +61,14 @@ from mediease_api.application.appointments.queue import AddWalkIn, GetQueue, Tra
 from mediease_api.application.appointments.reschedule import RescheduleAppointment
 from mediease_api.application.auth._session import SessionIssuer
 from mediease_api.application.auth.authenticate import AuthenticateRequest
+from mediease_api.application.auth.emails import SendAuthEmail
 from mediease_api.application.auth.google import CompleteGoogleSignIn, StartGoogleSignIn
+from mediease_api.application.auth.password_reset import (
+    CompletePasswordReset,
+    RequestPasswordReset,
+    ResendVerification,
+    VerifyEmail,
+)
 from mediease_api.application.auth.refresh_session import RefreshSession
 from mediease_api.application.auth.sign_in import SignIn
 from mediease_api.application.auth.sign_out import SignOut
@@ -179,6 +188,7 @@ from mediease_api.delivery.webhooks.whatsapp import create_whatsapp_webhook_blue
 from mediease_api.delivery.worker.heartbeat import beat
 from mediease_api.delivery.worker.loop import LockRenewer, Worker
 from mediease_api.domain.jobs.job import (
+    AUTH_EMAIL_KIND,
     MARK_NO_SHOWS_KIND,
     NO_SHOW_SWEEP_KIND,
     PURGE_KIND,
@@ -193,6 +203,7 @@ from mediease_api.domain.messaging.jobs import (
     SMS_FALLBACK_KIND,
 )
 from mediease_api.ports.clock import ClockPort
+from mediease_api.ports.email import EmailPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.messaging import MessagingPort, PhoneCipherPort
 from mediease_api.ports.oidc import OidcPort
@@ -338,6 +349,26 @@ class _UseCases:
         return SignOutPatient(
             uow=self._uow(), clock=self.clock, ids=self.ids, secrets=self.refresh_secrets
         )
+
+    def request_password_reset(self) -> RequestPasswordReset:
+        return RequestPasswordReset(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def complete_password_reset(self) -> CompletePasswordReset:
+        return CompletePasswordReset(
+            uow=self._uow(),
+            clock=self.clock,
+            ids=self.ids,
+            hasher=self.hasher,
+            secrets=self.refresh_secrets,
+        )
+
+    def verify_email(self) -> VerifyEmail:
+        return VerifyEmail(
+            uow=self._uow(), clock=self.clock, ids=self.ids, secrets=self.refresh_secrets
+        )
+
+    def resend_verification(self) -> ResendVerification:
+        return ResendVerification(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def start_google_sign_in(self) -> StartGoogleSignIn:
         return StartGoogleSignIn(
@@ -683,6 +714,22 @@ def build_messaging(settings: AppSettings) -> MessagingPort:
     return ConsoleMessagingAdapter()
 
 
+def build_email(settings: AppSettings) -> EmailPort:
+    """The email adapter (M6a-P4, ADR-0016); the console sends nothing, refused in production."""
+    if settings.EMAIL_PROVIDER == "smtp":
+        return SmtpEmailAdapter(
+            host=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            security=settings.SMTP_SECURITY,
+            sender=settings.EMAIL_FROM,
+            username=settings.SMTP_USERNAME,
+            password=settings.SMTP_PASSWORD.get_secret_value(),
+        )
+    if settings.APP_ENV is AppEnv.PRODUCTION:
+        raise ValueError("EMAIL_PROVIDER=console sends nothing; refused in production")
+    return ConsoleEmailAdapter()
+
+
 def build_sms(settings: AppSettings) -> MessagingPort | None:
     """The SMS fallback's provider, or None while ``MESSAGING_SMS_FALLBACK_ENABLED`` is off (M5-P5).
 
@@ -771,6 +818,14 @@ def build_worker(settings: AppSettings, stop: threading.Event) -> Worker:
     rand = random.SystemRandom().random
     handlers: dict[str, JobHandler] = {
         PURGE_KIND: PurgeExpired(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
+        AUTH_EMAIL_KIND: SendAuthEmail(
+            uow=SqlAlchemyUnitOfWork(factory),
+            clock=clock,
+            ids=ids,
+            secrets=Sha256RefreshTokenSecrets(),
+            email=build_email(settings),
+            public_base_url=settings.PUBLIC_BASE_URL,
+        ),
         **_messaging_handlers(settings, factory, clock, ids),
     }
     return Worker(

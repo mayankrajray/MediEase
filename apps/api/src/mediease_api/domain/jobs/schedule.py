@@ -80,3 +80,5 @@ class PurgeCounts:
     patient_links: int
     jobs: int
     webhook_events: int = 0
+    # M6a-P4: email tokens 30 days after they expired.
+    email_tokens: int = 0

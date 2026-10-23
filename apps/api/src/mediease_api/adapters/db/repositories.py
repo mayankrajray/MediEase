@@ -335,6 +335,15 @@ class SqlAlchemyRefreshTokenRepository:
         )
         return bool(self._session.scalar(query))
 
+    def revoke_all_for_owner(self, owner_id: UUID, *, now: datetime) -> int:
+        result = self._session.execute(
+            update(RefreshTokenRow)
+            .where(RefreshTokenRow.user_id == owner_id, RefreshTokenRow.revoked_at.is_(None))
+            .values(revoked_at=now, updated_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        return int(result.rowcount)  # type: ignore[attr-defined]
+
 
 # --- Clinic access (platform, cross-clinic by user) ---------------------------------------------
 

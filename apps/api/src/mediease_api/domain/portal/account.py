@@ -156,3 +156,16 @@ class PatientAccount:
         self.last_signed_in_at = now
         self.failed_sign_in_count = 0
         self.locked_until = None
+
+    def clear_lockout(self, *, now: datetime) -> None:
+        """A completed password reset (M6a-P4) starts the failure count afresh."""
+        self.updated_at = require_utc(now, "now")
+        self.failed_sign_in_count = 0
+        self.locked_until = None
+
+    def verify_email(self, *, now: datetime) -> bool:
+        """Mark the address proved. Returns False when it already was (idempotent)."""
+        if self.email_verified_at is not None:
+            return False
+        self.email_verified_at = self.updated_at = require_utc(now, "now")
+        return True
