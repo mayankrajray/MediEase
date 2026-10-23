@@ -1,9 +1,9 @@
-# NEXT_STEPS_PLAN.md — Approved plan for M6 (MVP demo: clinic and patient experience)
+# NEXT_STEPS_PLAN.md — Approved plan for M6a (auth, staff workspaces and notification core)
 
 | Field | Value |
 |---|---|
-| Status | **M6 opened 20 Oct 2026** after M5 merged (PR #41, #40 closed). Plan approved by the developer: the demo plan's D2–D5 as M6, D6–D7 as M7, the multi-clinic WhatsApp and consolidated billing designed now as M8 and built later; deployment and hosting skipped for now. Product rules changed to PRD v1.1. M6-P1 confirmed and pushed (draft PR #50); M6-P2 confirmed and pushed; M6-P3 designed (ADR-0015 Proposed), awaiting approval |
-| Scope | Milestone 6 in phase detail; M7–M9 as a roadmap. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39), M5 (PR #41, merged 20 Oct 2026) |
+| Status | **M6 opened 20 Oct 2026** after M5 merged (PR #41, #40 closed). Plan approved by the developer: the demo plan's D2–D5 as M6, D6–D7 as M7, the multi-clinic WhatsApp and consolidated billing designed now as M8 and built later; deployment and hosting skipped for now. Product rules changed to PRD v1.1. M6-P1 confirmed and pushed (draft PR #50); M6-P2 confirmed and pushed. **22 Oct 2026: PRD v1.2** split M6 into M6a–M6d; issue #49 is now M6a, and the old P4–P8 move to M6b. M6a-P3 design approved (ADR-0015 Accepted), ready to build |
+| Scope | Milestone 6a in phase detail; M6b–M6d and M7–M9 as a roadmap. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39), M5 (PR #41, merged 20 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
 | Design notes | `docs/milestones/M6-mvp-demo.md`; M8: `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Workflow rules | `CLAUDE.md` → "Git Workflow"; `CONTRIBUTING.md`; ADR-0010, ADR-0011 |
@@ -21,7 +21,10 @@ per clinic with one MediEase invoice.
 
 ## 2. Requirements
 
-- PRD v1.1 §0 (C1–C6) and §8.13: FR-AUTH-07, FR-PRT-01..04, FR-REM-03, FR-NTF-01, FR-PUB-01..04.
+- PRD v1.2 §0 and §8.14, with v1.1 §8.13 where not superseded: FR-AUTH-05, 07, 08, FR-PRT-01
+  (account only), FR-ORG-03, FR-ORG-07, FR-UX-01..06, FR-NTF-02..06, FR-APT-08, 09, FR-AUD-03.
+- A membership keeps exactly one role; a practising owner is an `OWNER` with a linked doctor
+  profile (FR-ORG-03). No multi-role membership model.
 - Each phase gets its design (and, where a feature is new, a spec in `docs/specs/`) approved
   before code.
 - Clinical safety unchanged (principle 6). The patient sees only what the clinic gave them (FR-PRT-03).
@@ -48,6 +51,7 @@ Milestone issue #49 → branch m6/49-mvp-demo (from origin/main at cbb6b9a)
 | # | Needed | State |
 |---|---|---|
 | L-09 | A Google Cloud OAuth client for Google sign-in | Open; needed by P3 (email and password work without it) |
+| L-11 | A free-tier transactional email account | Open; needed by P4 (provider named in its design) |
 | L-10 | A Groq API key (free tier) | Open; needed by M7 |
 | L-08 | A WhatsApp BSP with a partner-paid model; MediEase's business verification | Open; needed by M8 |
 | L-01, L-02 | Meta account and approved templates for the live WhatsApp test | **Pending after M5** |
@@ -65,13 +69,21 @@ its start. P1 is designed and awaits approval.
 | P1 | Design system (tokens, primitives, Motion, responsive shell); *Today* dashboards per role | NFR-02, NFR-09 | Counts match the queue; each role's shape; 360 px |
 | P2 | The design system across the existing screens; mobile layouts; motion | NFR-09, NFR-10 | `make e2e` unchanged journeys green on the new look |
 | P3 | Google sign-in for staff and patients; patient email and password; separate patient sessions | FR-AUTH-07, FR-PRT-01 | Sign in both ways; a patient session cannot reach staff routes |
-| P4 | Linking by clinic invite or prescription link; the patient API | FR-PRT-02, 03 | Linked records only; another clinic's or patient's never |
-| P5 | Patient portal web | FR-PRT-03, 04 | 360 px, English and Hindi, AA |
-| P6 | Medicine planner | FR-REM-03 | Plan equals the prescribed frequency, timing and days |
-| P7 | In-app notifications | FR-NTF-01 | Each event appears once, with read state |
-| P8 | Public booking page and requests | FR-PUB-01..04 | A request confirmed by the front desk |
+| P4 | Email provider: verification and password reset | FR-AUTH-08, FR-AUTH-05 | Unverified password account cannot pass the verified-identity check; reset link single-use and expiring |
+| P5 | Owner Team page | FR-ORG-07 | Invite, change role, deactivate from the web; next request of a deactivated member refused |
+| P6 | Role workspaces; practising owner's Owner / Doctor switch with *My Patients*; owner as Doctor 1 in the ops wizard | FR-UX-01..06, FR-ORG-03 | Each role and both owner views differ (Playwright); the owner's Doctor view shows only their own patients |
+| P7 | Notification service and in-app channel | FR-NTF-02..06 | Each event appears once, with read state |
+| P8 | Appointment reminders, doctor-leave conflicts, owner audit view | FR-APT-08, 09, FR-AUD-03 | Reminder scheduled and sent once; leave over booked days lists the affected appointments |
 
-## 5. Roadmap after M6
+## 5. Roadmap after M6a
+
+- **M6b Patient identity, portal and booking requests** — the former M6-P4 to P8: linking,
+  patient API, portal, medicine planner, `/c/{slug}`, booking requests and the front-desk inbox.
+- **M6c SaaS clinic onboarding, verification and discovery** — application, reviewer workflow,
+  approved onboarding, verification and listing kept separate, profiles, clinic and doctor search,
+  discovery-to-booking, landing page v1 (TASKS.md lists its nine phases).
+- **M6d Billing and documents** — fees, bills, receipts, dues, daily collection, attachments,
+  plan limits.
 
 - **M7 AI assistant and pitch** — LLM gateway (Groq first, ADR-0013), tools with the user's own
   permissions, guard rails, patient and staff assistant, animated landing page. About 5 phases.
@@ -160,3 +172,4 @@ its start. P1 is designed and awaits approval.
 | 20 Oct 2026 | M6-P1 confirmed by the developer; `m6/49-mvp-demo` pushed with permission and draft PR #50 opened. M6-P2 designed (8 decisions), awaiting approval | #49, PR #50 | M6-P1 confirmed |
 | 21 Oct 2026 | M6-P2 approved (A on all eight) and built: every clinic, ops and auth screen on the design system; responsive tables as cards; CSS motion for drawers and dialogs; lazily loaded list motion; a Field family; one `Shell` for clinic and ops; the sign-in card. Gates green; `make e2e` 16/16; patient page 153 KB | #49 | M6-P2 built |
 | 21 Oct 2026 | M6-P2 confirmed by the developer and pushed (PR #50 updated). M6-P3 designed (8 decisions) with ADR-0015 (Proposed): patient accounts and sessions apart from staff, Google OIDC through the API with a local fake provider | #49, PR #50 | M6-P2 confirmed |
+| 22 Oct 2026 | PRD v1.2 recorded (discovery and booking requests, verified clinic onboarding with application status, clinic status, verification and listing kept apart, role workspaces, notification service, billing, inventory, SaaS packaging; no SMS OTP; email provider; practising owner as `OWNER` + linked doctor profile with an Owner / Doctor switch; owner Team page). M6 split into M6a–M6d: #49 is M6a, the old P4–P8 move to M6b. M6a-P3 design approved (A on all eight); ADR-0015 Accepted with decision 5 amended for the email provider (M6a-P4) | #49 | M6a-P3 approved |

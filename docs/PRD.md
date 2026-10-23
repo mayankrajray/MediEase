@@ -4,9 +4,9 @@
 |---|---|
 | Product | MediEase (working name) |
 | Document owner | Product team (Sitare University Startup Program, Group 1) |
-| Status | v1.1 — product rules changed by the developer on 20 Oct 2026 (§0) |
-| Last updated | 20 October 2026 |
-| Target segment | Independent clinics and small specialty hospitals, 1–4 doctors, India |
+| Status | v1.2 — product direction extended by the developer on 22 Oct 2026 (§0) |
+| Last updated | 22 October 2026 |
+| Target segment | Small clinics with 2–5 doctors and staff (solo practitioners supported), India; medical stores later |
 | Related documents | [ARCHITECTURE.md](ARCHITECTURE.md) · [DATA_MODEL.md](DATA_MODEL.md) · [API.md](API.md) · [../SPECS.md](../SPECS.md) · [../TASKS.md](../TASKS.md) · [SECURITY_AND_COMPLIANCE.md](SECURITY_AND_COMPLIANCE.md) |
 
 > **How to read this document.** Sections 1–5 explain *why* we are building MediEase and *for whom*.
@@ -16,9 +16,60 @@
 
 ---
 
-## 0. Changes in v1.1 (20 October 2026)
+## 0. Changes in v1.2 (22 October 2026)
 
-Decided by the developer after M5. Where a later section still says otherwise, this section wins.
+Decided by the developer during the M6 planning, after reviewing what building M0–M5 taught us.
+**Where any later section, or the v1.1 table below, says otherwise, this section wins.**
+
+**Why the direction changed.** MediEase is a *SaaS for small clinics* (2–5 doctors and staff) at an
+aggressively low price, and Practo is a much bigger product with a different customer. Our answer to
+Practo is not to copy it, but to be the cheapest, simplest system a small clinic can run its whole
+day on, *plus* a free way for local patients to find that clinic and request a visit. Discovery
+therefore exists to feed the clinic's own queue, not to sit between clinic and patient.
+
+| # | Change | Replaces | Built in |
+|---|---|---|---|
+| C7 | **Patient discovery and booking requests.** A patient can search discoverable clinics (`ACTIVE`, verified and listed, FR-ONB-09) by **doctor name, clinic name or speciality** (plus city/PIN), open a public clinic or doctor profile, pick from slots generated from that doctor's own schedule, and send a **booking request**. The request reaches the clinic's front desk as a notification; the clinic **accepts or declines** it. Nothing is confirmed automatically (FR-DIS, FR-BKG) | §6.3 non-goal "A patient marketplace or doctor discovery"; principle 5 is reworded | M6b, M6c |
+| C8 | **Verified clinic onboarding.** A clinic or doctor can apply on the website (self-service). The **application** has its own lifecycle (`PENDING → UNDER_REVIEW → APPROVED \| REJECTED`) while the MediEase team manually verifies it; approval creates the clinic through the same wizard ops use. Three things are kept apart: the application's status, the clinic's **operational status** (unchanged: `ONBOARDING → ACTIVE ↔ SUSPENDED`) and its **public visibility**. A clinic is discoverable only when it is `ACTIVE`, **verified** and **listed** (FR-ONB-02) | FR-ORG-01 as the only way to create a clinic | M6c |
+| C9 | **Patient account with Google OAuth.** A patient signs up with Google (or email and password) and lands on a **fresh dashboard**: zero appointments, no prescriptions, no notifications, with one clear first action, *Find a doctor*. A patient account is global to MediEase; each clinic relationship is separate. A booking **accepted by a clinic** links the account to that clinic's patient record (staff-matched, never by phone alone) | C1: account linked *only* by clinic invite or prescription link | M6a (account and sign-in), M6b (dashboard, linking) |
+| C10 | **Role-specific workspaces.** Owner, Doctor and Front Desk get different navigation, home screen and workflows, not one UI with different permissions (FR-UX). A doctor can book an appointment on behalf of a patient | Single shared dashboard | M6a |
+| C11 | **Notification service with channels.** Features raise domain events; a notification service delivers them in-app, by WhatsApp, and later email/SMS, per recipient preference. WhatsApp is one adapter, not hard-wired into features (FR-NTF-02..06) | FR-NTF-01 only | M6a (core), M8 (per-clinic WhatsApp) |
+| C12 | **Clinic billing in scope.** Consultation fees, procedures, discounts, cash/UPI/card recorded, receipts, outstanding dues, daily collection (FR-BIL-01..07). Insurance/TPA and payment-gateway collection stay out | §6.3 "Full billing" non-goal for clinics; FR-BIL P2 | M6d |
+| C13 | **Inventory and medical stores.** Clinic stock inventory with batches and expiry (FR-INV), then a lightweight **medical-store workspace** that receives a patient's prescription by code and records dispensing (FR-PHA). Store and clinic data stay separate tenants | C6 "pharmacy and clinic drug inventory stays a non-goal" | M10+ |
+| C14 | **SaaS packaging and landing page.** Subscription priced by clinic size, a 14-day trial, plan limits enforced, and a public landing page for clinics and patients with the clinic application as the main call to action (FR-SUB, FR-LND) | Single ₹999 plan; landing page only in M7 | M6c (page), M6d (plans) |
+
+**Already specified earlier but never scheduled, now scheduled** (found while reconciling §13):
+
+| Requirement | Why it matters | Now in |
+|---|---|---|
+| FR-APT-08 appointment reminders | Without it patients get follow-up reminders but no "visit tomorrow" message; drives no-shows | M6a |
+| FR-AUTH-05 password reset | Patients and staff will lock themselves out | M6a |
+| FR-QUE-06 live token status link | Standard in Indian clinics; cheap | M6b |
+| FR-VIS-04 report attachments | Needed by diagnostic-plus-consultation clinics (A10) | M6d |
+| FR-AUD-03 owner audit view | Trust for multi-doctor clinics | M6a |
+
+**Also decided on 22 Oct 2026** (while reviewing the M6-P3 design):
+
+- **No SMS OTP.** A booking request needs a signed-in patient account instead: Google, or email
+  and password with a verified email (FR-PUB-03, FR-AUTH-08).
+- **Practising owner.** One role per membership stays. An owner who practises is an `OWNER` with a
+  linked doctor profile, gets an Owner / Doctor switch, and can be set up as Doctor 1 in the same
+  onboarding step (FR-ORG-03, FR-UX-06, FR-ONB-08).
+- **Application, operation and visibility are separate.** Application status, clinic status and
+  public listing are three independent facts (FR-ONB). Approval by MediEase never makes a clinic
+  public by itself.
+- **Order.** M6a (auth, staff workspaces, notifications) → M6b (patient identity, portal, booking)
+  → M6c (SaaS onboarding, verification, discovery) → M6d (billing, documents). Each is its own
+  issue, branch and PR (ADR-0011); the open M6 issue #49 becomes M6a.
+
+Clinical safety, the "clinical content never reaches logs or messages" rule, and the consent rules
+are unchanged.
+
+---
+
+## 0.1 Changes in v1.1 (20 October 2026)
+
+Decided by the developer after M5. Superseded by §0 where the two differ.
 
 | # | Change | Replaces | Built in |
 |---|---|---|---|
@@ -41,15 +92,22 @@ Small independent clinics in India run their practice on personal WhatsApp, phon
 registers. Appointments arrive as messages, patient history lives in a register or in the doctor's
 memory, and follow-ups, vaccinations and medicine instructions depend on someone remembering.
 
-MediEase is a lightweight, WhatsApp-native clinic operating system for one-to-four-doctor practices.
+MediEase is a lightweight, WhatsApp-native clinic operating system for small practices of two to five doctors and staff (solo practitioners included).
 It gives the clinic a single place where a patient exists — booking, a daily queue, a searchable
 visit record and a digital prescription — and it reaches the patient on the channel they already
 use: a web link and WhatsApp/SMS messages, with no app to install.
 
+MediEase covers the clinic's whole day: appointments and queue, digital patient records, prescriptions
+with dosage instructions, follow-up reminders, billing, staff management and, later, inventory. It is
+sold as a **monthly SaaS subscription priced by clinic size**. Patients can sign up with Google, find
+an approved clinic or doctor, and send a booking request that the clinic's front desk accepts or
+declines. The initial focus is small clinics and independent doctors, with specialty hospitals and
+medical stores to follow.
+
 The product's differentiated wedge is **the patient side of the visit**: a prescription the patient
 can re-read with dosage, dilution and diet instructions, and a follow-up reminder that actually
 arrives. Those capabilities exist in the market today only at price points our segment has not
-adopted (see §5). MediEase delivers them at a flat **₹999 per clinic per month**.
+adopted (see §5). MediEase delivers them at an aggressively low monthly subscription sized to the clinic (§12).
 
 ## 2. Problem
 
@@ -86,7 +144,7 @@ objective of this product is to convert that unknown into a fact** (see §12).
 
 ## 3. Target segment
 
-**In scope:** independent clinics and small specialty hospitals with **one to four doctors**, no
+**In scope:** independent clinics and small specialty hospitals with **two to five doctors and staff** (solo practitioners supported), no
 practice-management software in use, coordinating appointments through personal WhatsApp and
 phone, with patient volume the owner can no longer hold in memory.
 
@@ -96,7 +154,8 @@ multi-specialty hospitals (e.g. dental + gynaecology), diagnostic-plus-consultat
 **Out of scope, deliberately:**
 
 - Large hospitals and chains — procurement-led buying, already on hospital information systems.
-- Pharmacies and medical stores — owned by Marg and Reckon.
+- Pharmacies and medical stores as a *primary* customer at MVP — owned by Marg and Reckon. A light
+  prescription-receiving store workspace is planned later (v1.2, C13).
 - Very low-volume solo practices where manual still works (e.g. A2) — no felt pain.
 
 **Segment boundary:** the determinant is *whether the operation has outgrown one person's memory*,
@@ -106,11 +165,12 @@ not company size.
 
 | ID | Persona | Who | Primary jobs-to-be-done | Surface |
 |---|---|---|---|---|
-| U1 | **Patient / parent** | Clinic patient or parent of a paediatric patient; uses WhatsApp daily; will not install an app | Book without phoning in clinic hours; re-read prescription instructions; receive follow-up and vaccination reminders | Patient web links + WhatsApp/SMS |
+| U1 | **Patient / parent** | Clinic patient or parent of a paediatric patient; uses WhatsApp daily; will not install an app; may be new to MediEase | Find a doctor by name, clinic or speciality; request a booking without phoning; re-read prescription instructions; receive follow-up and vaccination reminders; see appointments across clinics | Patient web portal (Google sign-in) + links + WhatsApp/SMS |
 | U2 | **Doctor** | Practice owner and clinical decision-maker; the buyer; time-poor | See patient history in seconds; write a digital prescription with instructions; see today's queue; zero training | Clinic dashboard — doctor view |
 | U3 | **Front desk / compounder** | Often the only admin staff; handles incoming calls and messages | Register patients; convert requests into confirmed slots; run the day's queue; avoid double-booking | Clinic dashboard — front-desk view |
 | U4 | **Clinic owner / admin** | Proprietor of a multi-doctor clinic (e.g. A13) | Manage doctors, staff and permissions; see volume and follow-up compliance | Clinic dashboard — admin view |
-| U5 | **MediEase ops team** | Us | Create and configure a clinic in minutes; import patients; see whether a clinic is actually using the product | Internal ops console |
+| U5 | **MediEase ops team** | Us | Review and verify clinic applications; create and configure a clinic in minutes; import patients; see whether a clinic is actually using the product | Internal ops console |
+| U6 | **Medical store (later)** | Small independent pharmacy near a clinic | Receive a patient's prescription by code; record what was dispensed; keep simple stock | Store workspace (M10+) |
 
 **Persona note — the doctor is buyer, user and bottleneck at once.** Any flow that costs a doctor
 more than a few minutes of learning will fail regardless of price.
@@ -130,7 +190,12 @@ decisions. Full analysis: Phase 1 report §5.2.
 | Hospital-grade HMS | ₹25,000–₹75,000 one-time | Built for in-patient/insurance; wrong shape and revenue model |
 
 **Positioning:** the patient-communication capability clinics described exists, but not at a price
-a one-to-four-doctor clinic in our sample will pay. MediEase ships it as a core feature at ₹999.
+a small clinic in our sample will pay. MediEase ships it as a core feature at a price sized to the clinic.
+
+**Against Practo specifically:** Practo is larger and built around its own marketplace. MediEase is built
+for clinics of 2–5 people: the clinic owns its patient relationship, there is **no commission, no ads
+and no paid ranking**, and the price is deliberately lower. Discovery is a free feature that brings
+patients to the clinic's own queue.
 
 ## 6. Goals, non-goals and principles
 
@@ -146,19 +211,19 @@ a one-to-four-doctor clinic in our sample will pay. MediEase ships it as a core 
 
 ### 6.2 Business goals (Phase 2)
 
-- B-1: Two named clinics on a **paid** ₹999/month pilot within 30 days of Phase 2 start.
+- B-1: Two named clinics on a **paid** pilot (₹999/month reference tier) within 30 days of Phase 2 start.
 - B-2: A refusal at ₹999 is recorded as a finding, with the stated reason.
 - B-3: Recurring (subscription) revenue only — the programme does not count one-time payments.
 
 ### 6.3 Non-goals (MVP)
 
 - In-patient / IPD management, bed management, insurance or TPA billing, NABH modules.
-- A patient marketplace or doctor discovery.
+- Marketplace features beyond free discovery: ratings/reviews, paid ranking, ads and per-booking commission (discovery itself is in scope, v1.2 C7).
 - A patient mobile app to install (a web portal is in scope from v1.1, C1).
 - Telemedicine / video consultation.
-- Pharmacy inventory (a backlog candidate after the pilot, v1.1 C6).
+- Hospital-scale pharmacy/ERP, drug e-commerce and delivery (clinic stock inventory and a light medical-store workspace are in scope later, v1.2 C13).
 - ABDM / ABHA integration (revisit post-pilot; see §14).
-- Full billing and invoicing beyond the consolidated MediEase invoice (v1.1, C5).
+- Insurance/TPA billing and payment-gateway collection (simple clinic fee billing is in scope, v1.2 C12).
 - AI diagnosis or clinical decision support of any kind (the v1.1 assistant, C4, never does either).
 
 ### 6.4 Product principles
@@ -168,7 +233,8 @@ a one-to-four-doctor clinic in our sample will pay. MediEase ships it as a core 
 3. **Three taps for the doctor.** Any doctor action that needs training is a design defect.
 4. **Predictable price.** One MediEase invoice: the flat subscription plus the clinic's WhatsApp
    usage at cost plus a stated markup (v1.1, C5); nothing else per message or per patient.
-5. **The clinic owns its patients.** No MediEase-branded marketplace between clinic and patient.
+5. **The clinic owns its patients.** Discovery lists a clinic and sends it requests; the patient
+   relationship, records and communication stay with the clinic. No commission, ads or paid ranking.
 6. **Clinical content is the doctor's.** MediEase formats, stores and delivers; it never suggests
    diagnoses, doses or drugs.
 
@@ -184,13 +250,22 @@ P2 = later, closer to paid conversion. Priorities match the Phase 1 report §8.
 | 3 | Digital prescription with patient-readable instructions | P0 | FR-RX | A3, A6, A14 |
 | 4 | Automated follow-up reminders (WhatsApp / SMS) | P0 | FR-REM, FR-MSG | A3, A14 |
 | 5 | Clinic, doctor and staff setup with role-based access | P0 | FR-ORG, FR-AUTH | A13 |
-| 6 | Clinic-owned booking / query landing page | P1 | FR-PUB | B4–B7 |
+| 6 | Clinic-owned booking / query landing page | P0 (v1.2) | FR-PUB | B4–B7 |
 | 7 | Vaccination schedule tracking and due-date alerts | P1 | FR-VAX | A3 |
 | 8 | Broadcast announcements to patient groups | P1 | FR-BRD | A1 |
 | 9 | Advanced patient search and filters | P1 | FR-PAT-07 | A11, A12 |
 | 10 | Specialty templates (Dental, Gynaecology, Physiotherapy, Homoeopathy, Paediatrics) | P1 | FR-TPL | A13 |
-| 11 | Billing and payment history | P2 | FR-BIL | — |
+| 11 | Clinic billing: fees, receipts, dues, daily collection (v1.2, C12) | P1 | FR-BIL-01..07 | — |
 | 12 | Analytics: volume, follow-up compliance, no-show rate | P2 | FR-ANL | — |
+| 13 | Role-specific workspaces: Owner, Doctor, Front Desk (C10) | P0 | FR-UX | A13 |
+| 14 | Patient account (Google), fresh dashboard, multi-clinic appointments (C9) | P0 | FR-PRT | Owner direction |
+| 15 | Booking requests accepted/declined by front desk (C7) | P0 | FR-BKG | B4–B7 |
+| 16 | Clinic and doctor discovery by name, clinic, speciality (C7) | P0 | FR-DIS | Owner direction |
+| 17 | Verified clinic onboarding, approval and status (C8) | P0 | FR-ONB | Owner direction |
+| 18 | Notification service: in-app, WhatsApp, later email/SMS (C11) | P0 | FR-NTF-02..06 | — |
+| 19 | Landing page and plan limits (C14) | P0 / P1 | FR-LND, FR-SUB | Owner direction |
+| 20 | Clinic stock inventory (C13) | P1 | FR-INV | Owner direction |
+| 21 | Medical-store workspace (C13) | P2 | FR-PHA | Owner direction |
 | — | Internal ops console | P0 (internal) | FR-OPS | Onboarding < 60 min |
 | — | Audit log | P0 (compliance) | FR-AUD | DPDP |
 
@@ -205,13 +280,13 @@ written so they can become automated tests. Detailed behaviour lives in `docs/sp
 |---|---|---|
 | FR-ORG-01 | The ops team can create a **Clinic** (name, address, phone, timezone default `Asia/Kolkata`, specialties, working hours). | P0 |
 | FR-ORG-02 | A clinic has one or more **Doctors**, each with name, qualification, and **medical council registration number** (printed on prescriptions). | P0 |
-| FR-ORG-03 | A clinic has **Staff users** with exactly one role per clinic: `OWNER`, `DOCTOR`, `FRONT_DESK`. | P0 |
+| FR-ORG-03 | A clinic has **Staff users** with exactly one role per clinic: `OWNER`, `DOCTOR`, `FRONT_DESK`. **v1.2:** a practising owner is an `OWNER` membership with a **linked doctor profile**, which grants doctor permissions (clinical write) without a second role. Such an owner has an **Owner / Doctor workspace switch**, and the Doctor view (my queue, *My Patients*, consultation and prescriptions) works for them exactly as for a `DOCTOR` (FR-UX-06). Clinic setup can mark the owner as **Doctor 1 in the same onboarding step** (FR-ONB-08). | P0 |
 | FR-ORG-04 | The owner can invite, deactivate and change the role of staff. Deactivation takes effect on the next request. | P0 |
 | FR-AUTH-01 | Staff sign in with phone number or email + password. Passwords are hashed with Argon2id. | P0 |
 | FR-AUTH-02 | Sessions use short-lived access tokens and rotating refresh tokens in `HttpOnly`, `Secure`, `SameSite=Lax` cookies. | P0 |
 | FR-AUTH-03 | Every API request is authorised against role **and** clinic membership; cross-clinic access is impossible by construction (see ADR-0003). | P0 |
 | FR-AUTH-04 | Sign-in is rate-limited and locks for 15 minutes after 5 consecutive failures. | P0 |
-| FR-AUTH-05 | Password reset by one-time code sent through the messaging port. | P1 |
+| FR-AUTH-05 | Password reset for staff and patients. **v1.2:** by a single-use, time-limited link sent by email (FR-AUTH-08), not through the messaging port. | P0 (v1.2) |
 | FR-AUTH-06 | OTP-only sign-in for doctors. | P1 |
 
 **Permission matrix (P0):**
@@ -226,6 +301,11 @@ written so they can become automated tests. Detailed behaviour lives in `docs/sp
 | Write visit notes, issue prescription | ✅ if also a doctor | ✅ | ❌ | ❌ |
 | Schedule follow-up reminder | ✅ | ✅ | ✅ | — |
 | View usage metrics | ✅ | ✅ | — | ✅ (aggregate only) |
+| Accept / decline / propose-another-slot on booking requests | ✅ | ✅ (own patients, optional) | ✅ | — |
+| Create billing entries and receipts | ✅ | ✅ (own consultations) | ✅ | — |
+| Edit fee schedule, publish clinic/doctor public profile | ✅ | — | — | — |
+| Manage stock (FR-INV) | ✅ | view only | ✅ | — |
+| Review / approve / reject / suspend clinic applications | — | — | — | ✅ (`OPS_REVIEWER`) |
 
 > Ops users never see clinical content. Support access to a clinic's data requires an explicit,
 > time-boxed, audited grant from the clinic owner (FR-OPS-05).
@@ -328,14 +408,14 @@ instruction appears under a "How to give" heading.
 | FR-MSG-06 | Per-clinic sender identity: MVP uses one MediEase WhatsApp number with the clinic name in every template; a clinic-owned number is P2. | P0 |
 | FR-MSG-07 | Messaging cost per clinic is tracked internally (MediEase absorbs it under flat pricing). | P0 |
 
-### 8.9 Public booking page — `FR-PUB` (P1)
+### 8.9 Public booking page — `FR-PUB` (P0 from v1.2; see also FR-DIS and FR-BKG in §8.14)
 
 | ID | Requirement | Priority |
 |---|---|---|
-| FR-PUB-01 | Each clinic gets a public page at `/c/{clinic-slug}` with name, address, map link, hours, doctors and a booking/query form. | P1 |
-| FR-PUB-02 | The form creates a **booking request** that front desk confirms or declines; it does not auto-book in MVP. | P1 |
-| FR-PUB-03 | Phone verification by OTP before a request is accepted; rate-limited per phone and IP. | P1 |
-| FR-PUB-04 | The page link is shareable to WhatsApp status and Google Business Profile. | P1 |
+| FR-PUB-01 | Each clinic that is `ACTIVE` and verified gets a public page at `/c/{clinic-slug}` with name, address, map link, hours, doctors and a booking/query form. It works whether or not the clinic is listed in the directory (FR-DIS-07). | P0 |
+| FR-PUB-02 | The form creates a **booking request** (FR-BKG) that front desk accepts or declines; it does not auto-book in MVP. | P0 |
+| FR-PUB-03 | **v1.2:** no SMS OTP (cost). A booking request requires a **verified identity**: a signed-in patient account (Google, or email and password with a verified email, FR-AUTH-08); rate-limited per account, phone and IP. | P0 |
+| FR-PUB-04 | The page link is shareable to WhatsApp status and Google Business Profile. | P0 |
 
 ### 8.10 P1/P2 capabilities (outline — specified when scheduled)
 
@@ -384,6 +464,136 @@ Detailed behaviour is specified per phase in `docs/specs/` (one spec per feature
 | FR-BIL-WA-01 | Each clinic sends WhatsApp messages from its own number, connected through Meta's Embedded Signup; credentials, templates and webhook events are kept per clinic. | P2 |
 | FR-BIL-WA-02 | Every billable WhatsApp event is written to an append-only usage ledger per clinic (message, category, time, billing period, Meta cost, markup); one MediEase invoice per clinic per month adds the subscription. No clinic's usage can appear on another's invoice. | P2 |
 
+### 8.14 v1.2 additions — `FR-ONB`, `FR-DIS`, `FR-BKG`, `FR-UX`, `FR-NTF`, `FR-BIL`, `FR-INV`, `FR-PHA`, `FR-SUB`, `FR-LND`
+
+Detailed behaviour is specified per phase in `docs/specs/`. Priorities below say what is needed for the
+M6 demo and pilot (P0), shortly after (P1), and later (P2).
+
+#### Verified clinic onboarding — `FR-ONB` (C8)
+
+Three things are modelled separately and never inferred from each other:
+
+| Concept | Where it lives | Values | Who changes it |
+|---|---|---|---|
+| **Application status** | A clinic application (platform data, not tenant data) | `PENDING → UNDER_REVIEW → APPROVED \| REJECTED` | MediEase reviewer |
+| **Clinic operational status** | The clinic (unchanged since M1) | `ONBOARDING → ACTIVE ↔ SUSPENDED` | Onboarding completion; ops (suspend) |
+| **Verification** | The clinic and each doctor: verified by whom, when, against which application or check | verified / not verified | MediEase reviewer only |
+| **Listing** | The clinic and each doctor: the owner's "Listed in MediEase directory" / "visible" switch | listed / not listed | Owner, only once allowed (FR-ONB-10) |
+
+`Clinic.status` never says whether a clinic applied or passed MediEase verification.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-ONB-01 | **Self-service application.** A public form lets a clinic or a solo doctor apply. It collects: clinic name, address, city/PIN, owner name, phone and **verified email**, specialties, each doctor's name, qualification, council and registration number, an upload of the registration certificate, and whether the owner is also a practising doctor. Submitting creates an application in `PENDING`; the applicant gets an email confirmation (FR-AUTH-08). | P0 |
+| FR-ONB-02 | **Application lifecycle.** `PENDING → UNDER_REVIEW → APPROVED \| REJECTED`. It is a separate record from the clinic: no clinic, user or membership exists until approval. A clinic is **not discoverable** unless FR-ONB-09 holds, and **cannot receive booking requests** unless it is `ACTIVE` and verified. | P0 |
+| FR-ONB-03 | **Manual verification by MediEase.** An `OPS_REVIEWER` sees a queue of applications, takes one (`UNDER_REVIEW`), checks each doctor's registration number against the state medical council register and the uploaded certificate, records the result per doctor, and decides with a reason. Every transition records reviewer, time and reason, and is audited (FR-AUD-01). Reviewers never see clinical content. | P0 |
+| FR-ONB-04 | **Approved clinic onboarding.** Approval creates the clinic in `ONBOARDING`, records it and the checked doctors as verified, and sends the owner an invitation to finish onboarding (checklist, FR-OPS-04) and to invite doctors and front-desk staff through the existing invitation model. The clinic becomes `ACTIVE` when the checklist is complete. Tenant isolation is unchanged. | P0 |
+| FR-ONB-05 | A rejected applicant is told the reason and may re-apply. A suspended clinic disappears from discovery within 5 minutes and its pending booking requests are cancelled with patients notified. | P0 |
+| FR-ONB-06 | Clinics created directly by the ops team (FR-OPS-01) start **unverified**; they become verified only after a reviewer records the same checks. | P0 |
+| FR-ONB-07 | Applications are rate-limited per phone and IP, and duplicate applications (same registration number) are flagged to the reviewer. | P1 |
+| FR-ONB-08 | **One creation path.** Approving an application **pre-fills the ops Create-clinic wizard** (FR-OPS-01) and sends the owner's invitation, so self-service and ops-created clinics are created by the same code. The wizard can mark the owner as **Doctor 1 in the same step**: accepting the invitation links the owner's user to that doctor profile (FR-ORG-03). | P0 |
+| FR-ONB-09 | **Discoverable = `ACTIVE` ∧ verified ∧ listed.** One domain rule decides it, and every public endpoint (search, profiles, slots) uses that rule. A doctor is shown only if verified **and** marked visible, in a discoverable clinic. Approval alone never makes a clinic public. | P0 |
+| FR-ONB-10 | **Listing requirements.** The owner can switch listing on only when the clinic is `ACTIVE`, verified and its public profile is complete: onboarding checklist done, address and city/PIN, opening hours, and at least one verified, visible doctor with a schedule. If the clinic is suspended or the profile becomes incomplete, it leaves discovery at once and the owner sees why. | P0 |
+
+#### Discovery — `FR-DIS` (C7)
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-DIS-01 | The directory lists only **discoverable** clinics and doctors (FR-ONB-09). | P0 |
+| FR-DIS-02 | **Clinic search** by clinic name, speciality and city/PIN, and **doctor search** by doctor name, speciality, clinic and city/PIN, filtered by language and "has availability in the next 7 days". Results return in < 500 ms at pilot scale. | P0 |
+| FR-DIS-03 | A public **clinic profile** and **doctor profile** show only what the clinic chose to publish: name, address, map link, hours, specialties, doctors, qualifications, consultation fee (optional), languages. No patient data, no clinical content. | P0 |
+| FR-DIS-04 | Results are ordered by relevance, then distance and availability. **No paid ranking, sponsored listings, ads or ratings/reviews** in MVP. | P0 |
+| FR-DIS-05 | Slots a patient sees are generated from the doctor's schedule and exceptions (FR-APT-01), minus booked slots and held requests. Clinics in token mode show sessions instead of times. | P0 |
+| FR-DIS-06 | Public profile pages are indexable by search engines unless the clinic opts out; they load in < 2 s on 3G. | P1 |
+| FR-DIS-07 | The clinic can still use its own link `/c/{clinic-slug}` (FR-PUB-01) without being listed in the directory. | P0 |
+| FR-DIS-08 | **Discovery to booking.** From a clinic or doctor profile the patient picks a slot (FR-DIS-05); if not signed in, they sign in or sign up and return to the same slot; the request then follows FR-BKG and lands in that clinic's front-desk inbox. A profile of a clinic that is no longer discoverable answers exactly like "not found" (NFR-19). | P0 |
+
+#### Patient account and booking requests — `FR-PRT` (amended), `FR-BKG` (C7, C9)
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-PRT-05 | **Google OAuth sign-up** (or email and password) creates a global patient account. First sign-in shows a **fresh dashboard**: 0 upcoming appointments, no prescriptions, no notifications, one primary action *Find a doctor*. No data is imported or inferred. | P0 |
+| FR-PRT-06 | **Amends FR-PRT-02.** A patient account is linked to a clinic's patient record when (a) the clinic **accepts a booking request** and front desk selects or creates the matching patient record, (b) a single-use clinic invite is used, or (c) a prescription link passes its last-4-digit check. Linking never happens automatically by phone number alone (family members may share a phone, FR-PAT-02). | P0 |
+| FR-PRT-07 | **My Appointments** is grouped by clinic, each showing doctor, date/time and status (`Requested`, `Confirmed`, `Declined`, `Cancelled`, `Completed`). Records of one clinic are never shown inside another clinic's group. | P0 |
+| FR-PRT-08 | A patient can cancel a request or confirmed appointment, and request a reschedule, subject to a clinic-set cut-off (default 2 hours before). | P1 |
+| FR-PRT-09 | A patient can book for themselves or for a dependent (child, parent) on the same account. | P1 |
+| FR-PRT-10 | Data rights from the portal: download my account data, change consent and language per clinic, delete my account. Clinic medical records are retained as the clinic is legally required (§10). | P1 |
+| FR-BKG-01 | A booking request captures doctor, slot (or session), patient, a short reason (free text, with a visible "not for emergencies" notice) and contact phone (from the verified patient account). | P0 |
+| FR-BKG-02 | Creating a request places a **soft hold** on the slot (default 2 hours, clinic-configurable) so two patients cannot request the same slot, consistent with FR-APT-04. | P0 |
+| FR-BKG-03 | The request raises a **BookingRequested** event; the front desk gets an in-app notification (and WhatsApp when enabled). | P0 |
+| FR-BKG-04 | Front desk can **accept**, **decline (with reason)** or **propose another slot**. Doctors and owners can do the same. | P0 |
+| FR-BKG-05 | **Accept** creates the appointment (source `PUBLIC_PAGE` or `PORTAL`, FR-APT-07), links the account (FR-PRT-06) and notifies the patient. **Decline** releases the hold and notifies the patient. | P0 |
+| FR-BKG-06 | If nobody responds within the clinic's response window (default 4 hours, or 1 hour before the slot), the request **expires**, the hold is released, the patient is told, and front desk sees an "expired" count. | P0 |
+| FR-BKG-07 | Abuse controls: verified identity before any request (FR-PUB-03), rate limits per account, phone and IP, a cap of 5 open requests per patient, and a no-show counter visible to staff. Staff decide; there is no automatic ban. | P0 |
+| FR-BKG-08 | A doctor or front desk can book on behalf of a patient at any time (FR-APT-03); this is separate from patient requests and is not subject to FR-BKG-06. | P0 |
+
+#### Role-specific workspaces — `FR-UX` (C10)
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-UX-01 | **Owner** home: clinic overview, today's volume, revenue and dues, staff and doctors, booking-request response rate, public profile status, settings, reports, integrations. | P0 |
+| FR-UX-02 | **Doctor** home: *my* appointments today and queue, my patients, patient history, consultation and prescription, follow-ups due, my schedule and leave, notifications. | P0 |
+| FR-UX-03 | **Front Desk** home: today's queue and calendar, **booking-requests inbox** (accept / decline / propose), register and search patients, walk-ins, reschedule/cancel, payments and receipts, patient communication. | P0 |
+| FR-UX-04 | Each role has its own navigation and default landing screen; items a role may not use are **not shown**, not just disabled. A front-desk user never sees clinical notes (§8.1). | P0 |
+| FR-UX-05 | Acceptance: sign in as each role on a 1366×768 desktop; the home screen, navigation and first three actions differ, and a Playwright test asserts it. | P0 |
+| FR-UX-06 | **Practising owner.** An owner with a linked doctor profile (FR-ORG-03) gets an **Owner / Doctor switch** in the shell. The Doctor view is the same workspace a `DOCTOR` gets, scoped to the owner's own doctor profile: my queue and *Today*, **My Patients**, patient history, consultation and prescriptions, my follow-ups and schedule. The switch changes the view only, never the permissions; an owner without a doctor profile sees no switch. Acceptance: a Playwright test signs in as a practising owner, switches to Doctor and sees only their own patients and sessions. | P0 |
+
+#### Notifications — `FR-NTF` (C11)
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-NTF-02 | Features publish **domain events** (e.g. `BookingRequested`, `AppointmentConfirmed`); a notification service maps each event to recipients and channels. No feature calls WhatsApp directly. | P0 |
+| FR-NTF-03 | Channels: `IN_APP` (P0), `WHATSAPP` via the messaging port (P0, per-clinic number in M8), `EMAIL` and `SMS` (P2). Each recipient has per-channel preferences. | P0 |
+| FR-NTF-04 | Event catalogue (MVP): booking requested / accepted / declined / expired, appointment confirmed / moved / cancelled, appointment reminder, follow-up due, prescription ready, medicine due, message failed, clinic application decided, subscription notices. | P0 |
+| FR-NTF-05 | A notification centre for patients and for each staff role: unread badge, read state, deep link to the item. In-app delivery ignores quiet hours; WhatsApp/SMS obey FR-REM-04. | P0 |
+| FR-NTF-06 | Delivery is at-least-once and idempotent (NFR-13). Notification text never contains diagnosis or medicine names (FR-MSG-04). | P0 |
+
+#### Clinic billing — `FR-BIL-01..07` (C12)
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-BIL-01 | Per-doctor and per-service **fee schedule** (consultation, follow-up, procedure). | P1 |
+| FR-BIL-02 | A bill is created from a visit or walk-in with line items, discount (amount or %) and notes. | P1 |
+| FR-BIL-03 | Payment is **recorded** as cash, UPI or card (no gateway in MVP); partial payments allowed. | P1 |
+| FR-BIL-04 | A receipt PDF with clinic letterhead; sent to the patient by link. | P1 |
+| FR-BIL-05 | **Outstanding dues** per patient and a clinic-wide dues list. | P1 |
+| FR-BIL-06 | **Daily collection** report by payment mode and by doctor; export CSV. | P1 |
+| FR-BIL-07 | Bills are immutable once issued; corrections create a credit note. Edits are audited. | P1 |
+
+#### Inventory and medical stores — `FR-INV`, `FR-PHA` (C13)
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-INV-01 | Clinic stock items with batch, expiry, quantity, unit price and supplier; stock-in and manual adjustment (audited). | P1 |
+| FR-INV-02 | Dispensing can be linked to a prescription line; stock decrements. MediEase never suggests a medicine or substitute (FR-RX-10). | P1 |
+| FR-INV-03 | Low-stock and near-expiry alerts to owner and front desk. | P1 |
+| FR-PHA-01 | A **medical-store** tenant (new role `PHARMACIST`) with its own staff, stock and billing, separate from any clinic. | P2 |
+| FR-PHA-02 | A patient can share a prescription with a store by **time-limited code**. The store sees only the medicine lines and patient name, **not diagnosis, visit notes or history**, and marks lines as dispensed. | P2 |
+| FR-PHA-03 | Counsel to confirm drug-licence and prescription-handling obligations before FR-PHA ships (§10). | P2 |
+
+#### Subscription and landing page — `FR-SUB`, `FR-LND` (C14)
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-SUB-01 | Plans by clinic size (§12) with limits on doctors and users enforced by the tenancy layer; a 14-day trial with no card. | P1 |
+| FR-SUB-02 | Lifecycle: trial → active → payment overdue (7-day grace, read-only banner) → suspended. Suspended clinics are removed from discovery; data is retained for 30 days and exportable by the owner. | P1 |
+| FR-SUB-03 | The owner can export all clinic data (patients, visits metadata, bills) as CSV at any time. | P1 |
+| FR-LND-01 | A public landing page with a clinic path (benefits, features, pricing, **Apply to join MediEase**, book a demo) and a patient path (**Find a doctor**, Sign in with Google). | P0 |
+| FR-LND-02 | Content: problem, 5-minute onboarding promise, role-based screenshots, pricing tiers, security and privacy summary, FAQ; English and Hindi. No clinical claims. | P0 |
+| FR-LND-03 | LCP < 2.5 s on 4G, WCAG 2.1 AA, indexable, analytics events without PII (§11.3). | P0 |
+
+#### Other gaps closed
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-PAT-09 | **Merge** two patient records in a clinic, with preview, undo window and audit (FR-AUD-01 already refers to merges). | P1 |
+| FR-AUTH-08 | **Email provider** (free-tier transactional service): verify email addresses, password reset (FR-AUTH-05), application and invitation emails, and the later `EMAIL` notification channel. Password sign-ups cannot request a booking until the email is verified; Google accounts are already verified. | P0 |
+| FR-ORG-07 | The owner has a web **Team page** to invite staff, change roles and deactivate (API already exists, FR-ORG-04). | P0 |
+| FR-APT-09 | When a doctor adds leave over dates that already have appointments, front desk sees the affected list and can reschedule or cancel each, and patients are notified. | P0 |
+| FR-APT-08 | (existing) Appointment reminders: scheduled for M6a. | P0 |
+| FR-QUE-06 | (existing) Live token status link: scheduled for M6b. | P1 |
+| FR-VIS-04 | (existing) Report attachments and patient-visible documents where the clinic allows: scheduled for M6d. | P1 |
+
 ## 9. Non-functional requirements
 
 | ID | Category | Requirement |
@@ -404,6 +614,9 @@ Detailed behaviour is specified per phase in `docs/specs/` (one spec per feature
 | NFR-14 | Maintainability | Hexagonal architecture; domain layer has no framework imports; ≥ 80% unit-test coverage of domain and application layers. |
 | NFR-15 | Portability | Whole stack runs locally with `make up`; no cloud-only dependency is required for development. |
 | NFR-16 | Cost | Infrastructure + messaging cost per clinic < ₹250/month at pilot scale (tracked, see FR-MSG-07). |
+| NFR-17 | Privacy | Public discovery and profile endpoints return only fields the clinic published; automated tests prove no patient, clinical or staff-private data can appear there. |
+| NFR-18 | Multi-tenancy | A global patient account never gives access to a clinic's data except through a link created under FR-PRT-06; tests prove an account cannot read a clinic it is not linked to. |
+| NFR-19 | Abuse | Public endpoints (application, search, booking request) are rate-limited and require a verified identity where a patient or applicant acts; response for a clinic that is not discoverable (directory and profiles), or not `ACTIVE` and verified (own link and booking requests), is identical to "not found". |
 
 ## 10. Compliance and clinical safety (requirements view)
 
@@ -427,6 +640,15 @@ product view, not legal advice; obligations must be confirmed with counsel befor
   number, and the clinic's details. MediEase never generates clinical recommendations (FR-RX-10).
 - **Messaging.** WhatsApp business-initiated messages use approved templates; SMS requires DLT
   registration of sender ID and templates in India (TRAI).
+- **v1.2: MediEase's role grows.** A global patient account and a public directory mean MediEase decides
+  how that account data and listing content are used, so MediEase is likely a *Data Fiduciary* for those,
+  while each clinic stays the fiduciary for its clinical records. Counsel must confirm and the privacy
+  notice must say so before the directory launches.
+- **v1.2: Doctor listings.** Indian rules on how doctors may advertise or solicit patients apply to a
+  directory. MVP therefore shows factual profile data only, with no ratings, no paid ranking and no
+  claims; counsel reviews the wording before launch.
+- **v1.2: Dispensing.** Inventory and the medical-store workspace touch drug-licence and
+  prescription-handling rules. They are P1/P2 and need counsel review before they ship.
 
 ## 11. Success metrics
 
@@ -445,23 +667,36 @@ product view, not legal advice; obligations must be confirmed with counsel befor
 | Reminder delivery rate | ≥ 90% | message statuses |
 | Follow-up return rate (visit within 3 days of follow-up date) | Baseline in month 1, then +20% | reminders, visits |
 | Day-14 and day-30 retention | Clinic still booking | appointments |
-| Paid conversion | 2 clinics at ₹999 within 30 days | billing ledger |
+| Paid conversion | 2 clinics on a paid plan within 30 days | billing ledger |
+| Booking requests answered within the response window | ≥ 90% | booking-request events |
+| Median time to accept/decline a request | < 30 min in clinic hours | booking-request events |
+| Clinic applications reviewed | < 2 business days | onboarding events |
+| Requests that become attended visits | Baseline in month 1 | appointments, visits |
 
 ### 11.3 Product analytics events (no PII, no clinical content)
 
 `clinic_onboarding_step_completed`, `appointment_created`, `queue_status_changed`,
 `visit_completed`, `prescription_issued`, `prescription_link_opened`, `reminder_scheduled`,
-`message_status_changed`, `patient_opted_out`, `public_booking_requested`.
+`message_status_changed`, `patient_opted_out`, `public_booking_requested`,
+`booking_request_created`, `booking_request_accepted`, `booking_request_declined`,
+`booking_request_expired`, `clinic_application_submitted`, `clinic_application_decided`,
+`patient_account_created`, `directory_search_performed`.
 Properties are limited to IDs, enums, counts and durations.
 
 ## 12. Pricing and packaging (hypothesis to test)
 
-| Plan | Price | Includes |
-|---|---|---|
-| Starter | ₹999 / clinic / month | 1–2 doctors, unlimited staff, patients, appointments, prescriptions; messaging included |
-| Clinic | ₹1,499 / clinic / month | 3–4 doctors, everything in Starter |
-| Design-partner pilot | Free for 14 days | Full product, in-person onboarding |
+Priced by clinic size and deliberately below the competitors in §5. **All figures are hypotheses to
+test, not decisions; the developer to confirm before the landing page publishes prices.**
 
+| Plan | Price (proposed) | Includes |
+|---|---|---|
+| Solo | ₹499 / month | 1 doctor + 1 staff user; appointments, queue, records, prescriptions, billing, directory listing |
+| Clinic | ₹999 / month | Up to 3 doctors and 5 users; everything in Solo |
+| Clinic Plus | ₹1,499 / month | Up to 5 doctors and unlimited staff; everything in Clinic, inventory when shipped |
+| Medical store (later) | ₹499 / month | Store workspace and stock (FR-PHA) |
+| Free trial | 14 days, no card | Full product; in-person onboarding for design partners |
+
+- Directory listing and patient booking requests are **included**: no commission, no per-booking fee.
 - Subscription plus WhatsApp usage at cost and a stated markup, on one MediEase invoice (v1.1, C5).
 - Payment by UPI AutoPay / e-mandate is **manual in MVP** (invoice + UPI); automated billing is P2.
 - **First test:** offer the paid pilot to Aarogya Hospital (A13) and Apollo Diagnostic (A10), with
@@ -480,12 +715,15 @@ Detailed task breakdown: [TASKS.md](../TASKS.md).
 | **M3 Appointments & queue** | Schedules, booking, token mode, live queue | FR-APT-01..07, FR-QUE-01..05 | Concurrency test passes; front desk books in ≤ 3 interactions |
 | **M4 Visits & prescriptions** | Visit record, Rx builder, PDF, patient link | FR-VIS-01..03, 05, FR-RX-01..10 | Patient page acceptance test on 360 px |
 | **M5 Messaging & reminders** | Messaging port + adapters, job worker, reminders, opt-out | FR-MSG, FR-REM-01, 02, 04, 05, 07, FR-APT-06 | End-to-end reminder delivered via WhatsApp sandbox (done in code; the live test is pending L-01, L-02) |
-| **M6 MVP demo: clinic and patient experience** (v1.1) | Design system, role dashboards, patient portal with Google and email sign-in, medicine planner, in-app notifications, public booking page | FR-AUTH-07, FR-PRT, FR-REM-03, FR-NTF, FR-PUB | Every journey demonstrable on the local stack; `make e2e` green |
-| **M7 AI assistant and pitch** (v1.1) | LLM gateway (Groq first), patient and staff assistant with tools, animated landing page | FR-AI | Booking by chat and the guard-rail tests pass |
+| **M6a Auth, staff workspaces and notification core** (v1.2; issue #49, branch `m6/49-mvp-demo`) | Design system (done); Google sign-in for staff and patients and patient email-and-password accounts kept apart from staff (ADR-0015); email provider with email verification and password reset; owner Team page; separate Owner, Doctor and Front Desk workspaces; practising owner's Owner / Doctor switch with *My Patients*, and the ops wizard marking the owner as Doctor 1; notification service with in-app channel behind a port; appointment reminders; doctor-leave conflicts; owner audit view | FR-AUTH-05, 07, 08, FR-PRT-01 (account only), FR-ORG-03, FR-ORG-07, FR-UX-01..06, FR-NTF-02..06, FR-APT-08, 09, FR-AUD-03 | Three roles, and a practising owner in both views, show different home screens and navigation (Playwright); a patient and a staff member each sign in with Google (fake provider) and stay apart; `make e2e` green |
+| **M6b Patient identity, portal and booking requests** (v1.1/v1.2) | Linking an account to a clinic's record (invite, prescription link, accepted request); patient portal with the fresh dashboard and *Find a doctor* entry, My Appointments by clinic, prescriptions and reminders; medicine planner; per-clinic public page `/c/{slug}`; booking requests from a verified account with soft hold; front-desk inbox (accept / decline / propose / expire); patient notifications; live token link | FR-PRT-02..07, FR-BKG, FR-PUB, FR-REM-03, FR-QUE-06 | Patient requests on `/c/{slug}`, front desk accepts, appointment appears under the right clinic; cross-clinic isolation tests pass |
+| **M6c SaaS clinic onboarding, verification and discovery** (v1.2) | (1) Self-service clinic and solo-doctor application; (2) application lifecycle `PENDING → UNDER_REVIEW → APPROVED \| REJECTED`, kept apart from clinic status; (3) MediEase reviewer workflow: queue, manual registration checks per doctor, decision with reason, audit; (4) approved clinic onboarding through the pre-filled Create-clinic wizard, owner as Doctor 1, owner invitation; (5) verification and listing modelled separately, with listing requirements; (6) public clinic and doctor profiles; (7) clinic search and doctor search with filters; (8) discovery-to-booking into the M6b request flow; (9) landing page v1 | FR-ONB-01..10, FR-DIS-01..08, FR-LND, NFR-17, NFR-19 | A pending, approved-but-unlisted or suspended clinic is invisible in discovery; an `ACTIVE`, verified and listed clinic is found by clinic and by doctor search and requested within one session |
+| **M6d Billing and documents** (v1.2) | Fee schedule, bills, receipts, dues, daily collection, report attachments, plan limits and trial | FR-BIL-01..07, FR-VIS-04, FR-SUB-01 | Daily collection matches recorded payments; plan limits enforced |
+| **M7 AI assistant and pitch** (v1.1) | LLM gateway (Groq first), patient and staff assistant with tools, animated landing page polish (first landing page ships in M6c) | FR-AI | Booking by chat and the guard-rail tests pass |
 | **M8 Multi-clinic WhatsApp and consolidated billing** (v1.1) | Embedded Signup per clinic, per-clinic templates and webhooks, usage ledger, one MediEase invoice | FR-BIL-WA | Two clinics' usage billed separately with no mixing |
 | **M9 Pilot hardening** | Backups, monitoring, ops health view, security review, deploy | NFR-03..07, FR-OPS-03 | Restore drill done; security checklist signed |
 | **— Pilot launch —** | Two clinics live | G1–G5 | Scorecard §11.2 tracked weekly |
-| **M10+** | Vaccination, broadcasts, specialty templates, search, analytics, pharmacy inventory | FR-VAX, FR-BRD, FR-TPL, FR-PAT-07, FR-ANL | Driven by pilot feedback |
+| **M10+** | Clinic inventory (FR-INV), vaccination, broadcasts, specialty templates, search, analytics, patient merge, subscription lifecycle and data export, then medical-store workspace (FR-PHA), email/SMS channels | FR-INV, FR-VAX, FR-BRD, FR-TPL, FR-PAT-07, 09, FR-ANL, FR-SUB-02, 03, FR-PHA | Driven by pilot feedback; FR-PHA only after counsel review |
 
 ## 14. Risks, assumptions and open questions
 
@@ -501,6 +739,12 @@ Detailed task breakdown: [TASKS.md](../TASKS.md).
 | Health-data breach | Severe | Tenancy isolation tests, encryption, audit, least privilege, no clinical data in logs/messages |
 | Doctor finds Rx entry slower than paper | High | Favourites and templates (FR-RX-05), keyboard-first UI, measure time-to-issue |
 | Regulatory interpretation changes | Medium | Counsel review before pilot; compliance items tracked in TASKS.md |
+| Directory has too few clinics to attract patients (cold start) | High | Clinics keep their own link and queue regardless; open the directory by city only once several clinics are active; discovery is never the reason a clinic pays |
+| Fake or unqualified clinic or doctor listed | Severe | Manual verification of registration numbers (FR-ONB-03), suspend-in-5-minutes (FR-ONB-05), audit of every decision |
+| Front desk ignores booking requests, so patients lose trust | High | Expiry with patient notice (FR-BKG-06), response-rate on owner dashboard, reminders to the desk |
+| Doctor-advertising and data-fiduciary rules apply to a directory | High | Facts-only profiles, no ratings or paid ranking, counsel review before launch (§10) |
+| Scope creep: SaaS + discovery + billing + inventory + stores for a small team | High | Strict M6a–d order; P2 items (FR-PHA, email/SMS) wait for pilot evidence; each sub-milestone has its own exit test |
+| Aggressive pricing cannot cover WhatsApp and infrastructure cost | Medium | Track cost per clinic (NFR-16, FR-MSG-07); WhatsApp usage billed at cost plus markup (C5) |
 
 ### 14.2 Assumptions
 
@@ -509,6 +753,9 @@ Detailed task breakdown: [TASKS.md](../TASKS.md).
 - A3: Pilot clinics have at least one desktop or laptop at the front desk and a smartphone for the doctor.
 - A4: English staff UI is acceptable for pilot clinics; Hindi is needed for patients.
 - A5: The pilot runs on a single-region deployment in India.
+- A6: Patients will use Google sign-in and request a booking rather than phoning the clinic.
+- A7: Small clinics are willing to be listed publicly and to answer requests within a few hours.
+- A8: A clinic's registration certificate and council number are enough for a manual verification decision.
 
 ### 14.3 Open questions
 
@@ -519,6 +766,11 @@ Detailed task breakdown: [TASKS.md](../TASKS.md).
 5. Token mode vs time slots — which do pilot clinics actually run? (Built both; measure.)
 6. Is a clinic-owned WhatsApp number a buying criterion? (Currently P2.)
 7. When should ABDM/ABHA integration enter the roadmap?
+8. What exactly does "approved" promise patients: identity of the doctor, or also quality? (MVP: identity only.)
+9. Is directory listing free forever, or a paid add-on later? (MVP: free, included.)
+10. Do pilot clinics want to be discoverable at all, or only to receive bookings on their own link?
+11. How should a medical store receive a prescription without seeing more than it needs? (FR-PHA-02, needs counsel.)
+12. Which front-desk response window do clinics actually keep? (FR-BKG-06 default is a guess.)
 
 ## 15. Glossary
 
@@ -532,3 +784,5 @@ consultation time), *Token* (queue number within a session), *Visit* (one consul
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | 15 Sep 2026 | First complete PRD from Phase 1 validation and Phase 2 readiness work |
+| 1.1 | 20 Oct 2026 | C1–C6: patient portal, Google staff sign-in, medicine planner and notifications, AI assistant, consolidated WhatsApp invoice |
+| 1.2 | 22 Oct 2026 | C7–C14: patient discovery and booking requests, verified clinic onboarding, Google patient accounts, role-specific workspaces, notification service, clinic billing, inventory and medical stores, SaaS packaging and landing page; M6 split into M6a–d; unscheduled FRs scheduled; pricing re-tiered (proposed); no SMS OTP (FR-PUB-03), email provider (FR-AUTH-08), practising owner as `OWNER` + linked doctor profile with an Owner / Doctor switch (FR-ORG-03, FR-UX-06), owner Team page (FR-ORG-07), application status, clinic status, verification and listing kept separate (FR-ONB-01..10), discovery-to-booking (FR-DIS-08) |

@@ -2,9 +2,9 @@
 
 | Field | Value |
 |---|---|
-| Status | Proposed (M6-P3 design, 21 Oct 2026) |
-| Date | 2026-10-21 |
-| Related | PRD v1.1 FR-AUTH-07, FR-PRT-01, FR-PRT-02; ADR-0003, ADR-0006; M6-P3 design |
+| Status | Accepted (M6-P3 design proposed 21 Oct 2026; approved by the developer 22 Oct 2026, with decision 5 amended for PRD v1.2) |
+| Date | 2026-10-21 (accepted 2026-10-22) |
+| Related | PRD v1.2 FR-AUTH-05, FR-AUTH-07, FR-AUTH-08, FR-PRT-01, FR-PRT-05, FR-PRT-06, FR-PUB-03; ADR-0003, ADR-0006; M6a-P3 design |
 
 ## Context
 
@@ -54,8 +54,12 @@ local stack without them.
      Platform ops users may not use Google.
    - **Patients:** the first Google sign-in creates a patient account.
 5. **Patient passwords.** Email-and-password patient accounts use the same Argon2id hashing,
-   minimum length and lockout as staff. The email is stored unverified.
-   - No email is sent, so there is no password reset by email until an email provider exists.
+   minimum length and lockout as staff. The email starts unverified; the account records
+   `email_verified_at` (set at once for Google sign-ups, whose email Google has verified).
+   - **Amended 22 Oct 2026 (PRD v1.2).** M6a-P4 adds an email provider behind a port
+     (FR-AUTH-08): it verifies addresses and sends password-reset links (FR-AUTH-05). Until then
+     no email is sent and there is no reset. A password account whose email is unverified cannot
+     pass the verified-identity check a booking request needs (FR-PUB-03).
    - Google accounts and password accounts are never merged automatically, even with the same
      address. An unverified address must not let anyone claim another person's account or its
      linked records.
@@ -81,8 +85,8 @@ local stack without them.
 
 - There are two session stacks to maintain (staff and portal). They share the token, hashing
   and cookie helpers, with different names, paths and audiences.
-- Patients cannot reset a forgotten password until an email provider is chosen. They can use
-  Google, or a clinic can link a new account.
+- Patients cannot reset a forgotten password until the email provider lands in M6a-P4. Until
+  then they can use Google, or a clinic can link a new account.
 - Sign-up shows whether an email address already has a password account (an account-enumeration
   risk), limited by the public-route rate limits.
 - Real Google sign-in waits for L-09. Until then everything else, including the full flow, is
