@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M6a — Auth, staff workspaces and notification core** (issue #49, branch `m6/49-mvp-demo`, one PR for the milestone). PRD v1.2 (22 Oct 2026) split the former M6 into M6a–M6d; #49 became M6a, and M6b–M6d each get their own issue, branch and PR when they open (ADR-0011). M5 merged in PR #41 on 20 Oct 2026 |
-| Active phase | **M6a-P5 — The owner's Team page:** designed (`docs/milestones/M6-mvp-demo.md`, 8 decisions), awaiting the developer's approval. M6a-P1 to P4 confirmed and pushed (draft PR #50) |
+| Active phase | **M6a-P5 — The owner's Team page:** approved (A on all eight) and built 23 Oct 2026, awaiting the developer's confirmation (`docs/milestones/M6-mvp-demo.md` "M6a-P5 — as built"). M6a-P1 to P4 confirmed and pushed (draft PR #50) |
 | Design notes | `docs/milestones/M6-mvp-demo.md` (M6a); M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M6a phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -152,7 +152,7 @@ notifications arrive; `make e2e` green. Deployment and hosting are out of scope 
 | M6a-P2 | The design system across the existing screens; mobile layouts; motion for drawers, dialogs and lists | ✅ (confirmed 21 Oct 2026; PR #50) |
 | M6a-P3 | Google sign-in for staff and patients; patient email and password; separate patient sessions (FR-AUTH-07, FR-PRT-01; ADR-0015) | ✅ (confirmed 23 Oct 2026; PR #50) |
 | M6a-P4 | Email provider behind a port: email verification for patient password accounts, password reset by link for staff and patients (FR-AUTH-08, FR-AUTH-05; ADR-0016); L-11 | ✅ (confirmed 23 Oct 2026; PR #50) |
-| M6a-P5 | Owner Team page: invite (emailed, or a link for phone-only), change role, deactivate, re-invite (FR-ORG-07, on the existing FR-ORG-04 API) | ▶ (designed, awaiting approval) |
+| M6a-P5 | Owner Team page: invite (emailed, or a link for phone-only), change role, deactivate, re-invite (FR-ORG-07, on the existing FR-ORG-04 API) | ▶ (built 23 Oct 2026, awaiting confirmation) |
 | M6a-P6 | Role workspaces: Owner, Doctor and Front Desk navigation and home (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); the ops wizard marks the owner as Doctor 1 in the same step (FR-ORG-03) | ☐ |
 | M6a-P7 | Notification service with domain events and the in-app channel; notification centre per role (FR-NTF-02..06; replaces FR-NTF-01) | ☐ |
 | M6a-P8 | Appointment reminders (FR-APT-08), doctor-leave conflicts (FR-APT-09), owner audit view (FR-AUD-03) | ☐ |

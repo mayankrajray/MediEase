@@ -212,8 +212,11 @@ curl -s -b jar -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/js
    **current** password instead, which is never changed (spec R13). The clinic becomes `ACTIVE` as
    soon as an owner accepts. If the link is lost or expires,
    invite them again: the new link retires the old one.
-4. The owner invites the doctor and front desk themselves
-   (`POST /api/v1/clinic/staff`), or ops does it with the same body as above.
+4. The owner invites the doctor and front desk themselves from **Team** (`/team`, M6a-P5): an
+   invitation to an email address is emailed by the worker (the owner never sees the link), and a
+   phone-only one shows its link once to share. **Resend** retires the previous link; a
+   deactivated member can be **invited back**. The API is `POST /api/v1/clinic/staff`; ops can
+   still invite with the body above and always get the link.
 5. Agree the booking mode (slots or tokens, `booking_mode` on `POST /ops/clinics`; `TOKENS` by default)
    and each doctor's weekly hours, then set them (M3-P1). Times are the clinic's wall clock; an end
    before the start is the next day, up to 12 hours a block. Give each block both `slot_minutes` and
@@ -387,6 +390,11 @@ there. Read them at **http://localhost:8025** (nothing leaves the machine). Link
    retrying. A `dead` one ended with the code in docs/ERRORS.md "Emailed links".
 3. A reset request for an address with no eligible account sends nothing by design (the answer
    is the same 202): check the account exists, is active and has a password.
+4. **A staff invitation (M6a-P5).** The owner's *Team* page shows *Sending the email…* until the
+   worker has sent it, then *Link expires …*. Look for `email.staff_invite_sent`, or
+   `email.skipped email=staff_invite` with `reason` (`not_invited`, `no_email`,
+   `not_eligible`), and the jobs of kind `send_staff_invite` as in step 2. The owner can
+   *Resend* (3 an hour per member) or invite by phone only to get a link to share.
 
 **Going live (L-11):**
 1. Create the Brevo account and verify the sending domain with SPF, DKIM and DMARC.

@@ -22,7 +22,7 @@ notifications for patients, public booking) moved to M6b.
 | P2 | The design system across the existing screens (queue, patients, consultation, schedule, follow-ups, ops); mobile layouts; motion for drawers, dialogs and list changes | Below (confirmed 21 Oct 2026) |
 | P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR-0015) | Below (approved 22 Oct 2026; built 23 Oct 2026) |
 | P4 | Email provider behind a port: email verification, password reset by link (FR-AUTH-08, FR-AUTH-05) | Below (approved and built 23 Oct 2026) |
-| P5 | Owner Team page: invite, change role, deactivate (FR-ORG-07) | Below (awaiting approval) |
+| P5 | Owner Team page: invite, change role, deactivate (FR-ORG-07) | Below (approved and built 23 Oct 2026) |
 | P6 | Role workspaces (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); owner as Doctor 1 in the ops wizard (FR-ORG-03) | At its start |
 | P7 | Notification service, domain events, in-app channel, notification centre (FR-NTF-02..06) | At its start |
 | P8 | Appointment reminders (FR-APT-08), doctor-leave conflicts (FR-APT-09), owner audit view (FR-AUD-03) | At its start |
@@ -544,7 +544,8 @@ Confirmed by the developer on 23 Oct 2026 and pushed to draft PR #50.
 
 ## M6a-P5 — The owner's Team page
 
-Proposed 23 Oct 2026. Recommendations are marked (rec). Covers FR-ORG-07 (PRD v1.2), on top of
+Proposed 23 Oct 2026; approved by the developer the same day (A on all eight). Recommendations
+are marked (rec). Covers FR-ORG-07 (PRD v1.2), on top of
 FR-ORG-04. No ADR: it reuses ADR-0016 for the invitation email. Doctor profiles and "owner as
 Doctor 1" are P6.
 
@@ -620,3 +621,61 @@ Planned verification:
   - the owner changes their role, then deactivates them, and their next request is refused;
   - failure path: demoting the only owner shows the last-owner message.
 - **Gates:** `make lint typecheck contract-check test` and `make e2e`.
+
+### M6a-P5 — as built (23 Oct 2026)
+
+Approved A on all eight. Two points differ from the fixed points above:
+
+- **No migration `0022`.** The database lists only the *system* job kinds
+  (`ck_jobs_system_kind`); a clinic kind such as `send_staff_invite` needs no schema change, and
+  the `DEACTIVATED → INVITED` transition is domain code. The migration head stays `0021`.
+- **Re-invite is `POST /api/v1/clinic/staff`** with the member's email or phone, not a separate
+  route: the same use case finds the deactivated membership and brings it back. *Resend*
+  (`POST /staff/{id}/resend`) is for a member still `INVITED` only.
+
+What was built:
+
+- **Domain.** `ClinicMembership.reinvite(role)` (`DEACTIVATED → INVITED`, clears the old
+  invitation and acceptance) and `withdraw_invite()` (retires a pending link at once).
+  `StaffMember` gains `email`, `phone_e164`, `invite_expires_at` (invited only) and
+  `has_doctor_profile` (an active doctor profile at this clinic). Audit action `staff.reinvited`.
+- **Application.**
+  - `InviteStaff` takes `by_owner`: an owner's invitation to someone with an email address is
+    emailed (`delivery: email`), otherwise a link is made and returned once (`delivery: link`).
+    Ops invitations are always links (FR-ONB-08, M6c).
+  - `ResendStaffInvite`, and `enqueue_staff_invite` (payload: the membership ID only).
+  - `SendStaffInvite` (`application/clinics/invite_email.py`), the handler for the clinic job
+    kind `send_staff_invite`: it re-reads the membership, skips one no longer invited or an
+    account disabled, makes the secret, stores its digest, commits, then sends. A failed send
+    retries with a new secret. The wording is `email_templates.staff_invite`.
+  - Limits on the M4-P5 counter table, hour windows: 10 invitations per clinic, 3 resends per
+    member; over either is `CLN_INVITE_RATE_LIMITED` (429, `Retry-After`).
+- **HTTP and contract 0.25.0.** `StaffMember` has the four new fields (required, nullable); the
+  owner's invite answers `TeamInvitation` (`delivery`, `email_masked`, `accept_url` null when
+  emailed); new `POST /api/v1/clinic/staff/{membership_id}/resend`. The ops invitation answer is
+  unchanged apart from the new member fields.
+- **Web.** `/team` (sidebar *Team*, `requires: STAFF_MANAGE`): `features/team/` with the table
+  that becomes cards below 768 px, a skeleton, the error with its Ref and *Try again*, an
+  `InviteDrawer` (also *Invite back*, prefilled), and dialogs for *Change role* (warning before
+  demoting yourself, then a reload on Today), *Deactivate* (hidden on your own row) and a
+  resent link. Every change updates its row and says so in a status line.
+- **Tests changed because the behaviour changed (decision 3A).** Two onboarding tests took the
+  owner's invitation link from the response: the M1 exit criterion now takes it from the emailed
+  message, and the R13 takeover regression now uses an ops invitation (an owner's emailed one is
+  never shown, so the link-holder there is ops). The P4 password-reset journey takes its
+  invitation from Mailpit. No assertion was loosened.
+- **Verification.**
+  - **Gates.** `make lint typecheck contract-check test` green. API: 1,728 tests, 97.58%
+    package coverage, 97% on `domain/` + `application/` (the M4-P3 suggestions timing test
+    failed once in the full run under load and passed alone, as before). Web: 53 files, 515
+    tests.
+  - **Stack.** `make up` and `make smoke` green. `make e2e` 24/24 with `team.spec.ts`:
+    - the owner invites a front-desk member by email from `/team`, the person joins from the
+      Mailpit link in their own browser, the owner makes them a Doctor, then deactivates them,
+      and their next request is 403 `AUTH_ACCOUNT_DISABLED`;
+    - failure path: demoting the only owner warns first, then shows "A clinic needs at least one
+      owner." with its Ref.
+
+    A first `make e2e` run overlapped with the stack's containers being replaced and five
+    journeys could not reach `web:3000`; the run straight after was 24/24 with no change.
+  - **Not verified.** Real delivery through Brevo waits for L-11, as in P4.

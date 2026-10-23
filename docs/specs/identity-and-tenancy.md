@@ -5,7 +5,7 @@
 | Requirements | FR-ORG-01..04, FR-AUTH-01..04, FR-AUD-01..02, FR-OPS-01, FR-OPS-04, NFR-08 |
 | Milestone / phases | M1 / P1–P6 |
 | Status | Approved (developer sign-off 2026-10-02) |
-| Last updated | 2026-10-03 (§4 R13 and §8: accepting an invitation for an existing account now needs that account's current password and never changes it — a security amendment, approved by the developer 2026-10-03; earlier the same day: §7, §8 and §10 recorded the M1-P4 and M1-P5 audit actions, invitation flow and `auth.rejected` event) |
+| Last updated | 2026-10-23 (M6a-P5, approved by the developer: §3 a deactivated membership can be invited back (`DEACTIVATED → INVITED`), §7 `staff.reinvited`, §8 owners' invitations to an email address are emailed and never shown; earlier: 2026-10-03 §4 R13 and §8, accepting an invitation for an existing account needs that account's current password — a security amendment; §7, §8 and §10 recorded the M1-P4 and M1-P5 audit actions, invitation flow and `auth.rejected` event) |
 
 ## 1. Context
 Clinics must trust that only their own staff can see their patients, and that each staff member
@@ -18,7 +18,9 @@ See the PRD §8.1 permission matrix — it is normative for this spec.
 ## 3. Domain model
 - `Clinic` (status: `ONBOARDING → ACTIVE ↔ SUSPENDED`)
 - `User` (status: `ACTIVE`, `DISABLED`; lockout fields)
-- `ClinicMembership` (role: `OWNER | DOCTOR | FRONT_DESK`; status: `INVITED → ACTIVE → DEACTIVATED`)
+- `ClinicMembership` (role: `OWNER | DOCTOR | FRONT_DESK`; status: `INVITED → ACTIVE → DEACTIVATED`,
+  and from M6a-P5 `DEACTIVATED → INVITED` when an owner invites the person back; they become
+  `ACTIVE` again only by accepting)
 - `Doctor` (optional link to a `User`)
 - `AuditEvent` (append-only)
 
@@ -67,7 +69,7 @@ See API.md "Auth and session", "Clinic administration", "Ops console".
 |---|---|---|
 | Sign-in success / failure | `auth.signed_in` / `auth.sign_in_failed` | — |
 | Sign-out, refresh token replayed | `auth.signed_out` / `auth.refresh_reused` (M1-P4) | — |
-| Staff invited / accepted / role changed / deactivated | `staff.invited` / `staff.accepted` / `staff.role_changed` / `staff.deactivated` | — |
+| Staff invited / accepted / role changed / deactivated | `staff.invited` / `staff.accepted` / `staff.role_changed` / `staff.deactivated`; from M6a-P5 `staff.reinvited` (a deactivated member invited back), and `delivery` (`email` or `link`) and `resent` in the invitation metadata | — |
 | Clinic created / activated / edited | `clinic.created` / `clinic.activated` / `clinic.updated` | `clinic_onboarding_step_completed` |
 | Doctor added / edited | `doctor.added` / `doctor.updated` (M1-P5) | — |
 
@@ -80,6 +82,8 @@ See API.md "Auth and session", "Clinic administration", "Ops console".
 | An invitation link is used twice | The second attempt is refused as already used; they sign in instead (M1-P5) |
 | An invitation is for an email or phone that already has an account | The page asks for that account's current password instead of a new one (R13); a wrong one is refused and counted, and the invitation stays pending |
 | A person with a password but no active membership is invited again | They can still accept, by entering their password: sign-in refuses them (`AUTH_ACCOUNT_DISABLED`), so acceptance is how they come back |
+| A deactivated member is invited back (M6a-P5) | The same membership returns to `INVITED` with the role chosen (`staff.reinvited`); it is `ACTIVE` again only once they accept, and their history stays |
+| An owner invites someone with an email address (M6a-P5) | The worker emails the link; its secret is made at send time and never shown to the owner, so only the mailbox holder can accept. Phone-only invitations still show the link once. *Resend* retires the previous link at once |
 | Password reset requested (P1) | Not available in M1; ops resets manually with audit |
 | Clock skew between api replicas | Token validation allows 30 s leeway |
 

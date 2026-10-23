@@ -123,9 +123,9 @@ Not tenant-owned: one user can hold memberships in several clinics.
 | clinic_id | uuid FK not null | *P1* |
 | user_id | uuid FK not null | *P1* index `ix_clinic_memberships_user_id` (a user's clinics) |
 | role | text not null | *P1* `OWNER` \| `DOCTOR` \| `FRONT_DESK` (`ck_clinic_memberships_role`) |
-| status | text not null | *P1* `INVITED` \| `ACTIVE` \| `DEACTIVATED` (`ck_clinic_memberships_status`); no transition back from `DEACTIVATED` in M1 |
+| status | text not null | *P1* `INVITED` \| `ACTIVE` \| `DEACTIVATED` (`ck_clinic_memberships_status`); from M6a-P5 `DEACTIVATED → INVITED` when an owner invites the person back (domain rule, no schema change) |
 | | | *P1* `uq_clinic_memberships_clinic_id_user_id` — invariant I2 |
-| invite_token_hash | text null | *P5* SHA-256 of the single-use invitation secret, `uq_clinic_memberships_invite_token_hash`. The secret is never stored; the digest is kept after acceptance so a replay answers "already used" instead of "unknown" |
+| invite_token_hash | text null | *P5* SHA-256 of the single-use invitation secret, `uq_clinic_memberships_invite_token_hash`. The secret is never stored; the digest is kept after acceptance so a replay answers "already used" instead of "unknown". From M6a-P5 an emailed invitation has none until the worker sends it (`send_staff_invite`) |
 | invite_expires_at | timestamptz null | *P5* 7 days after the invitation was issued (`INVITE_TTL`, a domain constant) |
 | invite_accepted_at | timestamptz null | *P5* when the invitee set a password and the membership activated |
 
@@ -637,6 +637,11 @@ Migration `0021` (M6a-P4, ADR-0016). Single-use verification and reset tokens; p
 Purged 30 days after expiry with the refresh tokens. `jobs` gains the system kind
 `send_auth_email` (payload: which email, `staff` or `patient`, the account ID; never an address
 or a token).
+
+M6a-P5 adds the clinic job kind `send_staff_invite` (payload: the membership ID only). No
+migration: only system kinds are listed in `ck_jobs_system_kind`, so a clinic kind needs no
+schema change. Invitation rate limits use `public_rate_limits` with hour windows
+(`staff-invite:<clinic>` and `staff-invite-resend:<membership>`).
 
 ---
 
