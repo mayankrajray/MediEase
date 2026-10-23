@@ -51,6 +51,8 @@ change that implements it.
 | POST | `/api/v1/auth/sign-in` | Email/phone + password | FR-AUTH-01, 04 | Implemented (M1-P2) |
 | POST | `/api/v1/auth/refresh` | Rotate refresh token | FR-AUTH-02 | Implemented (M1-P2) |
 | POST | `/api/v1/auth/sign-out` | Revoke token family | FR-AUTH-02 | Implemented (M1-P2) |
+| GET | `/api/v1/auth/google/start` | Start a Google sign-in for `intent=staff\|patient`; seals the flow into `me_oidc` and redirects to Google (or to the callback with the local fake) | FR-AUTH-07, FR-PRT-01 | Implemented (M6a-P3) |
+| GET | `/api/v1/auth/google/callback` | Finish it: staff cookies for an existing staff user (linked by verified email once, then by `sub`), portal cookies for a patient; redirects to `next`, or back to the sign-in page with a `reason` | FR-AUTH-07, FR-PRT-01 | Implemented (M6a-P3) |
 | GET | `/api/v1/me` | Current user, memberships, permissions | FR-AUTH-03 | Implemented (M1-P3) |
 
 **Sign-in** `{"identifier": "<email or phone>", "password": "…"}` → `200` with
@@ -70,6 +72,21 @@ All cookies are `SameSite=Lax` and `Secure` when `COOKIE_SECURE=true`. Every uns
 request that carries a session cookie needs `X-CSRF-Token` = `me_csrf` (sign-in is exempt).
 Auth responses are `Cache-Control: no-store`. The web client must not refresh twice in parallel:
 the second refresh presents a rotated token and ends the session (`AUTH_REFRESH_REUSED`).
+
+### Patient portal accounts (M6a-P3)
+
+Own cookies (`me_pt_access` path `/api/v1/portal`, `me_pt_refresh` path `/api/v1/portal/auth`,
+`me_pt_csrf`), audience `mediease-portal`, policy `@patient` (ADR-0015). Sign-up and sign-in are
+exempt from `X-CSRF-Token`; refresh and sign-out send `me_pt_csrf`. A staff session is 401 here
+and a portal session is 401 on every staff route.
+
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| POST | `/api/v1/portal/auth/sign-up` | Name, email, password; 201 with the account and portal cookies | FR-PRT-01 | Implemented (M6a-P3) |
+| POST | `/api/v1/portal/auth/sign-in` | Email and password | FR-PRT-01 | Implemented (M6a-P3) |
+| POST | `/api/v1/portal/auth/refresh` | Rotate the portal refresh token | FR-AUTH-02 | Implemented (M6a-P3) |
+| POST | `/api/v1/portal/auth/sign-out` | Revoke the portal session | FR-AUTH-02 | Implemented (M6a-P3) |
+| GET | `/api/v1/portal/me` | The signed-in account (no clinic data until M6b) | FR-PRT-01 | Implemented (M6a-P3) |
 
 ### Authorisation (M1-P3)
 

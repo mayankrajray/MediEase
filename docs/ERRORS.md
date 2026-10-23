@@ -17,6 +17,7 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | `PERM_` | Authorisation | | `LINK_` | Patient links |
 | `CLN_` | Clinic administration | | `REM_` | Reminders |
 | `PAT_` | Patients | | `MSG_` / `WH_` / `JOB_` | Messaging, webhooks, jobs |
+| `PRT_` | Patient portal accounts (M6a-P3) | | | |
 | `SYS_` | Unexpected server errors | | `WEB_` | Web app → API (raised in the browser/web server, never by the API) |
 
 ## Platform
@@ -86,6 +87,23 @@ fail with `AUD_APPEND_ONLY` (FR-AUD-02, M1-P4). No request can reach it — noth
 application issues those statements — so it never appears in an error envelope; it protects
 against a bug, a migration mistake or a stolen connection. Lifting it is an approved procedure
 (RUNBOOK §18).
+
+## Patient portal and Google sign-in (M6a-P3)
+
+ADR-0015. Portal routes use the portal cookies (`me_pt_access`, `me_pt_refresh`, `me_pt_csrf`)
+and audience `mediease-portal`; the staff codes above (`AUTH_SESSION_EXPIRED`,
+`AUTH_REFRESH_REUSED`, `AUTH_CSRF_INVALID`, `AUTH_LOCKED`, `AUTH_ACCOUNT_DISABLED`) mean the same
+for a portal session, logged as `portal.*` instead of `auth.*`. A staff token on a portal route,
+or a portal token on a staff route, is `AUTH_SESSION_EXPIRED` (`auth.rejected` / `portal.rejected`
+`reason=invalid_token`).
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `PRT_INVALID_CREDENTIALS` | 401 | The email or password is incorrect | Unknown email, a Google-only account (no password), or a wrong password; never says which | `portal.sign_in_failed` with `reason` (`unknown_email`, `wrong_password`, `locked`) and `account_id` when known |
+| `PRT_EMAIL_TAKEN` | 409 | An account with this email already exists | Sign-up with an email a password account already uses (one per email, `uq_patient_accounts_password_email`). Accepted enumeration risk, rate limited (decision 7). A Google account with the same email is separate and never merged | `portal.sign_up_refused` `reason=email_taken` |
+| `AUTH_RATE_LIMITED` | 429 | Too many attempts; wait a minute | Over 10 portal sign-ups, 30 portal sign-ins or 30 Google starts/callbacks per minute from one caller (salted IP fingerprint); `Retry-After` gives the seconds | `auth.rate_limited` with `bucket` (`portal-sign-up`, `portal-sign-in`, `google`); `public_rate_limits` |
+| `AUTH_GOOGLE_FAILED` | redirect | Google sign-in did not finish | The callback answers with a redirect to `/sign-in` or `/portal/sign-in` and `?reason=` instead of an envelope: `google_failed` (flow cookie missing, expired or tampered with, `state` mismatch, ID token refused, email not verified, fake provider without a login hint), `google_cancelled` (Google returned `error`, e.g. `access_denied`), `account_disabled`, `too_many_attempts` | `google.failed` with `intent` and `reason` (`flow_invalid`, `state_mismatch`, `provider_error`, `id_token_invalid`, `nonce_mismatch`, `token_refused`, `jwks_unreachable`, `email_not_verified`, `fake_login_hint_missing`, …) |
+| `AUTH_GOOGLE_NO_STAFF_ACCOUNT` | redirect | No MediEase staff account uses this Google address | Staff Google sign-in whose verified email matches no staff user, or a platform ops user (who may not use Google). Google never creates staff access (FR-AUTH-07); redirect reason `google_no_account` | `google.failed` `intent=staff` `reason=unknown_email` or `platform_ops`; invite the address first |
 
 ## Patients (M2)
 

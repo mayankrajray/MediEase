@@ -422,8 +422,15 @@ Full controls list: [SECURITY_AND_COMPLIANCE.md](SECURITY_AND_COMPLIANCE.md).
 - **Authentication:** Argon2id password hashes; JWT access token (15 min) and rotating refresh token
   (14 days, stored hashed, reuse detection revokes the family). Cookies: `HttpOnly`, `Secure`,
   `SameSite=Lax`, path-scoped. CSRF: double-submit token on state-changing requests.
+- **Patient portal sessions (M6a-P3, ADR-0015):** patients are `patient_accounts`, apart from
+  `users`, with their own cookies (`me_pt_access` on `/api/v1/portal`, `me_pt_refresh`,
+  `me_pt_csrf`) and JWT audience `mediease-portal`. `@patient` routes read only the portal cookie;
+  every other route only `me_access`, whose verifier refuses the portal audience. Google sign-in
+  for both is an OpenID Connect code flow with PKCE run by the API behind `OidcPort` (Google, or a
+  local-only fake); staff are matched by Google `sub` after one verified-email link and are never
+  created by it.
 - **Authorisation:** every route declares an access policy (`public`, `authenticated`,
-  `clinic(permission)`, `ops`) and one `before_request` hook enforces it: it authenticates the
+  `clinic(permission)`, `ops`, `patient`) and one `before_request` hook enforces it: it authenticates the
   `me_access` cookie, re-reads the session, user and membership, resolves the request's clinic and
   checks the permission before the view runs. `create_app` refuses to start if any route has no
   policy (default deny). The permission matrix is domain data (PRD §8.1); use cases re-check

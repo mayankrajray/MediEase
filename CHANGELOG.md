@@ -14,6 +14,21 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6a-P3 (#49): patient accounts and Google sign-in (FR-AUTH-07, FR-PRT-01; ADR-0015 Accepted,
+  decisions 1A–8A). Patients sign up with a name, email and password (the staff policy) or with
+  Google, in `patient_accounts` apart from staff users, with their own sessions: cookies
+  `me_pt_access`/`me_pt_refresh`/`me_pt_csrf`, JWT audience `mediease-portal`, routes under
+  `/api/v1/portal/` behind a new `@patient` policy; each kind of token is 401 on the other's
+  routes (a permanent suite enumerates every route). Google is an OpenID Connect code flow with
+  PKCE run by the API (`/api/v1/auth/google/start`, `/callback`; the ID token checked against
+  Google's keys, `iss`, `aud`, `exp`, `nonce`): staff are linked once by verified email and then
+  by `sub`, never created, and ops users may not use it; patients get a verified account. A
+  local-only fake provider (`GOOGLE_OIDC_PROVIDER=fake`, refused when deployed) runs the same
+  flow without L-09. Sign-up, sign-in and Google are rate limited per caller
+  (`AUTH_RATE_LIMITED`). Migration `0020` (three tables, actor type `PATIENT`); contract 0.23.0.
+  Web: *Continue with Google* on `/sign-in`, and `/portal/sign-in`, `/portal/sign-up` and the
+  `/portal` account page at 360 px, with the proxy sending portal visitors to the portal's own
+  sign-in. No new dependency.
 - M6-P2 (#49): every clinic, ops and sign-in screen on the design system (decisions 1A–8A). Lists
   (queue, patient search, follow-ups, ops clinics, a patient's appointments and messages) are
   tables from 768 px and cards below, from one markup with explicit ARIA roles; drawers and
