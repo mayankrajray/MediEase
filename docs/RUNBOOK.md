@@ -54,6 +54,7 @@ demo password above (local only; `--password` overrides it):
 |---|---|
 | `sample-clinic` | `owner@`, `doctor@`, `desk@sample-clinic.example` |
 | `sample-clinic-two` | `owner@sample-clinic-two.example`, and `doctor@sample-clinic.example` again as a second membership |
+| `sample-family-clinic` (M6a-P6) | `owner@sample-family-clinic.example` (a practising owner: Owner with a linked doctor profile, so the Owner / Doctor switch shows), `doctor@` and `desk@sample-family-clinic.example` |
 | (no clinic) | `ops@mediease.example` |
 
 Every seeded doctor gets a Monday–Saturday 10:00–13:00 schedule (15-minute slots, 12 tokens), once,
@@ -72,7 +73,8 @@ row to try *Book follow-up* on. Ops see the month's messaging costs at `/ops/mes
 `doctor@sample-clinic.example` therefore belongs to two clinics: signing in as them shows the clinic
 chooser and switcher in the web app. The seed refuses to run unless `APP_ENV=local` and is
 idempotent **per clinic**: a clinic that exists is left alone, so a database seeded before
-`sample-clinic-two` existed only gains the new clinic.
+`sample-clinic-two` existed only gains the new clinic (`make seed` again adds
+`sample-family-clinic` to an older database).
 
 **`make up` fails with `CFG_INVALID ... JWT_SIGNING_KEY`** (or Compose says
 `set JWT_SIGNING_KEY in .env`): `.env` was created before M1-P2. Set `JWT_SIGNING_KEY` in `.env`

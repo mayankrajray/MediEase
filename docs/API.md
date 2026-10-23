@@ -53,7 +53,7 @@ change that implements it.
 | POST | `/api/v1/auth/sign-out` | Revoke token family | FR-AUTH-02 | Implemented (M1-P2) |
 | GET | `/api/v1/auth/google/start` | Start a Google sign-in for `intent=staff\|patient`; seals the flow into `me_oidc` and redirects to Google (or to the callback with the local fake) | FR-AUTH-07, FR-PRT-01 | Implemented (M6a-P3) |
 | GET | `/api/v1/auth/google/callback` | Finish it: staff cookies for an existing staff user (linked by verified email once, then by `sub`), portal cookies for a patient; redirects to `next`, or back to the sign-in page with a `reason` | FR-AUTH-07, FR-PRT-01 | Implemented (M6a-P3) |
-| GET | `/api/v1/me` | Current user, memberships, permissions | FR-AUTH-03 | Implemented (M1-P3) |
+| GET | `/api/v1/me` | Current user, memberships, permissions; from M6a-P6 each membership's `doctor_id` (the member's doctor profile, or null) | FR-AUTH-03, FR-UX-06 | Implemented (M1-P3, M6a-P6) |
 | POST | `/api/v1/auth/password-reset` | `{email}` → always 202 `{accepted: true}`; the worker emails a 30-minute link to an eligible staff user | FR-AUTH-05 | Implemented (M6a-P4) |
 | POST | `/api/v1/auth/password-reset/complete` | `{token, password}` → 204; ends every session of the account | FR-AUTH-05 | Implemented (M6a-P4) |
 
@@ -141,9 +141,11 @@ can grow (patients, M2).
 change writes its own audit event in the same transaction as the change (FR-AUD-01, spec R11).
 The last active owner can neither be demoted nor deactivated (`409 CLN_LAST_OWNER`). Setting the
 role a member already holds changes nothing and records nothing. `status` accepts `DEACTIVATED`
-only: the lifecycle is `INVITED → ACTIVE → DEACTIVATED` with no way back in M1, so somebody
-removed by mistake is invited again. A new role applies from the member's next request, and a
-deactivated member's next request is refused (FR-ORG-04, AC4).
+only; bringing somebody back is a new invitation (M6a-P5). A new role applies from the member's
+next request, and a deactivated member's next request is refused (FR-ORG-04, AC4). From M6a-P6
+both invitation routes take an optional `doctor_id` for an `OWNER` invitation: that unlinked,
+active doctor profile is linked to the invitee at once ("Doctor 1", FR-ONB-08) and counts once
+they accept (422 on `doctor_id` otherwise).
 
 **Staff invitations** `POST /api/v1/clinic/staff` (and the ops equivalent below) →
 `201` with the member and `accept_url`. An email address or phone number is required, because
@@ -241,6 +243,7 @@ is a documented `make psql` procedure (RUNBOOK §18), and the owner-facing view 
 | Method | Path | Purpose | Req | Status |
 |---|---|---|---|---|
 | GET | `/api/v1/patients?q=` | Lookup by phone, code or name prefix (at most 20, ordered by name) | FR-PAT-04 | Implemented (M2-P2) |
+| GET | `/api/v1/my-patients?q=&limit=&offset=` | Patients the caller has seen as a doctor, latest visit first (`CLINICAL_VIEW` and a doctor profile, else 409 `CLN_NO_DOCTOR_PROFILE`); who and when only | FR-UX-02, FR-UX-06 | Implemented (M6a-P6) |
 | POST | `/api/v1/patients` | Register (returns `409 PAT_PHONE_EXISTS` with candidates unless `confirm_new: true`) | FR-PAT-01/02 | Implemented (M2-P2) |
 | GET | `/api/v1/patients/{patient_id}` | One patient | FR-PAT-01 | Implemented (M2-P2) |
 | PATCH | `/api/v1/patients/{patient_id}` | Correct demographics | FR-PAT-01 | Implemented (M2-P2) |
@@ -434,7 +437,7 @@ never reaches the logs. Audit: `patient_link.opened`, `.challenge_failed`, `.loc
 |---|---|---|---|
 | GET/POST | `/api/v1/patients/{patient_id}/reminders` | List / schedule | FR-REM-02 |
 | PATCH | `/api/v1/reminders/{reminder_id}` | Reschedule / cancel | FR-REM-02 |
-| GET | `/api/v1/follow-ups/pending` | Overdue follow-ups | FR-REM-07 |
+| GET | `/api/v1/follow-ups/pending` | Overdue follow-ups; from M6a-P6 `doctor_id` keeps one doctor's | FR-REM-07, FR-UX-02 |
 | GET | `/api/v1/patients/{patient_id}/messages` | Message history (status only) | FR-MSG-04 |
 | GET | `/webhooks/whatsapp` | Meta verification challenge | FR-MSG-03 |
 | POST | `/webhooks/whatsapp` | Status + inbound (signature verified) | FR-MSG-03/05 |
@@ -463,7 +466,7 @@ waits for a real SMS provider (L-03).
 
 | Method | Path | Purpose | Req |
 |---|---|---|---|
-| GET | `/api/v1/dashboard/today` | *Today*: counts for the caller's role | M6-P1 (decision 5A) |
+| GET | `/api/v1/dashboard/today` | *Today*: counts for the caller's role; from M6a-P6 `view=doctor` for a practising owner's Doctor view (409 `CLN_NO_DOCTOR_PROFILE` without a profile) | M6-P1 (decision 5A), M6a-P6 (decision 4A) |
 
 M6-P1 (contract 0.22.0): `CLINIC_VIEW` (every role). Computed in the clinic's zone; today's
 sessions are generated first, as `GET /queue` does. A doctor with a doctor profile gets
