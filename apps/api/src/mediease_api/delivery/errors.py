@@ -22,6 +22,7 @@ from flask import Flask, Response, jsonify
 from werkzeug.exceptions import HTTPException
 
 from mediease_api.application.auth.errors import AccountLocked, AuthRateLimited
+from mediease_api.application.clinics.errors import InvitesRateLimited
 from mediease_api.application.patients.errors import ImportInvalid, PhoneExists
 from mediease_api.delivery.http.bodies import candidate_body
 from mediease_api.delivery.http.validation import RequestValidationFailed
@@ -82,6 +83,7 @@ DOMAIN_ERROR_STATUS = {
     "CLN_INVALID_TRANSITION": 409,
     "CLN_SLUG_TAKEN": 409,
     "CLN_MEMBER_EXISTS": 409,
+    "CLN_INVITE_RATE_LIMITED": 429,
     "CLN_INVITE_INVALID": 404,
     "CLN_INVITE_EXPIRED": 410,
     "CLN_INVITE_USED": 410,
@@ -160,7 +162,13 @@ def domain_error_response(exc: DomainError) -> tuple[Response, int]:
         details = {"problems": list(exc.problems)}
     response, _ = error_response(exc.code, exc.message, status, details)
     if isinstance(
-        exc, AccountLocked | AuthRateLimited | PdfBusy | LinkRateLimited | WebhookRateLimited
+        exc,
+        AccountLocked
+        | AuthRateLimited
+        | PdfBusy
+        | LinkRateLimited
+        | WebhookRateLimited
+        | InvitesRateLimited,
     ):
         response.headers["Retry-After"] = str(exc.retry_after_seconds)
     return response, status

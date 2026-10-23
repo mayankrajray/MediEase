@@ -135,6 +135,16 @@ def test_templates_escape_names_and_carry_no_clinical_words() -> None:
     assert "http" not in changed.text  # no link to click in a "your password changed" email
 
 
+def test_m6a_p5_the_staff_invitation_names_clinic_and_role_and_escapes_them() -> None:
+    rendered = email_templates.staff_invite("<i>Asha</i>", "Sample & Co Clinic", "a doctor", LINK)
+    assert rendered.subject == "Join Sample & Co Clinic on MediEase"
+    assert "join Sample & Co Clinic on MediEase as a doctor" in rendered.text
+    assert "Sample &amp; Co Clinic" in rendered.html
+    assert "<i>Asha</i>" not in rendered.html
+    assert rendered.text.count(LINK) == 1
+    assert "expires in 7 days" in rendered.text
+
+
 def test_adr_0016_console_is_refused_in_production(
     set_env: SetEnv, valid_env: dict[str, str]
 ) -> None:

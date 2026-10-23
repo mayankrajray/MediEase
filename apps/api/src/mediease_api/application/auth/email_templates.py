@@ -90,3 +90,23 @@ def password_changed(name: str) -> Rendered:
         text="\n\n".join([hello, *lines, "MediEase"]),
         html=_page([html.escape(hello), *lines], None),
     )
+
+
+def staff_invite(name: str, clinic_name: str, role_label: str, link: str) -> Rendered:
+    """M6a-P5: an owner's invitation to join their clinic (FR-AUTH-08)."""
+    hello = f"Hello {name},"
+    invited = f"You have been invited to join {clinic_name} on MediEase as {role_label}."
+    lines = [
+        "Open the link to set up your account. If you already use MediEase, sign in with your"
+        " current password to add this clinic.",
+        "The link works once and expires in 7 days. If it has expired, ask the clinic to send"
+        " the invitation again.",
+        "If you were not expecting this, you can ignore this email.",
+    ]
+    return Rendered(
+        subject=f"Join {clinic_name} on MediEase",
+        text="\n\n".join([hello, invited, link, *lines, "MediEase"]),
+        html=_page(
+            [html.escape(hello), html.escape(invited), *lines], ("Accept the invitation", link)
+        ),
+    )

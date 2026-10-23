@@ -30,6 +30,7 @@ _FAR_DATE = (date.today() + timedelta(days=30)).isoformat()
 CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/clinic/doctors/<uuid:doctor_id>": lambda w: f"/api/v1/clinic/doctors/{w.b.doctor.id}",
     "/api/v1/clinic/staff/<uuid:membership_id>": lambda w: _staff_url(w),
+    "/api/v1/clinic/staff/<uuid:membership_id>/resend": lambda w: _invited_staff_url(w),
     "/api/v1/patients/<uuid:patient_id>": lambda w: _patient_url(w),
     "/api/v1/patients/<uuid:patient_id>/consent": lambda w: f"{_patient_url(w)}/consent",
     "/api/v1/patients/<uuid:patient_id>/opt-out": lambda w: f"{_patient_url(w)}/opt-out",
@@ -109,6 +110,7 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
         lambda w: {"session_id": _session_of_b(w, days=32)},
     ),
     "/api/v1/clinic/staff/<uuid:membership_id>": ("PATCH", {"role": "DOCTOR"}),
+    "/api/v1/clinic/staff/<uuid:membership_id>/resend": ("POST", {}),
     "/api/v1/visits/<uuid:visit_id>/complete": ("POST", {}),
     "/api/v1/visits/<uuid:visit_id>/addenda": ("POST", {"body": "seen again"}),
     "/api/v1/visits/<uuid:visit_id>/prescriptions": ("POST", {}),
@@ -294,6 +296,20 @@ def _staff_url(world: World) -> str:
     staff = owner_of_b.get("/api/v1/clinic/staff").get_json()["items"]
     membership_id = next(m["membership_id"] for m in staff if m["full_name"] == "Beta Front_Desk")
     return f"/api/v1/clinic/staff/{membership_id}"
+
+
+def _invited_staff_url(world: World) -> str:
+    """The resend URL of somebody clinic B has invited by phone (M6a-P5: resend needs INVITED)."""
+    owner_of_b = world.client_for(world.b.owner)
+    csrf = owner_of_b.get_cookie("me_csrf", path="/")
+    assert csrf is not None
+    invited = owner_of_b.post(
+        "/api/v1/clinic/staff",
+        json={"full_name": "Beta Invitee", "role": "FRONT_DESK", "phone": "9000066001"},
+        headers={"X-CSRF-Token": csrf.value},
+    )
+    assert invited.status_code == 201, invited.get_json()
+    return f"/api/v1/clinic/staff/{invited.get_json()['membership_id']}/resend"
 
 
 def _patient_url(world: World) -> str:

@@ -543,12 +543,19 @@ class SqlAlchemyMembershipRepository(TenantScopedRepository[ClinicMembershipRow]
         return self._session.scalar(select(func.count()).select_from(owners.subquery())) or 0
 
     def list_staff(self) -> Sequence[StaffMember]:
-        # Scoped like every other query here; the join only adds the member's
-        # name, which lives on the platform `users` table.
+        # Scoped like every other query here; the joins only add the member's name and sign-in
+        # identifiers (platform `users`) and whether an active doctor profile at *this* clinic
+        # is linked to them (M6a-P5).
         query = (
             self._scoped_select()
-            .add_columns(UserRow.full_name)
+            .add_columns(UserRow.full_name, UserRow.email, UserRow.phone_e164, DoctorRow.id)
             .join(UserRow, UserRow.id == ClinicMembershipRow.user_id)
+            .outerjoin(
+                DoctorRow,
+                (DoctorRow.clinic_id == ClinicMembershipRow.clinic_id)
+                & (DoctorRow.user_id == ClinicMembershipRow.user_id)
+                & DoctorRow.is_active,
+            )
             .order_by(UserRow.full_name, ClinicMembershipRow.id)
         )
         return [
@@ -558,8 +565,16 @@ class SqlAlchemyMembershipRepository(TenantScopedRepository[ClinicMembershipRow]
                 full_name=full_name,
                 role=Role(row.role),
                 status=MembershipStatus(row.status),
+                email=email,
+                phone_e164=phone,
+                invite_expires_at=(
+                    _utc_or_none(row.invite_expires_at)
+                    if row.status == MembershipStatus.INVITED.value
+                    else None
+                ),
+                has_doctor_profile=doctor_id is not None,
             )
-            for row, full_name in self._session.execute(query)
+            for row, full_name, email, phone, doctor_id in self._session.execute(query)
         ]
 
     def update(self, membership: ClinicMembership) -> None:

@@ -305,10 +305,27 @@ def _actor() -> Actor:
 
 
 def invitation_body(invitation: StaffInvitation, public_base_url: str) -> dict[str, Any]:
-    """The new member plus the acceptance URL — the only place the secret appears."""
+    """The new member plus the acceptance URL — the only place the secret appears.
+
+    Ops invitations are always shown as a link (until M6c, FR-ONB-08).
+    """
+    if invitation.token is None:  # pragma: no cover - ops never ask for email delivery
+        raise ValueError("an ops invitation is always a link")
     return {
         **staff_body(invitation.member),
         "accept_url": f"{public_base_url}/invite/{invitation.token}",
+    }
+
+
+def team_invitation_body(invitation: StaffInvitation, public_base_url: str) -> dict[str, Any]:
+    """An owner's invitation (M6a-P5): emailed (masked address) or a link shown once."""
+    return {
+        **staff_body(invitation.member),
+        "delivery": invitation.delivery.value,
+        "email_masked": invitation.email_masked,
+        "accept_url": (
+            f"{public_base_url}/invite/{invitation.token}" if invitation.token is not None else None
+        ),
     }
 
 

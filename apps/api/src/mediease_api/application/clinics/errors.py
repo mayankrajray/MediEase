@@ -22,12 +22,25 @@ class SlugTaken(DomainError):
 
 
 class MemberExists(DomainError):
-    """I2: this user already has a membership in this clinic (active or deactivated)."""
+    """I2: this user already has an active or pending membership in this clinic."""
 
     code = "CLN_MEMBER_EXISTS"
 
     def __init__(self) -> None:
         super().__init__("This person is already a member of this clinic.")
+
+
+class InvitesRateLimited(DomainError):
+    """M6a-P5: over 10 invitations an hour for the clinic, or 3 resends an hour for one member."""
+
+    code = "CLN_INVITE_RATE_LIMITED"
+
+    def __init__(self, retry_after_seconds: int) -> None:
+        super().__init__(
+            "Too many invitations for now. Try again later.",
+            retry_after_seconds=str(retry_after_seconds),
+        )
+        self.retry_after_seconds = retry_after_seconds
 
 
 class InviteInvalid(DomainError):

@@ -74,7 +74,8 @@ from mediease_api.application.auth.sign_in import SignIn
 from mediease_api.application.auth.sign_out import SignOut
 from mediease_api.application.clinics.change_staff_role import ChangeStaffRole
 from mediease_api.application.clinics.deactivate_staff import DeactivateStaff
-from mediease_api.application.clinics.invite_staff import InviteStaff
+from mediease_api.application.clinics.invite_email import SendStaffInvite
+from mediease_api.application.clinics.invite_staff import InviteStaff, ResendStaffInvite
 from mediease_api.application.clinics.onboard_clinic import (
     AddDoctor,
     CreateClinic,
@@ -193,6 +194,7 @@ from mediease_api.domain.jobs.job import (
     NO_SHOW_SWEEP_KIND,
     PURGE_KIND,
     RECONCILE_KIND,
+    STAFF_INVITE_KIND,
     WEBHOOK_KIND,
 )
 from mediease_api.domain.messaging.jobs import (
@@ -414,6 +416,11 @@ class _UseCases:
 
     def invite_staff(self) -> InviteStaff:
         return InviteStaff(
+            uow=self._uow(), clock=self.clock, ids=self.ids, secrets=self.invite_secrets
+        )
+
+    def resend_staff_invite(self) -> ResendStaffInvite:
+        return ResendStaffInvite(
             uow=self._uow(), clock=self.clock, ids=self.ids, secrets=self.invite_secrets
         )
 
@@ -816,6 +823,7 @@ def build_worker(settings: AppSettings, stop: threading.Event) -> Worker:
     store = SqlAlchemyJobStore(factory)
     # Jitter only spreads retries out; it needs no cryptographic randomness.
     rand = random.SystemRandom().random
+    email = build_email(settings)
     handlers: dict[str, JobHandler] = {
         PURGE_KIND: PurgeExpired(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
         AUTH_EMAIL_KIND: SendAuthEmail(
@@ -823,7 +831,15 @@ def build_worker(settings: AppSettings, stop: threading.Event) -> Worker:
             clock=clock,
             ids=ids,
             secrets=Sha256RefreshTokenSecrets(),
-            email=build_email(settings),
+            email=email,
+            public_base_url=settings.PUBLIC_BASE_URL,
+        ),
+        # M6a-P5: an owner's emailed staff invitation (the same secret adapter as the API's).
+        STAFF_INVITE_KIND: SendStaffInvite(
+            uow=SqlAlchemyUnitOfWork(factory),
+            clock=clock,
+            secrets=Sha256RefreshTokenSecrets(),
+            email=email,
             public_base_url=settings.PUBLIC_BASE_URL,
         ),
         **_messaging_handlers(settings, factory, clock, ids),

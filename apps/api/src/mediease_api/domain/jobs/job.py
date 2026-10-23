@@ -35,7 +35,9 @@ MARK_NO_SHOWS_KIND = "mark_no_shows"
 # M6a-P4 (ADR-0016): verification and password-reset emails. They belong to an account, not a
 # clinic, so they are system kinds.
 AUTH_EMAIL_KIND = "send_auth_email"
-
+# M6a-P5: an owner's emailed staff invitation. It belongs to a clinic, so it is a clinic kind (no
+# migration: only system kinds are listed in ``ck_jobs_system_kind``).
+STAFF_INVITE_KIND = "send_staff_invite"
 # R9d: the only kinds allowed to have no clinic. The database CHECK ``ck_jobs_system_kind`` lists
 # the same kinds; a test keeps the two in step, and adding a kind is a migration.
 SYSTEM_KINDS: frozenset[str] = frozenset(

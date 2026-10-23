@@ -108,7 +108,7 @@ def test_r9_an_invited_owner_is_not_an_active_owner() -> None:
     assert invited_owner.status is MembershipStatus.DEACTIVATED
 
 
-def test_fr_org_04_deactivated_membership_is_final() -> None:
+def test_fr_org_04_a_deactivated_membership_only_comes_back_by_invitation() -> None:
     membership = a_membership(uuid4(), uuid4())
     membership.deactivate(active_owner_count=1, now=LATER)
     assert membership.status is MembershipStatus.DEACTIVATED
@@ -118,3 +118,6 @@ def test_fr_org_04_deactivated_membership_is_final() -> None:
         membership.change_role(Role.OWNER, active_owner_count=1, now=LATER)
     with pytest.raises(InvalidTransition):
         membership.activate(now=LATER)
+    # M6a-P5 (decision 6A): the only way back is a new invitation, accepted by the person.
+    membership.reinvite(Role.DOCTOR, now=LATER)
+    assert membership.status is MembershipStatus.INVITED

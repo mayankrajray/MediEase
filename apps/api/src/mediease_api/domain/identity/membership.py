@@ -1,9 +1,10 @@
 """ClinicMembership — a user's single role at one clinic (FR-ORG-03, FR-ORG-04).
 
 Lifecycle (spec §3): ``INVITED → ACTIVE → DEACTIVATED``; an invited member can
-also be deactivated before accepting. There is no way back from
-``DEACTIVATED``: a clinic that deactivated someone by mistake invites them
-again, and the audit trail shows both steps.
+also be deactivated before accepting. From M6a-P5 an owner can bring a
+deactivated member back with a new invitation (``DEACTIVATED → INVITED``,
+``reinvite``): the person keeps their user and history, and becomes ``ACTIVE``
+again only by accepting it. The audit trail shows every step.
 
 Invariant **I2** (one membership per user per clinic) is enforced by a unique
 constraint, because only the database sees every membership at once.
@@ -114,6 +115,31 @@ class ClinicMembership:
         self._touch(now)
         self.invite_token_hash = token_hash
         self.invite_expires_at = self.updated_at + ttl
+        self.invite_accepted_at = None
+
+    def withdraw_invite(self, *, now: datetime) -> None:
+        """Retire the pending secret now; a new one follows by email (M6a-P5).
+
+        An emailed invitation's secret is made by the worker at send time (ADR-0016 decision 4),
+        so between the request and the send there is deliberately no usable link.
+        """
+        if self.status is not MembershipStatus.INVITED:
+            raise InvalidTransition("membership", self.status, "invite")
+        self._touch(now)
+        self.invite_token_hash = None
+        self.invite_expires_at = None
+        self.invite_accepted_at = None
+
+    def reinvite(self, role: Role, *, now: datetime) -> None:
+        """``DEACTIVATED`` → ``INVITED`` with a role (M6a-P5); the caller then issues the secret."""
+        if self.status is not MembershipStatus.DEACTIVATED:
+            raise InvalidTransition("membership", self.status, "re-invite")
+        self._touch(now)
+        self.status = MembershipStatus.INVITED
+        self.role = role
+        # The old acceptance belongs to the old invitation.
+        self.invite_token_hash = None
+        self.invite_expires_at = None
         self.invite_accepted_at = None
 
     def invite_state(self, now: datetime) -> InviteState:
