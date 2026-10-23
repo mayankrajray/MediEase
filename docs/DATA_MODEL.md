@@ -621,6 +621,23 @@ At most one staff link and one patient link per `(provider, subject)`
 (`uq_external_identities_staff_subject`, `uq_external_identities_patient_subject`, partial): the
 same person may be staff and a patient.
 
+### `email_tokens`
+Migration `0021` (M6a-P4, ADR-0016). Single-use verification and reset tokens; platform data.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| purpose | text not null | `VERIFY_EMAIL` (24 h) \| `RESET_PASSWORD` (30 min) |
+| user_id / patient_account_id | uuid null FK | Exactly one (`ck_email_tokens_exactly_one_owner`) |
+| email | text not null | The address it was sent to; a token is refused once the account's email differs |
+| token_hash | text unique | SHA-256 of the value; the value is only in the email (made by the worker at send time) |
+| expires_at, created_at | timestamptz | Index on `expires_at` for the purge |
+| used_at, superseded_at | timestamptz null | Used once; superseded when a newer token of the same purpose is sent |
+
+Purged 30 days after expiry with the refresh tokens. `jobs` gains the system kind
+`send_auth_email` (payload: which email, `staff` or `patient`, the account ID; never an address
+or a token).
+
 ---
 
 ## Retention and erasure
@@ -631,6 +648,7 @@ same person may be staff and a patient.
 | Messages | 18 months | Scheduled purge job |
 | Audit events | 3 years minimum | Partitioned by month (post-pilot) |
 | Refresh tokens | 30 days after expiry | Purge job (staff and, from M6a-P3, portal sessions) |
+| Email tokens | 30 days after expiry | Purge job (M6a-P4) |
 | Patient links | 30 days after expiry | Purge job |
 
 Erasure requests are executed by a reviewed, audited procedure (`scripts/erase_patient.py`, M6)

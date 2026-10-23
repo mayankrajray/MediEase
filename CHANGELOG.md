@@ -14,6 +14,18 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6a-P4 (#49): email verification and password reset (FR-AUTH-08, FR-AUTH-05; ADR-0016
+  Accepted, decisions 1A–8A). An `EmailPort` with one standard-library SMTP adapter (Brevo free
+  for the pilot, L-11; Resend or SES Mumbai by settings), and a pinned Mailpit container
+  (`axllent/mailpit:v1.32.0`) catching mail locally at localhost:8025. Requests enqueue the new
+  system job `send_auth_email`; the worker makes the single-use token (stored as a digest in
+  `email_tokens`, migration `0021`) and sends, so no secret is ever stored. Patients verify a
+  password account's email from a page that POSTs (banner and resend, 3 an hour, on `/portal`);
+  staff and patients reset a forgotten password (`/forgot-password`, `/portal/forgot-password`)
+  with the same 202 for any address, a 30-minute link, the lockout cleared, every session ended
+  and a "password changed" email; Google-only patients get a "use Google" notice. Contract
+  0.24.0. No new Python or npm dependency. Also: the FR-REM-07 journey no longer tries to cancel
+  an earlier booking whose session has ended (it failed on reruns after clinic hours).
 - M6a-P3 (#49): patient accounts and Google sign-in (FR-AUTH-07, FR-PRT-01; ADR-0015 Accepted,
   decisions 1A–8A). Patients sign up with a name, email and password (the staff policy) or with
   Google, in `patient_accounts` apart from staff users, with their own sessions: cookies

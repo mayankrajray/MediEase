@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Proposed (M6a-P4 design, 23 Oct 2026) |
+| Status | Accepted (M6a-P4 design proposed and approved by the developer 23 Oct 2026, A on all eight) |
 | Date | 2026-10-23 |
 | Related | PRD v1.2 FR-AUTH-05, FR-AUTH-08, FR-PUB-03, NFR-07; ADR-0005 (job queue), ADR-0007 (messaging port), ADR-0015; L-04, L-11; M6a-P4 design |
 

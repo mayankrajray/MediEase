@@ -21,7 +21,7 @@ notifications for patients, public booking) moved to M6b.
 | P1 | Design system (tokens, primitives, Motion, responsive shell) and the role dashboards' first screen: *Today* for front desk, doctor and owner | Below (confirmed 20 Oct 2026) |
 | P2 | The design system across the existing screens (queue, patients, consultation, schedule, follow-ups, ops); mobile layouts; motion for drawers, dialogs and list changes | Below (confirmed 21 Oct 2026) |
 | P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR-0015) | Below (approved 22 Oct 2026; built 23 Oct 2026) |
-| P4 | Email provider behind a port: email verification, password reset by link (FR-AUTH-08, FR-AUTH-05) | Below (awaiting approval) |
+| P4 | Email provider behind a port: email verification, password reset by link (FR-AUTH-08, FR-AUTH-05) | Below (approved and built 23 Oct 2026) |
 | P5 | Owner Team page: invite, change role, deactivate (FR-ORG-07) | At its start |
 | P6 | Role workspaces (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); owner as Doctor 1 in the ops wizard (FR-ORG-03) | At its start |
 | P7 | Notification service, domain events, in-app channel, notification centre (FR-NTF-02..06) | At its start |
@@ -486,3 +486,54 @@ Planned verification:
     in;
   - failure path: opening the reset link a second time shows that it was already used.
 - **Gates:** `make lint typecheck contract-check test` and `make e2e`.
+
+**Approved by the developer 23 Oct 2026: A on all eight** (ADR-0016 Accepted).
+
+### M6a-P4 — as built (23 Oct 2026)
+
+- **API.**
+  - **Tokens.** `domain/identity/email_token.py` defines `EmailToken`, its lifetimes, and
+    `TokenInvalid`/`TokenExpired`. `User` and `PatientAccount` gain `clear_lockout`, and
+    `PatientAccount` gains `verify_email`.
+  - **Email port.** `ports/email.py`, with `adapters/email/smtp.py` (STARTTLS, TLS or none;
+    failures sorted into retryable and permanent) and `adapters/email/console.py`.
+  - **The send job.** `application/auth/emails.py` holds `enqueue_auth_email` and the
+    `SendAuthEmail` handler for the new system kind `send_auth_email`. The handler re-reads the
+    account and skips one that no longer qualifies. It supersedes earlier tokens, stores a new
+    digest, commits, then sends. Wording is in `email_templates.py`.
+  - **Use cases.** `application/auth/password_reset.py`: `RequestPasswordReset`,
+    `CompletePasswordReset`, `VerifyEmail` and `ResendVerification`. Sign-up now enqueues the
+    verification email.
+  - **Sessions and routes.**
+    - `RefreshTokenRepository.revoke_all_for_owner` serves staff and portal tokens alike.
+    - The new routes are in `delivery/http/auth.py` and `portal.py`; the anonymous ones are
+      CSRF-exempt.
+    - `bootstrap.build_email` refuses `console` in production. The worker registers the handler.
+  - **Database and contract.**
+    - Migration `0021` adds `email_tokens` and the system kind.
+    - The retention purge also removes email tokens.
+    - Contract 0.24.0.
+- **Compose.** A `mailpit` service (`axllent/mailpit:v1.32.0`, hardened, port 8025 on localhost).
+  The API and worker environment now names the email and Google settings explicitly.
+- **Web.**
+  - `ForgotPasswordForm` and `ResetPasswordForm` are shared by staff and patients.
+  - `VerifyEmail` is a page with a button.
+  - The `/portal` banner offers *Resend the email*.
+  - *Forgot password?* links are on both sign-in pages, plus a `password_reset` reason.
+  - The proxy's public pages gain `/forgot-password`, `/portal/forgot-password` and the
+    `reset-password` and `verify-email` link prefixes.
+  - Link pages send no referrer.
+- **Journey fix.** `reminders-follow-ups.spec.ts` FR-REM-07 skipped cancelling an earlier booking
+  whose session has already ended. The API refuses that with `APT_NOT_MODIFIABLE`, so the
+  journey failed when re-run after clinic hours. This is not a behaviour change, and the
+  assertion is unchanged.
+- **Verification.**
+  - **Gates.** `make lint typecheck contract-check test` are green. API: 1,707 tests, 97.61%
+    package coverage and 97% on `domain/` + `application/`. Web: 52 files, 503 tests.
+  - **Stack.** `make up` (with `mailpit` healthy) and `make smoke` are green. `make e2e` is
+    22/22, including `password-reset.spec.ts`:
+    - a patient confirms their email from the Mailpit link at 360 px and the banner goes;
+    - a fresh staff member resets a forgotten password, their old session gets 401 and the new
+      password signs in;
+    - failure path: the same link a second time says it is not valid any more.
+  - **Not verified.** Real delivery through Brevo and its SPF, DKIM and DMARC wait for L-11.
