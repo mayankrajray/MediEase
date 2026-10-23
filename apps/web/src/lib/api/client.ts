@@ -114,6 +114,8 @@ export interface RequestOptions {
   readonly fetchImpl?: typeof fetch;
   /** Extra request headers the contract declares, e.g. the patient page's `X-Link-View` (M4-P5). */
   readonly headers?: Readonly<Record<string, string>>;
+  /** Which CSRF cookie to copy into `X-CSRF-Token`: `me_csrf` (staff, default) or `me_pt_csrf`. */
+  readonly csrfCookie?: string;
 }
 
 export class ApiError extends Error {
@@ -257,7 +259,7 @@ async function send(
     headers["If-None-Match"] = ifNoneMatch;
   }
   if (method !== "GET") {
-    const csrf = readCsrfToken();
+    const csrf = readCsrfToken(options.csrfCookie);
     if (csrf !== undefined) {
       headers[CSRF_HEADER] = csrf;
     }

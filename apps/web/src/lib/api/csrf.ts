@@ -8,6 +8,8 @@
  */
 
 export const CSRF_COOKIE = "me_csrf";
+/** The patient portal's own key (M6a-P3, ADR-0015): portal requests send this one instead. */
+export const PORTAL_CSRF_COOKIE = "me_pt_csrf";
 
 /** The value of one cookie in a `document.cookie`-style string, or undefined. */
 export function parseCookie(cookies: string, name: string): string | undefined {
@@ -26,9 +28,9 @@ export function parseCookie(cookies: string, name: string): string | undefined {
 }
 
 /** The current CSRF token, or undefined on the server or when signed out. */
-export function readCsrfToken(): string | undefined {
+export function readCsrfToken(cookie: string = CSRF_COOKIE): string | undefined {
   if (typeof document === "undefined") {
     return undefined;
   }
-  return parseCookie(document.cookie, CSRF_COOKIE);
+  return parseCookie(document.cookie, cookie);
 }

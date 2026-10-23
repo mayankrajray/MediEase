@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { safeNextPath } from "./safe-next";
+import { isPortalPath, safeNextPath, safePortalNextPath, safeStaffNextPath } from "./safe-next";
 
 describe("safeNextPath (open-redirect guard)", () => {
   it.each(["/queue", "/queue?tab=1", "/select-clinic#top", "/a/b/c"])("keeps %s", (path) => {
@@ -30,5 +30,30 @@ describe("safeNextPath (open-redirect guard)", () => {
 
   it("returns a normalised path on this site", () => {
     expect(safeNextPath("/a/../queue")).toBe("/queue");
+  });
+});
+
+describe("portal and staff landings (M6a-P3, ADR-0015)", () => {
+  it.each(["/portal", "/portal/appointments?x=1"])("a patient may land on %s", (path) => {
+    expect(safePortalNextPath(path)).toBe(path);
+  });
+
+  it.each(["/today", "/queue", "/portal/sign-in", "/portal/sign-up?next=/portal", "/portalx", "//evil.example"])(
+    "a patient never lands on %s",
+    (path) => {
+      expect(safePortalNextPath(path)).toBe("/portal");
+    },
+  );
+
+  it("staff never land in the portal", () => {
+    expect(safeStaffNextPath("/portal", "/today")).toBe("/today");
+    expect(safeStaffNextPath("/portal/x", "/today")).toBe("/today");
+    expect(safeStaffNextPath("/queue", "/today")).toBe("/queue");
+  });
+
+  it("no sign-in page is ever a landing", () => {
+    expect(safeNextPath("/portal/sign-in", "/f")).toBe("/f");
+    expect(isPortalPath("/portal")).toBe(true);
+    expect(isPortalPath("/portalx")).toBe(false);
   });
 });

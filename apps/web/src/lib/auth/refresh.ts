@@ -52,13 +52,15 @@ export interface RefreshDeps {
   readonly probe?: () => Promise<unknown>;
   /** Defaults to `navigator.locks` when the browser has it. */
   readonly locks?: Pick<LockManager, "request"> | undefined;
+  /** The Web Lock (and in-tab share) to use; the portal session has its own (M6a-P3). */
+  readonly lockName?: string;
 }
 
-let inFlight: Promise<void> | undefined;
+const inFlight = new Map<string, Promise<void>>();
 
 /** Tests only: forget a refresh that is still "in flight". */
 export function resetRefreshState(): void {
-  inFlight = undefined;
+  inFlight.clear();
 }
 
 export function isSessionExpired(error: unknown): boolean {
@@ -85,13 +87,18 @@ export async function withSessionRefresh<T>(
 }
 
 function refreshOnce(deps: RefreshDeps): Promise<void> {
-  inFlight ??= runRefresh(deps).finally(() => {
-    inFlight = undefined;
-  });
-  return inFlight;
+  const name = deps.lockName ?? LOCK_NAME;
+  let running = inFlight.get(name);
+  if (running === undefined) {
+    running = runRefresh(deps, name).finally(() => {
+      inFlight.delete(name);
+    });
+    inFlight.set(name, running);
+  }
+  return running;
 }
 
-async function runRefresh(deps: RefreshDeps): Promise<void> {
+async function runRefresh(deps: RefreshDeps, lockName: string): Promise<void> {
   const refresh = deps.refresh ?? defaultRefresh;
   const probe = deps.probe ?? defaultProbe;
 
@@ -113,7 +120,7 @@ async function runRefresh(deps: RefreshDeps): Promise<void> {
   if (locks === undefined) {
     return work();
   }
-  return locks.request(LOCK_NAME, work);
+  return locks.request(lockName, work);
 }
 
 async function defaultRefresh(): Promise<void> {

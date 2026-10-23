@@ -7,6 +7,7 @@ import { ApiError, apiPost } from "@/lib/api/client";
 
 import { readRememberedClinic } from "./clinic-selection";
 import { ErrorNotice } from "./ErrorNotice";
+import { GoogleButton } from "./GoogleButton";
 import { postSignInPath } from "./landing";
 import {
   AUTH_INVALID_CREDENTIALS,
@@ -172,6 +173,8 @@ export function SignInForm({ next, reason }: { next: string; reason?: SignInReas
           {submitting ? "Signing in…" : "Sign in"}
         </button>
       </form>
+
+      <GoogleButton intent="staff" next={next} email={identifier} />
     </section>
   );
 }

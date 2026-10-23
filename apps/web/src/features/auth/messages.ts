@@ -24,6 +24,12 @@ export const SIGN_IN_REASONS = {
   session_ended_for_safety:
     "Your session was ended for safety. Please sign in again. If this keeps happening, tell your clinic owner.",
   account_disabled: "This account has been deactivated. Contact your clinic owner.",
+  // M6a-P3: where a Google sign-in comes back when it did not finish (ADR-0015).
+  google_failed: "Google sign-in did not work. Try again, or sign in with your password.",
+  google_cancelled: "Google sign-in was cancelled.",
+  google_no_account:
+    "No MediEase staff account uses this Google address. Sign in with your password, or ask your clinic owner to invite this address.",
+  too_many_attempts: "Too many attempts. Wait a minute and try again.",
 } as const;
 
 export type SignInReason = keyof typeof SIGN_IN_REASONS;

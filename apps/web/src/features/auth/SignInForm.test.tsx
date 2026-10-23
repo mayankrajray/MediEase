@@ -33,6 +33,26 @@ afterEach(() => {
 });
 
 describe("SignInForm", () => {
+  it("FR-AUTH-07: offers Google, passing the typed email as a login hint and where to go next", () => {
+    render(<SignInForm next="/queue" />);
+    const google = screen.getByRole("link", { name: /Continue with Google/ });
+    expect(google).toHaveAttribute("href", "/api/v1/auth/google/start?intent=staff&next=%2Fqueue");
+
+    fireEvent.change(screen.getByLabelText("Email or phone number"), {
+      target: { value: " doctor@sample-clinic.example " },
+    });
+    expect(google.getAttribute("href")).toContain("login_hint=doctor%40sample-clinic.example");
+
+    // A phone number is not an email and is never sent to Google.
+    fireEvent.change(screen.getByLabelText("Email or phone number"), { target: { value: "9000000002" } });
+    expect(google.getAttribute("href")).not.toContain("login_hint");
+  });
+
+  it("FR-AUTH-07: explains a Google address with no staff account", () => {
+    render(<SignInForm next="/today" reason="google_no_account" />);
+    expect(screen.getByRole("status")).toHaveTextContent("No MediEase staff account uses this Google address");
+  });
+
   it("FR-AUTH-01: labels both fields and lets password managers recognise them", () => {
     render(<SignInForm next="/queue" />);
 
