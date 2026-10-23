@@ -43,6 +43,7 @@ class PurgeExpired:
                         "jobs": str(counts.jobs),
                         "webhook_events": str(counts.webhook_events),
                         "email_tokens": str(counts.email_tokens),
+                        "notifications": str(counts.notifications),
                     },
                 )
             )
@@ -54,6 +55,7 @@ class PurgeExpired:
             jobs=counts.jobs,
             webhook_events=counts.webhook_events,
             email_tokens=counts.email_tokens,
+            notifications=counts.notifications,
         )
         return counts
 

@@ -212,6 +212,7 @@ def test_fr_rem_06_a_failure_reported_by_webhook_falls_back_too(
     process = ProcessWebhookEvent(
         uow=SqlAlchemyUnitOfWork(session_factory),
         clock=SystemClock(),
+        ids=Uuid7Generator(),
         parser=WhatsAppWebhookParser(CIPHER),
         opt_outs=OptOutByReply(ids=IDS, phones=CIPHER),
         fallback=SmsFallback(ids=IDS),

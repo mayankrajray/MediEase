@@ -34,6 +34,7 @@ from mediease_api.domain.messaging.errors import (
 )
 from mediease_api.domain.messaging.message import Message, MessageStatus, SourceType
 from mediease_api.domain.messaging.pricing import PriceTable
+from mediease_api.domain.notifications.events import MessageFailed
 from mediease_api.domain.patients.patient import Patient
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -261,6 +262,7 @@ class MessageSender:
             now = self._clock.now()
             message = tenant.messages.get_by_key(key, for_update=True)
             assert message is not None, "written before the call"
+            was_failed = message.status is MessageStatus.FAILED
             change(message, now)
             # R18: an SMS (per segment), a console message or a failure is priced now; WhatsApp
             # waits for the delivery status.
@@ -270,6 +272,19 @@ class MessageSender:
                 after(uow, tenant, now)
             if failed is not None:
                 failed(uow, tenant, message, now)
+            if not was_failed and message.status is MessageStatus.FAILED:
+                # M6a-P7 (FR-NTF-04): the front desk and the owners are told, in this transaction.
+                # Imported here: the service enqueues the M5 jobs, whose handlers use this sender.
+                from mediease_api.application.notifications.service import publish
+
+                publish(
+                    uow,
+                    MessageFailed(message.id, message.patient_id),
+                    clinic_id=clinic_id,
+                    ids=self._ids,
+                    now=now,
+                    request_id=message.request_id,
+                )
             uow.commit()
 
 

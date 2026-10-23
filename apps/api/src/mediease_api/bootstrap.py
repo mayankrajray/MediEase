@@ -107,6 +107,14 @@ from mediease_api.application.messaging.webhooks import (
     ReconcileMessages,
     VerifyWebhookSubscription,
 )
+from mediease_api.application.notifications.use_cases import (
+    GetNotificationPreferences,
+    GetNotificationSummary,
+    ListNotifications,
+    ReadAllNotifications,
+    ReadNotification,
+    SetNotificationPreferences,
+)
 from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics, MessagingCosts
 from mediease_api.application.patients.consent import OptIn, OptOut, RecordConsent
 from mediease_api.application.patients.import_patients import ImportPatients
@@ -174,6 +182,7 @@ from mediease_api.delivery.http.dashboard import create_dashboard_blueprint
 from mediease_api.delivery.http.google import create_google_blueprint
 from mediease_api.delivery.http.invites import create_invite_blueprint
 from mediease_api.delivery.http.me import create_me_blueprint
+from mediease_api.delivery.http.notifications import create_notifications_blueprint
 from mediease_api.delivery.http.ops import create_ops_blueprint
 from mediease_api.delivery.http.patients import (
     create_my_patients_blueprint,
@@ -464,6 +473,25 @@ class _UseCases:
 
     def list_my_patients(self) -> ListMyPatients:
         return ListMyPatients(uow=self._uow(), clock=self.clock)
+
+    # M6a-P7: the notification centre and preferences.
+    def list_notifications(self) -> ListNotifications:
+        return ListNotifications(uow=self._uow())
+
+    def notification_summary(self) -> GetNotificationSummary:
+        return GetNotificationSummary(uow=self._uow())
+
+    def read_notification(self) -> ReadNotification:
+        return ReadNotification(uow=self._uow(), clock=self.clock)
+
+    def read_all_notifications(self) -> ReadAllNotifications:
+        return ReadAllNotifications(uow=self._uow(), clock=self.clock)
+
+    def notification_preferences(self) -> GetNotificationPreferences:
+        return GetNotificationPreferences(uow=self._uow())
+
+    def set_notification_preferences(self) -> SetNotificationPreferences:
+        return SetNotificationPreferences(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def record_consent(self) -> RecordConsent:
         return RecordConsent(uow=self._uow(), clock=self.clock, ids=self.ids)
@@ -800,6 +828,7 @@ def _messaging_handlers(
             opt_outs=OptOutByReply(ids=ids, phones=phones),
             fallback=fallback,
             prices=prices,
+            ids=ids,
         ),
         OPT_OUT_CONFIRMATION_KIND: SendOptOutConfirmation(sender=sender),
         SMS_FALLBACK_KIND: SendSmsFallback(sender=sms_sender, ids=ids),
@@ -985,6 +1014,7 @@ def create_app(
     app.register_blueprint(create_whatsapp_webhook_blueprint(use_cases))
     app.register_blueprint(create_reminders_blueprint(use_cases))
     app.register_blueprint(create_dashboard_blueprint(use_cases))
+    app.register_blueprint(create_notifications_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

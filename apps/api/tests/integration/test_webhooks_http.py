@@ -153,6 +153,7 @@ def _process(session_factory: sessionmaker[Session], db: Engine, body: bytes, **
     handler = ProcessWebhookEvent(
         uow=SqlAlchemyUnitOfWork(session_factory),
         clock=SystemClock(),
+        ids=Uuid7Generator(),
         parser=WhatsAppWebhookParser(CIPHER),
         opt_outs=OptOutByReply(ids=Uuid7Generator(), phones=CIPHER),
     )
@@ -288,6 +289,19 @@ def test_a_failed_status_records_the_mapped_code(
     _process(session_factory, db, body)
     [row] = _messages(db, row.idempotency_key)
     assert (row.status, row.error_code) == ("FAILED", "MSG_RECIPIENT_INVALID")
+    # M6a-P7 (FR-NTF-04): the front desk and the owners are told, once each, the doctor is not.
+    told = (
+        "SELECT n.recipient_user_id FROM notifications n WHERE n.kind = 'message.failed'"
+        " AND n.entity_id = :m"
+    )
+    with db.connect() as conn:
+        recipients = set(conn.execute(text(told), {"m": row.id}).scalars())
+    assert {world.a.owner.id, world.a.desk.id} <= recipients
+    assert world.a.doctor_user.id not in recipients
+    _process(
+        session_factory, db, _post(hooks, _document(_status(row.provider_message_id, "failed")))[1]
+    )
+    assert _count(db, told.replace("n.recipient_user_id", "count(*)"), m=row.id) == len(recipients)
 
 
 def test_a_status_before_its_message_is_retried_then_recorded_unmatched(

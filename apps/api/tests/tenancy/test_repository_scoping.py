@@ -16,6 +16,10 @@ import pytest
 
 from mediease_api.adapters.db.messages import SqlAlchemyMessageRepository
 from mediease_api.adapters.db.models import Base
+from mediease_api.adapters.db.notifications import (
+    SqlAlchemyNotificationRepository,
+    SqlAlchemyPreferenceRepository,
+)
 from mediease_api.adapters.db.reminders import SqlAlchemyReminderRepository
 from mediease_api.adapters.db.repositories import (
     SqlAlchemyAppointmentHistoryRepository,
@@ -41,6 +45,12 @@ from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
 from mediease_api.domain.links.link import PatientLink
 from mediease_api.domain.messaging.message import Channel, Message, SourceType
+from mediease_api.domain.notifications.notification import Channel as NotificationChannel
+from mediease_api.domain.notifications.notification import (
+    Notification,
+    NotificationKind,
+    Preference,
+)
 from mediease_api.domain.patients.patient import Patient
 from mediease_api.domain.prescriptions.library import Favourite, Template
 from mediease_api.domain.prescriptions.prescription import Advice, Prescription, PrescriptionItem
@@ -590,6 +600,8 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "patient_links",
             "messages",
             "reminders",
+            "notifications",
+            "notification_preferences",
             "audit_events",
             "jobs",
         }
@@ -613,7 +625,57 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyPatientLinkRepository,
         SqlAlchemyMessageRepository,
         SqlAlchemyReminderRepository,
+        SqlAlchemyNotificationRepository,
+        SqlAlchemyPreferenceRepository,
     } == set(TenantScopedRepository.__subclasses__())
+
+
+def test_notifications_and_preferences_are_scoped_to_their_clinic(
+    uow_factory: UowFactory, two_clinics: tuple[Tenant, Tenant]
+) -> None:
+    """M6a-P7: clinic A reaches neither B's notifications nor B's members' choices."""
+    a, b = two_clinics
+    kind = NotificationKind.STAFF_JOINED
+    notification = Notification.create(
+        id=new_id(),
+        clinic_id=b.clinic_id,
+        recipient_user_id=b.owner.user_id,
+        kind=kind,
+        event_key=f"staff.joined:{new_id()}",
+        title="Dr. Example joined the team as Doctor",
+        link="/team",
+        entity_type="membership",
+        entity_id=b.owner.id,
+        now=NOW,
+    )
+    off = Preference(b.owner.user_id, kind, NotificationChannel.IN_APP, enabled=False)
+    with uow_factory() as uow:
+        staff_b = uow.tenant(b.clinic_id)
+        assert staff_b.notifications.add_many([notification]) == 1
+        staff_b.notification_preferences.set(off, id=new_id(), now=NOW)
+        uow.commit()
+
+    with uow_factory() as uow:
+        staff_a = uow.tenant(a.clinic_id)
+        user = b.owner.user_id
+        assert staff_a.notifications.list_for(user, limit=10) == []
+        assert staff_a.notifications.unread_count(user) == 0
+        assert staff_a.notifications.get_for(user, notification.id) is None
+        assert staff_a.notifications.mark_all_read(user, LATER) == 0
+        with pytest.raises(TenancyViolation):
+            staff_a.notifications.add_many([notification])
+        with pytest.raises(TenancyViolation):
+            staff_a.notifications.update(notification)
+        assert staff_a.notification_preferences.list_for(user) == []
+        assert staff_a.notification_preferences.disabled_among([user], kind, off.channel) == set()
+
+    with uow_factory() as uow:
+        staff_b = uow.tenant(b.clinic_id)
+        assert staff_b.notifications.unread_count(b.owner.user_id) == 1
+        assert staff_b.notification_preferences.list_for(b.owner.user_id) == [off]
+        assert staff_b.notification_preferences.disabled_among(
+            [b.owner.user_id], kind, off.channel
+        ) == {b.owner.user_id}
 
 
 def _a_message(tenant: Tenant, appointment_id: UUID) -> Message:

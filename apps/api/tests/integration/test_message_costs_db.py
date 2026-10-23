@@ -76,6 +76,7 @@ def _deliver(
     ProcessWebhookEvent(
         uow=SqlAlchemyUnitOfWork(session_factory),
         clock=SystemClock(),
+        ids=Uuid7Generator(),
         parser=WhatsAppWebhookParser(CIPHER),
         opt_outs=OptOutByReply(ids=IDS, phones=CIPHER),
         prices=PRICES,

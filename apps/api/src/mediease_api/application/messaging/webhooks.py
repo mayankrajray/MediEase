@@ -42,6 +42,7 @@ from mediease_api.domain.messaging.errors import (
 from mediease_api.domain.messaging.message import MessageStatus, SourceType, StatusUpdate
 from mediease_api.domain.messaging.pricing import PriceTable
 from mediease_api.domain.messaging.webhook import WebhookEvent
+from mediease_api.domain.notifications.events import MessageFailed
 from mediease_api.domain.prescriptions.prescription import LinkDelivery
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -172,6 +173,7 @@ class ProcessWebhookEvent:
         uow: UnitOfWork,
         clock: ClockPort,
         parser: WebhookParser,
+        ids: IdPort,
         opt_outs: OptOutByReply,
         fallback: SmsFallback | None = None,
         prices: PriceTable | None = None,
@@ -182,6 +184,8 @@ class ProcessWebhookEvent:
         self._opt_outs = opt_outs
         self._fallback = fallback
         self._prices = prices or PriceTable()
+        # M6a-P7: a message that fails here notifies the front desk and the owners.
+        self._ids = ids
 
     def __call__(self, job: ClaimedJob) -> None:
         event_id = UUID(str(job.payload["event_id"]))
@@ -253,6 +257,19 @@ class ProcessWebhookEvent:
             and message.status is MessageStatus.FAILED
         ):
             self._fallback.enqueue(uow, message, request_id=request_id, now=now)
+        if before is not MessageStatus.FAILED and message.status is MessageStatus.FAILED:
+            # M6a-P7 (FR-NTF-04). Imported here: the service enqueues jobs whose handlers use
+            # the messaging package.
+            from mediease_api.application.notifications.service import publish
+
+            publish(
+                uow,
+                MessageFailed(message.id, message.patient_id),
+                clinic_id=clinic_id,
+                ids=self._ids,
+                now=now,
+                request_id=request_id,
+            )
         if not was_accepted and message.is_accepted:
             logger.info(
                 "message.acceptance_learned",

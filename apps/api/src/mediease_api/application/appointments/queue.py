@@ -31,6 +31,7 @@ from mediease_api.application.appointments.common import (
 from mediease_api.application.appointments.views import AppointmentView
 from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor, RequestContext
+from mediease_api.application.notifications.service import publish
 from mediease_api.application.patients.views import PatientView
 from mediease_api.application.scheduling.generation import generate
 from mediease_api.application.scheduling.schedules import load_clinic, load_doctor
@@ -43,6 +44,7 @@ from mediease_api.domain.appointments.status import (
     AppointmentStatus,
 )
 from mediease_api.domain.audit.actions import AuditAction
+from mediease_api.domain.notifications.events import PatientArrived
 from mediease_api.domain.prescriptions.prescription import IssuedVersion
 from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.scheduling.sessions import Session
@@ -104,6 +106,17 @@ class TransitionAppointment:
                     "doctor_id": str(session.doctor_id),
                 },
             )
+            if cmd.to is AppointmentStatus.ARRIVED:
+                # M6a-P7: the doctor is told their patient is here.
+                publish(
+                    uow,
+                    PatientArrived(appointment.id),
+                    clinic_id=clinic_id,
+                    ids=self._ids,
+                    now=now,
+                    request_id=actor.info.request_id,
+                    actor_user_id=actor.user_id,
+                )
             uow.commit()
 
         logger.info(
@@ -220,6 +233,16 @@ class AddWalkIn:
                 entity_type=ENTITY_TYPE,
                 entity_id=appointment.id,
                 metadata=place_metadata(appointment, session),
+            )
+            # M6a-P7: a walk-in is here now; the doctor is told as for an arrival.
+            publish(
+                uow,
+                PatientArrived(appointment.id),
+                clinic_id=clinic_id,
+                ids=self._ids,
+                now=now,
+                request_id=actor.info.request_id,
+                actor_user_id=actor.user_id,
             )
             uow.commit()
 

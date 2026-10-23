@@ -27,6 +27,10 @@ from mediease_api.adapters.db.messages import (
     SqlAlchemyOptOutLookup,
     SqlAlchemyWebhookEventRepository,
 )
+from mediease_api.adapters.db.notifications import (
+    SqlAlchemyNotificationRepository,
+    SqlAlchemyPreferenceRepository,
+)
 from mediease_api.adapters.db.portal import (
     SqlAlchemyEmailTokenRepository,
     SqlAlchemyExternalIdentityRepository,
@@ -91,6 +95,8 @@ class SqlAlchemyTenantRepositories:
         self._patient_links = SqlAlchemyPatientLinkRepository(session, clinic_id)
         self._messages = SqlAlchemyMessageRepository(session, clinic_id)
         self._reminders = SqlAlchemyReminderRepository(session, clinic_id)
+        self._notifications = SqlAlchemyNotificationRepository(session, clinic_id)
+        self._notification_preferences = SqlAlchemyPreferenceRepository(session, clinic_id)
         self._dashboard = SqlAlchemyDashboardReads(session, clinic_id)
 
     @property
@@ -164,6 +170,14 @@ class SqlAlchemyTenantRepositories:
     @property
     def reminders(self) -> SqlAlchemyReminderRepository:
         return self._reminders
+
+    @property
+    def notifications(self) -> SqlAlchemyNotificationRepository:
+        return self._notifications
+
+    @property
+    def notification_preferences(self) -> SqlAlchemyPreferenceRepository:
+        return self._notification_preferences
 
     @property
     def dashboard(self) -> SqlAlchemyDashboardReads:

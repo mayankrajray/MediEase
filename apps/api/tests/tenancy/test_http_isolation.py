@@ -82,6 +82,8 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     # M5-P6: a patient's message history.
     "/api/v1/patients/<uuid:patient_id>/messages": lambda w: f"{_patient_url(w)}/messages",
     "/api/v1/reminders/<uuid:reminder_id>": lambda w: _reminder_url(w),
+    # M6a-P7: one of clinic B's doctor's notifications.
+    "/api/v1/notifications/<uuid:notification_id>/read": lambda w: _notification_url(w),
 }
 
 # Clinical writes need CLINICAL_WRITE and the visit's doctor (prescriptions spec §2), so these
@@ -94,6 +96,8 @@ AS_DOCTOR = {
     "/api/v1/prescriptions/<uuid:rx_id>/revise",
     "/api/v1/rx-favourites/<uuid:favourite_id>",
     "/api/v1/rx-templates/<uuid:template_id>",
+    # M6a-P7: a notification is its recipient's; B's doctor is told of the owner's booking.
+    "/api/v1/notifications/<uuid:notification_id>/read",
 }
 
 # Methods a cross-tenant case must use (default GET), with the body to send: fixed, or built
@@ -134,6 +138,7 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
         {},
     ),
     "/api/v1/reminders/<uuid:reminder_id>": ("PATCH", {"cancel": True}),
+    "/api/v1/notifications/<uuid:notification_id>/read": ("POST", {}),
 }
 
 # Patients have their own read and write cross-clinic cases in integration/test_patients_http.py;
@@ -173,6 +178,14 @@ def _reminder_url(world: World) -> str:
     )
     assert created.status_code == 201, created.get_json()
     return f"/api/v1/reminders/{created.get_json()['id']}"
+
+
+def _notification_url(world: World) -> str:
+    """The notification B's doctor gets when B's owner books with them (M6a-P7)."""
+    _appointment_url(world)
+    items = world.client_for(world.b.doctor_user).get("/api/v1/notifications").get_json()["items"]
+    assert items, "the doctor should have been told of the booking"
+    return f"/api/v1/notifications/{items[0]['id']}/read"
 
 
 def _owner_of_b(world: World) -> tuple[FlaskClient, dict[str, str]]:

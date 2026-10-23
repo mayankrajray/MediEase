@@ -24,11 +24,12 @@ from mediease_api.application.appointments.common import (
 from mediease_api.application.appointments.views import AppointmentView
 from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor
-from mediease_api.application.messaging.booking import enqueue_booking_confirmation
+from mediease_api.application.notifications.service import publish
 from mediease_api.domain.appointments.appointment import Appointment
 from mediease_api.domain.appointments.errors import SessionClosed
 from mediease_api.domain.appointments.status import AppointmentSource
 from mediease_api.domain.audit.actions import AuditAction
+from mediease_api.domain.notifications.events import AppointmentBooked
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -95,14 +96,16 @@ class BookAppointment:
                 entity_id=appointment.id,
                 metadata=place_metadata(appointment, session),
             )
-            # FR-APT-06 (M5-P2): the confirmation commits with the booking (the outbox).
-            enqueue_booking_confirmation(
+            # FR-APT-06 (M5-P2), through the notification service from M6a-P7 (ADR-0017): the
+            # patient's confirmation and the doctor's notification commit with the booking.
+            publish(
                 uow,
+                AppointmentBooked(appointment.id),
+                clinic_id=clinic_id,
                 ids=self._ids,
-                appointment=appointment,
-                patient=patient,
-                request_id=actor.info.request_id,
                 now=now,
+                request_id=actor.info.request_id,
+                actor_user_id=actor.user_id,
             )
             uow.commit()
 

@@ -50,6 +50,7 @@ JOB_RETENTION = timedelta(days=30)
 DEAD_JOB_RETENTION = timedelta(days=90)
 # M5-P3: stored webhook bodies (statuses only, no text or phone numbers) are kept a week.
 WEBHOOK_EVENT_RETENTION = timedelta(days=7)
+NOTIFICATION_RETENTION = timedelta(days=90)
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +62,8 @@ class RetentionCutoffs:
     finished_jobs: datetime
     dead_jobs: datetime
     webhook_events: datetime | None = None
+    # M6a-P7 (decision 8A): notifications 90 days after they were created.
+    notifications: datetime | None = None
 
     @classmethod
     def at(cls, now: datetime) -> RetentionCutoffs:
@@ -71,6 +74,7 @@ class RetentionCutoffs:
             finished_jobs=now - JOB_RETENTION,
             dead_jobs=now - DEAD_JOB_RETENTION,
             webhook_events=now - WEBHOOK_EVENT_RETENTION,
+            notifications=now - NOTIFICATION_RETENTION,
         )
 
 
@@ -82,3 +86,4 @@ class PurgeCounts:
     webhook_events: int = 0
     # M6a-P4: email tokens 30 days after they expired.
     email_tokens: int = 0
+    notifications: int = 0

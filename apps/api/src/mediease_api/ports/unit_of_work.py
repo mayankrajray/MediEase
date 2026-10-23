@@ -31,6 +31,7 @@ from mediease_api.ports.messaging import (
     OptOutLookup,
     WebhookEventRepository,
 )
+from mediease_api.ports.notifications import NotificationRepository, PreferenceRepository
 from mediease_api.ports.reminders import NoShowSweep, ReminderRepository
 from mediease_api.ports.repositories import (
     AppointmentHistoryRepository,
@@ -99,6 +100,13 @@ class TenantRepositories(Protocol):
     def messages(self) -> MessageRepository: ...
     @property
     def reminders(self) -> ReminderRepository: ...
+    @property
+    def notifications(self) -> NotificationRepository:
+        """In-app notifications (M6a-P7, ADR-0017)."""
+        ...
+
+    @property
+    def notification_preferences(self) -> PreferenceRepository: ...
     @property
     def dashboard(self) -> DashboardReads:
         """Counts for the *Today* screen (M6-P1)."""
