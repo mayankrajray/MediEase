@@ -69,9 +69,20 @@ describe("proxy (sign-in hint)", () => {
 
   it("isPublicPath names exactly the public pages", () => {
     expect(
-      ["/sign-in", "/status", "/livez", "/invite/x", "/p/x", "/portal/sign-in", "/portal/sign-up"].every(
-        isPublicPath,
-      ),
+      [
+        "/sign-in",
+        "/status",
+        "/livez",
+        "/invite/x",
+        "/p/x",
+        "/portal/sign-in",
+        "/portal/sign-up",
+        "/forgot-password",
+        "/reset-password/x",
+        "/portal/forgot-password",
+        "/portal/reset-password/x",
+        "/portal/verify-email/x",
+      ].every(isPublicPath),
     ).toBe(true);
     expect(["/", "/queue", "/ops", "/invite", "/portal", "/portal/x"].some(isPublicPath)).toBe(false);
   });

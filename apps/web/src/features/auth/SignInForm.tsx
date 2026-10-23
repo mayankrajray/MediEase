@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
@@ -175,6 +176,12 @@ export function SignInForm({ next, reason }: { next: string; reason?: SignInReas
       </form>
 
       <GoogleButton intent="staff" next={next} email={identifier} />
+
+      <p className="text-sm text-slate-700">
+        <Link href="/forgot-password" className="font-medium text-brand-800 underline">
+          Forgot password?
+        </Link>
+      </p>
     </section>
   );
 }

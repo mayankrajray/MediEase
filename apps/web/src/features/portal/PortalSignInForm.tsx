@@ -105,6 +105,12 @@ export function PortalSignInForm({ next, reason }: { next: string; reason?: Port
         </Button>
       </form>
 
+      <p className="text-sm text-slate-700">
+        <Link href="/portal/forgot-password" className="font-medium text-brand-800 underline">
+          Forgot password?
+        </Link>
+      </p>
+
       <GoogleButton intent="patient" next={next} email={email} />
 
       <p className="text-sm text-slate-700">

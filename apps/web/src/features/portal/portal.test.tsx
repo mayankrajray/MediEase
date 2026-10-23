@@ -126,6 +126,29 @@ describe("PortalAccount (M6a-P3, decision 8)", () => {
     expect(screen.getByRole("region", { name: "No clinic linked yet" })).toBeInTheDocument();
   });
 
+  it("FR-AUTH-08: an unverified password account sees the banner and can resend", async () => {
+    const api = mockApi({
+      "GET /api/v1/portal/me": () => json(200, { account: ACCOUNT }),
+      "POST /api/v1/portal/auth/verify-email/resend": () => json(202, { accepted: true }),
+    });
+    render(<PortalAccount />);
+    const banner = await screen.findByRole("region", { name: "Confirm your email" });
+    expect(banner).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Resend the email" }));
+    expect(await screen.findByText(/A new link is on its way/)).toBeInTheDocument();
+    const call = api.calls.find((c) => c.path.endsWith("/resend"));
+    expect(call?.headers.get("X-CSRF-Token")).toBe("portal-csrf");
+  });
+
+  it("a verified or Google account sees no banner", async () => {
+    mockApi({
+      "GET /api/v1/portal/me": () => json(200, { account: { ...ACCOUNT, email_verified: true } }),
+    });
+    render(<PortalAccount />);
+    expect(await screen.findByText("Verified")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Confirm your email" })).not.toBeInTheDocument();
+  });
+
   it("ADR-0015: signs out with the portal's CSRF key, not the staff one", async () => {
     const api = mockApi({
       "GET /api/v1/portal/me": () => json(200, { account: { ...ACCOUNT, sign_in_method: "GOOGLE" } }),

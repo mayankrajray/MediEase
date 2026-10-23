@@ -105,12 +105,19 @@ test("FR-REM-07: the front desk books an overdue follow-up from the pending list
   };
   const seeded = pending.items.find((i) => i.patient_name === "Deepa Nair");
   expect(seeded, "make seed adds one overdue follow-up").toBeDefined();
-  // A rerun on the same day: free the patient from today's earlier booking first.
+  // A rerun on the same day: free the patient from today's earlier booking first. A booking whose
+  // session has already ended cannot be cancelled (APT_NOT_MODIFIABLE) and does not block a new
+  // booking in the session running now, so it is left for the no-show sweep.
   const theirs = (await (await request.get(`/api/v1/patients/${seeded?.patient_id ?? ""}/appointments`)).json()) as {
     items: { id: string; status: string; on_date: string }[];
   };
   for (const a of theirs.items.filter((i) => i.status === "BOOKED" && i.on_date === inDays(0))) {
-    await ok(await request.post(`/api/v1/appointments/${a.id}/cancel`, { headers: { "X-CSRF-Token": token }, data: { reason: "PATIENT_REQUEST" } }));
+    const cancelled = await request.post(`/api/v1/appointments/${a.id}/cancel`, {
+      headers: { "X-CSRF-Token": token },
+      data: { reason: "PATIENT_REQUEST" },
+    });
+    if (cancelled.status() === 409 && (await cancelled.text()).includes("APT_NOT_MODIFIABLE")) continue;
+    await ok(cancelled);
   }
 
   const desk = await as(browser, DESK);

@@ -1,0 +1,73 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+
+import { Button } from "@/components/ui/Button";
+import { ErrorNotice } from "@/features/auth/ErrorNotice";
+import { isRetryable } from "@/features/auth/messages";
+import { apiPost } from "@/lib/api/client";
+
+/**
+ * The page the verification email opens (M6a-P4, FR-AUTH-08, ADR-0016 decision 6). Opening it
+ * changes nothing: the person presses the button, which POSTs the token, so a mail scanner that
+ * pre-fetches the link cannot verify an address nobody read.
+ */
+export function VerifyEmail({ token }: { token: string }) {
+  const [state, setState] = useState<"ready" | "sending" | "done">("ready");
+  const [error, setError] = useState<unknown>(null);
+  const alertRef = useRef<HTMLDivElement>(null);
+  const doneRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (error !== null) alertRef.current?.focus();
+  }, [error]);
+  useEffect(() => {
+    if (state === "done") doneRef.current?.focus();
+  }, [state]);
+
+  async function verify() {
+    setState("sending");
+    setError(null);
+    try {
+      await apiPost("/api/v1/portal/auth/verify-email", { token });
+      setState("done");
+    } catch (failure) {
+      setError(failure);
+      setState("ready");
+    }
+  }
+
+  return (
+    <section aria-labelledby="verify-heading" className="space-y-5 p-6 sm:p-8">
+      <h1 id="verify-heading" className="text-2xl font-bold tracking-tight">
+        Confirm your email
+      </h1>
+      {state === "done" ? (
+        <p ref={doneRef} tabIndex={-1} role="status" className="rounded-lg border border-slate-300 bg-slate-50 p-3">
+          Your email is confirmed. Thank you.
+        </p>
+      ) : (
+        <>
+          <p className="text-slate-700">Press the button to confirm this is your email address.</p>
+          {error !== null && (
+            <ErrorNotice
+              id="verify-error"
+              ref={alertRef}
+              error={error}
+              {...(isRetryable(error) ? { onRetry: () => void verify() } : {})}
+            />
+          )}
+          <Button variant="primary" className="w-full" onClick={() => void verify()} disabled={state === "sending"}>
+            {state === "sending" ? "Confirming…" : "Confirm my email"}
+          </Button>
+        </>
+      )}
+      <p className="text-sm text-slate-700">
+        <Link href="/portal" className="font-medium text-brand-800 underline">
+          Go to your account
+        </Link>
+      </p>
+    </section>
+  );
+}

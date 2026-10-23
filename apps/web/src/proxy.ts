@@ -31,9 +31,19 @@ const PUBLIC_PATHS: ReadonlySet<string> = new Set([
   // M6a-P3: the patient portal's own sign-in and sign-up.
   PORTAL_SIGN_IN_PATH,
   "/portal/sign-up",
+  // M6a-P4: asking for a reset link (staff and patients).
+  "/forgot-password",
+  "/portal/forgot-password",
 ]);
 // /p/<token>: the patient's prescription page (M4-P5); the token and the last-4 check guard it.
-const PUBLIC_PREFIXES: readonly string[] = ["/invite/", "/p/"];
+// M6a-P4: emailed reset and verification links; the token in the path is the authority.
+const PUBLIC_PREFIXES: readonly string[] = [
+  "/invite/",
+  "/p/",
+  "/reset-password/",
+  "/portal/reset-password/",
+  "/portal/verify-email/",
+];
 
 /** Pages anyone may open without a session. */
 export function isPublicPath(pathname: string): boolean {
