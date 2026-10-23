@@ -116,6 +116,8 @@ export function PortalAccount() {
         <dd className="text-slate-800">{account.email_verified ? "Verified" : "Not verified yet"}</dd>
       </dl>
 
+      {!account.email_verified && account.sign_in_method === "PASSWORD" && <VerifyBanner />}
+
       <Card title="No clinic linked yet">
         <p className="text-slate-800">
           Your appointments and prescriptions will appear here once a clinic links this account to
@@ -126,6 +128,47 @@ export function PortalAccount() {
       <Button onClick={() => void signOut()} disabled={signingOut} className="w-full">
         {signingOut ? "Signing out…" : "Sign out"}
       </Button>
+    </section>
+  );
+}
+
+/**
+ * Until the email is confirmed (M6a-P4, ADR-0016 decision 6). Booking requests will need it
+ * (M6b, FR-PUB-03); nothing is blocked yet.
+ */
+function VerifyBanner() {
+  const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
+  const [error, setError] = useState<unknown>(null);
+
+  async function resend() {
+    setState("sending");
+    setError(null);
+    try {
+      await portalPost("/api/v1/portal/auth/verify-email/resend", undefined);
+      setState("sent");
+    } catch (failure) {
+      setError(failure);
+      setState("idle");
+    }
+  }
+
+  return (
+    <section
+      aria-labelledby="verify-banner-heading"
+      className="space-y-3 rounded-lg border border-amber-700 bg-amber-50 p-4 text-amber-950"
+    >
+      <h2 id="verify-banner-heading" className="font-semibold">
+        Confirm your email
+      </h2>
+      <p>We sent you a link. Open it to confirm this is your address.</p>
+      {state === "sent" ? (
+        <p role="status">A new link is on its way. It works once and lasts 24 hours.</p>
+      ) : (
+        <Button size="sm" onClick={() => void resend()} disabled={state === "sending"}>
+          {state === "sending" ? "Sending…" : "Resend the email"}
+        </Button>
+      )}
+      {error !== null && <ErrorNotice error={error} />}
     </section>
   );
 }

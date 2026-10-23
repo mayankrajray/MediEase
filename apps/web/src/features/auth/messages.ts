@@ -30,6 +30,8 @@ export const SIGN_IN_REASONS = {
   google_no_account:
     "No MediEase staff account uses this Google address. Sign in with your password, or ask your clinic owner to invite this address.",
   too_many_attempts: "Too many attempts. Wait a minute and try again.",
+  // M6a-P4: back from a completed reset.
+  password_reset: "Your password was changed and every session was ended. Sign in with the new one.",
 } as const;
 
 export type SignInReason = keyof typeof SIGN_IN_REASONS;

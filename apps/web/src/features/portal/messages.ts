@@ -22,6 +22,7 @@ export const PORTAL_SIGN_IN_REASONS = {
   google_failed: "Google sign-in did not work. Try again, or use your email and password.",
   google_cancelled: "Google sign-in was cancelled.",
   too_many_attempts: "Too many attempts. Wait a minute and try again.",
+  password_reset: "Your password was changed. Sign in with the new one.",
 } as const;
 
 export type PortalSignInReason = keyof typeof PORTAL_SIGN_IN_REASONS;
