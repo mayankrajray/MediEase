@@ -37,6 +37,7 @@ describe("each workspace's navigation (M6a-P6, decision 3A; FR-UX-04)", () => {
       "Follow-ups",
       "Team",
       "Schedule",
+      "Notifications",
     ]);
   });
 
@@ -47,6 +48,7 @@ describe("each workspace's navigation (M6a-P6, decision 3A; FR-UX-04)", () => {
       "My patients",
       "My follow-ups",
       "My schedule",
+      "Notifications",
     ]);
   });
 
@@ -56,6 +58,7 @@ describe("each workspace's navigation (M6a-P6, decision 3A; FR-UX-04)", () => {
       "Queue",
       "Patients",
       "Follow-ups",
+      "Notifications",
     ]);
   });
 

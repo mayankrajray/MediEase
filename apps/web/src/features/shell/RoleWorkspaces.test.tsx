@@ -85,7 +85,7 @@ describe("each workspace's shell and home (FR-UX-04, FR-UX-05)", () => {
     render(owner);
     await screen.findByRole("navigation", { name: "Quick actions" }, { timeout: 5000 });
 
-    expect(labels()).toEqual(["Today", "Queue", "Patients", "Follow-ups", "Team", "Schedule"]);
+    expect(labels()).toEqual(["Today", "Queue", "Patients", "Follow-ups", "Team", "Schedule", "Notifications"]);
     expect(actions()).toEqual(["Invite someone", "Schedule settings", "See the queue"]);
     expect(await screen.findByRole("list", { name: "Team" })).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "View" })).not.toBeInTheDocument();
@@ -95,7 +95,7 @@ describe("each workspace's shell and home (FR-UX-04, FR-UX-05)", () => {
     render(doctor, todayOf({ scope: "DOCTOR", doctor_id: doctor.doctor_id }));
     await screen.findByRole("navigation", { name: "Quick actions" }, { timeout: 5000 });
 
-    expect(labels()).toEqual(["Today", "My queue", "My patients", "My follow-ups", "My schedule"]);
+    expect(labels()).toEqual(["Today", "My queue", "My patients", "My follow-ups", "My schedule", "Notifications"]);
     expect(actions()).toEqual(["Open my queue", "My patients", "My follow-ups"]);
     expect(screen.queryByRole("group", { name: "View" })).not.toBeInTheDocument();
   });
@@ -104,7 +104,7 @@ describe("each workspace's shell and home (FR-UX-04, FR-UX-05)", () => {
     render(desk);
     await screen.findByRole("navigation", { name: "Quick actions" }, { timeout: 5000 });
 
-    expect(labels()).toEqual(["Today", "Queue", "Patients", "Follow-ups"]);
+    expect(labels()).toEqual(["Today", "Queue", "Patients", "Follow-ups", "Notifications"]);
     expect(actions()).toEqual(["Book an appointment", "Add a walk-in", "Register a patient"]);
   });
 });
@@ -119,7 +119,7 @@ describe("the practising owner's switch (FR-UX-06, decision 6A)", () => {
     fireEvent.click(within(view).getByRole("radio", { name: "Doctor" }));
 
     expect(await screen.findByText("Doctor view")).toBeInTheDocument();
-    await waitFor(() => expect(labels()).toEqual(["Today", "My queue", "My patients", "My follow-ups", "My schedule"]));
+    await waitFor(() => expect(labels()).toEqual(["Today", "My queue", "My patients", "My follow-ups", "My schedule", "Notifications"]));
     expect(push).toHaveBeenCalledWith("/today");
     await waitFor(() =>
       expect(api.calls.some((c) => c.path === "/api/v1/dashboard/today" && c.search.get("view") === "doctor")).toBe(true),

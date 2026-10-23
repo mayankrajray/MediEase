@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { ROLE_LABELS } from "@/features/auth/labels";
 import type { Membership } from "@/features/auth/landing";
 import { useSession } from "@/features/auth/SessionProvider";
+import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { PatientSearch } from "@/features/patients/PatientSearch";
 import {
   RegisterPatientProvider,
@@ -24,7 +25,8 @@ import { WorkspaceSwitch } from "./WorkspaceSwitch";
  * The clinic dashboard frame (M6-P1, decision 4A) on the shared `Shell`: who and where you are,
  * the switcher for people in several clinics, the role's navigation, and sign-out. Shows the
  * person's name and role, never their phone number or email. Once the clinic has loaded, roles
- * that manage patients get the patient search (`/`) and Register patient in the header.
+ * that manage patients get the patient search (`/`) and Register patient in the header, and every
+ * member gets the notification bell (M6a-P7).
  */
 export function AppShell({ membership, children }: { membership: Membership; children: ReactNode }) {
   const { identity, selectClinic } = useSession();
@@ -52,6 +54,8 @@ export function AppShell({ membership, children }: { membership: Membership; chi
             )}
             <RolePill>{ROLE_LABELS[membership.role]}</RolePill>
             {view?.canSwitch === true && <WorkspaceSwitch workspace={workspace} onSwitch={view.switchTo} />}
+            {/* M6a-P7: in the identity group, so it stays in the header on a phone. */}
+            {clinicReady && <NotificationBell />}
           </>
         }
         {...(clinicReady && managesPatients ? { tools: <PatientTools /> } : {})}
