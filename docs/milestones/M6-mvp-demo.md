@@ -21,7 +21,7 @@ notifications for patients, public booking) moved to M6b.
 | P1 | Design system (tokens, primitives, Motion, responsive shell) and the role dashboards' first screen: *Today* for front desk, doctor and owner | Below (confirmed 20 Oct 2026) |
 | P2 | The design system across the existing screens (queue, patients, consultation, schedule, follow-ups, ops); mobile layouts; motion for drawers, dialogs and list changes | Below (confirmed 21 Oct 2026) |
 | P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR-0015) | Below (approved 22 Oct 2026; built 23 Oct 2026) |
-| P4 | Email provider behind a port: email verification, password reset by link (FR-AUTH-08, FR-AUTH-05) | At its start |
+| P4 | Email provider behind a port: email verification, password reset by link (FR-AUTH-08, FR-AUTH-05) | Below (awaiting approval) |
 | P5 | Owner Team page: invite, change role, deactivate (FR-ORG-07) | At its start |
 | P6 | Role workspaces (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); owner as Doctor 1 in the ops wizard (FR-ORG-03) | At its start |
 | P7 | Notification service, domain events, in-app channel, notification centre (FR-NTF-02..06) | At its start |
@@ -394,3 +394,95 @@ Planned verification:
     route with a staff token: all 401.
   - **Not verified.** Real Google sign-in waits for L-09. The Google adapter is tested only
     against signed test tokens and an in-memory JWKS.
+
+Confirmed by the developer on 23 Oct 2026 and pushed to draft PR #50.
+
+---
+
+## M6a-P4 — Email provider: verification and password reset
+
+Proposed 23 Oct 2026. Recommendations are marked (rec). ADR-0016 (Proposed) records decisions
+1, 2, 4 and 5. Covers FR-AUTH-08 and FR-AUTH-05 (PRD v1.2). Invitation emails and the Team page
+are P5. The `EMAIL` notification channel comes with the notification service (P7).
+
+Facts the design rests on:
+
+- **Nothing sends email today.**
+  - Staff invitation links are shown to ops or the owner, who share them by hand.
+  - A patient password account stores `email_verified_at` as null (P3).
+  - A locked-out staff member is reset by ops (RUNBOOK §17).
+- **The job queue exists** (M5-P1, the outbox).
+  - A change enqueues a job in its own transaction, the worker sends it, and failures retry with
+    backoff.
+  - Job payloads are stored in plain text, so a secret must never be in one.
+- **Secrets stored as digests.** Invitation and refresh secrets are SHA-256 digests of random
+  values (`Sha256RefreshTokenSecrets`), looked up by digest.
+- **Rate limits.** The per-caller limiter (`public_rate_limits`) is reused from M4-P5/M6a-P3.
+- **Free tiers, checked on 23 Oct 2026.** All three providers below accept plain SMTP, so one
+  SMTP adapter serves any of them.
+  - **Brevo:** 300 emails a day, forever ([Brevo help](https://help.brevo.com/hc/en-us/articles/8292912279954-Add-or-remove-emails-from-your-plan)).
+  - **Resend:** 3,000 a month and at most 100 a day ([Resend limits](https://resend.com/docs/knowledge-base/resend-sending-limits)).
+  - **Amazon SES:** the only one with a Mumbai region. Third-party reports of AWS's July 2026
+    pricing plans say the 12-month free tier no longer applies to new accounts ([classmethod](https://dev.classmethod.jp/en/articles/ses-pricing-plans-price-list-api-sesv2-api/));
+    I could not load AWS's own pricing page to confirm.
+- **Local mail catcher.** Mailpit is an SMTP catcher with an HTTP API for tests; v1.32.0 is
+  current and carries security fixes ([releases](https://github.com/axllent/mailpit/releases)).
+
+| # | Question | A (rec) | Rejected |
+|---|---|---|---|
+| 1 | Port and adapter | An `EmailPort` (`send(EmailMessage) -> provider_message_id`) with one **SMTP adapter** on the standard library (`smtplib`, STARTTLS or implicit TLS, login). It works with Brevo, Resend, SES and Mailpit alike, so changing provider is a settings change. A `console` adapter (logs the masked recipient and the subject, never the link) is for unit tests; it is refused in production, like messaging | B: each provider's HTTP API or SDK (a dependency and code per provider) |
+| 2 | Provider (L-11) | **Brevo free** (300 a day) for the pilot, sending from a verified domain with SPF, DKIM and DMARC. Its free tier has the most daily headroom. Email addresses are processed outside India, so the privacy notice must name Brevo as a processor (counsel, L-04) | B: Resend free (100 a day, US). C: SES in Mumbai (keeps data in India, NFR-07, but is no longer free for a new account; the right choice if counsel requires India-only processing) |
+| 3 | Mail on the local stack | A **Mailpit** container (`axllent/mailpit:v1.32.0`, pinned). SMTP is on the compose network only; the inbox UI is on `127.0.0.1:8025`. It is the local default (`EMAIL_PROVIDER=smtp`, `SMTP_HOST=mailpit`), so local sign-ups really "send". Playwright reads the links through Mailpit's API | B: the console adapter only (e2e could not follow a link) |
+| 4 | Sending | Through the **job queue**. The request enqueues `send_auth_email` with only `{purpose, account kind, account id}`. The worker creates the token, stores its digest, renders the message and sends it. A retry makes a new token and retires the unused older one, so **no secret ever sits in the database**. The request never waits for SMTP | B: send inside the request (slow, and an SMTP outage fails the sign-up). C: create the token in the request and put it in the payload (a usable secret at rest) |
+| 5 | Tokens | A new `email_tokens` table (platform data).<br>• **Columns:** `purpose` (`VERIFY_EMAIL` \| `RESET_PASSWORD`), a staff `user_id` or a `patient_account_id`, the email it was sent to, `token_hash` (unique), `expires_at`, `used_at`, `superseded_at`.<br>• **Lifetimes:** verification 24 hours, reset 30 minutes.<br>• **Rules:** single use; a new token supersedes the account's earlier unused one of the same purpose; a token is refused if the account's email has changed since it was sent; purged 30 days after expiry | B: signed stateless tokens (a reset could not be made single-use) |
+| 6 | Email verification | Patient password accounts only.<br>• **When:** sent at sign-up; *Resend the email* on `/portal`, at most 3 an hour per account.<br>• **The link** opens `/portal/verify-email/{token}`, a page with a *Verify my email* button that POSTs. A mail scanner that pre-fetches the link therefore consumes nothing. Success sets `email_verified_at`.<br>• **On `/portal`:** a banner until the email is verified.<br>• **No blocking yet:** M6b's booking requests will require a verified email (FR-PUB-03); nothing is blocked in P4.<br>• **Staff are not verified in P4:** their address came from the clinic's own invitation, and Google sign-in uses Google's verification | B: verify by GET (a scanner could verify an address nobody opened). C: verify staff too (every existing staff user would have to act at once) |
+| 7 | Password reset | **Staff** (`/sign-in` → *Forgot password?*) and **patients** (`/portal/sign-in`).<br>• **Request** (`POST /api/v1/auth/password-reset`, `/api/v1/portal/auth/password-reset`): always **202 with the same body**, whether or not the account exists. Rate limited per caller (5 a minute) and, silently, per account (3 an hour).<br>• **Who gets nothing:** a staff user with only a phone number (ops still reset them, RUNBOOK §17) and platform ops users.<br>• **Google-only patients:** they get a "you sign in with Google" email instead of a link.<br>• **Complete** (`.../password-reset/complete` with the token and the new password): applies the password policy, clears the lockout, **revokes every session of that account**, marks the token used and sends a "your password was changed" email.<br>• **Then:** it does not sign the person in; they return to sign-in with a "Password changed" message. For a patient password account a completed reset also verifies the email, which it has just proved | B: sign in after the reset (a leaked link would then also open a session). C: leave staff to ops (FR-AUTH-05 asks for both) |
+| 8 | Messages and privacy | Plain text plus a minimal HTML version, in English. Hindi patient emails come with the portal's Hindi in M6b. From `MediEase <no-reply@<domain>>`. No clinical content, no images, and the provider's open and click tracking off. Links only to `PUBLIC_BASE_URL`. Logs and audit carry IDs and the masked address (`a***@example.com`), never the token or the full address | B: rich branded templates (more to test, nothing to brand yet) |
+
+Fixed points:
+
+- **Audit actions:**
+  - `auth.password_reset_requested` (only when an account exists and a link was sent);
+  - `auth.password_reset` (STAFF);
+  - `patient.password_reset` and `patient.email_verified` (PATIENT).
+- **Errors:**
+  - `AUTH_TOKEN_INVALID` (404): unknown, used or superseded, one answer for all three;
+  - `AUTH_TOKEN_EXPIRED` (410);
+  - `REQ_VALIDATION_FAILED` for a weak password;
+  - `AUTH_RATE_LIMITED` (429).
+- **Settings, all in `.env.example`:**
+  - `EMAIL_PROVIDER` (`smtp` \| `console`) and `EMAIL_FROM`;
+  - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` (a `SecretStr`);
+  - `SMTP_SECURITY` (`starttls` \| `tls` \| `none`, where `none` is allowed only in local and test).
+- **Migration and contract.** Migration `0021` (`email_tokens`); contract 0.24.0. The compose
+  `mailpit` service appears in the stack because the application uses it.
+- **Web pages:**
+  - *Forgot password?* links;
+  - `/forgot-password` and `/portal/forgot-password`;
+  - `/reset-password/{token}` and `/portal/reset-password/{token}`;
+  - `/portal/verify-email/{token}`;
+  - the verification banner with *Resend the email*.
+  - All are mobile-first at 360 px. They join the proxy's public pages, except the banner.
+- **Unchanged.** Staff and patient sign-in behaviour; every existing test and journey passes.
+
+Planned verification:
+
+- **Unit:**
+  - token lifecycle: expiry, single use, superseding, a changed email;
+  - the SMTP adapter against a fake `smtplib` (STARTTLS, login, a refused recipient, a timeout);
+  - settings: `console` and `SMTP_SECURITY=none` refused in production;
+  - rendering: no token or full address in any log line.
+- **Integration (PostgreSQL):**
+  - a reset request for a real and for an unknown email answers the same 202, and only the real
+    one enqueues a job;
+  - the job sends through a fake port and stores only a digest;
+  - completing a reset revokes the account's sessions, so an old refresh is 401;
+  - a reused or expired link is refused;
+  - verification sets `email_verified_at`;
+  - the per-account and per-caller limits hold.
+- **Playwright with Mailpit:**
+  - a patient signs up, opens the email in Mailpit, verifies, and the banner is gone;
+  - a staff member resets a forgotten password, the old session ends and the new password signs
+    in;
+  - failure path: opening the reset link a second time shows that it was already used.
+- **Gates:** `make lint typecheck contract-check test` and `make e2e`.
