@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
+import { CheckboxField } from "@/components/ui/Field";
 import { LIST_ITEM, LayoutMotion } from "@/components/ui/LayoutMotion";
 import { m } from "@/components/ui/Motion";
 import { TABLE, TABLE_WRAP, TD, TH, TR } from "@/components/ui/table";
@@ -14,6 +15,7 @@ import { useAppointmentApi, type Doctor } from "@/features/appointments/api";
 import { clinicToday } from "@/features/patients/fields";
 import { patientPath } from "@/features/patients/RegisterPatientDrawer";
 import { useClinic } from "@/features/shell/ClinicGate";
+import { useWorkspace } from "@/features/shell/WorkspaceProvider";
 import { formatDay } from "@/lib/format/time";
 
 import { PENDING_PAGE, useReminderApi, type PendingFollowUp } from "./api";
@@ -36,6 +38,11 @@ export function PendingFollowUps() {
   const appointments = useAppointmentApi();
   const { clinic: choice, endSession } = useSession();
   const canBook = choice.kind === "active" && choice.membership.permissions.includes("APPOINTMENTS_MANAGE");
+  // M6a-P6 (decision 7A): in the Doctor workspace, my follow-ups by default; all one click away.
+  const view = useWorkspace();
+  const myDoctor = view?.workspace === "DOCTOR" ? view.doctorId : null;
+  const [mineOnly, setMineOnly] = useState(true);
+  const filter = myDoctor !== null && mineOnly ? myDoctor : undefined;
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [doctors, setDoctors] = useState<readonly Doctor[]>([]);
   const [attempt, setAttempt] = useState(0);
@@ -47,7 +54,7 @@ export function PendingFollowUps() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.pending(0), appointments.doctors()]).then(
+    Promise.all([api.pending(0, filter), appointments.doctors()]).then(
       ([items, ds]) => {
         if (cancelled) return;
         setLoad({ status: "ready", items, more: items.length === PENDING_PAGE });
@@ -60,13 +67,13 @@ export function PendingFollowUps() {
     return () => {
       cancelled = true;
     };
-  }, [api, appointments, attempt, endSession]);
+  }, [api, appointments, attempt, endSession, filter]);
 
   async function showMore(current: readonly PendingFollowUp[]) {
     setLoadingMore(true);
     setMoreError(undefined);
     try {
-      const next = await api.pending(current.length);
+      const next = await api.pending(current.length, filter);
       setLoad({ status: "ready", items: [...current, ...next], more: next.length === PENDING_PAGE });
     } catch (failure) {
       if (!endSession(failure)) setMoreError(failure);
@@ -83,10 +90,21 @@ export function PendingFollowUps() {
     <section aria-labelledby="follow-ups-heading" className="space-y-4">
       <div>
         <h1 id="follow-ups-heading" className="text-2xl font-bold tracking-tight">
-          Pending follow-ups
+          {myDoctor !== null ? "My follow-ups" : "Pending follow-ups"}
         </h1>
         <p className="text-slate-800">Patients whose follow-up date has passed without a visit since. Oldest first.</p>
       </div>
+      {myDoctor !== null && (
+        <CheckboxField
+          id="follow-ups-mine"
+          label="Only my patients"
+          checked={mineOnly}
+          onChange={(checked) => {
+            setMineOnly(checked);
+            setLoad({ status: "loading" });
+          }}
+        />
+      )}
       <p role="status" className="min-h-6 font-medium text-emerald-900">
         {message}
       </p>

@@ -5,7 +5,7 @@
  * them would fail outside clinic hours; this makes the journeys pass at any time of day.
  */
 
-import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 export const PASSWORD = process.env.E2E_PASSWORD ?? "MediEase-demo-2026";
 export const DESK = "desk@sample-clinic.example";
@@ -73,11 +73,19 @@ interface Session {
   readonly available: number;
 }
 
-/** The doctor's open session with room that is running now, adding an extra one if none is. */
-export async function sessionRunningNow(request: APIRequestContext): Promise<{ doctorId: string; sessionId: string }> {
-  const token = await signInApi(request, OWNER);
-  const doctors = (await (await request.get("/api/v1/clinic/doctors")).json()) as { items: { id: string }[] };
-  const doctorId = doctors.items[0]?.id ?? "";
+/**
+ * The doctor's open session with room that is running now, adding an extra one if none is.
+ * M6a-P6: `owner` and `doctorName` choose another clinic's owner and one of its doctors.
+ */
+export async function sessionRunningNow(
+  request: APIRequestContext,
+  { owner = OWNER, doctorName }: { owner?: string; doctorName?: string } = {},
+): Promise<{ doctorId: string; sessionId: string }> {
+  const token = await signInApi(request, owner);
+  const doctors = (await (await request.get("/api/v1/clinic/doctors")).json()) as {
+    items: { id: string; display_name: string }[];
+  };
+  const doctorId = (doctorName === undefined ? doctors.items[0] : doctors.items.find((d) => d.display_name === doctorName))?.id ?? "";
   const now = Date.now();
   const today = wallClock(new Date(now)).day;
 
@@ -93,15 +101,31 @@ export async function sessionRunningNow(request: APIRequestContext): Promise<{ d
   const found = await running();
   if (found !== undefined) return { doctorId, sessionId: found.id };
 
-  const start = new Date(now - 5 * 60_000);
-  start.setUTCSeconds(0, 0);
-  start.setUTCMinutes(start.getUTCMinutes() - (start.getUTCMinutes() % 5));
-  const from = wallClock(start);
-  const to = wallClock(new Date(start.getTime() + 45 * 60_000));
-  const added = await request.post(`/api/v1/clinic/doctors/${doctorId}/schedule-exceptions`, {
-    headers: { "X-CSRF-Token": token },
-    data: { kind: "EXTRA", on_date: from.day, start_time: from.time, end_time: to.time, slot_minutes: 15, capacity: 30, note: "e2e" },
-  });
+  // An earlier run's extra session may be about to end (under 2 minutes left, so not used): a new
+  // one would overlap it (SCH_OVERLAP), so wait for it to end and try once more.
+  const add = async () => {
+    const at = Date.now();
+    const start = new Date(at - 5 * 60_000);
+    start.setUTCSeconds(0, 0);
+    start.setUTCMinutes(start.getUTCMinutes() - (start.getUTCMinutes() % 5));
+    const from = wallClock(start);
+    const to = wallClock(new Date(start.getTime() + 45 * 60_000));
+    return request.post(`/api/v1/clinic/doctors/${doctorId}/schedule-exceptions`, {
+      headers: { "X-CSRF-Token": token },
+      data: { kind: "EXTRA", on_date: from.day, start_time: from.time, end_time: to.time, slot_minutes: 15, capacity: 30, note: "e2e" },
+    });
+  };
+  let added = await add();
+  if (added.status() === 409) {
+    const today = (await (await request.get(`/api/v1/sessions?date=${wallClock(new Date()).day}&doctor_id=${doctorId}`)).json()) as {
+      items: Session[];
+    };
+    const lastEnd = Math.max(Date.now(), ...today.items.map((s) => Date.parse(s.ends_at)).filter((end) => end < Date.now() + 130_000));
+    const wait = lastEnd - Date.now() + 2_000;
+    test.info().setTimeout(test.info().timeout + wait);
+    await new Promise((resolve) => setTimeout(resolve, wait));
+    added = await add();
+  }
   expect(added.status(), await added.text()).toBe(201);
   const made = await running();
   expect(made, "the extra session is listed").toBeDefined();
@@ -109,8 +133,12 @@ export async function sessionRunningNow(request: APIRequestContext): Promise<{ d
 }
 
 /** A new synthetic family member on the Rao family's phone, with a unique name. */
-export async function newPatient(request: APIRequestContext, label: string): Promise<{ id: string; name: string }> {
-  const token = await signInApi(request, DESK);
+export async function newPatient(
+  request: APIRequestContext,
+  label: string,
+  desk: string = DESK,
+): Promise<{ id: string; name: string }> {
+  const token = await signInApi(request, desk);
   const name = `${label} Rao ${Date.now().toString(36)}`;
   const resp = await request.post("/api/v1/patients", {
     headers: { "X-CSRF-Token": token },

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
-import { buttonClasses } from "@/components/ui/Button";
+import { Button, buttonClasses } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { m, RISE, STAGGER } from "@/components/ui/Motion";
@@ -14,7 +14,11 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Tabs } from "@/components/ui/Tabs";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
+import { useRegisterPatient } from "@/features/patients/RegisterPatientProvider";
 import { useClinic } from "@/features/shell/ClinicGate";
+import { QUICK_ACTIONS, type Workspace } from "@/features/shell/workspace";
+import { useWorkspace } from "@/features/shell/WorkspaceProvider";
+import { useTeamApi } from "@/features/team/api";
 import { formatDay } from "@/lib/format/time";
 
 import { NEXT_STATUS, SESSION_STATUS, noShowRate, placeLabel, sessionHours, type Day } from "./labels";
@@ -30,7 +34,11 @@ export function TodayDashboard() {
   const clinic = useClinic();
   const { clinic: choice, endSession } = useSession();
   const clinicId = choice.kind === "active" && choice.sendClinicHeader ? choice.membership.clinic_id : undefined;
-  const { today, error, refresh } = useToday(clinicId);
+  const role = choice.kind === "active" ? choice.membership.role : "FRONT_DESK";
+  const view = useWorkspace();
+  const workspace = view?.workspace ?? role;
+  // M6a-P6 (decision 4A): only a practising owner asks for the Doctor view; a doctor gets it anyway.
+  const { today, error, refresh } = useToday(clinicId, view?.canSwitch === true && workspace === "DOCTOR" ? "doctor" : undefined);
 
   // A session that can no longer be refreshed sends the person to sign in, as other screens do.
   useEffect(() => {
@@ -40,26 +48,29 @@ export function TodayDashboard() {
   if (today === undefined) {
     return (
       <>
-        <PageHeader title="Today" description={clinic.name} />
+        <PageHeader title="Today" description={`${WORKSPACE_LINES[workspace]} · ${clinic.name}`} />
         {error !== undefined ? <ErrorNotice error={error} onRetry={refresh} /> : <TodaySkeleton />}
       </>
     );
   }
 
   const scopeLine = today.scope === "DOCTOR" ? "Your sessions" : clinic.name;
-  const overview = <Overview today={today} timeZone={clinic.timezone} />;
+  const overview = (
+    <div className="space-y-4">
+      {workspace === "OWNER" && choice.kind === "active" && choice.membership.permissions.includes("STAFF_MANAGE") && (
+        <TeamTile />
+      )}
+      <Overview today={today} timeZone={clinic.timezone} />
+    </div>
+  );
 
   return (
     <>
       <PageHeader
         title="Today"
-        description={`${formatDay(today.on_date)} · ${scopeLine}`}
-        actions={
-          <Link href="/queue" className={buttonClasses("primary")}>
-            Open the queue
-          </Link>
-        }
+        description={`${formatDay(today.on_date)} · ${WORKSPACE_LINES[workspace]} · ${scopeLine}`}
       />
+      <QuickActions workspace={workspace} />
       {error !== undefined && (
         <div className="mb-4">
           <ErrorNotice error={error} onRetry={refresh} message="These numbers could not be refreshed. They show the last update." />
@@ -241,5 +252,80 @@ function Week({ days }: { days: readonly Day[] }) {
         </table>
       </div>
     </Card>
+  );
+}
+
+const WORKSPACE_LINES: Readonly<Record<Workspace, string>> = {
+  OWNER: "Clinic overview",
+  DOCTOR: "My day",
+  FRONT_DESK: "Front desk",
+};
+
+/** Each workspace's three first actions (decision 4A, FR-UX-05). */
+function QuickActions({ workspace }: { workspace: Workspace }) {
+  const openRegister = useRegisterPatient();
+  return (
+    <nav aria-label="Quick actions" className="mb-5">
+      <ul className="flex flex-wrap gap-2">
+        {QUICK_ACTIONS[workspace].map((action, index) => {
+          const variant = index === 0 ? "primary" : "secondary";
+          return (
+            <li key={action.label}>
+              {action.kind === "register" ? (
+                openRegister !== null && (
+                  <Button variant={variant} onClick={() => openRegister()}>
+                    {action.label}
+                  </Button>
+                )
+              ) : (
+                <Link href={action.kind === "link" ? action.href : "/queue"} className={buttonClasses(variant)}>
+                  {action.label}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+/** The owner's view of their staff (FR-UX-01): who is active, and invitations still open. */
+function TeamTile() {
+  const api = useTeamApi();
+  const { endSession } = useSession();
+  const [counts, setCounts] = useState<{ readonly active: number; readonly invited: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.list().then(
+      (members) => {
+        if (cancelled) return;
+        setCounts({
+          active: members.filter((m) => m.status === "ACTIVE").length,
+          invited: members.filter((m) => m.status === "INVITED").length,
+        });
+      },
+      (failure: unknown) => {
+        if (!cancelled) endSession(failure);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [api, endSession]);
+
+  if (counts === null) return null;
+  return (
+    <m.ul variants={STAGGER} initial="hidden" animate="shown" aria-label="Team" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <StatTile label="Team members" value={counts.active} hint="Active in this clinic" href="/team" />
+      <StatTile
+        label="Invitations open"
+        value={counts.invited}
+        hint="Not accepted yet"
+        tone={counts.invited > 0 ? "waiting" : "neutral"}
+        href="/team"
+      />
+    </m.ul>
   );
 }

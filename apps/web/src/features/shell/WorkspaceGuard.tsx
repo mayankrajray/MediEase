@@ -9,6 +9,7 @@ import { useSession } from "@/features/auth/SessionProvider";
 import { AppShell } from "./AppShell";
 import { ClinicGate } from "./ClinicGate";
 import { NoAccess } from "./NoAccess";
+import { WorkspaceProvider } from "./WorkspaceProvider";
 
 /**
  * Guards the clinic workspace: ops users belong in the ops console (R10), a
@@ -40,13 +41,15 @@ export function WorkspaceGuard({ children }: { children: ReactNode }) {
     return <NoAccess />;
   }
   return (
-    <ClinicGate
-      key={clinic.membership.clinic_id}
-      membership={clinic.membership}
-      sendClinicHeader={clinic.sendClinicHeader}
-      frame={(body) => <AppShell membership={clinic.membership}>{body}</AppShell>}
-    >
-      {children}
-    </ClinicGate>
+    <WorkspaceProvider key={clinic.membership.clinic_id} membership={clinic.membership}>
+      <ClinicGate
+        key={clinic.membership.clinic_id}
+        membership={clinic.membership}
+        sendClinicHeader={clinic.sendClinicHeader}
+        frame={(body) => <AppShell membership={clinic.membership}>{body}</AppShell>}
+      >
+        {children}
+      </ClinicGate>
+    </WorkspaceProvider>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Dialog } from "@/components/Dialog";
 import { buttonClasses } from "@/components/ui/Button";
@@ -59,7 +59,7 @@ type Overlay =
  * refreshes and says so. Each action is reported in a status message naming the patient and the
  * time, so a slip is seen at once (the safeguard for single-click steps, D29).
  */
-export function QueueBoard() {
+export function QueueBoard({ initialOverlay }: { initialOverlay?: "book" | "walk-in" } = {}) {
   const clinic = useClinic();
   const { identity, clinic: choice, endSession } = useSession();
   const api = useAppointmentApi();
@@ -86,13 +86,23 @@ export function QueueBoard() {
   const pickerId = useId();
   const dateId = useId();
 
+  // M6a-P6: Today's front-desk quick actions open the booking or walk-in drawer here, once.
+  const asked = useRef(initialOverlay);
+
   useEffect(() => {
     let cancelled = false;
     api.doctors().then(
       (items) => {
         if (cancelled) return;
         setDoctors(items);
-        setDoctorId(initialDoctor(items, identity.user.id, window.localStorage.getItem(storageKey)));
+        const chosen = initialDoctor(items, identity.user.id, window.localStorage.getItem(storageKey));
+        setDoctorId(chosen);
+        if (chosen !== undefined && asked.current === "book" && canManage) {
+          setOverlay({ kind: "book", target: { kind: "book" } });
+        } else if (chosen !== undefined && asked.current === "walk-in" && canMove) {
+          setOverlay({ kind: "walk-in" });
+        }
+        asked.current = undefined;
       },
       (error: unknown) => {
         if (!cancelled && !endSession(error)) setDoctorsError(error);
@@ -101,7 +111,7 @@ export function QueueBoard() {
     return () => {
       cancelled = true;
     };
-  }, [api, identity.user.id, storageKey, endSession]);
+  }, [api, identity.user.id, storageKey, endSession, canManage, canMove]);
 
   const { queue, error, refresh } = useQueue({
     date,

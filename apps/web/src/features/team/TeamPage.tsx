@@ -19,7 +19,7 @@ import { formatDateTime } from "@/lib/format/time";
 
 import { useTeamApi, type StaffMember, type TeamInvitation } from "./api";
 import { InviteDrawer } from "./InviteDrawer";
-import { ChangeRoleDialog, DeactivateDialog, LinkDialog } from "./MemberDialogs";
+import { ChangeRoleDialog, DeactivateDialog, LinkDialog, LinkDoctorDialog } from "./MemberDialogs";
 import { STATUS_LABELS, STATUS_TONES, contactOf, sortTeam } from "./labels";
 
 type Load =
@@ -31,9 +31,10 @@ type Open =
   | { readonly kind: "invite"; readonly again?: StaffMember }
   | { readonly kind: "role"; readonly member: StaffMember }
   | { readonly kind: "deactivate"; readonly member: StaffMember }
+  | { readonly kind: "link-doctor"; readonly member: StaffMember }
   | { readonly kind: "link"; readonly invitation: TeamInvitation };
 
-/** After demoting yourself the session's permissions are stale: reload from Today. */
+/** After demoting yourself, or linking your own doctor profile, the session is stale: reload. */
 function leaveForToday(): void {
   window.location.assign(TODAY_PATH);
 }
@@ -43,14 +44,17 @@ function leaveForToday(): void {
  * invite, resend, change a role, deactivate and invite back. Owners only (`STAFF_MANAGE`); the
  * API refuses everyone else. Every change updates its row in place and says so in a status line.
  */
-export function TeamPage({ onSelfDemoted = leaveForToday }: { onSelfDemoted?: () => void } = {}) {
+export function TeamPage({
+  onSelfDemoted = leaveForToday,
+  initialInvite = false,
+}: { onSelfDemoted?: () => void; initialInvite?: boolean } = {}) {
   const api = useTeamApi();
   const clinic = useClinic();
   const { clinic: choice, endSession } = useSession();
   const myMembership = choice.kind === "active" ? choice.membership.membership_id : undefined;
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
-  const [open, setOpen] = useState<Open | undefined>(undefined);
+  const [open, setOpen] = useState<Open | undefined>(initialInvite ? { kind: "invite" } : undefined);
   const [message, setMessage] = useState("");
   const [rowError, setRowError] = useState<unknown>(null);
   const [resending, setResending] = useState<string | undefined>(undefined);
@@ -213,6 +217,13 @@ export function TeamPage({ onSelfDemoted = leaveForToday }: { onSelfDemoted?: ()
                               Change role{" "}<span className="sr-only">of {member.full_name}</span>
                             </Button>
                           )}
+                          {member.status === "ACTIVE" &&
+                            !member.has_doctor_profile &&
+                            (member.role === "OWNER" || member.role === "DOCTOR") && (
+                              <Button size="sm" onClick={() => setOpen({ kind: "link-doctor", member })}>
+                                Link doctor profile{" "}<span className="sr-only">to {member.full_name}</span>
+                              </Button>
+                            )}
                           {member.status !== "DEACTIVATED" && !isYou && (
                             <Button size="sm" variant="ghost" onClick={() => setOpen({ kind: "deactivate", member })}>
                               Deactivate{" "}<span className="sr-only">{member.full_name}</span>
@@ -264,6 +275,23 @@ export function TeamPage({ onSelfDemoted = leaveForToday }: { onSelfDemoted?: ()
             setOpen(undefined);
             put(member);
             setMessage(`${member.full_name} is deactivated.`);
+          }}
+          onClose={() => setOpen(undefined)}
+        />
+      )}
+      {open?.kind === "link-doctor" && (
+        <LinkDoctorDialog
+          member={open.member}
+          isYou={open.member.membership_id === myMembership}
+          onLinked={(member) => {
+            setOpen(undefined);
+            if (member.membership_id === myMembership) {
+              // Your permissions and workspaces changed: reload them from Today.
+              onSelfDemoted();
+              return;
+            }
+            put(member);
+            setMessage(`${member.full_name} is linked to a doctor profile.`);
           }}
           onClose={() => setOpen(undefined)}
         />

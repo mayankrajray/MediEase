@@ -18,6 +18,7 @@ export function membership(
     clinic_status: "ACTIVE",
     role,
     permissions: ["CLINIC_VIEW", "DOCTORS_VIEW"],
+    doctor_id: null,
     ...overrides,
   };
 }

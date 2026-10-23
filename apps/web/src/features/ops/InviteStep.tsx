@@ -2,7 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 
-import { TextField } from "@/components/ui/Field";
+import { CheckboxField, SelectField, TextField } from "@/components/ui/Field";
 import { useFocusOnError } from "@/components/useFocusOnError";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { ROLE_LABELS } from "@/features/auth/labels";
@@ -13,6 +13,7 @@ import { fieldErrors } from "@/lib/api/field-errors";
 import { sessionPost } from "@/lib/auth/refresh";
 
 import { AcceptLink } from "./AcceptLink";
+import type { AddedDoctor } from "./DoctorsStep";
 import { emptyToNull } from "./fields";
 
 const PATH = "/api/v1/ops/clinics/{clinic_id}/staff-invites" as const;
@@ -31,11 +32,17 @@ const NEEDS_CONTACT = "Enter an email address or a phone number: it is how they 
  */
 export function InviteStep({
   clinicId,
+  doctors = [],
   invited,
   onInvited,
   onFinish,
 }: {
   clinicId: string;
+  /**
+   * Doctors added in step 2 (M6a-P6, decision 8A): an owner who also practises is linked to
+   * one of them, Doctor 1 by default, in the same invitation.
+   */
+  doctors?: readonly AddedDoctor[];
   /** People invited so far (their links are gone: they are shown once). */
   invited: readonly InvitedPerson[];
   onInvited: (invitation: Invitation) => void;
@@ -46,6 +53,9 @@ export function InviteStep({
   const [role, setRole] = useState<Role>("OWNER");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const linkable = doctors.filter((d) => d.is_active && d.user_id === null);
+  const [practises, setPractises] = useState(false);
+  const [doctorId, setDoctorId] = useState(linkable[0]?.id ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [missingContact, setMissingContact] = useState(false);
@@ -75,6 +85,7 @@ export function InviteStep({
           role,
           email: emptyToNull(email),
           phone: emptyToNull(phone),
+          ...(role === "OWNER" && practises && doctorId !== "" ? { doctor_id: doctorId } : {}),
         },
         { pathParams: { clinic_id: clinicId } },
       );
@@ -93,6 +104,7 @@ export function InviteStep({
     setEmail("");
     setPhone("");
     setRole("DOCTOR");
+    setPractises(false);
   }
 
   if (latest !== null) {
@@ -191,6 +203,30 @@ export function InviteStep({
           error={problems["phone"]}
           onChange={setPhone}
         />
+        {role === "OWNER" && linkable.length > 0 && (
+          <div className="space-y-3 rounded-lg border border-slate-300 p-3">
+            <CheckboxField
+              id="invite-practises"
+              label="The owner also practises here"
+              hint="Their invitation links them to a doctor added in step 2, so they can switch between the Owner and Doctor views."
+              checked={practises}
+              onChange={setPractises}
+            />
+            {practises && (
+              <SelectField
+                id="invite-doctor"
+                label="Which doctor is the owner?"
+                value={doctorId}
+                error={problems["doctor_id"]}
+                options={linkable.map((d, i) => ({
+                  value: d.id,
+                  label: `${d.display_name}${i === 0 ? " (Doctor 1)" : ""}`,
+                }))}
+                onChange={setDoctorId}
+              />
+            )}
+          </div>
+        )}
         <button
           type="submit"
           disabled={submitting}

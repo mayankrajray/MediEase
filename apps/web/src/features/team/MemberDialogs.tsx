@@ -1,16 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui/Button";
+import { SelectField } from "@/components/ui/Field";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { ROLE_LABELS } from "@/features/auth/labels";
 import type { Role } from "@/features/auth/landing";
 import { useSession } from "@/features/auth/SessionProvider";
 import { AcceptLink } from "@/features/ops/AcceptLink";
 
-import { useTeamApi, type StaffMember, type TeamInvitation } from "./api";
+import { useTeamApi, type ClinicDoctor, type StaffMember, type TeamInvitation } from "./api";
 import { ROLE_HINTS, ROLES } from "./labels";
 
 /**
@@ -143,6 +144,91 @@ export function LinkDialog({ invitation, onClose }: { invitation: TeamInvitation
       <Button variant="primary" onClick={onClose}>
         Done
       </Button>
+    </Dialog>
+  );
+}
+
+/**
+ * Link a doctor profile to an active member (M6a-P6, decision 8A), the owner included: "I also
+ * practise here". Lists the clinic's active profiles that no one is linked to yet.
+ */
+export function LinkDoctorDialog({
+  member,
+  isYou,
+  onLinked,
+  onClose,
+}: {
+  member: StaffMember;
+  isYou: boolean;
+  onLinked: (member: StaffMember) => void;
+  onClose: () => void;
+}) {
+  const api = useTeamApi();
+  const { endSession } = useSession();
+  const [doctors, setDoctors] = useState<readonly ClinicDoctor[] | undefined>(undefined);
+  const [doctorId, setDoctorId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.doctors().then(
+      (items) => {
+        if (cancelled) return;
+        const free = items.filter((d) => d.is_active && d.user_id === null);
+        setDoctors(free);
+        setDoctorId(free[0]?.id ?? "");
+      },
+      (failure: unknown) => {
+        if (!cancelled && !endSession(failure)) setError(failure);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [api, endSession]);
+
+  async function save() {
+    if (saving || doctorId === "") return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.linkDoctor(doctorId, member.user_id);
+      onLinked({ ...member, has_doctor_profile: true });
+    } catch (failure) {
+      if (!endSession(failure)) setError(failure);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog title={isYou ? "I also practise here" : `Link a doctor profile to ${member.full_name}`} onClose={onClose}>
+      <p>
+        {isYou
+          ? "Link yourself to your doctor profile: you can then switch between the Owner and Doctor views, and write consultations and prescriptions."
+          : "They will see their own patients and sessions, and can write consultations and prescriptions."}
+      </p>
+      {doctors === undefined && error === null && <p role="status">Loading the doctors…</p>}
+      {doctors !== undefined && doctors.length === 0 && (
+        <p>Every doctor profile is already linked. Add the doctor in the clinic settings first.</p>
+      )}
+      {doctors !== undefined && doctors.length > 0 && (
+        <SelectField
+          id="team-link-doctor"
+          label="Doctor profile"
+          value={doctorId}
+          options={doctors.map((d) => ({ value: d.id, label: `${d.display_name} · ${d.registration_number}` }))}
+          onChange={setDoctorId}
+        />
+      )}
+      {error !== null && <ErrorNotice error={error} />}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="primary" disabled={saving || doctorId === ""} onClick={() => void save()}>
+          {saving ? "Linking…" : "Link profile"}
+        </Button>
+        <Button onClick={onClose}>Cancel</Button>
+      </div>
     </Dialog>
   );
 }

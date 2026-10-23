@@ -176,6 +176,7 @@ export function CreateClinicWizard({ resumeClinicId }: { resumeClinicId?: string
       {step === "invite" && clinic !== null && (
         <InviteStep
           clinicId={clinic.id}
+          doctors={doctors}
           invited={invited}
           onInvited={(invitation) => setInvited((list) => [...list, invitation])}
           onFinish={() => setStep("done")}

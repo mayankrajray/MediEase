@@ -23,15 +23,16 @@ export interface TodayState {
   readonly refresh: () => void;
 }
 
-export function useToday(clinicId: string | undefined): TodayState {
+export function useToday(clinicId: string | undefined, view?: "doctor"): TodayState {
   const [state, setState] = useState<{ readonly key: string; readonly today: Today | undefined; readonly error: unknown }>({
-    key: clinicId ?? "",
+    key: `${clinicId ?? ""}:${view ?? ""}`,
     today: undefined,
     error: undefined,
   });
   const [nonce, setNonce] = useState(0);
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
-  const key = clinicId ?? "";
+  // M6a-P6: the practising owner's Doctor view is its own answer, never mixed with the clinic's.
+  const key = `${clinicId ?? ""}:${view ?? ""}`;
 
   useEffect(
     () =>
@@ -40,6 +41,7 @@ export function useToday(clinicId: string | undefined): TodayState {
           withSessionRefresh(() =>
             apiGetConditional("/api/v1/dashboard/today", etag, {
               ...(clinicId === undefined ? {} : { clinicId }),
+              ...(view === undefined ? {} : { query: { view } }),
               signal,
             }),
           ),
@@ -47,7 +49,7 @@ export function useToday(clinicId: string | undefined): TodayState {
         onError: (error) =>
           setState((previous) => ({ key, today: previous.key === key ? previous.today : undefined, error })),
       }),
-    [key, clinicId, nonce],
+    [key, clinicId, view, nonce],
   );
 
   // Another clinic's numbers are never shown under this one, even for one render.
