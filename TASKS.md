@@ -12,12 +12,12 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M6a — Auth, staff workspaces and notification core** (issue #49, branch `m6/49-mvp-demo`, one PR for the milestone). PRD v1.2 (22 Oct 2026) split the former M6 into M6a–M6d; #49 became M6a, and M6b–M6d each get their own issue, branch and PR when they open (ADR-0011). M5 merged in PR #41 on 20 Oct 2026 |
-| Active phase | **M6a-P3 — Accounts: Google sign-in for staff and patients, patient email and password:** built and verified 23 Oct 2026 (ADR-0015 Accepted; `docs/milestones/M6-mvp-demo.md` "as built"), awaiting the developer's confirmation. M6a-P1 and M6a-P2 confirmed and pushed (draft PR #50) |
+| Active phase | **M6a-P4 — Email provider: verification and password reset:** designed (`docs/milestones/M6-mvp-demo.md`, ADR-0016 Proposed), awaiting the developer's approval. M6a-P1 to P3 confirmed and pushed (draft PR #50) |
 | Design notes | `docs/milestones/M6-mvp-demo.md` (M6a); M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M6a phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | Real Google sign-in needs L-09 (the fake provider covers local use). The email provider for M6a-P4 is chosen in that phase's design (L-11). The issue #49 title still says "MVP demo" (rename on GitHub by the developer). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test is flaky on CI (150 ms bound) |
+| Open decisions | M6a-P4 design (8 decisions) and ADR-0016; the email provider (Brevo recommended) and its sending domain are L-11. Real Google sign-in needs L-09 (the fake provider covers local use). The issue #49 title still says "MVP demo" (rename on GitHub by the developer). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test is flaky on CI (150 ms bound) |
 | Last updated | 23 Oct 2026 |
 
 
@@ -40,7 +40,7 @@ done before the pilot.
 | L-08 | Choose a WhatsApp BSP with a partner-paid (wholesale) model; MediEase's business verification and website for the partnership (ADR-0014) | Founder | M8 | ☐ |
 | L-09 | A Google Cloud OAuth client (free) for Google sign-in, with the local redirect URI | Founder | M6a-P3 | ☐ |
 | L-10 | A Groq API key (free tier) for the assistant | Founder | M7 | ☐ |
-| L-11 | A free-tier transactional email account (provider named in the M6a-P4 design), with a verified sending domain; listed as a processor in the privacy notice (L-04) | Founder | M6a-P4 | ☐ |
+| L-11 | A free-tier transactional email account (Brevo recommended, ADR-0016) with a verified sending domain (SPF, DKIM, DMARC) and SMTP credentials; listed as a processor in the privacy notice (L-04) | Founder | M6a-P4 | ☐ |
 
 ---
 
@@ -150,8 +150,8 @@ notifications arrive; `make e2e` green. Deployment and hosting are out of scope 
 |---|---|---|
 | M6a-P1 | Design system (tokens, primitives, Motion, responsive shell); *Today* dashboards for front desk, doctor and owner | ✅ (confirmed 20 Oct 2026; PR #50) |
 | M6a-P2 | The design system across the existing screens; mobile layouts; motion for drawers, dialogs and lists | ✅ (confirmed 21 Oct 2026; PR #50) |
-| M6a-P3 | Google sign-in for staff and patients; patient email and password; separate patient sessions (FR-AUTH-07, FR-PRT-01; ADR-0015) | ▶ (built 23 Oct 2026; awaiting confirmation) |
-| M6a-P4 | Email provider behind a port: email verification for patients and staff, password reset by link (FR-AUTH-08, FR-AUTH-05); L-11 | ☐ |
+| M6a-P3 | Google sign-in for staff and patients; patient email and password; separate patient sessions (FR-AUTH-07, FR-PRT-01; ADR-0015) | ✅ (confirmed 23 Oct 2026; PR #50) |
+| M6a-P4 | Email provider behind a port: email verification for patient password accounts, password reset by link for staff and patients (FR-AUTH-08, FR-AUTH-05; ADR-0016); L-11 | ▶ (designed, awaiting approval) |
 | M6a-P5 | Owner Team page: invite, change role, deactivate (FR-ORG-07, on the existing FR-ORG-04 API) | ☐ |
 | M6a-P6 | Role workspaces: Owner, Doctor and Front Desk navigation and home (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); the ops wizard marks the owner as Doctor 1 in the same step (FR-ORG-03) | ☐ |
 | M6a-P7 | Notification service with domain events and the in-app channel; notification centre per role (FR-NTF-02..06; replaces FR-NTF-01) | ☐ |
