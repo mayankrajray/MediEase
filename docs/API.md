@@ -54,6 +54,8 @@ change that implements it.
 | GET | `/api/v1/auth/google/start` | Start a Google sign-in for `intent=staff\|patient`; seals the flow into `me_oidc` and redirects to Google (or to the callback with the local fake) | FR-AUTH-07, FR-PRT-01 | Implemented (M6a-P3) |
 | GET | `/api/v1/auth/google/callback` | Finish it: staff cookies for an existing staff user (linked by verified email once, then by `sub`), portal cookies for a patient; redirects to `next`, or back to the sign-in page with a `reason` | FR-AUTH-07, FR-PRT-01 | Implemented (M6a-P3) |
 | GET | `/api/v1/me` | Current user, memberships, permissions | FR-AUTH-03 | Implemented (M1-P3) |
+| POST | `/api/v1/auth/password-reset` | `{email}` → always 202 `{accepted: true}`; the worker emails a 30-minute link to an eligible staff user | FR-AUTH-05 | Implemented (M6a-P4) |
+| POST | `/api/v1/auth/password-reset/complete` | `{token, password}` → 204; ends every session of the account | FR-AUTH-05 | Implemented (M6a-P4) |
 
 **Sign-in** `{"identifier": "<email or phone>", "password": "…"}` → `200` with
 `{user, memberships[], session: {access_expires_at, refresh_expires_at}}` and three cookies.
@@ -87,6 +89,10 @@ and a portal session is 401 on every staff route.
 | POST | `/api/v1/portal/auth/refresh` | Rotate the portal refresh token | FR-AUTH-02 | Implemented (M6a-P3) |
 | POST | `/api/v1/portal/auth/sign-out` | Revoke the portal session | FR-AUTH-02 | Implemented (M6a-P3) |
 | GET | `/api/v1/portal/me` | The signed-in account (no clinic data until M6b) | FR-PRT-01 | Implemented (M6a-P3) |
+| POST | `/api/v1/portal/auth/password-reset` | As staff; a Google-only account gets a "use Google" notice | FR-AUTH-05 | Implemented (M6a-P4) |
+| POST | `/api/v1/portal/auth/password-reset/complete` | As staff; also verifies the email | FR-AUTH-05 | Implemented (M6a-P4) |
+| POST | `/api/v1/portal/auth/verify-email` | `{token}` → 204 (the emailed page POSTs; a GET verifies nothing) | FR-AUTH-08 | Implemented (M6a-P4) |
+| POST | `/api/v1/portal/auth/verify-email/resend` | `@patient`; 202 `{accepted}`; 3 an hour | FR-AUTH-08 | Implemented (M6a-P4) |
 
 ### Authorisation (M1-P3)
 

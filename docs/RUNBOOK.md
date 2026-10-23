@@ -30,6 +30,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 17. Locked-out staff account
 18. Read the audit log
 19. Google sign-in and patient accounts (M6a-P3)
+20. Account emails: Mailpit locally, the SMTP provider in production (M6a-P4)
 
 ---
 
@@ -368,6 +369,33 @@ with the authorized redirect URI `PUBLIC_BASE_URL` + `/api/v1/auth/google/callba
 portal and Google sign-in"). Common causes: the 10-minute flow cookie expired (start again), a
 redirect URI that does not match the Google client exactly, or a staff address nobody invited.
 
-**A patient forgot their password:** there is no reset until M6a-P4 (email provider). They can
-use *Continue with Google*, which makes a separate Google account (never merged), or wait for
-the reset.
+**A patient forgot their password:** *Forgot password?* on `/portal/sign-in` (M6a-P4, §20). A
+Google-only account is emailed a reminder to use *Continue with Google*.
+
+---
+
+### 20. Account emails: Mailpit locally, the SMTP provider in production (M6a-P4)
+**Locally:** `make up` starts `mailpit`; the worker sends every verification and reset email
+there. Read them at **http://localhost:8025** (nothing leaves the machine). Links point at
+`PUBLIC_BASE_URL`.
+
+**An email did not arrive:**
+1. `make logs` for `email.failed` (reason and attempt) or `email.skipped` (why it no longer
+   applied, e.g. `already_verified`, `no_password`).
+2. In `make psql`: `SELECT state, attempts, last_error_code, run_at FROM jobs WHERE kind =
+   'send_auth_email' ORDER BY created_at DESC LIMIT 5;`. A `queued` job with a later `run_at` is
+   retrying. A `dead` one ended with the code in docs/ERRORS.md "Emailed links".
+3. A reset request for an address with no eligible account sends nothing by design (the answer
+   is the same 202): check the account exists, is active and has a password.
+
+**Going live (L-11):**
+1. Create the Brevo account and verify the sending domain with SPF, DKIM and DMARC.
+2. Turn off open and click tracking for transactional mail.
+3. Create an SMTP key.
+4. Set these, then restart the worker:
+   - `EMAIL_PROVIDER=smtp` and `EMAIL_FROM=MediEase <no-reply@<domain>>`;
+   - `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_SECURITY=starttls`;
+   - `SMTP_USERNAME` and `SMTP_PASSWORD`.
+
+   `SMTP_SECURITY=none` and `EMAIL_PROVIDER=console` are refused when deployed. To process in
+   India instead, point the same settings at Amazon SES in `ap-south-1` (ADR-0016).

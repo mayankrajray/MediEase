@@ -429,6 +429,11 @@ Full controls list: [SECURITY_AND_COMPLIANCE.md](SECURITY_AND_COMPLIANCE.md).
   for both is an OpenID Connect code flow with PKCE run by the API behind `OidcPort` (Google, or a
   local-only fake); staff are matched by Google `sub` after one verified-email link and are never
   created by it.
+- **Account emails (M6a-P4, ADR-0016):** verification and reset emails go through an `EmailPort`
+  with one standard-library SMTP adapter (Brevo, Resend or SES in production; the `mailpit`
+  container locally). Requests only enqueue `send_auth_email`; the worker makes the single-use
+  token, stores its digest in `email_tokens` and sends, so no usable secret is stored. A
+  completed reset revokes every session of the account.
 - **Authorisation:** every route declares an access policy (`public`, `authenticated`,
   `clinic(permission)`, `ops`, `patient`) and one `before_request` hook enforces it: it authenticates the
   `me_access` cookie, re-reads the session, user and membership, resolves the request's clinic and
