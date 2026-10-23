@@ -1,14 +1,18 @@
-# M6 — MVP demo: clinic and patient experience: design notes
+# M6a — Auth, staff workspaces and notification core: design notes
+
+Was "M6 — MVP demo: clinic and patient experience" until PRD v1.2 (22 Oct 2026) split M6 into
+M6a–M6d. The P1–P2 records below are unchanged; the old P4–P8 (linking, portal, medicine planner,
+notifications for patients, public booking) moved to M6b.
 
 | Field | Value |
 |---|---|
-| Status | Opened 20 Oct 2026 (issue #49, branch `m6/49-mvp-demo`); plan approved by the developer (items D2–D5 of the demo plan); M6-P1 confirmed by the developer 20 Oct 2026 and pushed (draft PR #50); M6-P2 confirmed 21 Oct 2026 and pushed; M6-P3 designed (ADR-0015 Proposed), awaiting approval |
-| PRD | v1.1 §0 (C1–C3), §8.13 |
-| ADR | ADR-0013 (for M7), ADR-0014 (for M8); patient accounts and Google sign-in: ADR-0015 (Proposed, P3) |
-| Covers | FR-AUTH-07, FR-PRT-01..04, FR-REM-03, FR-NTF-01, FR-PUB-01..04 |
+| Status | Opened 20 Oct 2026 (issue #49, branch `m6/49-mvp-demo`); plan approved by the developer (items D2–D5 of the demo plan); M6-P1 confirmed by the developer 20 Oct 2026 and pushed (draft PR #50); M6-P2 confirmed 21 Oct 2026 and pushed; re-scoped to M6a by PRD v1.2 on 22 Oct 2026; M6a-P3 design approved 22 Oct 2026 (ADR-0015 Accepted) |
+| PRD | v1.2 §0 and §8.14 (v1.1 §8.13 where not superseded) |
+| ADR | ADR-0013 (for M7), ADR-0014 (for M8); patient accounts and Google sign-in: ADR-0015 (Accepted, P3) |
+| Covers | FR-AUTH-05, 07, 08, FR-PRT-01 (account only), FR-ORG-03, FR-ORG-07, FR-UX-01..06, FR-NTF-02..06, FR-APT-08, 09, FR-AUD-03 |
 | Issue / branch / PR | #49 · `m6/49-mvp-demo` · one PR for the milestone (ADR-0011) |
-| Exit criterion | On the local stack: each role lands on its own dashboard; a patient signs in with Google or email, links a clinic record by invite or prescription link, and sees appointments, prescriptions, reminders and a medicine plan; notifications arrive in the app; a public booking request is confirmed by the front desk; `make e2e` green |
-| Out of scope | Deployment and hosting; the AI assistant (M7); per-clinic WhatsApp and billing (M8, designed); pilot hardening (M9) |
+| Exit criterion | On the local stack: Owner, Doctor and Front Desk, and a practising owner in both views, each get their own home screen and navigation; staff and patients sign in with Google (fake provider) or a password and stay apart; email verification and password reset work; the owner manages the team on the web; in-app notifications arrive; `make e2e` green |
+| Out of scope | Patient linking, portal, medicine planner and booking (M6b); clinic applications, verification and discovery (M6c); billing (M6d); deployment and hosting; the AI assistant (M7); per-clinic WhatsApp and billing (M8, designed); pilot hardening (M9) |
 
 ## Phase plan
 
@@ -16,12 +20,12 @@
 |---|---|---|
 | P1 | Design system (tokens, primitives, Motion, responsive shell) and the role dashboards' first screen: *Today* for front desk, doctor and owner | Below (confirmed 20 Oct 2026) |
 | P2 | The design system across the existing screens (queue, patients, consultation, schedule, follow-ups, ops); mobile layouts; motion for drawers, dialogs and list changes | Below (confirmed 21 Oct 2026) |
-| P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR) | Below (awaiting approval) |
-| P4 | Linking a patient account to a clinic's record by clinic invite or prescription link; the patient API (appointments, prescriptions, reminders, per clinic) | At its start |
-| P5 | Patient portal web: mobile-first, English and Hindi, with Motion | At its start |
-| P6 | Medicine planner (FR-REM-03): a dose schedule derived only from the prescribed lines | At its start |
-| P7 | In-app notifications for patients and staff (FR-NTF-01) | At its start |
-| P8 | Public booking page and booking requests (FR-PUB-01..04) | At its start |
+| P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR-0015) | Below (approved 22 Oct 2026) |
+| P4 | Email provider behind a port: email verification, password reset by link (FR-AUTH-08, FR-AUTH-05) | At its start |
+| P5 | Owner Team page: invite, change role, deactivate (FR-ORG-07) | At its start |
+| P6 | Role workspaces (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); owner as Doctor 1 in the ops wizard (FR-ORG-03) | At its start |
+| P7 | Notification service, domain events, in-app channel, notification centre (FR-NTF-02..06) | At its start |
+| P8 | Appointment reminders (FR-APT-08), doctor-leave conflicts (FR-APT-09), owner audit view (FR-AUD-03) | At its start |
 
 ---
 
@@ -246,10 +250,24 @@ Confirmed by the developer on 21 Oct 2026 and pushed to draft PR #50.
 
 ## M6-P3 — Accounts: Google sign-in for staff and patients, patient email and password
 
-Proposed 21 Oct 2026. Recommendations are marked (rec). ADR-0015 (Proposed) records decisions
+Proposed 21 Oct 2026. Recommendations are marked (rec). ADR-0015 records decisions
 1–4 and 6. Covers FR-AUTH-07 and FR-PRT-01. Linking an account to a clinic's record is P4; the
 portal screens are P5. P3 delivers only the sign-in, sign-up and sign-out screens and an account
 page that says no clinic is linked yet.
+
+**Approved by the developer 22 Oct 2026: A on all eight** (now M6a-P3; ADR-0015 Accepted).
+Amendments from PRD v1.2:
+
+- **Decision 5.** "No password reset" and "email stored unverified" now hold only until M6a-P4,
+  which adds an email provider (FR-AUTH-08): email verification, and password reset by link
+  (FR-AUTH-05). P3 stores `email_verified_at` (null for password sign-ups, set for Google) so P4
+  and the verified-identity rule (FR-PUB-03) need no data change. Accounts are still never merged
+  automatically.
+- **Account page.** It says *No clinic linked yet*; linking and the *Find a doctor* dashboard come
+  in M6b (and the directory in M6c), not "P4".
+- **Roles.** A membership keeps exactly one role (FR-ORG-03). Google staff matching is by user,
+  so a practising owner (an `OWNER` with a linked doctor profile) signs in like any staff member;
+  P3 changes no role or permission check.
 
 Facts the design rests on:
 
@@ -275,7 +293,7 @@ Facts the design rests on:
 | 5 | Patient email and password | Sign-up takes a name, email and password, then signs the patient in. The same Argon2id, 10-character minimum and five-failure lockout as staff. The email is stored unverified. There is no password reset by email until an email provider exists; a patient who forgets uses Google or a new clinic invite (P4). Google and password accounts are never merged automatically, even with the same address, so an unverified address cannot claim someone's account or their linked records | B: email verification and reset now (needs a paid email provider; noted as a later item). C: merge by email (account takeover by whoever registered the address first) |
 | 6 | Working without L-09 | `GOOGLE_OIDC_PROVIDER=google\|fake`. `fake` is allowed only with `APP_ENV` `local` or `test`, and start-up refuses it elsewhere. It skips Google: `/start` goes straight to `/callback` with a synthetic verified identity for the `login_hint` email, through the same matching and cookie code. With `google`, `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are required. The redirect URI is `PUBLIC_BASE_URL` + `/api/v1/auth/google/callback` (through the web origin's rewrite) | B: wait for L-09 (blocks the demo). C: a mock Google server container (more to run, and it proves little more) |
 | 7 | Abuse and privacy | Sign-up, sign-in and Google's start and callback are rate limited per caller fingerprint with the M4-P5 limiter. Errors are generic ("email or password is incorrect"). Audit events are `patient_account.created`, `patient.signed_in` and `staff.signed_in_google`, with a new actor type `PATIENT`; IDs only, no email. Sign-up does reveal that an address already has a password account; this is accepted and rate limited (ADR-0015) | B: a sign-up that hides existing addresses (needs email delivery to finish the sign-up) |
-| 8 | Web screens | `/sign-in` (staff) gains *Continue with Google*. New `/portal/sign-in` and `/portal/sign-up` in the `AuthFrame` card, with Google and email forms. `/portal` (the account) shows the name, how they signed in, *No clinic linked yet* with what P4 will offer, and *Sign out*. Mobile-first at 360 px; English only in P3 (Hindi arrives with the portal in P5) | B: one sign-in page that asks "staff or patient?" (staff and patients would see each other's options) |
+| 8 | Web screens | `/sign-in` (staff) gains *Continue with Google*. New `/portal/sign-in` and `/portal/sign-up` in the `AuthFrame` card, with Google and email forms. `/portal` (the account) shows the name, how they signed in, *No clinic linked yet* (linking arrives in M6b) and *Sign out*. Mobile-first at 360 px; English only in P3 (Hindi arrives with the portal in P5) | B: one sign-in page that asks "staff or patient?" (staff and patients would see each other's options) |
 
 Fixed points:
 
