@@ -26,11 +26,12 @@ import structlog
 from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor, RequestContext
 from mediease_api.application.links.use_cases import new_link
-from mediease_api.application.messaging.rx_link import enqueue_rx_link
+from mediease_api.application.notifications.service import publish
 from mediease_api.application.reminders.scheduling import sync_prescription_reminder
 from mediease_api.application.scheduling.schedules import load_clinic
 from mediease_api.application.visits.use_cases import callers_doctor_id, load_visit
 from mediease_api.domain.audit.actions import AuditAction
+from mediease_api.domain.notifications.events import PrescriptionIssued
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.prescriptions.errors import AlreadyExists, DraftExists, NotLatest
 from mediease_api.domain.prescriptions.patient_view import PatientPage, build_preview
@@ -337,7 +338,16 @@ class IssuePrescription(_UseCase):
                 metadata["supersedes_id"] = str(older.id)
             self._audit(uow, ctx, AuditAction.PRESCRIPTION_ISSUED, rx, **metadata)
             # M5-P2 (R14, R15): the worker sends a pending link; the job commits with the issue.
-            enqueue_rx_link(uow, ids=self._ids, rx=rx, request_id=ctx.request_id, now=now)
+            # From M6a-P7 through the notification service (ADR-0017), the same job and key.
+            publish(
+                uow,
+                PrescriptionIssued(rx.id),
+                clinic_id=ctx.clinic_id,
+                ids=self._ids,
+                now=now,
+                request_id=ctx.request_id,
+                actor_user_id=ctx.user_id,
+            )
             chain = tuple(tenant.prescriptions.list_for_visit(rx.visit_id))
             # M5-P4 (R1, R2): the chain's follow-up reminder follows this version's date.
             sync_prescription_reminder(

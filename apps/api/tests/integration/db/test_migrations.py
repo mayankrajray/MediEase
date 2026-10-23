@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0022"
+HEAD = "0023"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -42,6 +42,7 @@ M6A_P3_TABLES = sorted(
     [*M5_P4_TABLES, "external_identities", "patient_accounts", "patient_refresh_tokens"]
 )
 M6A_P4_TABLES = sorted([*M6A_P3_TABLES, "email_tokens"])
+M6A_P7_TABLES = sorted([*M6A_P4_TABLES, "notification_preferences", "notifications"])
 
 
 @pytest.fixture
@@ -649,7 +650,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6A_P4_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6A_P7_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -675,5 +676,22 @@ def test_0022_adds_the_index_for_a_doctors_patients(
         command.downgrade(alembic_config, "0021")
         with engine.connect() as conn:
             assert conn.execute(text(index), name).scalar_one() == 0
+    finally:
+        engine.dispose()
+
+
+def test_0023_adds_notifications_and_their_preferences(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    """M6a-P7 (ADR-0017): two tenant tables; a replayed event cannot add a second row."""
+    command.upgrade(alembic_config, "0023")
+    assert _tables(scratch_database_url) == M6A_P7_TABLES
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            assert "staff.joined" in _check(conn, "ck_notifications_kind")
+            assert "IN_APP" in _check(conn, "ck_notification_preferences_channel")
+        command.downgrade(alembic_config, "0022")
+        assert _tables(scratch_database_url) == M6A_P4_TABLES
     finally:
         engine.dispose()

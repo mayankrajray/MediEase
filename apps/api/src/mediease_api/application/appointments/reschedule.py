@@ -25,11 +25,12 @@ from mediease_api.application.appointments.common import (
 from mediease_api.application.appointments.views import AppointmentView
 from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor
-from mediease_api.application.messaging.booking import enqueue_booking_confirmation
+from mediease_api.application.notifications.service import publish
 from mediease_api.domain.appointments.appointment import Appointment
 from mediease_api.domain.appointments.errors import NotModifiable, SessionClosed
 from mediease_api.domain.appointments.status import AppointmentStatus, CancelReason
 from mediease_api.domain.audit.actions import AuditAction
+from mediease_api.domain.notifications.events import AppointmentRescheduled
 from mediease_api.domain.shared.errors import InvalidValue
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -104,17 +105,17 @@ class RescheduleAppointment:
                     "from_session_id": str(source.id),
                 },
             )
-            patient = tenant.patients.get(new.patient_id)
-            assert patient is not None  # a foreign key keeps it
             # FR-APT-06 (M5-P2, decision 6A): the new time is confirmed; the old job, if still
-            # queued, finds its appointment cancelled and sends nothing.
-            enqueue_booking_confirmation(
+            # queued, finds its appointment cancelled and sends nothing. Through the notification
+            # service from M6a-P7 (ADR-0017), which also tells the doctor.
+            publish(
                 uow,
+                AppointmentRescheduled(new.id, old.id),
+                clinic_id=clinic_id,
                 ids=self._ids,
-                appointment=new,
-                patient=patient,
-                request_id=actor.info.request_id,
                 now=now,
+                request_id=actor.info.request_id,
+                actor_user_id=actor.user_id,
             )
             uow.commit()
 

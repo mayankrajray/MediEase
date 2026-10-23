@@ -40,11 +40,13 @@ from mediease_api.application.auth.errors import AccountDisabled, AccountLocked,
 from mediease_api.application.auth.views import SessionResult
 from mediease_api.application.clinics.errors import InviteExpired, InviteInvalid, InviteUsed
 from mediease_api.application.context import Actor, RequestInfo
+from mediease_api.application.notifications.service import publish
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.clinics.clinic import Clinic, ClinicStatus
 from mediease_api.domain.identity.membership import ClinicMembership, InviteState, Role
 from mediease_api.domain.identity.password import validate_password
 from mediease_api.domain.identity.user import User
+from mediease_api.domain.notifications.events import StaffJoined
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.security import InviteSecrets, PasswordHasher
@@ -136,6 +138,16 @@ class AcceptInvite:
                 entity_type=ENTITY_TYPE,
                 entity_id=membership.id,
                 metadata={"role": membership.role.value, "account": account},
+            )
+            # M6a-P7: the clinic's owners are told someone joined (in-app).
+            publish(
+                uow,
+                StaffJoined(membership.id),
+                clinic_id=clinic.id,
+                ids=self._ids,
+                now=now,
+                request_id=info.request_id,
+                actor_user_id=user.id,
             )
             if membership.role is Role.OWNER and clinic.status is ClinicStatus.ONBOARDING:
                 # I1 is satisfiable now: the clinic has its first active owner.

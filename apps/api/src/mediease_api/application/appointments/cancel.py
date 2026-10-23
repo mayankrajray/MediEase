@@ -22,8 +22,10 @@ from mediease_api.application.appointments.common import (
 from mediease_api.application.appointments.views import AppointmentView
 from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor
+from mediease_api.application.notifications.service import publish
 from mediease_api.domain.appointments.status import CancelReason
 from mediease_api.domain.audit.actions import AuditAction
+from mediease_api.domain.notifications.events import AppointmentCancelled
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.unit_of_work import UnitOfWork
@@ -73,6 +75,16 @@ class CancelAppointment:
                     "from_status": before.value,
                     "cancel_reason": cmd.reason.value,
                 },
+            )
+            # M6a-P7: the doctor is told (in-app); there is no patient template yet (L-02).
+            publish(
+                uow,
+                AppointmentCancelled(appointment.id),
+                clinic_id=clinic_id,
+                ids=self._ids,
+                now=now,
+                request_id=actor.info.request_id,
+                actor_user_id=actor.user_id,
             )
             uow.commit()
 

@@ -117,3 +117,6 @@ class AuditAction(StrEnum):
     AUTH_PASSWORD_RESET = "auth.password_reset"
     PATIENT_PASSWORD_RESET = "patient.password_reset"
     PATIENT_EMAIL_VERIFIED = "patient.email_verified"
+    # M6a-P7 (decision 8A): a member's notification choices. Metadata: the kinds turned on and
+    # off. Reading notifications is not audited (a convenience, not a disclosure).
+    NOTIFICATION_PREFERENCES_CHANGED = "notification.preferences_changed"

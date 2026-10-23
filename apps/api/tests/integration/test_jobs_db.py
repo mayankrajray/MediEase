@@ -575,6 +575,7 @@ def test_retention_writes_one_system_audit_event_with_counts_only(
         "jobs": "0",
         "webhook_events": "0",
         "email_tokens": "0",
+        "notifications": "0",
     }
 
 

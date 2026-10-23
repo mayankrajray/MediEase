@@ -271,12 +271,21 @@ class SqlAlchemyRetentionRepository:
             text("DELETE FROM email_tokens WHERE expires_at < :cutoff"),
             {"cutoff": cutoffs.refresh_tokens},
         )
+        notifications = 0
+        if cutoffs.notifications is not None:
+            # M6a-P7: read or not, 90 days after they were created.
+            gone = self._session.execute(
+                text("DELETE FROM notifications WHERE created_at < :cutoff"),
+                {"cutoff": cutoffs.notifications},
+            )
+            notifications = gone.rowcount  # type: ignore[attr-defined]
         return PurgeCounts(
             refresh_tokens=tokens.rowcount + patient_tokens.rowcount,  # type: ignore[attr-defined]
             patient_links=links.rowcount,  # type: ignore[attr-defined]
             jobs=jobs.rowcount,  # type: ignore[attr-defined]
             webhook_events=events,
             email_tokens=email_tokens.rowcount,  # type: ignore[attr-defined]
+            notifications=notifications,
         )
 
 
