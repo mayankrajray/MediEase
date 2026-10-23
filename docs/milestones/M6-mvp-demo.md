@@ -22,7 +22,7 @@ notifications for patients, public booking) moved to M6b.
 | P2 | The design system across the existing screens (queue, patients, consultation, schedule, follow-ups, ops); mobile layouts; motion for drawers, dialogs and list changes | Below (confirmed 21 Oct 2026) |
 | P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR-0015) | Below (approved 22 Oct 2026; built 23 Oct 2026) |
 | P4 | Email provider behind a port: email verification, password reset by link (FR-AUTH-08, FR-AUTH-05) | Below (approved and built 23 Oct 2026) |
-| P5 | Owner Team page: invite, change role, deactivate (FR-ORG-07) | At its start |
+| P5 | Owner Team page: invite, change role, deactivate (FR-ORG-07) | Below (awaiting approval) |
 | P6 | Role workspaces (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); owner as Doctor 1 in the ops wizard (FR-ORG-03) | At its start |
 | P7 | Notification service, domain events, in-app channel, notification centre (FR-NTF-02..06) | At its start |
 | P8 | Appointment reminders (FR-APT-08), doctor-leave conflicts (FR-APT-09), owner audit view (FR-AUD-03) | At its start |
@@ -537,3 +537,86 @@ Planned verification:
       password signs in;
     - failure path: the same link a second time says it is not valid any more.
   - **Not verified.** Real delivery through Brevo and its SPF, DKIM and DMARC wait for L-11.
+
+Confirmed by the developer on 23 Oct 2026 and pushed to draft PR #50.
+
+---
+
+## M6a-P5 — The owner's Team page
+
+Proposed 23 Oct 2026. Recommendations are marked (rec). Covers FR-ORG-07 (PRD v1.2), on top of
+FR-ORG-04. No ADR: it reuses ADR-0016 for the invitation email. Doctor profiles and "owner as
+Doctor 1" are P6.
+
+Facts the design rests on:
+
+- **The API exists since M1-P4 and M1-P5**, under `STAFF_MANAGE`, which only owners hold:
+  - `GET /api/v1/clinic/staff`;
+  - `POST /api/v1/clinic/staff` (invite, returns `accept_url` once);
+  - `PATCH /api/v1/clinic/staff/{membership_id}` (role and/or `DEACTIVATED`).
+
+  Last-owner protection (`CLN_LAST_OWNER`) and the audit (`staff.invited`, `staff.role_changed`,
+  `staff.deactivated`) are already in place.
+- **What the list returns.** It gives `membership_id`, `user_id`, `full_name`, `role` and
+  `status` only: no email or phone, no invitation expiry, no doctor-profile link.
+- **Invitations.** Re-inviting an `INVITED` member issues a new secret that retires the old link.
+  A `DEACTIVATED` member cannot be re-invited (`CLN_MEMBER_EXISTS`, M1). The secret is made in
+  the request and returned once, which is how the ops wizard shows its copy-link box
+  (`AcceptLink`).
+- **Email exists since P4.** The `send_auth_email` worker pattern makes a secret at send time and
+  stores only its digest (ADR-0016 decision 4).
+- **The web app.** There is no staff screen for clinic members. Navigation is
+  `features/shell/nav.ts` (`requires` a permission). The P2 primitives (responsive table, Drawer,
+  Dialog, Field) are ready.
+
+| # | Question | A (rec) | Rejected |
+|---|---|---|---|
+| 1 | Where | `/team` in the clinic workspace, a sidebar item *Team* that `requires: STAFF_MANAGE`, so only owners see it. The API already refuses everyone else (403) | B: under `/settings/team` (one more level for the owner's most common admin task) |
+| 2 | What the list shows | Every member: name, role, status in words (*Active*, *Invited*, *Deactivated*), email or phone, and for an invitation when it expires. The list API gains `email`, `phone_e164`, `invite_expires_at` and `has_doctor_profile`, read-only (contract 0.25.0). Active first, then invited, then deactivated. A table from 768 px and cards below, like P2 | B: names and roles only (an owner cannot tell two invitations apart or see which have expired) |
+| 3 | Inviting | A drawer with name, role (Owner, Doctor, Front desk) and email or phone.<br>• **With an email:** the invitation is **emailed by the worker**. A new clinic job `send_staff_invite` makes the secret at send time and stores its digest on the membership, as ADR-0016 does. The owner sees "Invitation emailed to a\*\*\*@…", and *Resend* re-sends it, which retires the old link.<br>• **Phone only:** the link is shown once with *Copy link*, as ops do today, to share on WhatsApp. An emailed invitation never shows a link, so no second copy exists | B: always show the link and send no email (FR-AUTH-08 lists invitation emails). C: email *and* show the link (two live copies of one secret) |
+| 4 | Changing a role | A *Change role* action per row opens a dialog with the three roles, then PATCH.<br>• **Last owner:** the API's `CLN_LAST_OWNER` message is shown as it is.<br>• **Demoting yourself:** an owner doing so is told first that they will lose this page, and after saving they land on Today | B: an inline select per row (an accidental change is one tap away) |
+| 5 | Deactivating | *Deactivate* behind a confirmation dialog that says what happens: signed out on their next request, the member stays in the list.<br>• **Not yourself:** the action is hidden for your own row. The last-owner rule already covers a sole owner; this also stops a co-owner locking themselves out by mistake | B: allow deactivating yourself (a support call to undo) |
+| 6 | Bringing someone back | *Re-invite* on a deactivated member. The domain gains `DEACTIVATED → INVITED`: a new invitation with a new secret, sent as in decision 3, audited as `staff.reinvited`. The identity spec's "no way back in M1" is amended. The person keeps their user and history; they accept the invitation and are `ACTIVE` again | B: no way back (re-hiring needs ops and a new user) |
+| 7 | Doctor profiles | Shown, not managed: a *Doctor profile* badge where one is linked. Linking, and the owner as Doctor 1, are P6 (FR-ORG-03, FR-UX-06) | B: manage profiles here too (overlaps P6) |
+| 8 | Screen behaviour | Loading skeleton; an error with its Ref and *Try again*; every change updates the row in place with a status message. 360 px and WCAG 2.1 AA. The front desk and doctors never see *Team* | — |
+
+Fixed points:
+
+- **Data.**
+  - **Migration `0022`:**
+    - `jobs` gains the clinic kind `send_staff_invite`;
+    - `clinic_memberships` keeps the digest it already has;
+    - the domain's status transitions add `DEACTIVATED → INVITED`.
+
+    `docs/DATA_MODEL.md` and `docs/specs/identity-and-tenancy.md` are updated.
+  - **Audit:** `staff.invited` and `staff.reinvited`, with `delivery: email | link`; no address
+    and no secret.
+  - **Contract:** 0.25.0. The invite answer has `accept_url` only for a phone-only invitation,
+    and new `delivery` and `email_masked` fields; there is a new
+    `POST /api/v1/clinic/staff/{membership_id}/resend`.
+- **Errors.** `CLN_MEMBER_EXISTS` stays for an active or invited member.
+  `CLN_INVALID_TRANSITION` covers resending to someone not invited.
+- **Rate limit.** 10 invitations an hour per clinic, and *Resend* at most 3 an hour per member,
+  both on the M4-P5 table.
+- **Unchanged.** The ops wizard keeps its copy-link flow until M6c (FR-ONB-08). Every existing
+  test and journey passes.
+
+Planned verification:
+
+- **Unit:**
+  - the domain's re-invite transition and the last-owner rule;
+  - the invitation email's wording;
+  - the web Team screen's states and actions.
+- **Integration (PostgreSQL):**
+  - an emailed invitation stores only a digest, and the link works once;
+  - resend retires the old link;
+  - a phone-only invitation returns the link;
+  - re-inviting a deactivated member returns them `ACTIVE` with their history;
+  - doctors and front desk get 403 on every staff route;
+  - another clinic's member is 404 (tenancy suite).
+- **Playwright:**
+  - the owner invites a front-desk member by email, the person accepts from the Mailpit link and
+    signs in;
+  - the owner changes their role, then deactivates them, and their next request is refused;
+  - failure path: demoting the only owner shows the last-owner message.
+- **Gates:** `make lint typecheck contract-check test` and `make e2e`.
