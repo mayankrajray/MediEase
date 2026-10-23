@@ -101,13 +101,15 @@ export async function sessionRunningNow(
   const found = await running();
   if (found !== undefined) return { doctorId, sessionId: found.id };
 
-  // An earlier run's extra session may be about to end (under 2 minutes left, so not used): a new
-  // one would overlap it (SCH_OVERLAP), so wait for it to end and try once more.
-  const add = async () => {
+  // An earlier run's extra session may be about to end (under 2 minutes left, so not used) or may
+  // have ended in the last 10 minutes. A new one starting up to 10 minutes ago would overlap it
+  // (SCH_OVERLAP), so wait for it to end and start the new one no earlier than its end.
+  const add = async (notBefore = 0) => {
     const at = Date.now();
-    const start = new Date(at - 5 * 60_000);
+    let start = new Date(at - 5 * 60_000);
     start.setUTCSeconds(0, 0);
     start.setUTCMinutes(start.getUTCMinutes() - (start.getUTCMinutes() % 5));
+    if (start.getTime() < notBefore) start = new Date(Math.ceil(notBefore / 60_000) * 60_000);
     const from = wallClock(start);
     const to = wallClock(new Date(start.getTime() + 45 * 60_000));
     return request.post(`/api/v1/clinic/doctors/${doctorId}/schedule-exceptions`, {
@@ -120,11 +122,14 @@ export async function sessionRunningNow(
     const today = (await (await request.get(`/api/v1/sessions?date=${wallClock(new Date()).day}&doctor_id=${doctorId}`)).json()) as {
       items: Session[];
     };
-    const lastEnd = Math.max(Date.now(), ...today.items.map((s) => Date.parse(s.ends_at)).filter((end) => end < Date.now() + 130_000));
-    const wait = lastEnd - Date.now() + 2_000;
+    const at = Date.now();
+    const recent = today.items.map((s) => Date.parse(s.ends_at)).filter((end) => end > at - 10 * 60_000 && end < at + 130_000);
+    // Sessions end on a whole minute, so starting at the last end is never in the future once over.
+    const lastEnd = Math.max(0, ...recent);
+    const wait = Math.max(0, lastEnd - at) + 2_000;
     test.info().setTimeout(test.info().timeout + wait);
     await new Promise((resolve) => setTimeout(resolve, wait));
-    added = await add();
+    added = await add(lastEnd);
   }
   expect(added.status(), await added.text()).toBe(201);
   const made = await running();
