@@ -19,16 +19,21 @@ from mediease_api.ports.security import AccessClaims, InvalidAccessToken, Issued
 
 ISSUER = "mediease-api"
 AUDIENCE = "mediease"
+# M6a-P3 (ADR-0015 decision 2): patient portal tokens. Each issuer verifies its own audience only.
+PORTAL_AUDIENCE = "mediease-portal"
 CLOCK_SKEW = timedelta(seconds=30)
 _ALGORITHM = "HS256"
 _REQUIRED = ["iss", "aud", "sub", "sid", "jti", "iat", "exp"]
 
 
 class JwtAccessTokenIssuer:
-    def __init__(self, *, signing_key: str, ttl: timedelta, ids: IdPort) -> None:
+    def __init__(
+        self, *, signing_key: str, ttl: timedelta, ids: IdPort, audience: str = AUDIENCE
+    ) -> None:
         self._key = signing_key
         self._ttl = ttl
         self._ids = ids
+        self._audience = audience
 
     def issue(self, *, user_id: UUID, session_id: UUID, now: datetime) -> IssuedAccessToken:
         # JWT times are whole seconds; truncate so expires_at matches the token exactly.
@@ -36,7 +41,7 @@ class JwtAccessTokenIssuer:
         expires_at = issued_at + self._ttl
         claims = {
             "iss": ISSUER,
-            "aud": AUDIENCE,
+            "aud": self._audience,
             "sub": str(user_id),
             "sid": str(session_id),
             "jti": str(self._ids.new_id()),
@@ -54,7 +59,7 @@ class JwtAccessTokenIssuer:
                 token,
                 self._key,
                 algorithms=[_ALGORITHM],
-                audience=AUDIENCE,
+                audience=self._audience,
                 issuer=ISSUER,
                 options={"require": _REQUIRED, "verify_exp": False, "verify_iat": False},
             )

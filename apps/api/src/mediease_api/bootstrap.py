@@ -39,10 +39,13 @@ from mediease_api.adapters.messaging.whatsapp_webhook import (
     HmacWebhookVerifier,
     WhatsAppWebhookParser,
 )
+from mediease_api.adapters.oidc.fake import FakeOidcProvider
+from mediease_api.adapters.oidc.google import GoogleOidcProvider
 from mediease_api.adapters.pdf.weasy import WeasyPrintRenderer
 from mediease_api.adapters.security.argon2_hasher import Argon2PasswordHasher
 from mediease_api.adapters.security.ip_hash import HmacIpHasher
-from mediease_api.adapters.security.jwt_tokens import JwtAccessTokenIssuer
+from mediease_api.adapters.security.jwt_flow import JwtFlowSealer
+from mediease_api.adapters.security.jwt_tokens import PORTAL_AUDIENCE, JwtAccessTokenIssuer
 from mediease_api.adapters.security.link_signer import HmacLinkSigner
 from mediease_api.adapters.security.phone_cipher import FernetPhoneCipher
 from mediease_api.adapters.security.refresh_secrets import Sha256RefreshTokenSecrets
@@ -56,6 +59,7 @@ from mediease_api.application.appointments.queue import AddWalkIn, GetQueue, Tra
 from mediease_api.application.appointments.reschedule import RescheduleAppointment
 from mediease_api.application.auth._session import SessionIssuer
 from mediease_api.application.auth.authenticate import AuthenticateRequest
+from mediease_api.application.auth.google import CompleteGoogleSignIn, StartGoogleSignIn
 from mediease_api.application.auth.refresh_session import RefreshSession
 from mediease_api.application.auth.sign_in import SignIn
 from mediease_api.application.auth.sign_out import SignOut
@@ -99,6 +103,14 @@ from mediease_api.application.patients.import_patients import ImportPatients
 from mediease_api.application.patients.queries import GetPatient, LookupPatients
 from mediease_api.application.patients.register_patient import RegisterPatient
 from mediease_api.application.patients.update_patient import UpdatePatient
+from mediease_api.application.portal.sessions import PatientSessionIssuer
+from mediease_api.application.portal.use_cases import (
+    AuthenticatePatient,
+    RefreshPatientSession,
+    SignInPatient,
+    SignOutPatient,
+    SignUpPatient,
+)
 from mediease_api.application.prescriptions.library import (
     DeleteFavourite,
     DeleteTemplate,
@@ -148,11 +160,13 @@ from mediease_api.delivery.http.auth import create_auth_blueprint
 from mediease_api.delivery.http.clinic import create_clinic_blueprint
 from mediease_api.delivery.http.csrf import register_csrf_protection
 from mediease_api.delivery.http.dashboard import create_dashboard_blueprint
+from mediease_api.delivery.http.google import create_google_blueprint
 from mediease_api.delivery.http.invites import create_invite_blueprint
 from mediease_api.delivery.http.me import create_me_blueprint
 from mediease_api.delivery.http.ops import create_ops_blueprint
 from mediease_api.delivery.http.patients import create_patients_blueprint
 from mediease_api.delivery.http.platform import create_platform_blueprint
+from mediease_api.delivery.http.portal import create_portal_blueprint
 from mediease_api.delivery.http.prescriptions import create_prescriptions_blueprint
 from mediease_api.delivery.http.public_links import create_public_links_blueprint
 from mediease_api.delivery.http.reminders import create_reminders_blueprint
@@ -181,9 +195,10 @@ from mediease_api.domain.messaging.jobs import (
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.messaging import MessagingPort, PhoneCipherPort
+from mediease_api.ports.oidc import OidcPort
 from mediease_api.ports.pdf import PdfRendererPort
 from mediease_api.ports.readiness import DatabaseCheck
-from mediease_api.ports.security import AccessTokenIssuer, PasswordHasher
+from mediease_api.ports.security import AccessTokenIssuer, FlowSealer, PasswordHasher
 from mediease_api.ports.storage import BlobStoragePort
 from mediease_api.ports.unit_of_work import UnitOfWork
 
@@ -216,6 +231,12 @@ class _UseCases:
     # M4-P5: patient link tokens (the signer holds the keys) and their lifetime.
     link_tokens: LinkTokens
     link_ttl_days: int
+    # M6a-P3 (ADR-0015): portal sessions apart from staff, and Google sign-in.
+    portal_access_tokens: AccessTokenIssuer
+    patient_sessions: PatientSessionIssuer
+    oidc: OidcPort
+    flow_sealer: FlowSealer
+    google_redirect_uri: str
     # M5-P3: the WhatsApp webhook's secrets (empty: the webhook refuses everything).
     whatsapp_app_secret: str = ""
     whatsapp_verify_token: str = ""
@@ -278,6 +299,65 @@ class _UseCases:
     def authenticate(self) -> AuthenticateRequest:
         return AuthenticateRequest(
             uow=self._uow(), clock=self.clock, access_tokens=self.access_tokens
+        )
+
+    def authenticate_patient(self) -> AuthenticatePatient:
+        return AuthenticatePatient(
+            uow=self._uow(), clock=self.clock, access_tokens=self.portal_access_tokens
+        )
+
+    def sign_up_patient(self) -> SignUpPatient:
+        return SignUpPatient(
+            uow=self._uow(),
+            clock=self.clock,
+            ids=self.ids,
+            hasher=self.hasher,
+            sessions=self.patient_sessions,
+        )
+
+    def sign_in_patient(self) -> SignInPatient:
+        return SignInPatient(
+            uow=self._uow(),
+            clock=self.clock,
+            ids=self.ids,
+            hasher=self.hasher,
+            sessions=self.patient_sessions,
+            dummy_password_hash=self.dummy_password_hash,
+        )
+
+    def refresh_patient(self) -> RefreshPatientSession:
+        return RefreshPatientSession(
+            uow=self._uow(),
+            clock=self.clock,
+            ids=self.ids,
+            secrets=self.refresh_secrets,
+            sessions=self.patient_sessions,
+        )
+
+    def sign_out_patient(self) -> SignOutPatient:
+        return SignOutPatient(
+            uow=self._uow(), clock=self.clock, ids=self.ids, secrets=self.refresh_secrets
+        )
+
+    def start_google_sign_in(self) -> StartGoogleSignIn:
+        return StartGoogleSignIn(
+            uow=self._uow(),
+            clock=self.clock,
+            oidc=self.oidc,
+            sealer=self.flow_sealer,
+            redirect_uri=self.google_redirect_uri,
+        )
+
+    def complete_google_sign_in(self) -> CompleteGoogleSignIn:
+        return CompleteGoogleSignIn(
+            uow=self._uow(),
+            clock=self.clock,
+            ids=self.ids,
+            oidc=self.oidc,
+            sealer=self.flow_sealer,
+            redirect_uri=self.google_redirect_uri,
+            staff_sessions=self.sessions,
+            patient_sessions=self.patient_sessions,
         )
 
     def get_clinic(self) -> GetClinic:
@@ -543,6 +623,24 @@ def build_password_hasher() -> PasswordHasher:
     return Argon2PasswordHasher()
 
 
+GOOGLE_CALLBACK_PATH = "/api/v1/auth/google/callback"
+
+
+def build_oidc(settings: AppSettings) -> OidcPort:
+    """Google, or the fake that skips it (ADR-0015 decision 6), refused outside local and test."""
+    if settings.GOOGLE_OIDC_PROVIDER == "google":
+        return GoogleOidcProvider(
+            client_id=settings.GOOGLE_CLIENT_ID,
+            client_secret=settings.GOOGLE_CLIENT_SECRET.get_secret_value(),
+        )
+    if settings.APP_ENV not in (AppEnv.LOCAL, AppEnv.TEST):
+        raise ValueError(
+            "GOOGLE_OIDC_PROVIDER=fake signs anyone in by email; "
+            f"refused when APP_ENV={settings.APP_ENV.value}"
+        )
+    return FakeOidcProvider()
+
+
 @dataclass(frozen=True, slots=True)
 class SeedDependencies:
     uow: UnitOfWork
@@ -706,11 +804,13 @@ def create_app(
     clock: ClockPort | None = None,
     pdf_renderer: PdfRendererPort | None = None,
     blob_storage: BlobStoragePort | None = None,
+    oidc: OidcPort | None = None,
 ) -> Flask:
     """Build and wire the Flask application from validated settings.
 
     The keyword arguments replace adapters in tests: a fake readiness check, a
-    cheap password hasher, a fixed clock, a counting PDF renderer or another store.
+    cheap password hasher, a fixed clock, a counting PDF renderer, another store
+    or another OpenID Connect provider.
     Building the engine opens no connection, so this stays side-effect free.
     """
     configure_logging(settings)
@@ -723,10 +823,13 @@ def create_app(
     ids = Uuid7Generator()
     hasher = password_hasher or build_password_hasher()
     refresh_secrets = Sha256RefreshTokenSecrets()
-    access_tokens = JwtAccessTokenIssuer(
-        signing_key=settings.JWT_SIGNING_KEY.get_secret_value(),
-        ttl=timedelta(seconds=settings.ACCESS_TOKEN_TTL_SECONDS),
-        ids=ids,
+    signing_key = settings.JWT_SIGNING_KEY.get_secret_value()
+    access_ttl = timedelta(seconds=settings.ACCESS_TOKEN_TTL_SECONDS)
+    refresh_ttl = timedelta(seconds=settings.REFRESH_TOKEN_TTL_SECONDS)
+    access_tokens = JwtAccessTokenIssuer(signing_key=signing_key, ttl=access_ttl, ids=ids)
+    # ADR-0015 decision 2: the same key, another audience; each verifier refuses the other's.
+    portal_access_tokens = JwtAccessTokenIssuer(
+        signing_key=signing_key, ttl=access_ttl, ids=ids, audience=PORTAL_AUDIENCE
     )
     use_cases = _UseCases(
         session_factory=build_session_factory(engine),
@@ -740,7 +843,7 @@ def create_app(
             ids=ids,
             secrets=refresh_secrets,
             access_tokens=access_tokens,
-            refresh_ttl=timedelta(seconds=settings.REFRESH_TOKEN_TTL_SECONDS),
+            refresh_ttl=refresh_ttl,
         ),
         # One real hash of a random password, so unknown accounts cost the
         # same verification as real ones (spec R2).
@@ -749,6 +852,16 @@ def create_app(
         blob_storage=blob_storage or build_blob_storage(settings),
         link_tokens=LinkTokens(HmacLinkSigner(settings.patient_link_keys())),
         link_ttl_days=settings.PATIENT_LINK_TTL_DAYS,
+        portal_access_tokens=portal_access_tokens,
+        patient_sessions=PatientSessionIssuer(
+            ids=ids,
+            secrets=refresh_secrets,
+            access_tokens=portal_access_tokens,
+            refresh_ttl=refresh_ttl,
+        ),
+        oidc=oidc or build_oidc(settings),
+        flow_sealer=JwtFlowSealer(signing_key=signing_key),
+        google_redirect_uri=f"{settings.PUBLIC_BASE_URL}{GOOGLE_CALLBACK_PATH}",
         whatsapp_app_secret=settings.WHATSAPP_APP_SECRET.get_secret_value(),
         whatsapp_verify_token=settings.WHATSAPP_VERIFY_TOKEN.get_secret_value(),
         phones=FernetPhoneCipher(settings.messaging_phone_keys()),
@@ -771,6 +884,8 @@ def create_app(
     register_error_handlers(app)
     app.register_blueprint(create_platform_blueprint(database_check))
     app.register_blueprint(create_auth_blueprint(use_cases, cookie_secure=settings.COOKIE_SECURE))
+    app.register_blueprint(create_google_blueprint(use_cases, cookie_secure=settings.COOKIE_SECURE))
+    app.register_blueprint(create_portal_blueprint(use_cases, cookie_secure=settings.COOKIE_SECURE))
     app.register_blueprint(create_invite_blueprint(use_cases, cookie_secure=settings.COOKIE_SECURE))
     app.register_blueprint(create_me_blueprint())
     app.register_blueprint(

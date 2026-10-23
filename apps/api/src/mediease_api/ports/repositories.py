@@ -28,11 +28,13 @@ from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist
 from mediease_api.domain.identity.access import ClinicAccess, StaffMember
+from mediease_api.domain.identity.external import ExternalIdentity, IdentityProvider
 from mediease_api.domain.identity.membership import ClinicMembership
 from mediease_api.domain.identity.session import RefreshToken
 from mediease_api.domain.identity.user import User
 from mediease_api.domain.links.link import PatientLink
 from mediease_api.domain.patients.patient import Patient
+from mediease_api.domain.portal.account import PatientAccount
 from mediease_api.domain.prescriptions.library import Favourite, Template
 from mediease_api.domain.prescriptions.prescription import IssuedVersion, Prescription
 from mediease_api.domain.prescriptions.suggestions import HistoryName
@@ -99,6 +101,36 @@ class RefreshTokenRepository(Protocol):
     def is_family_live(self, family_id: UUID, *, now: datetime) -> bool:
         """True while the session has an unrevoked, unexpired token (checked per request)."""
         ...
+
+
+class PatientAccountRepository(Protocol):
+    """Patient portal accounts (M6a-P3, ADR-0015). Platform data, never tenant data."""
+
+    def add(self, account: PatientAccount) -> None:
+        """Raises ``EmailTaken`` when a password account already uses the email."""
+        ...
+
+    def get(self, account_id: UUID, *, for_update: bool = False) -> PatientAccount | None: ...
+    def get_password_account(
+        self, email: EmailAddress, *, for_update: bool = False
+    ) -> PatientAccount | None:
+        """The ``PASSWORD`` account with this email (unique among them), if any."""
+        ...
+
+    def update(self, account: PatientAccount) -> None: ...
+
+
+class ExternalIdentityRepository(Protocol):
+    """Google identities linked to a staff user or a patient account (M6a-P3, decision 4)."""
+
+    def add(self, identity: ExternalIdentity) -> None: ...
+    def get_for_staff(
+        self, provider: IdentityProvider, subject: str, *, for_update: bool = False
+    ) -> ExternalIdentity | None: ...
+    def get_for_patient(
+        self, provider: IdentityProvider, subject: str, *, for_update: bool = False
+    ) -> ExternalIdentity | None: ...
+    def update(self, identity: ExternalIdentity) -> None: ...
 
 
 class ClinicAccessRepository(Protocol):

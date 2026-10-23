@@ -21,7 +21,7 @@ import structlog
 from flask import Flask, Response, jsonify
 from werkzeug.exceptions import HTTPException
 
-from mediease_api.application.auth.errors import AccountLocked
+from mediease_api.application.auth.errors import AccountLocked, AuthRateLimited
 from mediease_api.application.patients.errors import ImportInvalid, PhoneExists
 from mediease_api.delivery.http.bodies import candidate_body
 from mediease_api.delivery.http.validation import RequestValidationFailed
@@ -64,6 +64,13 @@ DOMAIN_ERROR_STATUS = {
     "AUTH_LOCKED": 423,
     "AUTH_CSRF_INVALID": 403,
     "AUTH_ACCOUNT_DISABLED": 403,
+    # M6a-P3: the portal and Google sign-in. The Google codes normally travel as a redirect
+    # reason (delivery/http/google.py); the statuses apply if one ever reaches the envelope.
+    "AUTH_RATE_LIMITED": 429,
+    "AUTH_GOOGLE_FAILED": 400,
+    "AUTH_GOOGLE_NO_STAFF_ACCOUNT": 403,
+    "PRT_INVALID_CREDENTIALS": 401,
+    "PRT_EMAIL_TAKEN": 409,
     "PERM_DENIED": 403,
     "PERM_CLINIC_REQUIRED": 400,
     "CLN_SUSPENDED": 403,
@@ -149,7 +156,9 @@ def domain_error_response(exc: DomainError) -> tuple[Response, int]:
     elif isinstance(exc, ImportInvalid):
         details = {"problems": list(exc.problems)}
     response, _ = error_response(exc.code, exc.message, status, details)
-    if isinstance(exc, AccountLocked | PdfBusy | LinkRateLimited | WebhookRateLimited):
+    if isinstance(
+        exc, AccountLocked | AuthRateLimited | PdfBusy | LinkRateLimited | WebhookRateLimited
+    ):
         response.headers["Retry-After"] = str(exc.retry_after_seconds)
     return response, status
 

@@ -27,6 +27,11 @@ from mediease_api.adapters.db.messages import (
     SqlAlchemyOptOutLookup,
     SqlAlchemyWebhookEventRepository,
 )
+from mediease_api.adapters.db.portal import (
+    SqlAlchemyExternalIdentityRepository,
+    SqlAlchemyPatientAccountRepository,
+    SqlAlchemyPatientRefreshTokenRepository,
+)
 from mediease_api.adapters.db.reminders import SqlAlchemyNoShowSweep, SqlAlchemyReminderRepository
 from mediease_api.adapters.db.repositories import (
     SqlAlchemyAppointmentHistoryRepository,
@@ -173,6 +178,10 @@ class _OpenUnit:
         self.users = SqlAlchemyUserRepository(session)
         self.refresh_tokens = SqlAlchemyRefreshTokenRepository(session)
         self.clinic_access = SqlAlchemyClinicAccessRepository(session)
+        # M6a-P3 (ADR-0015): patient accounts, their sessions and Google identities.
+        self.patient_accounts = SqlAlchemyPatientAccountRepository(session)
+        self.patient_refresh_tokens = SqlAlchemyPatientRefreshTokenRepository(session)
+        self.external_identities = SqlAlchemyExternalIdentityRepository(session)
         self.staff_invites = SqlAlchemyStaffInviteRepository(session)
         self.rate_limits = SqlAlchemyRateLimitRepository(session)
         # Shares the session, so an audit row commits with the change (R11).
@@ -232,6 +241,18 @@ class SqlAlchemyUnitOfWork:
     @property
     def clinic_access(self) -> SqlAlchemyClinicAccessRepository:
         return self._require_open().clinic_access
+
+    @property
+    def patient_accounts(self) -> SqlAlchemyPatientAccountRepository:
+        return self._require_open().patient_accounts
+
+    @property
+    def patient_refresh_tokens(self) -> SqlAlchemyPatientRefreshTokenRepository:
+        return self._require_open().patient_refresh_tokens
+
+    @property
+    def external_identities(self) -> SqlAlchemyExternalIdentityRepository:
+        return self._require_open().external_identities
 
     @property
     def staff_invites(self) -> SqlAlchemyStaffInviteRepository:

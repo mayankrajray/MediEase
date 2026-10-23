@@ -7,8 +7,9 @@ an adapter only.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Protocol
 from uuid import UUID
 
@@ -110,4 +111,27 @@ class LinkSignerPort(Protocol):
 
     def mac(self, key_id: str, message: bytes) -> bytes | None:
         """The 16-byte MAC of ``message`` under ``key_id``, or ``None`` for an unknown key."""
+        ...
+
+
+class InvalidFlow(DomainError):
+    """A sign-in flow cookie that is missing, expired, tampered with or of another kind."""
+
+    code = "AUTH_GOOGLE_FAILED"
+
+    def __init__(self) -> None:
+        super().__init__("Google sign-in did not work. Try again.")
+
+
+class FlowSealer(Protocol):
+    """Seals the short-lived state of a Google sign-in for a signed HttpOnly cookie (M6a-P3).
+
+    The values (``state``, ``nonce``, the PKCE verifier, the intent and where to go next) stay in
+    the person's own browser, signed so they cannot be changed, and expire after ``ttl``.
+    """
+
+    def seal(self, values: Mapping[str, str], *, now: datetime, ttl: timedelta) -> str: ...
+
+    def open(self, sealed: str, *, now: datetime) -> dict[str, str]:
+        """The values, or ``InvalidFlow``."""
         ...

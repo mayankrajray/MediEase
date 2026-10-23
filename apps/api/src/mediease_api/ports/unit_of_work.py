@@ -39,8 +39,10 @@ from mediease_api.ports.repositories import (
     ClinicAccessRepository,
     ClinicRepository,
     DoctorRepository,
+    ExternalIdentityRepository,
     FavouriteRepository,
     MembershipRepository,
+    PatientAccountRepository,
     PatientLinkRepository,
     PatientRepository,
     PrescriptionRepository,
@@ -111,6 +113,21 @@ class UnitOfWork(Protocol):
     def refresh_tokens(self) -> RefreshTokenRepository: ...
     @property
     def clinic_access(self) -> ClinicAccessRepository: ...
+    @property
+    def patient_accounts(self) -> PatientAccountRepository:
+        """Patient portal accounts (M6a-P3); not tenant data."""
+        ...
+
+    @property
+    def patient_refresh_tokens(self) -> RefreshTokenRepository:
+        """Portal session families, in their own table (M6a-P3); ``user_id`` is the account."""
+        ...
+
+    @property
+    def external_identities(self) -> ExternalIdentityRepository:
+        """Google identities of staff users and patient accounts (M6a-P3)."""
+        ...
+
     @property
     def staff_invites(self) -> StaffInviteRepository: ...
     @property
