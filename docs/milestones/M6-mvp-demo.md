@@ -24,7 +24,7 @@ notifications for patients, public booking) moved to M6b.
 | P4 | Email provider behind a port: email verification, password reset by link (FR-AUTH-08, FR-AUTH-05) | Below (approved and built 23 Oct 2026) |
 | P5 | Owner Team page: invite, change role, deactivate (FR-ORG-07) | Below (approved and built 23 Oct 2026) |
 | P6 | Role workspaces (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); owner as Doctor 1 in the ops wizard (FR-ORG-03) | Below (approved and built 23 Oct 2026) |
-| P7 | Notification service, domain events, in-app channel, notification centre (FR-NTF-02..06) | At its start |
+| P7 | Notification service, domain events, in-app channel, notification centre (FR-NTF-02..06) | Below (awaiting approval) |
 | P8 | Appointment reminders (FR-APT-08), doctor-leave conflicts (FR-APT-09), owner audit view (FR-AUD-03) | At its start |
 
 ---
@@ -837,3 +837,94 @@ What was built:
     - failure path: an owner without a profile has no switch, and `/my-patients` says why.
   - **Not verified.** The ops wizard's Doctor 1 path in a browser journey; it is covered by the
     wizard's unit tests and the API integration test.
+
+Confirmed by the developer on 23 Oct 2026 and pushed to draft PR #50.
+
+---
+
+## M6a-P7 — Notification service, domain events and the notification centre
+
+Proposed 23 Oct 2026. Recommendations are marked (rec). Covers FR-NTF-02..06 (PRD v1.2 C11), with
+ADR-0017 (Proposed). It replaces FR-NTF-01 for staff. Notifications for patients in the app wait
+for M6b, because patient accounts are linked to clinic patients there (FR-PRT-06).
+
+Facts the design rests on:
+
+- **No events today.** Nothing publishes or subscribes. The audit log records what happened, but
+  it is a write-only trail, not an event stream.
+- **Two features send WhatsApp themselves:**
+  - booking and rescheduling enqueue `send_booking_confirmation` (key
+    `booking_confirmed:{appointment}`);
+  - issuing a prescription enqueues `send_rx_link` (key `rx_link:{prescription}`).
+
+  Both handlers re-check consent and facts at send time, and the sender sends at most once per
+  key (M5-P2).
+- **Reminders and other sends.** Reminders (`send_reminder`) have their own scheduler, with quiet
+  hours, revisions and the SMS fallback. The STOP confirmation answers an inbound message.
+- **Where a message fails.** A message becomes `FAILED` in two places: the sender's final failure
+  and the delivery webhook. Both already run a hook in that transaction (the SMS fallback). Staff
+  are never told.
+- **The outbox.** The job table is one: a job commits with its change, and a dedupe key makes it
+  idempotent.
+- **Patient accounts** (M6a-P3) hold no clinic data, so the app cannot notify a patient yet.
+- **Finding recipients.** Memberships give each member's role; the appointment's doctor gives
+  `doctors.user_id`.
+- **The web shell** has a header group (name and Sign out) that is hidden on a phone, and a menu
+  drawer. `lib/api/poll.ts` polls with an ETag and pauses in a hidden tab.
+
+| # | Question | A (rec) | Rejected |
+|---|---|---|---|
+| 1 | How events flow (FR-NTF-02, 06) | **Published and dispatched in the change's transaction** (ADR-0017). A use case calls `publish(uow, event)`, where the event is a frozen dataclass of IDs and enums. `NotificationService` resolves recipients and preferences, writes in-app rows (unique per recipient and event key, so a replay adds nothing) and asks external channels to deliver. WhatsApp delivers by enqueuing the existing send job with its existing key. The event exists exactly when the change commits | B: a dispatch job per event (a poll's delay for in-app, twice the jobs). C: an events table with its own dispatcher (a second queue). D: a broker (ADR-0005 rejected one at this scale) |
+| 2 | The event catalogue in P7 (FR-NTF-04, what exists today) | • `appointment.booked`, `appointment.rescheduled`: WhatsApp to the patient (the M5 confirmation, consent re-checked), and in-app to the appointment's doctor.<br>• `appointment.cancelled`: in-app to the doctor (there is no cancellation template; L-02 adds one later).<br>• `appointment.arrived`: in-app to the doctor ("Asha · SC-0004 has arrived, token 4").<br>• `prescription.issued`: WhatsApp link to the patient (M5).<br>• `message.failed`: in-app to the front desk and the owners, linking to the patient.<br>• `staff.joined`: in-app to the owners when an invitation is accepted.<br>Booking requests (M6b), medicine due (M6b), application decided (M6c), subscription notices (M6d), appointment reminders and leave conflicts (P8) join in their phases | B: notify every role of everything (noise; the front desk sees the queue anyway) |
+| 3 | What moves behind the service | The **booking confirmation** and the **prescription link**: their call sites publish events, and the handlers, keys, consent checks and messages stay as they are. **Unchanged:** reminders keep their scheduler (a reminder is due at a time, not raised by a change; quiet hours and the SMS fallback live there). The STOP confirmation is a protocol reply. P8 reviews reminders when appointment reminders arrive | B: move reminders and the fallback too (rewrites working M5 logic for no user-visible gain) |
+| 4 | Storing notifications | Migration `0023`:<br>• **`notifications`**, tenant data: `recipient_user_id`, `kind`, `event_key`, `title` (≤ 160 chars), `link` (an in-app path), `entity_type`, `entity_id`, `created_at`, `read_at`. Unique `(clinic_id, recipient_user_id, event_key)`; index `(clinic_id, recipient_user_id, created_at DESC)`.<br>• **`notification_preferences`**: `(user_id, clinic_id, kind, channel)` → `enabled`, with one row only when changed from the default.<br>The title is rendered when the notification is created, from a typed catalogue: a first name with a code, a doctor, a time, a role or a count. **Nothing clinical has a type** (FR-MSG-04). English at MVP | B: render on the web from params (two places to keep free of clinical text). C: keep notifications in the audit table (append-only, cannot hold read state) |
+| 5 | Preferences (FR-NTF-03) | **Staff:** each member turns each kind on or off for in-app on a *Notifications* settings page (`/settings/notifications`). Everything starts on. Staff WhatsApp and email are not offered yet: there are no staff templates or consent. **Patients:** their WhatsApp and SMS preference **is** the existing consent and opt-out (M2-P3), so nothing new is stored. The service obeys it, and the send handlers check it again | B: a separate patient preference store (two truths beside consent, a DPDP risk) |
+| 6 | The notification centre (FR-NTF-05) | • **Badge:** a *Notifications* button in the header, visible at every width, with the unread count in words for screen readers ("3 unread").<br>• **List:** opening it shows a drawer with the latest 30, newest first, unread in bold, each linking to its item (the appointment's queue day, the patient, the Team page). *Mark all as read* is there too.<br>• **Polling:** `GET /notifications/summary` every 15 s with an ETag, paused in a hidden tab. New arrivals are announced in a polite live region; there are no toasts.<br>• **API:** `GET /notifications`, `POST /notifications/{id}/read` and `POST /notifications/read-all` (`CLINIC_VIEW`), each caller's own only. Another member's notification is 404 | B: push by SSE or WebSocket (ADR needed; polling already serves the queue). C: a full notifications page instead of a drawer (one more click for a glance) |
+| 7 | Quiet hours (FR-NTF-05, FR-REM-04) | **In-app ignores quiet hours.** Patient WhatsApp raised by the patient's own action (a confirmation, a prescription link) goes at once, as in M5. Scheduled reminders keep FR-REM-04 in their scheduler. The service carries a per-kind `respects_quiet_hours` flag so P8's appointment reminders use it | B: hold every WhatsApp until 08:00 (a 21:30 walk-in waits overnight for their confirmation) |
+| 8 | Retention, volume and audit | Notifications are purged **90 days** after creation by the existing purge job. Preferences are kept. Reading is not audited (a convenience, not a disclosure). Changing a preference is. A dispatch does at most one query per lookup (recipients, preferences, insert), checked by a test | B: keep forever (personal data with no purpose after 90 days) |
+
+Fixed points:
+
+- **Code.**
+  - `domain/notifications/` holds the event types, `NotificationKind` and the title catalogue.
+  - `application/notifications/` holds `publish`, `NotificationService`, the channels and the
+    use cases.
+  - The ports gain `NotificationRepository` and `PreferenceRepository`.
+- **Call sites.** `book.py`, `reschedule.py`, the cancellation, the queue's arrival transition,
+  the prescription issue, the sender's final failure, the webhook's `FAILED` transition, and
+  `AcceptInvite`.
+- **Migration `0023`.**
+  - **Tables:** the two above.
+  - **Audit:** action `notification.preferences_changed`.
+  - **Docs:** `docs/DATA_MODEL.md`, the reminders-and-messaging spec and ARCHITECTURE §8.
+- **Contract 0.27.0.** The four notification routes, `GET/PUT /notifications/preferences`, and
+  the `Notification` and `NotificationSummary` schemas.
+- **Web.**
+  - `features/notifications/`: the bell, the drawer, the poller and the preferences page.
+  - The *Notifications* settings item joins every workspace's navigation.
+  - The bell lives in `Shell`'s identity group, so a phone shows it too.
+- **Unchanged.** Every M5 message (the same keys, consent checks and audit), the reminders
+  scheduler, and every existing test and journey.
+
+Planned verification:
+
+- **Unit:**
+  - each event's recipients and channels;
+  - the title catalogue refusing a clinical kind;
+  - preferences turning a kind off;
+  - the bell's count and the drawer's states.
+- **Integration (PostgreSQL):**
+  - a booking writes the doctor's notification and the same confirmation job as before, in one
+    transaction (a rollback leaves neither);
+  - publishing twice adds nothing;
+  - a failed message notifies the front desk and the owners once, through the webhook or the
+    sender;
+  - the read and read-all routes act on the caller's own notifications only;
+  - another clinic's notifications are 404 and never listed (tenancy suite);
+  - the purge removes rows older than 90 days.
+- **Playwright:**
+  - the front desk books a patient, and the doctor's bell shows 1. Opening it shows "Asha ·
+    SC-0004 booked for …", the link opens the queue on that day, and the badge clears;
+  - failure path: with the doctor's *Appointment booked* preference turned off, a booking adds
+    nothing.
+- **Gates:** `make lint typecheck contract-check test` and `make e2e`.
