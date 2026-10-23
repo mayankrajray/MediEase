@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 import { linkPath, waitForEmail } from "./mailpit";
-import { OWNER, signInApi } from "./queue-support";
+import { signInApi } from "./queue-support";
+
+const SECOND_OWNER = "owner@sample-clinic-two.example";
 
 /**
  * M6a-P4 (FR-AUTH-05, FR-AUTH-08, ADR-0016): emails sent by the worker into Mailpit, links
@@ -39,8 +41,9 @@ test("M6a-P4: a patient confirms their email from the link and the banner goes",
 
 test("M6a-P4: a staff member resets a forgotten password, and the old session ends", async ({ browser, request }) => {
   // A fresh front-desk member, so the seeded accounts keep the demo password. From M6a-P5 the
-  // owner's invitation is emailed, so the token comes from Mailpit.
-  const csrf = await signInApi(request, OWNER);
+  // owner's invitation is emailed, so the token comes from Mailpit. Invited by the second clinic's
+  // owner, so reruns share the 10-an-hour invitation limit with team.spec.ts less (M6a-P5).
+  const csrf = await signInApi(request, SECOND_OWNER);
   const email = uniqueEmail("desk.reset");
   const invited = await request.post("/api/v1/clinic/staff", {
     data: { full_name: "Reset Desk", role: "FRONT_DESK", email },
@@ -58,9 +61,14 @@ test("M6a-P4: a staff member resets a forgotten password, and the old session en
   const page = await browser.newPage();
   await page.goto("/sign-in");
   await page.getByRole("link", { name: "Forgot password?" }).click();
-  await page.getByLabel("Email").fill(email);
-  await page.getByRole("button", { name: "Send the link" }).click();
-  await expect(page.getByRole("status")).toHaveText(/If an account uses that email/);
+  await expect(page).toHaveURL(/\/forgot-password$/);
+  // The field can be filled before the page has hydrated, which then clears it (seen once in
+  // M6a-P6 under load): retry until the form's answer shows.
+  await expect(async () => {
+    await page.getByLabel("Email").fill(email);
+    await page.getByRole("button", { name: "Send the link" }).click();
+    await expect(page.getByRole("status")).toHaveText(/If an account uses that email/, { timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
 
   const link = linkPath(await waitForEmail(request, email, "Reset your MediEase password"), "/reset-password");
   await page.goto(link);

@@ -457,3 +457,67 @@ describe("Create clinic wizard: continuing a clinic that is still being set up",
     expect(within(alert).getByText("test-ref")).toBeInTheDocument();
   });
 });
+
+describe("owner as Doctor 1 (M6a-P6, decision 8A; FR-ONB-08)", () => {
+  it("links the owner's invitation to the doctor added in step 2", async () => {
+    const api = mockApi({
+      ...base,
+      "POST /api/v1/ops/clinics": () => json(201, clinic()),
+      [DETAIL]: () => detail(),
+      [DOCTORS]: () => json(201, doctor()),
+      [INVITES]: () => json(201, invitation()),
+    });
+    renderWizard();
+    await screen.findByRole("heading", { name: "Create clinic" });
+    await createClinicStep();
+
+    type(/^Doctor's name/, "Dr. Sample Doctor");
+    type(/^Qualification/, "MBBS");
+    type(/^Registration number/, "SAMPLE-9");
+    type(/^Medical council/, "Sample State Medical Council");
+    click("Add doctor");
+    await screen.findByText(/Dr\. Sample Doctor, MBBS \(registration SAMPLE-9\)/);
+    click("Continue to owner invitation");
+    await screen.findByRole("heading", { name: /Step 3 of 3/ });
+
+    type("Full name (required)", "Sample Owner Person");
+    type("Email", "owner@sample-clinic.example");
+    fireEvent.click(screen.getByRole("checkbox", { name: /The owner also practises here/ }));
+    expect(screen.getByLabelText("Which doctor is the owner?")).toHaveValue("d-1");
+    expect(screen.getByRole("option", { name: "Dr. Sample Doctor (Doctor 1)" })).toBeInTheDocument();
+    click("Create invitation");
+
+    await screen.findByLabelText(/Invitation link for Sample Owner Person/);
+    expect(api.calls.find((c) => c.path.endsWith("/staff-invites"))?.body).toEqual({
+      full_name: "Sample Owner Person",
+      role: "OWNER",
+      email: "owner@sample-clinic.example",
+      phone: null,
+      doctor_id: "d-1",
+    });
+  });
+
+  it("offers no Doctor 1 choice for another role", async () => {
+    mockApi({
+      ...base,
+      "POST /api/v1/ops/clinics": () => json(201, clinic()),
+      [DETAIL]: () => detail(),
+      [DOCTORS]: () => json(201, doctor()),
+    });
+    renderWizard();
+    await screen.findByRole("heading", { name: "Create clinic" });
+    await createClinicStep();
+    type(/^Doctor's name/, "Dr. Sample Doctor");
+    type(/^Qualification/, "MBBS");
+    type(/^Registration number/, "SAMPLE-9");
+    type(/^Medical council/, "Sample State Medical Council");
+    click("Add doctor");
+    await screen.findByText(/Dr\. Sample Doctor, MBBS/);
+    click("Continue to owner invitation");
+    await screen.findByRole("heading", { name: /Step 3 of 3/ });
+
+    expect(screen.getByRole("checkbox", { name: /The owner also practises here/ })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Role"), { target: { value: "FRONT_DESK" } });
+    expect(screen.queryByRole("checkbox", { name: /The owner also practises here/ })).not.toBeInTheDocument();
+  });
+});

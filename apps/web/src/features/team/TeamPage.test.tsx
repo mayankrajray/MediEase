@@ -295,4 +295,40 @@ describe("the owner's Team page (M6a-P5, FR-ORG-07)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await row(/Asha Desk/)).toBeInTheDocument();
   });
+
+
+  it("M6a-P6: links a free doctor profile to an active doctor without one", async () => {
+    const api = mockApi({
+      ...routes,
+      "GET /api/v1/clinic/staff": () => json(200, { items: [member({ role: "DOCTOR", full_name: "Asha Doc" })] }),
+      "GET /api/v1/clinic/doctors": () =>
+        json(200, {
+          items: [
+            {
+              id: "0192f0a0-0000-7000-8000-0000000000d7",
+              user_id: null,
+              display_name: "Dr Asha",
+              qualification: "MBBS",
+              registration_number: "KMC-7",
+              registration_council: "Sample State Medical Council",
+              specialty: null,
+              is_active: true,
+            },
+          ],
+        }),
+      "PATCH /api/v1/clinic/doctors/0192f0a0-0000-7000-8000-0000000000d7": () =>
+        json(200, { id: "0192f0a0-0000-7000-8000-0000000000d7", user_id: "x" }),
+    });
+    renderInWorkspace(<TeamPage />);
+    await heading();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Link doctor profile to Asha Doc" }, { timeout: 5000 }));
+    const dialog = await screen.findByRole("dialog", { name: "Link a doctor profile to Asha Doc" });
+    expect(await within(dialog).findByLabelText("Doctor profile")).toHaveValue("0192f0a0-0000-7000-8000-0000000000d7");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Link profile" }));
+
+    expect(await screen.findByText("Asha Doc is linked to a doctor profile.")).toBeInTheDocument();
+    expect(api.calls.find((c) => c.method === "PATCH")?.body).toEqual({ user_id: member().user_id });
+    expect(screen.getByRole("row", { name: /Asha Doc/ })).toHaveTextContent("Doctor profile");
+  });
 });

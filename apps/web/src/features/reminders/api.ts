@@ -27,7 +27,7 @@ export interface ReminderApi {
   readonly schedule: (patientId: string, doctorId: string, followUpDate: string) => Promise<Reminder>;
   readonly move: (reminderId: string, followUpDate: string) => Promise<Reminder>;
   readonly cancel: (reminderId: string) => Promise<Reminder>;
-  readonly pending: (offset: number) => Promise<readonly PendingFollowUp[]>;
+  readonly pending: (offset: number, doctorId?: string) => Promise<readonly PendingFollowUp[]>;
 }
 
 export function useReminderApi(): ReminderApi {
@@ -53,11 +53,11 @@ export function useReminderApi(): ReminderApi {
         (await sessionPatch("/api/v1/reminders/{reminder_id}", { follow_up_date: followUpDate, cancel: false }, reminder(id)))
           .data,
       cancel: async (id) => (await sessionPatch("/api/v1/reminders/{reminder_id}", { cancel: true }, reminder(id))).data,
-      pending: async (offset) =>
+      pending: async (offset, doctorId) =>
         (
           await sessionGet("/api/v1/follow-ups/pending", {
             ...base,
-            query: { limit: String(PENDING_PAGE), offset: String(offset) },
+            query: { limit: String(PENDING_PAGE), offset: String(offset), doctor_id: doctorId },
           })
         ).data.items,
     };

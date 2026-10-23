@@ -16,6 +16,9 @@ import { useOptionalClinic } from "./ClinicGate";
 import { ClinicSwitcher } from "./ClinicSwitcher";
 import { visibleNav } from "./nav";
 import { RolePill, Shell } from "./Shell";
+import { WORKSPACE_NAV } from "./workspace";
+import { useWorkspace } from "./WorkspaceProvider";
+import { WorkspaceSwitch } from "./WorkspaceSwitch";
 
 /**
  * The clinic dashboard frame (M6-P1, decision 4A) on the shared `Shell`: who and where you are,
@@ -27,12 +30,14 @@ export function AppShell({ membership, children }: { membership: Membership; chi
   const { identity, selectClinic } = useSession();
   const clinicReady = useOptionalClinic() !== null;
   const managesPatients = membership.permissions.includes("PATIENTS_MANAGE");
+  const view = useWorkspace();
+  const workspace = view?.workspace ?? membership.role;
 
   return (
     <RegisterPatientProvider enabled={managesPatients}>
       <Shell
         navLabel="Main"
-        links={visibleNav(membership.permissions)}
+        links={visibleNav(membership.permissions, WORKSPACE_NAV[workspace])}
         person={identity.user.full_name}
         identity={
           <>
@@ -46,6 +51,7 @@ export function AppShell({ membership, children }: { membership: Membership; chi
               <span className="truncate font-medium">{membership.clinic_name}</span>
             )}
             <RolePill>{ROLE_LABELS[membership.role]}</RolePill>
+            {view?.canSwitch === true && <WorkspaceSwitch workspace={workspace} onSwitch={view.switchTo} />}
           </>
         }
         {...(clinicReady && managesPatients ? { tools: <PatientTools /> } : {})}

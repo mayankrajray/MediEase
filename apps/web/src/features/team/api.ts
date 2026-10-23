@@ -16,6 +16,7 @@ import { sessionGet, sessionPatch, sessionPost } from "@/lib/auth/refresh";
 export type StaffMember = components["schemas"]["StaffMember"];
 export type TeamInvitation = components["schemas"]["TeamInvitation"];
 export type NewInvite = components["schemas"]["NewStaffInvite"];
+export type ClinicDoctor = components["schemas"]["Doctor"];
 
 export interface TeamApi {
   readonly list: () => Promise<readonly StaffMember[]>;
@@ -23,6 +24,9 @@ export interface TeamApi {
   readonly resend: (membershipId: string) => Promise<TeamInvitation>;
   readonly changeRole: (membershipId: string, role: Role) => Promise<StaffMember>;
   readonly deactivate: (membershipId: string) => Promise<StaffMember>;
+  /** M6a-P6: the clinic's doctor profiles, and linking one to a member (decision 8A). */
+  readonly doctors: () => Promise<readonly ClinicDoctor[]>;
+  readonly linkDoctor: (doctorId: string, userId: string) => Promise<ClinicDoctor>;
 }
 
 export function useTeamApi(): TeamApi {
@@ -41,6 +45,15 @@ export function useTeamApi(): TeamApi {
         (await sessionPatch("/api/v1/clinic/staff/{membership_id}", { role }, member(id))).data,
       deactivate: async (id) =>
         (await sessionPatch("/api/v1/clinic/staff/{membership_id}", { status: "DEACTIVATED" }, member(id))).data,
+      doctors: async () => (await sessionGet("/api/v1/clinic/doctors", base)).data.items,
+      linkDoctor: async (doctorId, userId) =>
+        (
+          await sessionPatch(
+            "/api/v1/clinic/doctors/{doctor_id}",
+            { user_id: userId },
+            { ...base, pathParams: { doctor_id: doctorId } },
+          )
+        ).data,
     };
   }, [clinicId]);
 }
