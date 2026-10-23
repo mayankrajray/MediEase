@@ -6,7 +6,7 @@ notifications for patients, public booking) moved to M6b.
 
 | Field | Value |
 |---|---|
-| Status | Opened 20 Oct 2026 (issue #49, branch `m6/49-mvp-demo`); plan approved by the developer (items D2–D5 of the demo plan); M6-P1 confirmed by the developer 20 Oct 2026 and pushed (draft PR #50); M6-P2 confirmed 21 Oct 2026 and pushed; re-scoped to M6a by PRD v1.2 on 22 Oct 2026; M6a-P3 design approved 22 Oct 2026 (ADR-0015 Accepted) |
+| Status | Opened 20 Oct 2026 (issue #49, branch `m6/49-mvp-demo`); plan approved by the developer (items D2–D5 of the demo plan); M6-P1 confirmed by the developer 20 Oct 2026 and pushed (draft PR #50); M6-P2 confirmed 21 Oct 2026 and pushed; re-scoped to M6a by PRD v1.2 on 22 Oct 2026; M6a-P3 design approved 22 Oct 2026 (ADR-0015 Accepted); M6a-P3 built 23 Oct 2026, awaiting confirmation |
 | PRD | v1.2 §0 and §8.14 (v1.1 §8.13 where not superseded) |
 | ADR | ADR-0013 (for M7), ADR-0014 (for M8); patient accounts and Google sign-in: ADR-0015 (Accepted, P3) |
 | Covers | FR-AUTH-05, 07, 08, FR-PRT-01 (account only), FR-ORG-03, FR-ORG-07, FR-UX-01..06, FR-NTF-02..06, FR-APT-08, 09, FR-AUD-03 |
@@ -20,7 +20,7 @@ notifications for patients, public booking) moved to M6b.
 |---|---|---|
 | P1 | Design system (tokens, primitives, Motion, responsive shell) and the role dashboards' first screen: *Today* for front desk, doctor and owner | Below (confirmed 20 Oct 2026) |
 | P2 | The design system across the existing screens (queue, patients, consultation, schedule, follow-ups, ops); mobile layouts; motion for drawers, dialogs and list changes | Below (confirmed 21 Oct 2026) |
-| P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR-0015) | Below (approved 22 Oct 2026) |
+| P3 | Accounts: Google sign-in for staff and patients, patient email and password, patient sessions kept apart from staff sessions (ADR-0015) | Below (approved 22 Oct 2026; built 23 Oct 2026) |
 | P4 | Email provider behind a port: email verification, password reset by link (FR-AUTH-08, FR-AUTH-05) | At its start |
 | P5 | Owner Team page: invite, change role, deactivate (FR-ORG-07) | At its start |
 | P6 | Role workspaces (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); owner as Doctor 1 in the ops wizard (FR-ORG-03) | At its start |
@@ -330,3 +330,67 @@ Planned verification:
   - The seeded doctor uses *Continue with Google* (fake) and lands on Today.
   - Failure path: an unknown Google address on the staff page shows the message.
 - **Gates:** `make lint typecheck contract-check test` and `make e2e`.
+
+### M6a-P3 — as built (23 Oct 2026)
+
+- **API.**
+  - **Accounts and sessions.** `domain/portal/account.py` (`PatientAccount`, `SignInMethod`) and
+    `domain/identity/external.py` (`ExternalIdentity`). Use cases are in
+    `application/portal/use_cases.py`: sign-up, sign-in, refresh, sign-out and
+    `AuthenticatePatient`. Portal sessions are issued by `PatientSessionIssuer`
+    (`application/portal/sessions.py`) into `patient_refresh_tokens`, with a second
+    `JwtAccessTokenIssuer` on audience `mediease-portal`.
+  - **Routes.** `delivery/http/portal.py` serves `/api/v1/portal/...`. `@patient` and
+    `current_patient()` are in `access.py`. The cookie sets are in `session_cookies.py`
+    (`STAFF_COOKIES`, `PORTAL_COOKIES`). `csrf.py` checks portal paths against `me_pt_csrf`.
+  - **Google.** The flow is `application/auth/google.py` (`StartGoogleSignIn`,
+    `CompleteGoogleSignIn`), behind the new `ports/oidc.py`. It runs on
+    `adapters/oidc/google.py` (PyJWT `PyJWKSet` over Google's JWKS, injectable transport) or
+    `adapters/oidc/fake.py`. The flow cookie `me_oidc` is a JWT with its own audience
+    (`adapters/security/jwt_flow.py`). `delivery/http/google.py` answers only with redirects and
+    checks `next` again (`safe_next`). `bootstrap.build_oidc` refuses `fake` outside local and
+    test.
+  - **Rate limits** (`application/auth/rate_limit.py`, the M4-P5 table): 10 sign-ups, 30
+    sign-ins and 30 Google starts or callbacks per caller per minute (`AUTH_RATE_LIMITED`, with
+    `Retry-After`).
+  - **Audit.** Actor type `PATIENT` on entity `patient_account`. New actions:
+    `patient_account.created`, `patient.signed_in`, `patient.sign_in_failed`,
+    `patient.signed_out`, `patient.refresh_reused` and `staff.signed_in_google` (with `linked`).
+  - **Database and contract.** Migration `0020`; contract 0.23.0. The retention purge also
+    removes expired portal tokens.
+- **Web.**
+  - **Shared code.** `lib/api/client.ts` takes a `csrfCookie` option. `lib/auth/refresh.ts`
+    shares a refresh per lock name. `lib/auth/portal-session.ts` provides `portalGet` and
+    `portalPost`. `safe-next.ts` has `safePortalNextPath` and `safeStaffNextPath`.
+  - **Proxy.** It sends `/portal/*` without `me_pt_csrf` to `/portal/sign-in`, and
+    `/portal/sign-in` and `/portal/sign-up` are public.
+  - **Screens.**
+    - `features/auth/GoogleButton.tsx` is a plain link that passes a typed email as
+      `login_hint`. It appears on `/sign-in`, which also gains Google reasons.
+    - `features/portal/` holds the sign-in, sign-up and account screens, under
+      `app/(patient)/portal/`. They use `AuthFrame` with a patient tagline.
+- **Decisions held as designed.** Two refinements:
+  - The password minimum is the staff policy's 12 characters (`domain/identity/password.py`),
+    not the 10 the design table said; "the same as staff" is what the design meant.
+  - `email_verified_at` is stored now, so M6a-P4 needs no data change.
+- **No new dependency.** The local venv and `node_modules` were re-installed from the lockfiles
+  (`make install-api`, `make install-web`).
+- **Verification.**
+  - **Gates.** `make lint typecheck contract-check` are green. The full API run had 1,671 tests,
+    with 97.75% package coverage and 98% on `domain/` + `application/`. The portal-token purge
+    test was added after that run and passes with the purge and portal files. Web: 51 files, 493
+    tests.
+  - **Timing test.** The known flaky M4-P3 suggestions timing test failed once under load in the
+    full run and passed on its own (TASKS "Open decisions").
+  - **Stack.** `make up`, `make seed` and `make smoke` are green. `make e2e` is 20/20, including
+    `portal-accounts.spec.ts`:
+    - email sign-up at 360 px, the account page, sign-out and sign-in again, and a staff page
+      refused to the portal session;
+    - patient Google sign-in (fake);
+    - the seeded doctor's *Continue with Google* to Today;
+    - the failure path, an unknown staff Google address, with its message.
+  - **Separation suite.** `tests/tenancy/test_portal_separation.py` calls every staff route
+    with a portal token (also copied into `me_access`): all 401. It calls every `@patient`
+    route with a staff token: all 401.
+  - **Not verified.** Real Google sign-in waits for L-09. The Google adapter is tested only
+    against signed test tokens and an in-memory JWKS.

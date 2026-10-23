@@ -167,7 +167,7 @@ Owned by a user, not a clinic. *P2* = created by migration `0003`.
 | id | uuid PK | |
 | clinic_id | uuid FK `clinics` null | Null for platform-level events (a sign-in belongs to a user) |
 | actor_user_id | uuid FK `users` null | Null for patient/system actors |
-| actor_type | text not null | `STAFF` \| `OPS` \| `PATIENT_LINK` \| `SYSTEM` (CHECK) |
+| actor_type | text not null | `STAFF` \| `OPS` \| `PATIENT_LINK` \| `SYSTEM` \| `PATIENT` (CHECK; `PATIENT` from migration `0020`, M6a-P3) |
 | action | text not null | `area.past_tense`, from `domain/audit/actions.py`: `auth.signed_in`, `auth.sign_in_failed`, `auth.signed_out`, `auth.refresh_reused`, `staff.role_changed` (M1-P4), `clinic.*`, `doctor.*` and `staff.*` (M1-P5), `patient.created` and `patient.updated` (M2-P2: the code, or the changed field names - never a name or phone), `patient.consent_changed`, `patient.opted_out` and `patient.opted_in` (M2-P3: the two consent flags, `given_by` guardian or patient, and the opt-out `source`), `patient.imported` (M2-P4: the code and the `import_id` shared by one import, actor `OPS`), `schedule.changed` (M3-P1: the block count and how many booked sessions were kept, entity the doctor), `schedule.exception_added` / `schedule.exception_removed` (the doctor ID, kind, date and kept count; never the note), `appointment.booked` / `appointment.cancelled` / `appointment.rescheduled` (M3-P2: session, doctor and patient IDs, mode, token or slot, source, cancel reason; never a name, the reason or the note), `appointment.status_changed` (M3-P3: from, to, session and doctor IDs); more per milestone |
 | entity_type, entity_id | text, uuid | Given together or not at all |
 | request_id | text | Ties the row to the API log and to the client's "Ref" |
@@ -582,6 +582,47 @@ Indexes: `ix_jobs_claim (run_at) WHERE state = 'queued'`, `ix_jobs_running (lock
 
 ---
 
+## M6a — Patient accounts and Google identities
+
+Migration `0020` (M6a-P3, ADR-0015). Platform tables, **not tenant data**, apart from `users` and
+`refresh_tokens` on purpose: a patient account has no memberships, so it can never resolve a
+clinic. It holds no clinic data until a clinic links it (M6b, FR-PRT-06).
+
+### `patient_accounts`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | UUIDv7 |
+| full_name | text not null | From sign-up, or Google's `name` (else the email's local part) |
+| email | text not null | Lower case (`ck_patient_accounts_email_lower_case`). Unique among `PASSWORD` accounts only (`uq_patient_accounts_password_email`, partial): a Google account may share it and is never merged (decision 5) |
+| email_verified_at | timestamptz null | Set at creation for Google; for password accounts from M6a-P4 (FR-AUTH-08) |
+| sign_in_method | text not null | `PASSWORD` \| `GOOGLE`; a hash exactly when `PASSWORD` (`ck_patient_accounts_password_matches_method`) |
+| status | text not null | `ACTIVE` \| `DISABLED` |
+| password_hash | text null | Argon2id, the staff policy |
+| failed_login_count, locked_until, last_login_at | | The staff lockout (FR-AUTH-04) |
+| created_at, updated_at | timestamptz | |
+
+### `patient_refresh_tokens`
+The `refresh_tokens` lifecycle (rotation, family revocation on reuse) for portal sessions, with
+`account_id` FK `patient_accounts` instead of `user_id`. Indexes `ix_patient_refresh_tokens_family_id`,
+`ix_patient_refresh_tokens_account_id`; `token_hash` unique. Purged with the staff tokens.
+
+### `external_identities`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| provider | text not null | `GOOGLE` |
+| subject | text not null | The provider's stable `sub`; matched after the first sign-in instead of the email (decision 4) |
+| user_id | uuid null FK users | A staff link: only ever created for an existing active staff user whose email equals Google's verified email |
+| patient_account_id | uuid null FK patient_accounts | A patient link |
+| created_at, last_used_at | timestamptz | |
+
+Exactly one of `user_id` and `patient_account_id` (`ck_external_identities_exactly_one_owner`).
+At most one staff link and one patient link per `(provider, subject)`
+(`uq_external_identities_staff_subject`, `uq_external_identities_patient_subject`, partial): the
+same person may be staff and a patient.
+
+---
+
 ## Retention and erasure
 
 | Data | Retention | Mechanism |
@@ -589,7 +630,7 @@ Indexes: `ix_jobs_claim (run_at) WHERE state = 'queued'`, `ix_jobs_running (lock
 | Clinical records (visits, prescriptions) | As required of the clinic by law; clinic-configurable, default indefinite while the clinic is active | Export + delete on contract end |
 | Messages | 18 months | Scheduled purge job |
 | Audit events | 3 years minimum | Partitioned by month (post-pilot) |
-| Refresh tokens | 30 days after expiry | Purge job |
+| Refresh tokens | 30 days after expiry | Purge job (staff and, from M6a-P3, portal sessions) |
 | Patient links | 30 days after expiry | Purge job |
 
 Erasure requests are executed by a reviewed, audited procedure (`scripts/erase_patient.py`, M6)

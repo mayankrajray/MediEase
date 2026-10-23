@@ -50,7 +50,7 @@ Milestone issue #49 → branch m6/49-mvp-demo (from origin/main at cbb6b9a)
 
 | # | Needed | State |
 |---|---|---|
-| L-09 | A Google Cloud OAuth client for Google sign-in | Open; needed by P3 (email and password work without it) |
+| L-09 | A Google Cloud OAuth client for Google sign-in | Open; real Google sign-in waits for it (the fake provider covers local use; RUNBOOK §19) |
 | L-11 | A free-tier transactional email account | Open; needed by P4 (provider named in its design) |
 | L-10 | A Groq API key (free tier) | Open; needed by M7 |
 | L-08 | A WhatsApp BSP with a partner-paid model; MediEase's business verification | Open; needed by M8 |
@@ -173,3 +173,4 @@ its start. P1 is designed and awaits approval.
 | 21 Oct 2026 | M6-P2 approved (A on all eight) and built: every clinic, ops and auth screen on the design system; responsive tables as cards; CSS motion for drawers and dialogs; lazily loaded list motion; a Field family; one `Shell` for clinic and ops; the sign-in card. Gates green; `make e2e` 16/16; patient page 153 KB | #49 | M6-P2 built |
 | 21 Oct 2026 | M6-P2 confirmed by the developer and pushed (PR #50 updated). M6-P3 designed (8 decisions) with ADR-0015 (Proposed): patient accounts and sessions apart from staff, Google OIDC through the API with a local fake provider | #49, PR #50 | M6-P2 confirmed |
 | 22 Oct 2026 | PRD v1.2 recorded (discovery and booking requests, verified clinic onboarding with application status, clinic status, verification and listing kept apart, role workspaces, notification service, billing, inventory, SaaS packaging; no SMS OTP; email provider; practising owner as `OWNER` + linked doctor profile with an Owner / Doctor switch; owner Team page). M6 split into M6a–M6d: #49 is M6a, the old P4–P8 move to M6b. M6a-P3 design approved (A on all eight); ADR-0015 Accepted with decision 5 amended for the email provider (M6a-P4) | #49 | M6a-P3 approved |
+| 23 Oct 2026 | M6a-P3 built: patient accounts, portal sessions (`me_pt_*`, audience `mediease-portal`, `@patient`), Google OIDC with PKCE through the API with a local-only fake, staff linked by verified email then `sub`, rate limits, `PATIENT` audit actor, migration `0020`, contract 0.23.0, web `/portal/sign-in`, `/portal/sign-up`, `/portal` and *Continue with Google* on `/sign-in`. Gates green (API 1,671 tests at 97.75%; web 493); `make e2e` 20/20; separation suite over every route | #49 | M6a-P3 built |

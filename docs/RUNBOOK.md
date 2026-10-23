@@ -29,6 +29,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 16. Break-glass production database access
 17. Locked-out staff account
 18. Read the audit log
+19. Google sign-in and patient accounts (M6a-P3)
 
 ---
 
@@ -345,3 +346,28 @@ COMMIT;
 
 Retention is at least three years (DATA_MODEL "Retention"); monthly partitioning is a post-pilot
 step and nothing prunes the table today.
+
+---
+
+### 19. Google sign-in and patient accounts (M6a-P3)
+**Locally (no Google client yet, L-09):** `GOOGLE_OIDC_PROVIDER=fake` (the default). Type an
+email on `/sign-in` or `/portal/sign-in`, then press *Continue with Google*: the fake signs that
+email in as a Google-verified identity. A seeded staff email (`doctor@sample-clinic.example`)
+lands on Today; any other email on the staff page gets "No MediEase staff account uses this
+Google address"; on the portal any email gets a Google patient account. The API refuses to start
+with `fake` when `APP_ENV` is `staging` or `production`.
+
+**With Google (after L-09):** create an OAuth client of type *Web application* in Google Cloud
+with the authorized redirect URI `PUBLIC_BASE_URL` + `/api/v1/auth/google/callback` (locally
+`http://localhost:3000/api/v1/auth/google/callback`), then set `GOOGLE_OIDC_PROVIDER=google`,
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` and `make up`. Start-up fails with
+`CFG_INVALID` if either value is missing.
+
+**A sign-in that bounces back to the sign-in page** carries `?reason=`; the API log has
+`google.failed` with `intent` and `reason` for the same request ID (docs/ERRORS.md "Patient
+portal and Google sign-in"). Common causes: the 10-minute flow cookie expired (start again), a
+redirect URI that does not match the Google client exactly, or a staff address nobody invited.
+
+**A patient forgot their password:** there is no reset until M6a-P4 (email provider). They can
+use *Continue with Google*, which makes a separate Google account (never merged), or wait for
+the reset.
