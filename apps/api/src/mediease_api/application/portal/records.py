@@ -46,6 +46,8 @@ class PortalLinkView:
     clinic_phone_e164: str | None
     clinic_address_line: str | None
     clinic_city: str | None
+    # M6b-P2 (spec R22): times are shown on the clinic's clock.
+    clinic_timezone: str
     patient_first_name: str
     patient_code: str
     method: LinkMethod
@@ -69,6 +71,8 @@ class PortalAppointment:
 class PortalAppointmentGroup:
     clinic_id: UUID
     clinic_name: str
+    clinic_timezone: str
+    clinic_phone_e164: str | None
     appointments: list[PortalAppointment]
 
 
@@ -113,6 +117,7 @@ class ListPortalLinks(_Reads):
                     clinic_phone_e164=e.clinic.phone.e164 if e.clinic.phone else None,
                     clinic_address_line=e.clinic.address_line,
                     clinic_city=e.clinic.city,
+                    clinic_timezone=e.clinic.timezone,
                     patient_first_name=first_name(e.patient),
                     patient_code=e.patient.code,
                     method=e.link.method,
@@ -133,7 +138,13 @@ class ListPortalAppointments:
         now = self._clock.now()
         with self._uow as uow:
             groups = [
-                PortalAppointmentGroup(e.clinic.id, e.clinic.name, self._for(e, now))
+                PortalAppointmentGroup(
+                    e.clinic.id,
+                    e.clinic.name,
+                    e.clinic.timezone,
+                    e.clinic.phone.e164 if e.clinic.phone else None,
+                    self._for(e, now),
+                )
                 for e in PortalScope.read(uow, principal.account_id)
             ]
         return groups
@@ -194,7 +205,8 @@ def _issued_in_scope(scope: PortalScope, rx_id: UUID) -> tuple[ScopeEntry, Presc
 
 
 class GetPortalPrescription(_Reads):
-    """The patient page, as the prescription link shows it (``?lang=en|hi``)."""
+    """The patient page, as the prescription link shows it (``?lang=en|hi``; else the account's
+    language, M6b-P2 decision 2A)."""
 
     def execute(
         self, principal: PatientPrincipal, rx_id: UUID, language: Language | None
@@ -203,7 +215,7 @@ class GetPortalPrescription(_Reads):
             entry, rx = _issued_in_scope(PortalScope.read(uow, principal.account_id), rx_id)
             chain = list(entry.tenant.prescriptions.list_for_visit(rx.visit_id))
         page = build_patient_view(
-            chain, language=language or entry.patient.language, timezone=entry.clinic.timezone
+            chain, language=language or principal.account.language, timezone=entry.clinic.timezone
         )
         assert page is not None  # the chain has an issued version: rx
         return page

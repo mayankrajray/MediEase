@@ -26,6 +26,7 @@ from mediease_api.application.portal.errors import PortalAccountDisabled
 from mediease_api.application.portal.use_cases import (
     PortalSignInCommand,
     RefreshPatientSession,
+    SetPortalLanguage,
     SignInPatient,
     SignOutPatient,
     SignUpCommand,
@@ -48,6 +49,18 @@ from mediease_api.delivery.http.session_cookies import (
     set_session_cookies,
 )
 from mediease_api.delivery.http.validation import parse_json
+from mediease_api.domain.patients.patient import Language
+
+# M6b-P2 (decision 2A): the signed-out portal pages' language, set by the web app. Not a secret;
+# it only chooses a new account's language at sign-up (email or Google).
+PORTAL_LANGUAGE_COOKIE = "me_pt_lang"
+
+
+def cookie_language() -> Language:
+    try:
+        return Language(request.cookies.get(PORTAL_LANGUAGE_COOKIE, Language.EN.value))
+    except ValueError:
+        return Language.EN
 
 
 class PortalUseCases(Protocol):
@@ -59,6 +72,7 @@ class PortalUseCases(Protocol):
     def complete_password_reset(self) -> CompletePasswordReset: ...
     def verify_email(self) -> VerifyEmail: ...
     def resend_verification(self) -> ResendVerification: ...
+    def set_portal_language(self) -> SetPortalLanguage: ...
 
 
 class VerifyEmailRequest(BaseModel):
@@ -74,6 +88,14 @@ class SignUpRequest(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     # The policy (12 characters minimum) is the domain's; the cap bounds the hashing cost.
     password: str = Field(min_length=1, max_length=1024)
+    # M6b-P2: the sign-up page's language; else the me_pt_lang cookie, else English.
+    language: Language | None = None
+
+
+class PortalAccountUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    language: Language
 
 
 class PortalSignInRequest(BaseModel):
@@ -90,6 +112,7 @@ def account_body(account: PatientAccountView) -> dict[str, Any]:
         "email": account.email,
         "sign_in_method": account.sign_in_method.value,
         "email_verified": account.email_verified,
+        "language": account.language.value,
     }
 
 
@@ -125,7 +148,12 @@ def create_portal_blueprint(use_cases: PortalUseCases, *, cookie_secure: bool) -
     def sign_up() -> Response:
         body = parse_json(SignUpRequest)
         result = use_cases.sign_up_patient().execute(
-            SignUpCommand(full_name=body.full_name, email=body.email, password=body.password),
+            SignUpCommand(
+                full_name=body.full_name,
+                email=body.email,
+                password=body.password,
+                language=body.language or cookie_language(),
+            ),
             request_info(),
         )
         return portal_session_response(result, cookie_secure, status=201)
@@ -167,6 +195,13 @@ def create_portal_blueprint(use_cases: PortalUseCases, *, cookie_secure: bool) -
     @patient
     def me() -> Response:
         return jsonify({"account": account_body(account_view(current_patient()))})
+
+    @bp.patch("/me")
+    @patient
+    def update_me() -> Response:
+        body = parse_json(PortalAccountUpdate)
+        view = use_cases.set_portal_language().execute(current_patient(), body.language)
+        return jsonify({"account": account_body(view)})
 
     @bp.post("/auth/password-reset")
     @public

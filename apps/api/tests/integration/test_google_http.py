@@ -216,3 +216,20 @@ def test_no_login_hint_with_the_fake_provider_fails_politely(db_client: FlaskCli
 
 def test_an_unknown_intent_goes_back_to_the_staff_sign_in(db_client: FlaskClient) -> None:
     assert _reason(db_client.get(f"{START}?intent=admin")) == ("/sign-in", "google_failed")
+
+
+def test_m6b_p2_r21_a_new_google_account_takes_the_sign_in_pages_language(
+    db_client: FlaskClient, uow_factory: UowFactory
+) -> None:
+    db_client.set_cookie("me_pt_lang", "hi", path="/")
+    assert google(db_client, "patient", "hindi.google@example.test").status_code == 302
+    language = _count(
+        uow_factory,
+        "SELECT count(*) FROM patient_accounts"
+        " WHERE email = 'hindi.google@example.test' AND language = 'hi'",
+    )
+    assert language == 1
+    # An existing account keeps its own choice whatever the cookie says.
+    db_client.set_cookie("me_pt_lang", "en", path="/")
+    assert google(db_client, "patient", "hindi.google@example.test").status_code == 302
+    assert _count(uow_factory, "SELECT count(*) FROM patient_accounts WHERE language = 'hi'") == 1

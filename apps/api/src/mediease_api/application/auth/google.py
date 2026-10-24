@@ -42,6 +42,7 @@ from mediease_api.application.portal.sessions import PatientSessionIssuer, recor
 from mediease_api.application.portal.views import PatientSessionResult
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.identity.external import ExternalIdentity, IdentityProvider
+from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.portal.account import MAX_NAME_LENGTH, PatientAccount, SignInMethod
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.errors import DomainError, InvalidValue
@@ -203,6 +204,7 @@ class CompleteGoogleSignIn:
         code: str | None,
         error: str | None,
         info: RequestInfo,
+        language: Language = Language.EN,
     ) -> StaffSignedIn | PatientSignedIn:
         fallback = intent_from_state(state) or GoogleIntent.STAFF
         _limit(self._uow, self._clock, info, fallback)
@@ -233,7 +235,7 @@ class CompleteGoogleSignIn:
 
         if intent is GoogleIntent.STAFF:
             return StaffSignedIn(self._staff(identity, email, info), values["next"])
-        return PatientSignedIn(self._patient(identity, email, info), values["next"])
+        return PatientSignedIn(self._patient(identity, email, info, language), values["next"])
 
     def _open(self, flow: str | None, intent: GoogleIntent) -> dict[str, str]:
         try:
@@ -321,7 +323,7 @@ class CompleteGoogleSignIn:
         return session_result(user, access, tokens)
 
     def _patient(
-        self, identity: OidcIdentity, email: EmailAddress, info: RequestInfo
+        self, identity: OidcIdentity, email: EmailAddress, info: RequestInfo, language: Language
     ) -> PatientSessionResult:
         intent = GoogleIntent.PATIENT
         with self._uow as uow:
@@ -344,6 +346,7 @@ class CompleteGoogleSignIn:
                     full_name=_display_name(identity, email),
                     email=email,
                     now=now,
+                    language=language,
                 )
                 uow.patient_accounts.add(account)
                 uow.external_identities.add(

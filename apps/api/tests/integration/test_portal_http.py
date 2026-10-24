@@ -71,6 +71,7 @@ def test_fr_prt_01_sign_up_creates_an_account_and_sets_only_portal_cookies(
         "email": EMAIL,
         "sign_in_method": "PASSWORD",
         "email_verified": False,
+        "language": "en",
     }
     assert set(body["session"]) == {"access_expires_at", "refresh_expires_at"}
     cookies = _cookies(resp)

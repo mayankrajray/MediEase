@@ -35,6 +35,7 @@ EXPECTED_POLICIES = {
     "portal.refresh": (Access.PUBLIC, None),
     "portal.sign_out": (Access.PUBLIC, None),
     "portal.me": (Access.PATIENT, None),
+    "portal.update_me": (Access.PATIENT, None),
     # M6b-P1: linking and the patient's own records.
     "portal_records.list_links": (Access.PATIENT, None),
     "portal_records.unlink": (Access.PATIENT, None),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from urllib.parse import urlencode
 
 from flask.testing import FlaskClient
@@ -71,6 +72,15 @@ def test_adr_0008_portal_sign_up_sign_in_me_refresh_sign_out_match_contract(
     me = db_client.get("/api/v1/portal/me", base_url=_BASE_URL)
     assert me.status_code == 200
     _check(openapi, me)
+
+    # M6b-P2: the portal's language.
+    body = {"language": "hi"}
+    changed = db_client.patch(
+        "/api/v1/portal/me", base_url=_BASE_URL, json=body, headers=_portal_csrf(db_client)
+    )
+    changed.sent_body = json.dumps(body).encode()  # type: ignore[attr-defined]
+    assert changed.status_code == 200
+    _check(openapi, changed)
 
     refreshed = _post(db_client, "/api/v1/portal/auth/refresh", headers=_portal_csrf(db_client))
     assert refreshed.status_code == 200
