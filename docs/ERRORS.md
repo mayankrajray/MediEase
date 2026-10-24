@@ -1,4 +1,4 @@
-﻿# MediEase — Error Catalogue
+# MediEase — Error Catalogue
 
 Every error the API returns has a stable `code`. Codes never change meaning; retired codes are
 marked, not reused. Add a row in the same change that introduces a code.
@@ -27,7 +27,7 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | `CFG_INVALID` | — (process exits) | Settings failed validation | Missing/invalid env var | Start-up log `config.invalid` naming the field(s), `.env.example` (M0-P2) |
 | `READY_DB_UNAVAILABLE` | 503 | Database not reachable | db down, wrong host (`db` inside compose, `localhost` outside), wrong credentials | `ready.check_failed` (WARNING) with `cause`; `make ps`, db logs, DEBUGGING §5.2 (M0-P3) |
 | `READY_DB_TIMEOUT` | 503 | Database check exceeded 2 s | Connect, pool wait or `SELECT 1` took over 2 s: db overloaded, network, pool exhausted | `ready.check_failed` with `cause` (`ConnectionTimeout`, `QueryCanceled`, `TimeoutError`); db metrics, slow queries (M0-P3) |
-| `REQ_VALIDATION_FAILED` | 422 | Request body/query invalid | Client sent wrong shape (Pydantic, M1-P2), or a value failed a domain rule (`InvalidValue`) | `details.fields[]` lists each `field` and `reason`; the value itself is never echoed (M1-P2) |
+| `REQ_VALIDATION_FAILED` | 422 | Request body/query invalid | Client sent wrong shape (Pydantic, M1-P2), or a value failed a domain rule (`InvalidValue`) | `details.fields[]` lists each `field` and `reason`; the value itself is never echoed (M1-P2). M6b-P3 fields: `items.N.frequency` (not a 0/1 pattern of 3 or 4 slots with a 1: write it as CUSTOM), `items.N.duration_days` (DAYS needs days, other kinds none), `starts_on` (more than 30 days from today), `date` (plan more than 30 days away), `slot_times` (out of order or outside 05:00–23:30), `item_id` / `slot` / `remind_at` (a reminder for an untimed line, a slot the line lacks, or a time outside 05:00–23:30) |
 | `REQ_NOT_FOUND` | 404 | Resource not found | Unknown route (M0-P2); wrong ID **or other clinic's resource** (M1+; repositories raise `NotFound` from M1-P1) | Access log `route` is null for unknown routes; tenancy context for resources — expected for cross-clinic access |
 | `REQ_METHOD_NOT_ALLOWED` | 405 | Method not allowed on this URL | Client used the wrong HTTP method | `Allow` response header lists valid methods (M0-P2) |
 | `REQ_UNSUPPORTED_MEDIA_TYPE` | 415 | Wrong body format | JSON endpoint called without `Content-Type: application/json` (e.g. an HTML form); the patient import called without `text/csv` (M2-P4) | Client request headers (M1-P2) |

@@ -293,11 +293,15 @@ cookies); every response is `Cache-Control: no-store`.
 | GET | `/api/v1/portal/prescriptions/{rx_id}?lang=en\|hi` | The patient page, as the prescription link shows it | FR-PRT-03 | Implemented (M6b-P1) |
 | GET | `/api/v1/portal/prescriptions/{rx_id}/pdf` | The same PDF the clinic prints (rendered once) | FR-PRT-03 | Implemented (M6b-P1) |
 | GET | `/api/v1/portal/reminders` | Kind, date, due time and visible status | FR-REM-05 | Implemented (M6b-P1) |
+| GET | `/api/v1/portal/medicine-plan?date=` | One day's plan by slot, then "As the doctor wrote"; default today, ±30 days (else 422) | FR-REM-03 | Implemented (M6b-P3) |
+| GET | `/api/v1/portal/medicine-plan/courses` | Each current version's course with the reminder choices per line and slot | FR-REM-03 | Implemented (M6b-P3) |
+| PUT | `/api/v1/portal/medicine-plan/reminders` | A reminder choice for one line and slot (422 untimed line or slot it lacks; 404 out of scope or not current) | FR-REM-03 | Implemented (M6b-P3), stored only |
 | POST | `/api/v1/patients/{patient_id}/portal-invite` | Staff: a single-use invite `{url, expires_at}`, shown once (7 days; supersedes the pending one) | FR-PRT-06 (b) | Implemented (M6b-P1), `PATIENTS_MANAGE` |
 | GET | `/api/v1/patients/{patient_id}/portal` | Staff: `NOT_LINKED`, `INVITED` (with expiry) or `LINKED` (method, since); never the account's details | FR-PRT-06 | Implemented (M6b-P1), `PATIENTS_MANAGE` |
 | DELETE | `/api/v1/patients/{patient_id}/portal-link` | Staff: end the link; returns the new status | FR-PRT-06 | Implemented (M6b-P1), `PATIENTS_MANAGE` |
 
 - **M6b-P2 (contract 0.30.0).** `PATCH /api/v1/portal/me {language: en|hi}` changes the account's portal language (logged as `portal.language_changed`, not audited); sign-up takes an optional `language`, else the `me_pt_lang` cookie the signed-out pages set, else `en` (a new Google account reads the same cookie). Links' `clinic` and each appointment group carry the clinic's `timezone` (groups also its `phone_e164`); `GET /portal/prescriptions/{rx_id}` without `?lang` uses the account's language.
+- **M6b-P3 (contract 0.31.0).** `frequency` is a 0/1 pattern of 3 or 4 slots (the input may be `101` or `1 0 1`; all zeros or other digits are 422 on `items.N.frequency`) or SOS, ONCE, CUSTOM. Lines gain `duration_kind` and, in responses, the engine's `slots` and non-blocking `line_warnings`; drafts take `starts_on` and a revision's draft returns `previous_starts_on`. `PATCH /portal/me` also takes `slot_times`; the account carries them. The patient page gains the Medicine schedule (`schedule*`, empty before layout 2). Plan reads and reminder choices are not audited; logs carry IDs only.
 - **Scope (NFR-18).** Every patient read goes through `PortalScope`: the account's active links,
   read per request, each a (clinic, record) pair; a suspended clinic is left out. An ID outside it
   (another clinic, another record in the same clinic, a revoked link, a draft or superseded
@@ -463,6 +467,7 @@ that kept booked sessions also tells the active owners and front desk in the app
 | GET/POST | `/api/v1/rx-favourites` · PUT/DELETE `…/{favourite_id}` | The caller's favourites | FR-RX-05 | Implemented (M4-P3) |
 | GET/POST | `/api/v1/rx-templates` · GET/PUT/DELETE `…/{template_id}` | The caller's templates | FR-RX-05 | Implemented (M4-P3) |
 | GET | `/api/v1/medicine-suggestions?q=` | The caller's favourites, then names this clinic issued; at most 10 | FR-RX-10 | Implemented (M4-P3) |
+| GET | `/api/v1/rx-vocabulary` | The engine's slot sets (3 and 4 digits) and every code the editor offers | FR-RX-01 | Implemented (M6b-P3), `CLINICAL_VIEW` |
 
 M4-P1 rules (spec prescriptions R1-R3, R16, R17; decisions 1A-6A; contract 0.13.0): reads need
 `CLINICAL_VIEW` (doctors, owners), writes `CLINICAL_WRITE` and being the visit's doctor, so front

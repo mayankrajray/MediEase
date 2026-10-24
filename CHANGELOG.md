@@ -21,6 +21,15 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6b-P3 (#51): the medicine planner (FR-REM-03; prescriptions R21–R25; portal R28–R44;
+  decisions D1–D3, D6, D8, D9). Frequency is now any 0/1 pattern of 3 or 4 slots (or SOS, ONCE,
+  CUSTOM), read by one domain engine (`schedule.py`, `plan.py`) that the editor (via
+  `GET /rx-vocabulary`), the PDF (layout 2's Medicine schedule), the patient page and the portal use;
+  non-blocking bedtime notes for the doctor; explicit duration kinds and an optional start day;
+  with-water, warm-water and milk instructions. The portal gains a *Medicines* tab (*Today* by time
+  of day, *Courses*), the person's times of day under *Account*, and reminder choices per line and
+  slot (stored; delivery in M6b-P6). Migration `0027`, contract 0.31.0. `1-1-1` now reads "Three
+  times a day, morning, afternoon and night".
 - M6b-P2 (#51): the patient portal's screens (FR-PRT-03, 04, 05, 07; NFR-02, 10, 11; decisions
   1A–8A). A signed-in shell with bottom tabs at 360 px (*Home*, *Appointments*, *Prescriptions*,
   *Account*); a fresh dashboard with *Find a doctor* (an interim page until directory search,

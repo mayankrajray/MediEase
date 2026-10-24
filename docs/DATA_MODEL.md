@@ -406,6 +406,7 @@ One version of a visit's prescription chain (spec R4-R6, R14; decisions 1A-6A).
 | revision | integer not null default 1 | +1 per save; `PUT`/issue must send it (`RX_STALE`) |
 | advice | jsonb not null | `{diet[], activity[], return_if[], notes}` — **clinical**, as written |
 | follow_up_date | date null | After the issue date, within a year; for M5's reminders |
+| starts_on | date null | M6b-P3 (migration `0027`, prescriptions R24): the course's first day, within 30 days of the issue day; **null = the issue day** on the clinic's calendar (not backfilled: issued rows are immutable) |
 | language | text null | `en` \| `hi`: the patient's preference at issue; the PDF uses it (R20) |
 | issued_at | timestamptz null | |
 | doctor_snapshot | jsonb null | Name, qualification, registration number and council, specialty **as printed** |
@@ -432,9 +433,14 @@ row under the same key.
 
 ### `prescription_items` (migration `0010`, M4-P2)
 `id, clinic_id, prescription_id, position (UNIQUE per prescription, from 1), medicine_name
-(1–200), form, strength, dose, quantity (≤ 100 each), frequency (spec §3 codes, CHECK),
-frequency_text (≤ 100; set ⇔ frequency CUSTOM), timing (BEFORE_FOOD | AFTER_FOOD | WITH_FOOD |
-EMPTY_STOMACH | BEDTIME | ANY), duration_days (1–365), preparation jsonb [{code, text}],
+(1–200), form, strength, dose, quantity (≤ 100 each), frequency (CHECK `ck_prescription_items_frequency`:
+from M6b-P3 / migration `0027` a 0/1 pattern of 3 or 4 slots with at least one 1, or SOS, ONCE,
+CUSTOM; `domain/prescriptions/schedule.py`), frequency_text (≤ 100; set ⇔ frequency CUSTOM),
+timing (BEFORE_FOOD | AFTER_FOOD | WITH_FOOD | EMPTY_STOMACH | BEDTIME | ANY), duration_days
+(1–365), duration_kind (M6b-P3: DAYS | UNTIL_REVIEW | ONGOING | null = not stated; DAYS ⇔
+duration_days, `ck_prescription_items_duration_days_with_kind`; rows from before 0027 keep a
+null kind and read as DAYS when they have days), preparation jsonb [{code, text}] (M6b-P3 adds
+WITH_WATER, WITH_WARM_WATER, WITH_MILK),
 storage jsonb [{code, days}], warnings (≤ 500), notes (≤ 1,000)` — all clinical, never logged.
 Trigger `prescription_items_frozen` allows `INSERT`/`UPDATE`/`DELETE` only while the parent is a
 draft; `TRUNCATE` refused.
@@ -611,6 +617,7 @@ clinic. It holds no clinic data until a clinic links it (M6b, FR-PRT-06).
 | password_hash | text null | Argon2id, the staff policy |
 | failed_login_count, locked_until, last_login_at | | The staff lockout (FR-AUTH-04) |
 | language | text not null default `'en'` | M6b-P2 (migration `0026`): the portal's language, `en` \| `hi` (`ck_patient_accounts_language`); set at sign-up from the page, changed by `PATCH /portal/me` |
+| morning_time, afternoon_time, evening_time, night_time | time not null, defaults 08:00, 14:00, 18:00, 21:00 | M6b-P3 (migration `0027`, portal R34): the person's times of day for the medicine plan; 05:00–23:30 and increasing (`ck_patient_accounts_slot_times_in_order`). They never change a prescription |
 | created_at, updated_at | timestamptz | |
 
 ### `patient_refresh_tokens`
@@ -739,6 +746,29 @@ the portal scope. Revoked rows are kept as history and never deleted.
 One pending invite per record (`uq_patient_portal_invites_patient_pending`, partial on
 `used_at IS NULL AND superseded_at IS NULL`). Expired invites are kept (a few rows per patient);
 a purge can be added with the retention job if they ever matter.
+
+## M6b — Medicine reminder choices (migration `0027`, M6b-P3)
+
+Patient portal spec R38–R40, decision D6. **Tenant data** (`SqlAlchemyReminderPrefRepository`,
+`tenant.reminder_prefs`), reached only through `PortalScope`. Stored only: delivery is M6b-P6.
+
+### `medicine_reminder_prefs`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | |
+| patient_id | uuid FK patients not null | The linked record |
+| account_id | uuid FK patient_accounts not null | Whose choice it is |
+| prescription_id | uuid FK prescriptions not null | The **version**; a revision starts with none |
+| item_id | uuid not null | The line. No foreign key: an issued version's items can never be deleted, and a key would stand in front of the `prescription_items_frozen` TRUNCATE refusal |
+| slot | text not null | `MORNING` \| `AFTERNOON` \| `EVENING` \| `NIGHT` (CHECK); only a slot the line's pattern marks (use case) |
+| enabled | boolean not null | Default off when no row exists |
+| remind_at | time null | 05:00–23:30 (`ck_medicine_reminder_prefs_remind_at_range`); null = the account's time for the slot |
+| created_at, updated_at | timestamptz | |
+
+Unique `uq_medicine_reminder_prefs_line_slot (account_id, prescription_id, item_id, slot)`; index
+`(clinic_id, patient_id)`. Deleted when the link ends (patient or staff unlink). Holds no
+medicine name, dose or instruction.
 
 ---
 
