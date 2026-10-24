@@ -89,12 +89,14 @@ export async function sessionRunningNow(
   const now = Date.now();
   const today = wallClock(new Date(now)).day;
 
+  // "Now" is read on every call: after waiting out an ending session it has moved on.
   const running = async () => {
+    const at = Date.now();
     const list = (await (await request.get(`/api/v1/sessions?date=${today}&doctor_id=${doctorId}`)).json()) as {
       items: Session[];
     };
     return list.items.find(
-      (s) => s.status === "OPEN" && s.available > 0 && Date.parse(s.starts_at) <= now && Date.parse(s.ends_at) > now + 120_000,
+      (s) => s.status === "OPEN" && s.available > 0 && Date.parse(s.starts_at) <= at && Date.parse(s.ends_at) > at + 120_000,
     );
   };
 
