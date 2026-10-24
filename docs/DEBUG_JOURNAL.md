@@ -29,6 +29,23 @@ Rules:
 
 ---
 
+### 2026-10-24 — a journey's new extra session "is not listed" after waiting (no error code)
+
+- **Milestone / area:** M6a-P8 / Playwright helper `sessionRunningNow` (`apps/web/e2e/queue-support.ts`)
+- **Symptom:** `workspaces.spec.ts` FR-UX-06 failed with "the extra session is listed" after the
+  helper had waited for an earlier extra session to end.
+- **Impact:** local only.
+- **Reproduction:** run the journeys when the family clinic's last extra session ends within two
+  minutes, so the helper waits, then starts a new session at that end.
+- **Investigation:** the new session was created (201) and running, but `running()` compared it
+  with the time read when the helper began, before the wait, so it looked like a future session.
+- **Root cause:** a stale `now` captured once at the top of the helper.
+- **Fix:** `running()` reads the clock on every call. No assertion changed.
+- **Guard:** the full `make e2e` (32/32 after the fix).
+- **Prevention / follow-up:** a helper that waits must not reuse a timestamp taken before waiting.
+- **Search keywords:** e2e, extra session, sessionRunningNow, stale now, wait, flaky
+---
+
 ### 2026-10-24 — journeys fail setting up a running session after midnight (`SCH_OVERLAP`)
 
 - **Milestone / area:** M6a-P7 / Playwright helper `sessionRunningNow` (`apps/web/e2e/queue-support.ts`)
