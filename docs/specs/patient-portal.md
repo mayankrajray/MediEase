@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-PRT-02, 03, 06 (b, c); NFR-18 (P1). FR-PRT-04, 05, 07 (P2), FR-REM-03 (P3) and patient notifications (P6) are added in their phases |
 | Milestone / phases | M6b / P1 (this version), P2, P3, P6 |
-| Status | Approved for P1 (developer sign-off 24 Oct 2026, with the M6b-P1 design: A on all eight) |
+| Status | P1 approved (developer sign-off 24 Oct 2026, A on all eight) and built; P2 (R15–R27, AC7–AC12) Draft, awaiting approval |
 | Last updated | 2026-10-24 |
 
 ## 1. Context
@@ -89,8 +89,54 @@ stateDiagram-v2
   `INVITED` (with the invite's expiry) or `LINKED` (with method and `created_at`); never the
   account's email or name.
 
+### The portal screens (P2, Draft)
+- **R15** Signed-in portal screens share one shell: a header with the language switch and a tab
+  bar (*Home*, *Appointments*, *Prescriptions*, *Account*), at the bottom below 768 px. Every
+  screen works at 360 px without horizontal scrolling.
+- **R16** **Fresh dashboard (FR-PRT-05).** With no active link, *Home* shows "No appointments
+  yet", one primary action *Find a doctor* and a secondary explanation of how to link records
+  (an invitation from the clinic, or *Save to my MediEase* on a prescription link). Nothing is
+  imported or inferred. Until directory search exists (M6c), *Find a doctor* opens a page that
+  says so and offers the same two ways.
+- **R17** With links, *Home* shows the next upcoming appointment (clinic, doctor, day and time or
+  token, status), the latest prescription, and up to 3 upcoming reminders; *Find a doctor*
+  remains as a secondary action.
+- **R18** **My Appointments (FR-PRT-07)** is grouped by clinic (name and a call button); inside a
+  group, upcoming first (soonest first), then past (newest first). Each row shows the doctor, the
+  day and time on the clinic's clock (a slot) or the token and session times (token mode), and a
+  status in words: `BOOKED` *Confirmed*, `ARRIVED` and `IN_CONSULTATION` *At the clinic*,
+  `COMPLETED` *Completed*, `CANCELLED` *Cancelled*, `NO_SHOW` *Missed*. A clinic's records never
+  appear in another clinic's group.
+- **R19** *Prescriptions* lists each linked clinic's current prescriptions (doctor, issued date,
+  "updated" for a revision). Opening one shows the patient page exactly as the prescription link
+  does, in the account's language with a switch, and *Download PDF*.
+- **R20** *Account* shows the name, email and sign-in method, the language, the linked clinics
+  (name, address, phone, how and since when linked) each with *Unlink* behind a confirmation
+  that says the clinic's appointments and prescriptions will disappear from the account, and
+  *Sign out*.
+- **R21** **Language (FR-PRT-04, NFR-11).** The account has a language, `en` or `hi`, default
+  `en`, changed from the header (`PATCH /portal/me {language}`) and kept across devices. Before
+  sign-in, the auth pages follow a `me_pt_lang` cookie, which also sets a new account's language.
+  Every portal word, date and time is in that language; the doctor's own text is shown as
+  written. Errors the portal knows are worded in both languages; any other shows the API's
+  message and the Ref.
+- **R22** Times are stored in UTC and shown in each clinic's time zone, which the portal API
+  returns with the clinic.
+- **R23** **Budget (NFR-02).** Each portal screen's first load is under 200 KB transferred at
+  360 px. No analytics or tracking scripts.
+- **R24** **Accessibility (NFR-10).** WCAG 2.1 AA: labelled controls, visible focus, focus moved
+  to errors, status in text as well as colour, targets at least 44 px, `lang` set to the page's
+  language. An automated check (axe) finds no serious or critical violation on any portal screen
+  in either language.
+- **R25** An ended portal session on any screen returns to the portal sign-in with the reason;
+  after signing in the person comes back to the same screen.
+- **R26** A prescription or link ID the account no longer reaches (unlinked, another account's)
+  shows "not found" with a way back to *Home*, never the other record.
+- **R27** Nothing on the portal screens is cached for another person: responses are `no-store`
+  and nothing personal is written to local storage.
+
 ## 5. API surface
-See API.md "Patient portal" and `contracts/openapi.yaml` 0.29.0.
+See API.md "Patient portal" and `contracts/openapi.yaml` 0.29.0. P2 (0.30.0): `language` on the account and `PATCH /portal/me`; the clinic's `timezone` on links and appointment groups; the prescription page's default language is the account's.
 
 ## 6. UI notes
 - P1: the staff *Patient app* card on the patient profile (status, *Invite to the patient app*
@@ -98,7 +144,7 @@ See API.md "Patient portal" and `contracts/openapi.yaml` 0.29.0.
   (`/portal/link/{token}`: "Link your records at *Clinic* (First · CODE)", *Link* or *Not me*;
   `/portal/link/prescription/{token}`: the last-4 field). Signed-out visitors are sent to sign in
   or sign up and back.
-- P2 adds the portal screens.
+- P2: the portal screens, R15–R27.
 
 ## 7. Events and side effects
 | Trigger | Audit | Notes |
@@ -134,7 +180,19 @@ See API.md "Patient portal" and `contracts/openapi.yaml` 0.29.0.
   account never sees the other.
 - **AC6** Given a link revoked by staff, when the patient's next request is made, then the clinic is
   absent from `GET /portal/links` and its IDs are 404.
-
+- **AC7 (FR-PRT-05)** Given a new account, then *Home* shows no appointments, no prescriptions and
+  one primary action *Find a doctor*.
+- **AC8 (FR-PRT-07)** Given an account linked in two clinics, then *Appointments* shows two groups,
+  each holding only that clinic's appointments, with *Confirmed* for a booked one and the time on
+  the clinic's clock.
+- **AC9 (FR-PRT-03)** Given a linked account, when it opens a prescription, then it sees the same
+  page as the prescription link and can download the PDF.
+- **AC10 (FR-PRT-04, NFR-11)** Given the switch set to Hindi, then every portal screen is in Hindi,
+  and after signing in on another browser it is still Hindi.
+- **AC11 (NFR-02, NFR-10)** Each portal screen at 360 px loads under 200 KB, has no horizontal
+  overflow and passes the automated accessibility check in English and Hindi.
+- **AC12 (R20)** Given the patient unlinks a clinic from *Account*, then that clinic disappears
+  from every screen at once.
 ## 10. Observability
 Log events: `portal.invite_created`, `portal.linked` (method), `portal.unlinked`,
 `portal.invite_invalid`, `portal.link_refused` (reason). IDs only; never a phone digit, name or

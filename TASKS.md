@@ -168,8 +168,8 @@ tests pass. Issue #51, branch `m6b/51-patient-portal-booking`; design notes
 
 | Phase | Scope | Status |
 |---|---|---|
-| M6b-P1 | Linking (clinic invite, prescription link) and the read-only patient API; portal tenancy suite (FR-PRT-02, 03, 06 b-c, NFR-18) | ▶ (built, awaiting the developer's confirmation) |
-| M6b-P2 | Portal web: fresh dashboard, My Appointments by clinic, prescriptions, reminders, English and Hindi (FR-PRT-03, 04, 05, 07) | ☐ |
+| M6b-P1 | Linking (clinic invite, prescription link) and the read-only patient API; portal tenancy suite (FR-PRT-02, 03, 06 b-c, NFR-18) | ✅ (confirmed and pushed 24 Oct 2026; draft PR #52) |
+| M6b-P2 | Portal web: fresh dashboard, My Appointments by clinic, prescriptions, reminders, English and Hindi (FR-PRT-03, 04, 05, 07) | ▶ (designed, awaiting approval) |
 | M6b-P3 | Medicine planner (FR-REM-03) | ☐ |
 | M6b-P4 | Public page `/c/{slug}` and booking requests with a soft hold (FR-PUB-01..04, FR-BKG-01..03, 07) | ☐ |
 | M6b-P5 | Front-desk inbox: accept with linking, decline, propose, expiry (FR-BKG-04..06, 08, FR-PRT-06 a) | ☐ |
