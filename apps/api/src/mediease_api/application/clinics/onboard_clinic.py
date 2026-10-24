@@ -92,6 +92,9 @@ class UpdateClinicCommand:
     specialties: tuple[str, ...] | None = None
     booking_mode: BookingMode | None = None
     rx_paper_size: PaperSize | None = None
+    # M6a-P8 (decision 3A): appointment reminders.
+    reminder_evening_before: bool | None = None
+    reminder_hours_before: int | None = None
 
 
 class CreateClinic:
@@ -269,6 +272,11 @@ class UpdateClinic:
                 pincode=cmd.pincode,
                 specialties=cmd.specialties,
                 rx_paper_size=cmd.rx_paper_size,
+            )
+            clinic.change_reminders(
+                now=now,
+                evening_before=cmd.reminder_evening_before,
+                hours_before=cmd.reminder_hours_before,
             )
             if cmd.booking_mode is not None and cmd.booking_mode is not clinic.booking_mode:
                 # R19: refused unless every current block supports the new mode.

@@ -16,21 +16,39 @@ REMINDER_KIND = "send_reminder"
 SMS_FALLBACK_KIND = "send_sms_fallback"
 # M5-P5: the reply to a STOP, one per clinic that opted the sender out (decision 3A).
 OPT_OUT_CONFIRMATION_KIND = "send_opt_out_confirmation"
+# M6a-P8 (FR-APT-09, decision 7A): the patient told of a cancellation by the clinic.
+CANCELLATION_NOTICE_KIND = "send_cancellation_notice"
 
 BOOKING_CONFIRMED = "booking_confirmed"
 RX_READY = "rx_ready"
 RX_UPDATED = "rx_updated"
 FOLLOW_UP_DUE = "follow_up_due"
 OPT_OUT_CONFIRMED = "opt_out_confirmed"
+# M6a-P8: before a visit (decision 5A), and a visit cancelled by the clinic (decision 7A).
+APPOINTMENT_REMINDER = "appointment_reminder"
+APPOINTMENT_CANCELLED = "appointment_cancelled"
 
 # Every template the code sends; the loader refuses a templates file without one of them.
 REQUIRED_TEMPLATES = frozenset(
-    {BOOKING_CONFIRMED, RX_READY, RX_UPDATED, FOLLOW_UP_DUE, OPT_OUT_CONFIRMED}
+    {
+        BOOKING_CONFIRMED,
+        RX_READY,
+        RX_UPDATED,
+        FOLLOW_UP_DUE,
+        OPT_OUT_CONFIRMED,
+        APPOINTMENT_REMINDER,
+        APPOINTMENT_CANCELLED,
+    }
 )
 
 
 def booking_confirmation_key(appointment_id: UUID) -> str:
     return f"{BOOKING_CONFIRMED}:{appointment_id}"
+
+
+def cancellation_notice_key(appointment_id: UUID) -> str:
+    """At most one notice per cancelled appointment (decision 7A)."""
+    return f"{APPOINTMENT_CANCELLED}:{appointment_id}"
 
 
 def rx_link_key(prescription_id: UUID) -> str:

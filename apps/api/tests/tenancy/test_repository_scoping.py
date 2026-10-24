@@ -80,7 +80,9 @@ class Tenant:
 # the audit writer with the clinic ID from the request context, and it also holds
 # platform-level rows (clinic_id null for a sign-in). Nothing in the application
 # reads it; an owner-facing read (FR-AUD-03) must scope its own query by clinic
-# and add cases to this suite.
+# and add cases to this suite. M6a-P8 added that read: SqlAlchemyAuditReader, reached only as
+# uow.tenant(clinic).audit_log, filters the events and everything it joins by its one clinic
+# (tests/tenancy/test_http_isolation.py, tests/integration/test_audit_log_http.py).
 #
 # Reviewed exception (M5-P1): jobs carries a nullable clinic_id on purpose. It is null exactly for
 # the system kinds a CHECK lists (the retention purge), so no tenant repository can own the table.

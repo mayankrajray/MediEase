@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.27.0
+  version: 0.28.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -93,6 +93,10 @@ tags:
     description: |
       The notification centre (M6a-P7, ADR-0017; FR-NTF-03, 05, 06). Each member's own in-app
       notifications in the request's clinic, and their choices. Titles never carry clinical text.
+  - name: audit
+    description: |
+      The owner's audit log (M6a-P8, FR-AUD-03). AUDIT_VIEW, owners only. The clinic's own
+      entries, newest first; the export is CSV and is itself audited. Never cached.
   - name: dashboard
     description: |
       The role dashboards (M6-P1). Today: counts for the first screen of every clinic role,
@@ -1071,6 +1075,45 @@ paths:
           $ref: '#/components/responses/AuthError'
         '422':
           $ref: '#/components/responses/AppointmentError'
+  /api/v1/appointments/to-move:
+    get:
+      tags: [appointments]
+      operationId: listBookingsToMove
+      summary: Bookings a schedule change left to move
+      description: |
+        M6a-P8 (FR-APT-09, decision 6A). BOOKED or ARRIVED appointments from today on whose session
+        is CLOSED, because the doctor took leave that day (reason LEAVE) or the weekly schedule
+        changed (SCHEDULE_CHANGED); earliest first, at most 200. Reschedule or cancel each with the
+        usual routes. The patient as code, first name and masked phone only. APPOINTMENTS_MANAGE.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - name: doctor_id
+          in: query
+          required: false
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The bookings to move
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingToMoveList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/AuthError'
   /api/v1/appointments/{appointment_id}:
     get:
       tags: [appointments]
@@ -3924,6 +3967,88 @@ paths:
           $ref: '#/components/responses/ConflictError'
         '422':
           $ref: '#/components/responses/AuthError'
+  /api/v1/audit-events:
+    get:
+      tags: [audit]
+      operationId: listAuditEvents
+      summary: The clinic's audit log, newest first
+      description: |
+        M6a-P8 (FR-AUD-03, decision 8A). from and to are the clinic's calendar days, both
+        included (default the last 7 days; at most 92, else 422 AUD_RANGE_TOO_LONG). 50 a page;
+        pass next_cursor as cursor for the next. Reading is not audited. AUDIT_VIEW (owners).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - {name: from, in: query, required: false, schema: {type: string, format: date}}
+        - {name: to, in: query, required: false, schema: {type: string, format: date}}
+        - name: category
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AuditCategory'
+        - {name: actor_user_id, in: query, required: false, schema: {type: string, format: uuid}}
+        - {name: cursor, in: query, required: false, schema: {type: string, maxLength: 200}}
+      responses:
+        '200':
+          description: One page of the log
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+  /api/v1/audit-events/export:
+    get:
+      tags: [audit]
+      operationId: exportAuditEvents
+      summary: Export the clinic's audit log as CSV
+      description: |
+        M6a-P8 (FR-AUD-03, FR-AUD-01 "data exports"). Every entry of the range (rules as for the
+        list), at most 20,000 rows (else 422 AUD_RANGE_TOO_LONG). Columns: Time (clinic time),
+        Person, Role, Category, Action, Record type, Record ID, Patient code, Details. A cell
+        starting with = + - @ is prefixed with '. Records audit.exported. AUDIT_VIEW (owners).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - {name: from, in: query, required: false, schema: {type: string, format: date}}
+        - {name: to, in: query, required: false, schema: {type: string, format: date}}
+      responses:
+        '200':
+          description: The CSV file
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Content-Disposition:
+              description: attachment; filename="audit-<clinic>-<from>-<to>.csv"
+              schema: {type: string}
+          content:
+            text/csv:
+              schema: {type: string}
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/AuthError'
   /api/v1/notifications:
     get:
       tags: [notifications]
@@ -4641,24 +4766,36 @@ components:
     Reminder:
       type: object
       additionalProperties: false
-      required: [id, patient_id, doctor_id, kind, source, prescription_id, follow_up_date,
-                 due_at, status, error_code, revision, created_at, cancelled_at]
+      required: [id, patient_id, doctor_id, kind, source, prescription_id, appointment_id,
+                 follow_up_date, due_at, status, error_code, revision, created_at, cancelled_at]
       properties:
         id: {type: string, format: uuid}
         patient_id: {type: string, format: uuid}
         doctor_id: {type: string, format: uuid}
-        kind: {type: string, enum: [FOLLOW_UP]}
-        source: {type: string, enum: [PRESCRIPTION, MANUAL]}
+        kind:
+          type: string
+          enum: [FOLLOW_UP, APPOINTMENT]
+          description: M6a-P8 APPOINTMENT reminds of a booked visit; it follows its appointment
+        source: {type: string, enum: [PRESCRIPTION, MANUAL, APPOINTMENT]}
         prescription_id:
           description: The prescription chain (its version 1) for an automatic reminder
           type: [string, 'null']
           format: uuid
-        follow_up_date: {type: string, format: date}
+        appointment_id:
+          description: The appointment an APPOINTMENT reminder is for (M6a-P8)
+          type: [string, 'null']
+          format: uuid
+        follow_up_date:
+          type: string
+          format: date
+          description: The follow-up date, or the visit's date for an APPOINTMENT reminder
         due_at: {type: string, format: date-time}
         status:
           $ref: '#/components/schemas/ReminderStatus'
         error_code:
-          description: Why it failed (MSG_* or REM_CLINIC_PHONE_MISSING), else null
+          description: |
+            Why it failed (MSG_* or REM_CLINIC_PHONE_MISSING), or why the system cancelled an
+            appointment reminder (REM_APPOINTMENT_CHANGED, REM_TOO_LATE); else null
           type: [string, 'null']
         revision: {type: integer, minimum: 1}
         created_at: {type: string, format: date-time}
@@ -5572,6 +5709,7 @@ components:
         - CLINICAL_WRITE
         - USAGE_METRICS_VIEW
         - RX_PRINT
+        - AUDIT_VIEW
     Clinic:
       type: object
       required:
@@ -5589,6 +5727,8 @@ components:
         - patient_code_prefix
         - booking_mode
         - rx_paper_size
+        - reminder_evening_before
+        - reminder_hours_before
       properties:
         id:
           type: string
@@ -5625,6 +5765,14 @@ components:
           $ref: '#/components/schemas/BookingMode'
         rx_paper_size:
           $ref: '#/components/schemas/PaperSize'
+        reminder_evening_before:
+          type: boolean
+          description: M6a-P8 appointment reminder at 19:00 clinic time the day before
+        reminder_hours_before:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: M6a-P8 appointment reminder this many hours before the visit; 0 is off
     PatientLinkInfo:
       type: object
       additionalProperties: false
@@ -5975,10 +6123,104 @@ components:
           maxItems: 20
           items:
             $ref: '#/components/schemas/Patient'
+    BookingToMove:
+      type: object
+      additionalProperties: false
+      required: [id, status, doctor_id, session_id, on_date, starts_at, slot_start, token_number,
+                 reason, patient]
+      properties:
+        id: {type: string, format: uuid}
+        status: {type: string, enum: [BOOKED, ARRIVED]}
+        doctor_id: {type: string, format: uuid}
+        session_id: {type: string, format: uuid}
+        on_date: {type: string, format: date}
+        starts_at:
+          type: string
+          format: date-time
+          description: The slot's start, or the session's in token mode
+        slot_start: {type: [string, 'null'], format: date-time}
+        token_number: {type: [integer, 'null']}
+        reason: {type: string, enum: [LEAVE, SCHEDULE_CHANGED]}
+        patient:
+          type: object
+          additionalProperties: false
+          required: [id, code, first_name, phone_masked]
+          properties:
+            id: {type: string, format: uuid}
+            code: {type: string}
+            first_name: {type: string}
+            phone_masked: {type: string, description: e.g. +91******0101}
+    BookingToMoveList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingToMove'
+    AuditCategory:
+      type: string
+      enum: [SIGN_IN, TEAM, PATIENTS, APPOINTMENTS, CLINICAL, PRESCRIPTIONS, MESSAGES, SCHEDULE,
+             SETTINGS]
+    AuditEntry:
+      type: object
+      additionalProperties: false
+      required: [id, occurred_at, action, action_label, category, actor, entity_type, entity_id,
+                 patient_code, metadata]
+      properties:
+        id: {type: string, format: uuid}
+        occurred_at: {type: string, format: date-time}
+        action: {type: string, description: The stable action name, e.g. appointment.cancelled}
+        action_label: {type: string, description: What happened, in words}
+        category:
+          $ref: '#/components/schemas/AuditCategory'
+        actor:
+          type: object
+          additionalProperties: false
+          required: [type, user_id, label, role]
+          properties:
+            type: {type: string, enum: [STAFF, OPS, PATIENT_LINK, SYSTEM, PATIENT]}
+            user_id: {type: [string, 'null'], format: uuid}
+            label:
+              type: string
+              description: The member's current name, or MediEase support, System, a patient
+            role: {type: [string, 'null'], enum: [OWNER, DOCTOR, FRONT_DESK, null]}
+        entity_type: {type: [string, 'null']}
+        entity_id: {type: [string, 'null'], format: uuid}
+        patient_code: {type: [string, 'null'], description: Set when the record is a patient}
+        metadata:
+          type: object
+          description: IDs, codes and enums only (never names, phones or clinical text)
+          additionalProperties: {type: string}
+    AuditPage:
+      type: object
+      additionalProperties: false
+      required: [from, to, timezone, items, next_cursor, categories]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        timezone: {type: string}
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/AuditEntry'
+        next_cursor: {type: [string, 'null']}
+        categories:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [value, label]
+            properties:
+              value:
+                $ref: '#/components/schemas/AuditCategory'
+              label: {type: string}
     NotificationKind:
       type: string
       enum: [appointment.booked, appointment.rescheduled, appointment.cancelled,
-             appointment.arrived, message.failed, staff.joined]
+             appointment.arrived, message.failed, staff.joined, schedule.bookings_to_move]
     Notification:
       type: object
       additionalProperties: false
@@ -6394,6 +6636,14 @@ components:
           oneOf:
             - $ref: '#/components/schemas/PaperSize'
             - type: 'null'
+        reminder_evening_before:
+          description: M6a-P8. Applies to bookings made or moved after the change.
+          type: [boolean, 'null']
+        reminder_hours_before:
+          description: M6a-P8. 0 (off) to 6; applies to bookings made or moved after the change.
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 6
     NewDoctor:
       type: object
       additionalProperties: false
@@ -7283,6 +7533,7 @@ components:
         - sessions
         - next_patients
         - follow_ups_pending
+        - bookings_to_move
         - messages_failed
         - week
       properties:
@@ -7306,6 +7557,10 @@ components:
           items:
             $ref: '#/components/schemas/DashboardNextPatient'
         follow_ups_pending: {type: integer, minimum: 0}
+        bookings_to_move:
+          type: ['integer', 'null']
+          minimum: 0
+          description: M6a-P8 live bookings in closed sessions from today on; null in scope DOCTOR
         messages_failed:
           type: ['integer', 'null']
           minimum: 0

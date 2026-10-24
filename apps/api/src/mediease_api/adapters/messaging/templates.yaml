@@ -85,3 +85,42 @@ templates:
       hi:
         provider_name: opt_out_confirmed
         body: "अब आपको {{clinic_name}} से संदेश नहीं मिलेंगे।"
+
+  # M6a-P8 (FR-APT-08, decision 5A): the evening before and some hours before a visit, one wording
+  # for both. Needs Meta approval (L-02); the console sends it until then.
+  appointment_reminder:
+    version: 1
+    category: utility
+    variables:
+      - { name: clinic_name, kind: clinic_name }
+      - { name: doctor_name, kind: doctor_name }
+      - { name: date_time_or_token, kind: when }
+      - { name: clinic_phone, kind: phone }
+    languages:
+      en:
+        provider_name: appointment_reminder_v1
+        body: "Reminder: your appointment at {{clinic_name}} with {{doctor_name}} is {{date_time_or_token}}. To change it, call {{clinic_phone}}."
+      hi:
+        provider_name: appointment_reminder_v1
+        body: "याद दिलाना: {{clinic_name}} में {{doctor_name}} के साथ आपकी अपॉइंटमेंट {{date_time_or_token}} है। बदलने के लिए {{clinic_phone}} पर कॉल करें।"
+    sms:
+      en: "{{clinic_name}}: appointment with {{doctor_name}} {{date_time_or_token}}. To change, call {{clinic_phone}}."
+      hi: "{{clinic_name}}: {{doctor_name}} के साथ अपॉइंटमेंट {{date_time_or_token}}। बदलाव: {{clinic_phone}}"
+
+  # M6a-P8 (FR-APT-09, decision 7A): a visit cancelled by the clinic (the doctor is unavailable, or
+  # the clinic's own request). Needs Meta approval (L-02).
+  appointment_cancelled:
+    version: 1
+    category: utility
+    variables:
+      - { name: clinic_name, kind: clinic_name }
+      - { name: doctor_name, kind: doctor_name }
+      - { name: date_time_or_token, kind: when }
+      - { name: clinic_phone, kind: phone }
+    languages:
+      en:
+        provider_name: appointment_cancelled_v1
+        body: "Your appointment at {{clinic_name}} with {{doctor_name}} on {{date_time_or_token}} is cancelled. Please call {{clinic_phone}} to book again."
+      hi:
+        provider_name: appointment_cancelled_v1
+        body: "{{clinic_name}} में {{doctor_name}} के साथ {{date_time_or_token}} की आपकी अपॉइंटमेंट रद्द हो गई है। फिर से बुक करने के लिए {{clinic_phone}} पर कॉल करें।"

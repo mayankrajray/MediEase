@@ -8,6 +8,7 @@ so it always sees the change as committed. Nothing clinical is ever part of an e
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from uuid import UUID
 
 
@@ -50,6 +51,19 @@ class StaffJoined:
     membership_id: UUID
 
 
+@dataclass(frozen=True, slots=True)
+class BookingsToMove:
+    """M6a-P8 (FR-APT-09): a schedule change closed sessions with live bookings.
+
+    `change_id` names the change (the leave, or a fresh ID for a weekly schedule change) and keys
+    the notification; `on_date` is the leave's day, or None for a weekly schedule change.
+    """
+
+    doctor_id: UUID
+    change_id: UUID
+    on_date: date | None
+
+
 Event = (
     AppointmentBooked
     | AppointmentRescheduled
@@ -58,4 +72,5 @@ Event = (
     | PrescriptionIssued
     | MessageFailed
     | StaffJoined
+    | BookingsToMove
 )

@@ -1,4 +1,4 @@
-"""Follow-up reminders (M5-P4, migration 0017, docs/DATA_MODEL.md ``reminders``)."""
+"""Reminders (M5-P4 migration 0017; M6a-P8 0024 adds appointments; DATA_MODEL ``reminders``)."""
 
 from __future__ import annotations
 
@@ -21,6 +21,11 @@ class ReminderRow(TenantOwned, Timestamps, Base):
         CheckConstraint("revision >= 1", name="revision_positive"),
         # A prescription's reminder names its chain (version 1); a manual one names nothing.
         CheckConstraint("(source = 'PRESCRIPTION') = (source_id IS NOT NULL)", name="source_id"),
+        # M6a-P8: an appointment's reminder names it; no other one does.
+        CheckConstraint(
+            "(source = 'APPOINTMENT') = (appointment_id IS NOT NULL)", name="appointment_id"
+        ),
+        CheckConstraint("(kind = 'APPOINTMENT') = (source = 'APPOINTMENT')", name="kind_source"),
         CheckConstraint(
             "(status = 'CANCELLED') = (cancelled_at IS NOT NULL)", name="cancelled_has_time"
         ),
@@ -32,6 +37,7 @@ class ReminderRow(TenantOwned, Timestamps, Base):
             postgresql_where=text("status = 'SCHEDULED'"),
         ),
         Index("ix_reminders_clinic_id_patient_id", "clinic_id", "patient_id"),
+        Index("ix_reminders_appointment_id", "appointment_id"),
     )
 
     patient_id: Mapped[UUID] = mapped_column(ForeignKey("patients.id"))
@@ -44,6 +50,7 @@ class ReminderRow(TenantOwned, Timestamps, Base):
     status: Mapped[str] = mapped_column(Text)
     revision: Mapped[int] = mapped_column(SmallInteger)
     error_code: Mapped[str | None] = mapped_column(Text)
-    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    created_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
     cancelled_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    appointment_id: Mapped[UUID | None] = mapped_column(ForeignKey("appointments.id"))

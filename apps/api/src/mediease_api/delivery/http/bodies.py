@@ -54,6 +54,8 @@ def clinic_body(clinic: Clinic) -> dict[str, Any]:
         "patient_code_prefix": clinic.patient_code_prefix,
         "booking_mode": clinic.booking_mode.value,
         "rx_paper_size": clinic.rx_paper_size.value,
+        "reminder_evening_before": clinic.reminder_evening_before,
+        "reminder_hours_before": clinic.reminder_hours_before,
     }
 
 

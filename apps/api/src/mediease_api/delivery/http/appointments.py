@@ -36,6 +36,7 @@ from mediease_api.application.appointments.reschedule import (
     RescheduleAppointment,
     RescheduleCommand,
 )
+from mediease_api.application.appointments.to_move import BookingToMove, ListBookingsToMove
 from mediease_api.application.context import Actor
 from mediease_api.delivery.http.access import clinic, current_context
 from mediease_api.delivery.http.bodies import (
@@ -69,6 +70,7 @@ class AppointmentUseCases(Protocol):
     def transition_appointment(self) -> TransitionAppointment: ...
     def add_walk_in(self) -> AddWalkIn: ...
     def get_queue(self) -> GetQueue: ...
+    def list_bookings_to_move(self) -> ListBookingsToMove: ...
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -136,6 +138,28 @@ class WalkInRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=REASON_MAX)
 
 
+def booking_to_move_body(item: BookingToMove) -> dict[str, object]:
+    """Who and where (decision 6A): code, first name and a masked phone; nothing clinical."""
+    a, s, p = item.appointment, item.session, item.patient
+    return {
+        "id": str(a.id),
+        "status": a.status.value,
+        "doctor_id": str(a.doctor_id),
+        "session_id": str(s.id),
+        "on_date": s.on_date.isoformat(),
+        "starts_at": (a.slot_start or s.starts_at).isoformat(),
+        "slot_start": a.slot_start.isoformat() if a.slot_start else None,
+        "token_number": a.token_number,
+        "reason": item.reason.value,
+        "patient": {
+            "id": str(p.id),
+            "code": p.code,
+            "first_name": (p.full_name.split() or ["Patient"])[0],
+            "phone_masked": p.phone.masked(),
+        },
+    }
+
+
 def create_appointments_blueprint(use_cases: AppointmentUseCases) -> Blueprint:
     bp = Blueprint("appointments", __name__, url_prefix="/api/v1")
     one = "/appointments/<uuid:appointment_id>"
@@ -144,6 +168,15 @@ def create_appointments_blueprint(use_cases: AppointmentUseCases) -> Blueprint:
     def _no_store(response: Response) -> Response:
         response.headers["Cache-Control"] = "no-store"
         return response
+
+    @bp.get("/appointments/to-move")
+    @clinic(Permission.APPOINTMENTS_MANAGE)
+    def list_bookings_to_move() -> Response:
+        """M6a-P8 (FR-APT-09): live bookings in sessions a schedule change closed."""
+        items = use_cases.list_bookings_to_move().execute(
+            current_context(), doctor_id=_uuid_arg("doctor_id")
+        )
+        return jsonify(items_body(booking_to_move_body(i) for i in items))
 
     @bp.post("/appointments")
     @clinic(Permission.APPOINTMENTS_MANAGE)

@@ -28,6 +28,8 @@ MATRIX: dict[P, set[Role]] = {
     P.CLINICAL_WRITE: {DOC},
     P.USAGE_METRICS_VIEW: {OWN, DOC},
     P.RX_PRINT: {OWN, DOC, DESK},
+    # M6a-P8 (FR-AUD-03): the clinic's audit log, owners only.
+    P.AUDIT_VIEW: {OWN},
 }
 
 

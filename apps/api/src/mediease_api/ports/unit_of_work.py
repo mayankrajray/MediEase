@@ -21,7 +21,7 @@ from types import TracebackType
 from typing import Protocol, Self
 from uuid import UUID
 
-from mediease_api.ports.audit import AuditWriter
+from mediease_api.ports.audit import AuditReader, AuditWriter
 from mediease_api.ports.dashboard import DashboardReads
 from mediease_api.ports.jobs import JobQueue, RetentionRepository
 from mediease_api.ports.messaging import (
@@ -110,6 +110,11 @@ class TenantRepositories(Protocol):
     @property
     def dashboard(self) -> DashboardReads:
         """Counts for the *Today* screen (M6-P1)."""
+        ...
+
+    @property
+    def audit_log(self) -> AuditReader:
+        """This clinic's audit log, read-only (M6a-P8, FR-AUD-03)."""
         ...
 
 

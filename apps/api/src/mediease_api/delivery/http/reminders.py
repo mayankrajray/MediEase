@@ -74,6 +74,7 @@ def reminder_body(read: ReminderRead) -> dict[str, Any]:
         "kind": r.kind.value,
         "source": r.source.value,
         "prescription_id": str(r.source_id) if r.source_id else None,
+        "appointment_id": str(r.appointment_id) if r.appointment_id else None,
         "follow_up_date": r.follow_up_date.isoformat(),
         "due_at": r.due_at.isoformat(),
         # FR-REM-05: the message's status once sent (decision 3A), else the reminder's own.

@@ -120,3 +120,6 @@ class AuditAction(StrEnum):
     # M6a-P7 (decision 8A): a member's notification choices. Metadata: the kinds turned on and
     # off. Reading notifications is not audited (a convenience, not a disclosure).
     NOTIFICATION_PREFERENCES_CHANGED = "notification.preferences_changed"
+    # M6a-P8 (FR-AUD-01 "data exports", FR-AUD-03): an owner exported the clinic's audit log.
+    # Metadata: the range and the row count.
+    AUDIT_EXPORTED = "audit.exported"

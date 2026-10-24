@@ -157,6 +157,9 @@ class UpdateClinicRequest(BaseModel):
     booking_mode: BookingMode | None = None
     # M4-P4 (decision 3A): applies to versions first rendered after the change.
     rx_paper_size: PaperSize | None = None
+    # M6a-P8 (decision 3A): appointment reminders, for bookings made or moved from now on.
+    reminder_evening_before: bool | None = None
+    reminder_hours_before: int | None = Field(default=None, ge=0, le=6)
 
     @model_validator(mode="after")
     def _at_least_one_change(self) -> UpdateClinicRequest:
@@ -198,6 +201,8 @@ def create_clinic_blueprint(queries: ClinicUseCases, *, public_base_url: str) ->
                 specialties=tuple(body.specialties) if body.specialties is not None else None,
                 booking_mode=body.booking_mode,
                 rx_paper_size=body.rx_paper_size,
+                reminder_evening_before=body.reminder_evening_before,
+                reminder_hours_before=body.reminder_hours_before,
             ),
         )
         return jsonify(clinic_body(clinic_row))

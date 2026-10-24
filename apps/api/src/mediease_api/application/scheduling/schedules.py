@@ -26,6 +26,7 @@ from mediease_api.application.scheduling.views import ScheduleChange, ScheduleVi
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
+from mediease_api.domain.notifications.events import BookingsToMove
 from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock, check_no_overlap
 from mediease_api.domain.scheduling.sessions import horizon
 from mediease_api.domain.shared.errors import NotFound
@@ -151,6 +152,21 @@ class ReplaceSchedule:
                 entity_id=doctor.id,
                 metadata={"blocks": str(len(new_blocks)), "kept_sessions": str(len(kept))},
             )
+            # M6a-P8 (FR-APT-09): booked sessions it closed are listed for the desk, who is told.
+            if kept:
+                # Imported here: the service reaches the appointments, which load the clinic
+                # through this package.
+                from mediease_api.application.notifications.service import publish
+
+                publish(
+                    uow,
+                    BookingsToMove(doctor.id, self._ids.new_id(), None),
+                    clinic_id=clinic_id,
+                    ids=self._ids,
+                    now=now,
+                    request_id=actor.info.request_id,
+                    actor_user_id=actor.user_id,
+                )
             view = schedule_view(tenant, clinic, doctor, today)
             uow.commit()
 

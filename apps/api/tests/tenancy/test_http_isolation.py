@@ -421,3 +421,17 @@ def test_r8_a_cross_clinic_read_is_logged_as_tenancy_not_found(
     out = capsys.readouterr().out
     assert "tenancy.not_found" in out
     assert str(world.a.clinic.id) in out  # the scope that refused, for monitoring
+
+
+def test_nfr_08_fr_aud_03_an_owner_reads_only_their_own_clinics_audit_log(world: World) -> None:
+    """M6a-P8: clinic B's owner changes B's clinic; it is in B's log and never in A's."""
+    owner_of_b, headers = _owner_of_b(world)
+    changed = owner_of_b.patch("/api/v1/clinic", json={"city": "Beta City"}, headers=headers)
+    assert changed.status_code == 200, changed.get_json()
+
+    def updates(client: FlaskClient) -> set[str]:
+        items = client.get("/api/v1/audit-events?category=SETTINGS").get_json()["items"]
+        return {i["entity_id"] for i in items if i["action"] == "clinic.updated"}
+
+    assert str(world.b.clinic.id) in updates(owner_of_b)
+    assert updates(world.client_for(world.a.owner)) == set()

@@ -24,6 +24,7 @@ from mediease_api.domain.jobs.job import (
 )
 from mediease_api.domain.messaging.jobs import (
     BOOKING_CONFIRMATION_KIND,
+    CANCELLATION_NOTICE_KIND,
     OPT_OUT_CONFIRMATION_KIND,
     REMINDER_KIND,
     RX_LINK_KIND,
@@ -42,6 +43,7 @@ def test_m5_the_worker_handles_the_messaging_jobs(
     handlers = _messaging_handlers(settings, factory, SystemClock(), Uuid7Generator())
     assert set(handlers) == {
         BOOKING_CONFIRMATION_KIND,
+        CANCELLATION_NOTICE_KIND,
         RX_LINK_KIND,
         WEBHOOK_KIND,
         RECONCILE_KIND,

@@ -22,6 +22,12 @@ from uuid import UUID
 import structlog
 
 from mediease_api.application.messaging.sender import MessageSender, Send, Skip
+from mediease_api.application.reminders.appointment import (
+    appointment_variables,
+    cancel_reminder,
+    still_applies,
+    visit_start,
+)
 from mediease_api.application.reminders.fallback import (
     MSG_QUIET_HOURS_DEFERRED,
     SmsFallback,
@@ -30,9 +36,17 @@ from mediease_api.application.reminders.fallback import (
 from mediease_api.application.reminders.scheduling import enqueue_send
 from mediease_api.domain.jobs.job import ClaimedJob
 from mediease_api.domain.messaging.errors import MSG_NO_CONSENT, MSG_NOT_APPLICABLE
-from mediease_api.domain.messaging.jobs import FOLLOW_UP_DUE, reminder_message_key
+from mediease_api.domain.messaging.jobs import (
+    APPOINTMENT_REMINDER,
+    FOLLOW_UP_DUE,
+    reminder_message_key,
+)
 from mediease_api.domain.messaging.message import Message, SourceType
-from mediease_api.domain.reminders.errors import REM_CLINIC_PHONE_MISSING
+from mediease_api.domain.reminders.errors import (
+    REM_APPOINTMENT_CHANGED,
+    REM_CLINIC_PHONE_MISSING,
+    REM_TOO_LATE,
+)
 from mediease_api.domain.reminders.reminder import ReminderStatus
 from mediease_api.domain.reminders.rules import in_quiet_hours, outside_quiet_hours
 from mediease_api.ports.ids import IdPort
@@ -62,6 +76,32 @@ class SendReminder:
                 return Skip("not_current", MSG_NOT_APPLICABLE)
             clinic = uow.clinics.get(tenant.clinic_id)
             assert clinic is not None
+            appointment = session = None
+            if reminder.follows_appointment:
+                assert reminder.appointment_id is not None
+                appointment = tenant.appointments.get(reminder.appointment_id)
+                session = tenant.sessions.get(appointment.session_id) if appointment else None
+                late = None
+                if not still_applies(appointment, session):
+                    late = REM_APPOINTMENT_CHANGED
+                else:
+                    assert appointment is not None and session is not None
+                    if outside_quiet_hours(now, clinic.timezone) >= visit_start(
+                        appointment, session
+                    ):
+                        late = REM_TOO_LATE
+                if late is not None:
+                    if reminder.is_scheduled:
+                        cancel_reminder(
+                            uow,
+                            tenant,
+                            ids=self._ids,
+                            reminder=reminder,
+                            request_id=job.request_id,
+                            now=now,
+                            code=late,
+                        )
+                    return Skip("appointment_changed", MSG_NOT_APPLICABLE)
             if reminder.is_scheduled and in_quiet_hours(now, clinic.timezone):
                 reminder.defer(outside_quiet_hours(now, clinic.timezone), now)
                 tenant.reminders.update(reminder)
@@ -97,6 +137,14 @@ class SendReminder:
             assert doctor is not None
             reminder.handed_off(now)
             tenant.reminders.update(reminder)
+            if appointment is not None and session is not None:
+                return Send(
+                    patient=patient,
+                    template_key=APPOINTMENT_REMINDER,
+                    variables=appointment_variables(clinic, doctor, appointment, session, patient),
+                    source_type=SourceType.REMINDER,
+                    source_id=reminder.id,
+                )
             return Send(
                 patient=patient,
                 template_key=FOLLOW_UP_DUE,

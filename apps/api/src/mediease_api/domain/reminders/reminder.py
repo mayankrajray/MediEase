@@ -1,4 +1,5 @@
-"""A follow-up reminder (spec R1-R5; FR-REM-01, 02, 05; M5-P4 decisions 1A, 3A).
+"""A reminder: a follow-up (spec R1-R5; FR-REM-01, 02, 05; M5-P4 decisions 1A, 3A), or from
+M6a-P8 an appointment reminder (FR-APT-08; decisions 1A, 4A) that follows its appointment.
 
 One reminder per prescription chain at most is ``SCHEDULED`` (``source_id`` is the chain's
 version 1, like its patient link). Moving it bumps ``revision``; every send job carries the revision
@@ -24,11 +25,15 @@ from mediease_api.domain.shared.time import require_utc
 
 class ReminderKind(StrEnum):
     FOLLOW_UP = "FOLLOW_UP"
+    # M6a-P8: before a booked visit. `follow_up_date` holds the visit's date.
+    APPOINTMENT = "APPOINTMENT"
 
 
 class ReminderSource(StrEnum):
     PRESCRIPTION = "PRESCRIPTION"
     MANUAL = "MANUAL"
+    # M6a-P8: scheduled by the notification service for an appointment (``appointment_id``).
+    APPOINTMENT = "APPOINTMENT"
 
 
 class ReminderStatus(StrEnum):
@@ -53,11 +58,13 @@ class Reminder:
     status: ReminderStatus
     revision: int
     error_code: str | None
-    created_by: UUID
+    # Null for the system: an appointment reminder for a booking made without a staff member.
+    created_by: UUID | None
     cancelled_by: UUID | None
     cancelled_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    appointment_id: UUID | None = None
 
     @classmethod
     def schedule(
@@ -76,6 +83,7 @@ class Reminder:
     ) -> Reminder:
         now = require_utc(now, "now")
         assert (source is ReminderSource.PRESCRIPTION) == (source_id is not None)
+        assert source is not ReminderSource.APPOINTMENT, "use for_appointment"
         return cls(
             id=id,
             clinic_id=clinic_id,
@@ -96,6 +104,47 @@ class Reminder:
             updated_at=now,
         )
 
+    @classmethod
+    def for_appointment(
+        cls,
+        *,
+        id: UUID,
+        clinic_id: UUID,
+        patient_id: UUID,
+        doctor_id: UUID,
+        appointment_id: UUID,
+        visit_date: date,
+        due_at: datetime,
+        created_by: UUID | None,
+        now: datetime,
+    ) -> Reminder:
+        """M6a-P8 (FR-APT-08): one of an appointment's reminders, due at ``due_at``."""
+        now = require_utc(now, "now")
+        return cls(
+            id=id,
+            clinic_id=clinic_id,
+            patient_id=patient_id,
+            doctor_id=doctor_id,
+            kind=ReminderKind.APPOINTMENT,
+            source=ReminderSource.APPOINTMENT,
+            source_id=None,
+            follow_up_date=visit_date,
+            due_at=require_utc(due_at, "due_at"),
+            status=ReminderStatus.SCHEDULED,
+            revision=1,
+            error_code=None,
+            created_by=created_by,
+            cancelled_by=None,
+            cancelled_at=None,
+            created_at=now,
+            updated_at=now,
+            appointment_id=appointment_id,
+        )
+
+    @property
+    def follows_appointment(self) -> bool:
+        return self.kind is ReminderKind.APPOINTMENT
+
     @property
     def is_scheduled(self) -> bool:
         return self.status is ReminderStatus.SCHEDULED
@@ -111,10 +160,12 @@ class Reminder:
         self._require_scheduled()
         self._reschedule(due_at, now)
 
-    def cancel(self, *, by: UUID | None, now: datetime) -> None:
+    def cancel(self, *, by: UUID | None, now: datetime, code: str | None = None) -> None:
+        """``code``: why the system cancelled an appointment reminder that no longer applies."""
         self._require_scheduled()
         now = require_utc(now, "now")
         self.status = ReminderStatus.CANCELLED
+        self.error_code = code
         self.cancelled_by = by
         self.cancelled_at = now
         self.revision += 1
