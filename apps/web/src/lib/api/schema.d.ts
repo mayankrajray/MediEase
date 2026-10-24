@@ -679,6 +679,57 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/portal/medicine-plan/doses": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * Mark a scheduled dose Taken or Skipped
+         * @description M6b-P3b (spec R45, R46, R51). @patient. A timed line of a current version, a slot its
+         *     frequency marks, a day of its course (else 422 on item_id, slot or on_date), from 00:00 of
+         *     that day to 48 hours after its time (else 409 PRT_DOSE_NOT_MARKABLE). Marking again
+         *     changes it and the time marked. Private to the account; not audited; logs carry IDs and
+         *     a count only. Needs X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly put: operations["markDose"];
+        readonly post?: never;
+        /**
+         * Clear a dose's mark within its window
+         * @description M6b-P3b (R46). @patient. The same rules as marking; afterwards the dose is Not recorded
+         *     (its time has passed) or Upcoming. Clearing an unmarked dose changes nothing.
+         */
+        readonly delete: operations["clearDose"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/medicine-plan/history": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A version's doses by day
+         * @description M6b-P3b (R47, R49). @patient. An issued or superseded version of a linked record: each
+         *     day and slot as Taken, Skipped, Not recorded or Upcoming, with counts per state. Not
+         *     audited.
+         */
+        readonly get: operations["getDoseHistory"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/clinic": {
         readonly parameters: {
             readonly query?: never;
@@ -3390,6 +3441,8 @@ export interface components {
             readonly doctor_name: string;
             /** Format: date */
             readonly starts_on: string;
+            /** @description The clinic's zone, for times marked (M6b-P3b) */
+            readonly timezone: string;
             /** Format: uuid */
             readonly item_id: string;
             readonly medicine_name: string;
@@ -3405,12 +3458,75 @@ export interface components {
             readonly duration: string;
         };
         readonly MedicinePlanEntry: components["schemas"]["MedicineLine"] & {
+            /** @description M6b-P3b - the patient's mark, timed entries only (dose is the doctor's) */
+            readonly mark: components["schemas"]["MedicineDose"] | null;
             /** @description Day N of the course */
             readonly day: number;
             /** @description M for a number of days; else null */
             readonly days_total: number | null;
             /** @description Timed entries only */
             readonly reminder: components["schemas"]["MedicineReminder"] | null;
+        };
+        /**
+         * @description M6b-P3b (R45-R47): what the patient marked; NOT_RECORDED (its time has passed with no
+         *     mark) and UPCOMING are derived, never stored, and never mean "missed"
+         * @enum {string}
+         */
+        readonly DoseStatus: "TAKEN" | "SKIPPED" | "NOT_RECORDED" | "UPCOMING";
+        readonly MedicineDose: {
+            readonly status: components["schemas"]["DoseStatus"];
+            /** Format: date-time */
+            readonly marked_at: string | null;
+            /** @description Within the window - from 00:00 of its day to 48 hours after its time */
+            readonly markable: boolean;
+        };
+        readonly DoseInput: {
+            /** Format: uuid */
+            readonly prescription_id: string;
+            /** Format: uuid */
+            readonly item_id: string;
+            /** Format: date */
+            readonly on_date: string;
+            readonly slot: components["schemas"]["Slot"];
+            /** @enum {string} */
+            readonly state: "TAKEN" | "SKIPPED";
+        };
+        readonly DoseHistory: {
+            /** Format: uuid */
+            readonly prescription_id: string;
+            readonly version: number;
+            readonly clinic_name: string;
+            readonly clinic_phone_e164: string | null;
+            readonly timezone: string;
+            /** Format: date */
+            readonly starts_on: string;
+            /** @description Doses per state over the days shown (no score or percentage) */
+            readonly counts: {
+                readonly [key: string]: number;
+            };
+            /** @description Newest first, from the course start (at most 60 days back) to today or its end */
+            readonly days: readonly {
+                /** Format: date */
+                readonly date: string;
+                readonly doses: readonly {
+                    /** Format: uuid */
+                    readonly item_id: string;
+                    readonly medicine_name: string;
+                    readonly dose: string | null;
+                    readonly slot: components["schemas"]["Slot"];
+                    readonly status: components["schemas"]["DoseStatus"];
+                    /** Format: date-time */
+                    readonly marked_at: string | null;
+                }[];
+            }[];
+            /** @description The chain's issued and superseded versions, newest first (R49) */
+            readonly versions: readonly {
+                /** Format: uuid */
+                readonly prescription_id: string;
+                readonly version: number;
+                /** @enum {string} */
+                readonly status: "ISSUED" | "SUPERSEDED";
+            }[];
         };
         readonly MedicinePlan: {
             /** Format: date */
@@ -5773,6 +5889,110 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": components["schemas"]["MedicineReminder"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
+        };
+    };
+    readonly markDose: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["DoseInput"];
+            };
+        };
+        readonly responses: {
+            /** @description The dose */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["MedicineDose"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalError"];
+            readonly 409: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
+        };
+    };
+    readonly clearDose: {
+        readonly parameters: {
+            readonly query: {
+                readonly prescription_id: string;
+                readonly item_id: string;
+                readonly on_date: string;
+                readonly slot: components["schemas"]["Slot"];
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The dose */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["MedicineDose"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalError"];
+            readonly 409: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
+        };
+    };
+    readonly getDoseHistory: {
+        readonly parameters: {
+            readonly query: {
+                readonly prescription_id: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The history */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["DoseHistory"];
                 };
             };
             readonly 401: components["responses"]["PortalError"];

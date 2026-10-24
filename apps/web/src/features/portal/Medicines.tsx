@@ -4,11 +4,11 @@ import { useCallback, useId, useState } from "react";
 
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import type { components } from "@/lib/api/schema";
-import { portalGet, portalPut } from "@/lib/auth/portal-session";
+import { portalDelete, portalGet, portalPut } from "@/lib/auth/portal-session";
 import { addDays } from "@/lib/format/time";
-import { type PortalStrings, portalCalendarDate } from "@/lib/i18n/portal";
+import { type PortalStrings, portalCalendarDate, portalTime } from "@/lib/i18n/portal";
 
-import { usePortalLoad } from "./data";
+import { portalErrorText, usePortalLoad } from "./data";
 import { PortalCard, ScreenLoading, usePortal } from "./PortalShell";
 
 type S = components["schemas"];
@@ -16,6 +16,9 @@ type Plan = S["MedicinePlan"];
 type Entry = S["MedicinePlanEntry"];
 type Course = S["MedicineCourse"];
 type Reminder = S["MedicineReminder"];
+type Mark = S["MedicineDose"];
+type History = S["DoseHistory"];
+type Slot = S["Slot"];
 
 /** How far the day can move from today (the API refuses more, spec R35). */
 const WINDOW_DAYS = 30;
@@ -95,7 +98,7 @@ function LineText({ e }: Readonly<{ e: Pick<Entry, "medicine_name" | "form_stren
   );
 }
 
-function EntryItem({ e, s }: Readonly<{ e: Entry; s: PortalStrings }>) {
+function EntryItem({ e, s, slot }: Readonly<{ e: Entry; s: PortalStrings; slot?: { slot: Slot; label: string; date: string } }>) {
   const progress = e.days_total !== null ? s.medicines.dayOf(e.day, e.days_total) : e.duration;
   return (
     <li className="space-y-0.5 border-t border-slate-200 py-2 first:border-t-0">
@@ -109,6 +112,7 @@ function EntryItem({ e, s }: Readonly<{ e: Entry; s: PortalStrings }>) {
         {progress} · {s.medicines.by(e.doctor_name, e.clinic_name)}
       </p>
       {e.reminder?.enabled === true && <p className="text-sm text-slate-700">{s.medicines.reminderOn(e.reminder.remind_at ?? "")}</p>}
+      {slot !== undefined && e.mark !== null && <DoseControl e={e} mark={e.mark} slot={slot} />}
     </li>
   );
 }
@@ -156,7 +160,7 @@ function TodayView() {
             <PortalCard key={slot.slot} id={`slot-${slot.slot}`} title={`${slot.label} · ${slot.time}`}>
               <ul>
                 {slot.entries.map((e) => (
-                  <EntryItem key={`${e.prescription_id}-${e.item_id}`} e={e} s={s} />
+                  <EntryItem key={`${e.prescription_id}-${e.item_id}`} e={e} s={s} slot={{ slot: slot.slot, label: slot.label, date: plan.date }} />
                 ))}
               </ul>
             </PortalCard>
@@ -172,7 +176,99 @@ function TodayView() {
           )}
         </>
       )}
+      {plan.has_prescriptions && <p className="text-sm text-slate-700">{s.medicines.doses.private}</p>}
       <Safety phones={phonesOf(all)} />
+    </div>
+  );
+}
+
+/** The state in words, with the time marked on the clinic's clock (R45, R47). */
+export function markText(mark: { status: string; marked_at: string | null }, zone: string, s: PortalStrings): string {
+  const d = s.medicines.doses;
+  const at = mark.marked_at === null ? "" : portalTime(mark.marked_at, zone, s);
+  switch (mark.status) {
+    case "TAKEN":
+      return at === "" ? d.taken : d.takenAt(at);
+    case "SKIPPED":
+      return at === "" ? d.skipped : d.skippedAt(at);
+    case "NOT_RECORDED":
+      return d.notRecorded;
+    default:
+      return d.upcoming;
+  }
+}
+
+/**
+ * R45-R48: Taken / Skipped within the window, *Change* once marked; for Skipped and Not recorded
+ * only "contact your clinic" with the call. Nothing else is ever said about a dose.
+ */
+function DoseControl({ e, mark: initial, slot }: Readonly<{ e: Entry; mark: Mark; slot: { slot: Slot; label: string; date: string } }>) {
+  const { s, leave } = usePortal();
+  const d = s.medicines.doses;
+  const [mark, setMark] = useState<Mark>(initial);
+  const [changing, setChanging] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const choice = { prescription_id: e.prescription_id, item_id: e.item_id, on_date: slot.date, slot: slot.slot };
+
+  async function send(state: "TAKEN" | "SKIPPED" | null) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { data } =
+        state === null
+          ? await portalDelete("/api/v1/portal/medicine-plan/doses", { query: choice })
+          : await portalPut("/api/v1/portal/medicine-plan/doses", { ...choice, state });
+      setMark(data);
+      setChanging(false);
+    } catch (failure) {
+      if (!leave(failure)) setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const marked = mark.status === "TAKEN" || mark.status === "SKIPPED";
+  const showButtons = mark.markable && (!marked || changing);
+  const button = "min-h-11 rounded-lg border px-4 font-semibold disabled:opacity-60";
+  const errorText = portalErrorText(error, s);
+  return (
+    <div className="mt-1 space-y-1">
+      <p className="font-medium" aria-live="polite">
+        {markText(mark, e.timezone, s)}
+      </p>
+      {showButtons && (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={busy} aria-label={d.markAs(d.taken, e.medicine_name, slot.label)} onClick={() => void send("TAKEN")} className={`${button} border-brand-700 bg-brand-700 text-white`}>
+            {d.taken}
+          </button>
+          <button type="button" disabled={busy} aria-label={d.markAs(d.skipped, e.medicine_name, slot.label)} onClick={() => void send("SKIPPED")} className={`${button} border-slate-500 bg-white text-slate-900`}>
+            {d.skipped}
+          </button>
+          {marked && (
+            <button type="button" disabled={busy} onClick={() => void send(null)} className={`${button} border-slate-400 bg-white text-slate-800`}>
+              {d.clear}
+            </button>
+          )}
+        </div>
+      )}
+      {marked && mark.markable && !changing && (
+        <button type="button" onClick={() => setChanging(true)} className="min-h-11 font-medium text-brand-800 underline">
+          {d.change}
+        </button>
+      )}
+      {(mark.status === "SKIPPED" || mark.status === "NOT_RECORDED") && (
+        <p className="text-sm">
+          {d.unsure}{" "}
+          {e.clinic_phone_e164 !== null && (
+            <a href={`tel:${e.clinic_phone_e164}`} className="font-semibold text-brand-800 underline">
+              {s.medicines.contact}
+            </a>
+          )}
+        </p>
+      )}
+      {error !== null && <ErrorNotice error={error} {...(errorText === undefined ? {} : { message: errorText })} />}
     </div>
   );
 }
@@ -206,6 +302,7 @@ function CoursesView() {
               {s.medicines.updated}
             </p>
           )}
+          <HistoryToggle prescriptionId={c.prescription_id} />
           <ul>
             {c.lines.map((line) => (
               <li key={line.item_id} className="space-y-1 border-t border-slate-200 py-2 first:border-t-0">
@@ -324,5 +421,80 @@ function ReminderChoice({
       )}
       {error !== null && <ErrorNotice error={error} />}
     </div>
+  );
+}
+
+/** R47, R49: a version's doses by day; counts per state, never a score. */
+function HistoryToggle({ prescriptionId }: Readonly<{ prescriptionId: string }>) {
+  const { s } = usePortal();
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="min-h-11 font-medium text-brand-800 underline">
+        {open ? s.medicines.doses.hideHistory : s.medicines.doses.history}
+      </button>
+      {open && <HistoryPanel prescriptionId={prescriptionId} />}
+    </div>
+  );
+}
+
+function HistoryPanel({ prescriptionId: first }: Readonly<{ prescriptionId: string }>) {
+  const { s } = usePortal();
+  const d = s.medicines.doses;
+  const [prescriptionId, setPrescriptionId] = useState(first);
+  const load = useCallback(
+    async (): Promise<History> => (await portalGet("/api/v1/portal/medicine-plan/history", { query: { prescription_id: prescriptionId } })).data,
+    [prescriptionId],
+  );
+  const loaded = usePortalLoad(load);
+  if (loaded.status === "loading") return <ScreenLoading label={s.loading} />;
+  if (loaded.status === "failed") return <ErrorNotice error={loaded.error} onRetry={loaded.retry} />;
+  const h = loaded.data;
+  const words: Readonly<Record<string, string>> = { MORNING: s.account.slots.morning, AFTERNOON: s.account.slots.afternoon, EVENING: s.account.slots.evening, NIGHT: s.account.slots.night };
+  return (
+    <section aria-label={d.historyHeading(h.version)} className="mt-2 space-y-2 rounded-lg border border-slate-200 p-2">
+      <h3 className="font-semibold">{d.historyHeading(h.version)}</h3>
+      {h.versions.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {h.versions.map((v) => (
+            <button
+              key={v.prescription_id}
+              type="button"
+              aria-pressed={v.prescription_id === h.prescription_id}
+              onClick={() => setPrescriptionId(v.prescription_id)}
+              className="min-h-11 rounded-lg border border-slate-400 px-3 aria-pressed:bg-slate-800 aria-pressed:text-white"
+            >
+              {d.historyHeading(v.version)}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="text-sm">{d.counts(h.counts["TAKEN"] ?? 0, h.counts["SKIPPED"] ?? 0, h.counts["NOT_RECORDED"] ?? 0)}</p>
+      <ul className="space-y-2">
+        {h.days.map((day) => (
+          <li key={day.date}>
+            <p className="text-sm font-semibold">{portalCalendarDate(day.date, s)}</p>
+            <ul className="pl-3 text-sm">
+              {day.doses.map((x) => (
+                <li key={`${x.item_id}-${x.slot}`}>
+                  {words[x.slot]} · {x.medicine_name}
+                  {x.dose !== null && ` (${x.dose})`}: {markText(x, h.timezone, s)}
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+      {h.counts["NOT_RECORDED"] !== undefined && h.counts["NOT_RECORDED"] + (h.counts["SKIPPED"] ?? 0) > 0 && (
+        <p className="text-sm">
+          {d.unsure}{" "}
+          {h.clinic_phone_e164 !== null && (
+            <a href={`tel:${h.clinic_phone_e164}`} className="font-semibold text-brand-800 underline">
+              {s.medicines.contact}
+            </a>
+          )}
+        </p>
+      )}
+    </section>
   );
 }

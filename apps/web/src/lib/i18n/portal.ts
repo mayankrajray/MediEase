@@ -118,6 +118,25 @@ export interface PortalStrings {
     readonly reminderOn: (time: string) => string;
     readonly reminderSaved: string;
     readonly saveTime: string;
+    /** M6b-P3b (R45-R48): the patient's own marks. */
+    readonly doses: {
+      readonly taken: string;
+      readonly skipped: string;
+      readonly notRecorded: string;
+      readonly upcoming: string;
+      readonly takenAt: (time: string) => string;
+      readonly skippedAt: (time: string) => string;
+      readonly markAs: (state: string, medicine: string, slot: string) => string;
+      readonly change: string;
+      readonly clear: string;
+      readonly unsure: string;
+      readonly history: string;
+      readonly hideHistory: string;
+      readonly historyHeading: (version: number) => string;
+      readonly counts: (taken: number, skipped: number, notRecorded: number) => string;
+      readonly saved: string;
+      readonly private: string;
+    };
     readonly remindersLater: string;
     readonly updated: string;
     readonly noCourses: string;
@@ -292,6 +311,24 @@ const EN: PortalStrings = {
     reminderOn: (time) => `Reminder on at ${time}`,
     reminderSaved: "Your reminder choice is saved.",
     saveTime: "Save time",
+    doses: {
+      taken: "Taken",
+      skipped: "Skipped",
+      notRecorded: "Not recorded",
+      upcoming: "Upcoming",
+      takenAt: (time) => `Taken at ${time}`,
+      skippedAt: (time) => `Skipped at ${time}`,
+      markAs: (state, medicine, slot) => `${state}: ${medicine}, ${slot}`,
+      change: "Change",
+      clear: "Clear the mark",
+      unsure: "If you are unsure what to do, contact your clinic.",
+      history: "History",
+      hideHistory: "Hide history",
+      historyHeading: (version) => `History · version ${version}`,
+      counts: (taken, skipped, notRecorded) => `Taken ${taken} · Skipped ${skipped} · Not recorded ${notRecorded}`,
+      saved: "Saved.",
+      private: "Only you can see what you mark here. Your clinic does not.",
+    },
     remindersLater: "Reminders will be sent in a later update of the app. Your choices are saved now.",
     updated: "This prescription was updated — set your reminders again.",
     noCourses: "No courses yet.",
@@ -357,6 +394,7 @@ const EN: PortalStrings = {
     PRT_INVITE_INVALID: "This invitation is no longer valid. Ask the clinic for a new one.",
     PRT_ALREADY_LINKED: "These records can't be linked to this account. Contact the clinic.",
     PRT_UNVERIFIED_ACCOUNT: "Confirm your email address first, then try again.",
+    PRT_DOSE_NOT_MARKABLE: "This dose can only be marked from the start of its day until 48 hours after its time.",
     LINK_CHALLENGE_FAILED: "Those digits don't match.",
     LINK_LOCKED: "Too many attempts. Please contact the clinic.",
     LINK_INVALID: "This link isn't valid.",
@@ -481,6 +519,24 @@ const HI: PortalStrings = {
     reminderOn: (time) => `${time} पर याद दिलाना चालू`,
     reminderSaved: "आपकी पसंद सहेज ली गई है।",
     saveTime: "समय सहेजें",
+    doses: {
+      taken: "ले ली",
+      skipped: "नहीं ली",
+      notRecorded: "दर्ज नहीं",
+      upcoming: "आने वाली",
+      takenAt: (time) => `${time} पर ले ली`,
+      skippedAt: (time) => `${time} पर नहीं ली`,
+      markAs: (state, medicine, slot) => `${state}: ${medicine}, ${slot}`,
+      change: "बदलें",
+      clear: "निशान हटाएँ",
+      unsure: "अगर आपको समझ न आए कि क्या करें, तो अपने क्लिनिक से संपर्क करें।",
+      history: "पिछला रिकॉर्ड",
+      hideHistory: "रिकॉर्ड छिपाएँ",
+      historyHeading: (version) => `पिछला रिकॉर्ड · संस्करण ${version}`,
+      counts: (taken, skipped, notRecorded) => `ले ली ${taken} · नहीं ली ${skipped} · दर्ज नहीं ${notRecorded}`,
+      saved: "सहेज लिया।",
+      private: "आप यहाँ जो दर्ज करते हैं, वह सिर्फ़ आप देख सकते हैं। आपका क्लिनिक नहीं।",
+    },
     remindersLater: "रिमाइंडर ऐप के अगले अपडेट में भेजे जाएँगे। आपकी पसंद अभी सहेज ली गई है।",
     updated: "यह पर्चा बदला गया है — अपने रिमाइंडर फिर से चुनें।",
     noCourses: "अभी कोई कोर्स नहीं।",
@@ -546,6 +602,7 @@ const HI: PortalStrings = {
     PRT_INVITE_INVALID: "यह आमंत्रण अब मान्य नहीं है। क्लिनिक से नया माँगें।",
     PRT_ALREADY_LINKED: "ये रिकॉर्ड इस खाते से नहीं जुड़ सकते। क्लिनिक से संपर्क करें।",
     PRT_UNVERIFIED_ACCOUNT: "पहले अपने ईमेल की पुष्टि करें, फिर कोशिश करें।",
+    PRT_DOSE_NOT_MARKABLE: "यह खुराक उसके दिन की शुरुआत से उसके समय के 48 घंटे बाद तक ही दर्ज की जा सकती है।",
     LINK_CHALLENGE_FAILED: "ये अंक मेल नहीं खाते।",
     LINK_LOCKED: "बहुत ज़्यादा कोशिशें हुईं। क्लिनिक से संपर्क करें।",
     LINK_INVALID: "यह लिंक सही नहीं है।",
