@@ -15,18 +15,6 @@ from mediease_api.domain.shared.errors import InvalidValue
 from mediease_api.domain.shared.text import optional_text
 
 
-class Frequency(StrEnum):
-    MORNING = "1-0-0"
-    AFTERNOON = "0-1-0"
-    NIGHT = "0-0-1"
-    MORNING_NIGHT = "1-0-1"
-    THRICE = "1-1-1"
-    FOUR_TIMES = "1-1-1-1"
-    SOS = "SOS"
-    ONCE = "ONCE"
-    CUSTOM = "CUSTOM"
-
-
 class Timing(StrEnum):
     BEFORE_FOOD = "BEFORE_FOOD"
     AFTER_FOOD = "AFTER_FOOD"
@@ -42,6 +30,10 @@ class PreparationCode(StrEnum):
     DISSOLVE = "DISSOLVE"
     CHEW = "CHEW"
     DO_NOT_CRUSH = "DO_NOT_CRUSH"
+    # M6b-P3 (prescriptions R25): the doctor picks these; the system never adds one.
+    WITH_WATER = "WITH_WATER"
+    WITH_WARM_WATER = "WITH_WARM_WATER"
+    WITH_MILK = "WITH_MILK"
     CUSTOM = "CUSTOM"  # + text
 
 

@@ -135,6 +135,11 @@ from mediease_api.application.portal.linking import (
     UnlinkPatient,
     UnlinkPortal,
 )
+from mediease_api.application.portal.medicines import (
+    GetMedicinePlan,
+    ListMedicineCourses,
+    SetMedicineReminder,
+)
 from mediease_api.application.portal.records import (
     GetPortalPrescription,
     ListPortalAppointments,
@@ -726,6 +731,16 @@ class _UseCases:
 
     def list_portal_reminders(self) -> ListPortalReminders:
         return ListPortalReminders(uow=self._uow())
+
+    # M6b-P3: the medicine plan and the person's reminder choices.
+    def get_medicine_plan(self) -> GetMedicinePlan:
+        return GetMedicinePlan(uow=self._uow(), clock=self.clock)
+
+    def list_medicine_courses(self) -> ListMedicineCourses:
+        return ListMedicineCourses(uow=self._uow(), clock=self.clock)
+
+    def set_medicine_reminder(self) -> SetMedicineReminder:
+        return SetMedicineReminder(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def list_printable(self) -> ListPrintable:
         return ListPrintable(uow=self._uow())

@@ -21,11 +21,15 @@ from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.prescriptions.document import (
+    SCHEDULE_LAYOUT,
     RxAdvice,
     RxField,
-    duration_text,
+    RxScheduleRow,
+    duration_field,
     format_date,
     preparation_text,
+    schedule_columns,
+    schedule_rows,
     storage_text,
     when_text,
 )
@@ -67,14 +71,19 @@ class PatientPage:
     advice: tuple[RxAdvice, ...]
     advice_notes: RxField | None
     follow_up: RxField | None
+    # M6b-P3 (prescriptions R25): the Medicine schedule, from the one engine.
+    schedule_heading: str = ""
+    schedule_columns: tuple[str, ...] = ()
+    schedule: tuple[RxScheduleRow, ...] = ()
+    schedule_as_written: str = ""
 
 
-def _card(item: PrescriptionItem, lang: Language) -> PatientMedicine:
+def _card(item: PrescriptionItem, lang: Language, layout: int) -> PatientMedicine:
     values = [
         ("page.how_much", item.dose),
         ("page.when", when_text(item, lang)),
         ("page.how_to_give", preparation_text(item, lang)),
-        ("page.how_long", duration_text(item.duration_days, lang) if item.duration_days else None),
+        ("page.how_long", duration_field(item, lang, layout)),
         ("item.quantity", item.quantity),
         ("item.storage", storage_text(item, lang)),
         ("item.warnings", item.warnings),
@@ -158,7 +167,7 @@ def _page(
             phrase("page.updated", lang, date=format_date(issued_on, lang)) if older else None
         ),
         medicines_heading=phrase("medicines", lang),
-        medicines=tuple(_card(item, lang) for item in rx.items),
+        medicines=tuple(_card(item, lang, rx.layout_version) for item in rx.items),
         advice_heading=phrase("advice", lang),
         advice=tuple(
             RxAdvice(phrase(key, lang), entries)
@@ -177,4 +186,8 @@ def _page(
             if rx.follow_up_date
             else None
         ),
+        schedule_heading=phrase("schedule", lang),
+        schedule_columns=schedule_columns(lang),
+        schedule=schedule_rows(rx, lang) if rx.layout_version >= SCHEDULE_LAYOUT else (),
+        schedule_as_written=phrase("schedule.as_written", lang),
     )

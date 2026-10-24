@@ -28,7 +28,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 from mediease_api.adapters.db.models.base import Base, TenantOwned, Timestamps, enum_check
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.prescriptions.prescription import LinkDelivery, PrescriptionStatus
-from mediease_api.domain.prescriptions.vocabulary import Frequency, Timing
+from mediease_api.domain.prescriptions.schedule import DurationKind
+from mediease_api.domain.prescriptions.vocabulary import Timing
+
+# M6b-P3 (migration 0027, prescriptions R21): a 0/1 pattern of 3 or 4 slots with at least one 1,
+# or SOS, ONCE, CUSTOM. The rule itself lives in domain/prescriptions/schedule.py.
+FREQUENCY_RULE = (
+    "frequency IN ('SOS', 'ONCE', 'CUSTOM')"
+    " OR (frequency ~ '^[01](-[01]){2,3}$' AND strpos(frequency, '1') > 0)"
+)
 
 
 def _length(column: str, limit: int, *, required: bool = False) -> CheckConstraint:
@@ -100,6 +108,8 @@ class PrescriptionRow(TenantOwned, Timestamps, Base):
     template_id: Mapped[UUID | None] = mapped_column()
     # M4-P5 (migration 0013): the printed layout fixed at issue.
     layout_version: Mapped[int] = mapped_column(SmallInteger, server_default=text("1"))
+    # M6b-P3 (migration 0027): the doctor's chosen first day; null = the issue day.
+    starts_on: Mapped[date | None] = mapped_column(Date)
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
 
 
@@ -115,7 +125,13 @@ class PrescriptionItemRow(TenantOwned, Base):
             "clinic_id",
             text("lower(medicine_name) text_pattern_ops"),
         ),
-        enum_check("frequency", Frequency),
+        CheckConstraint(FREQUENCY_RULE, name="frequency"),
+        enum_check("duration_kind", DurationKind),
+        # Rows from before M6b-P3 keep a null kind with their days (issued rows are immutable).
+        CheckConstraint(
+            "duration_kind IS NULL OR (duration_kind = 'DAYS') = (duration_days IS NOT NULL)",
+            name="duration_days_with_kind",
+        ),
         enum_check("timing", Timing),
         CheckConstraint("position >= 1", name="position_positive"),
         CheckConstraint(
@@ -145,6 +161,7 @@ class PrescriptionItemRow(TenantOwned, Base):
     frequency_text: Mapped[str | None] = mapped_column(Text)
     timing: Mapped[str | None] = mapped_column(Text)
     duration_days: Mapped[int | None] = mapped_column(SmallInteger)
+    duration_kind: Mapped[str | None] = mapped_column(Text)
     quantity: Mapped[str | None] = mapped_column(Text)
     preparation: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, server_default=text("'[]'::jsonb")

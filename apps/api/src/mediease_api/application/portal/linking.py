@@ -291,6 +291,8 @@ class UnlinkPatient(_Staff):
                 raise NotFound("portal link")
             link.revoke(RevokedBy.STAFF, now)
             tenant.portal_links.update(link)
+            # M6b-P3 (R39): an ended link keeps no medicine-reminder choices.
+            tenant.reminder_prefs.delete_for_link(link.account_id, patient_id)
             record_event(
                 uow,
                 event_id=self._ids.new_id(),
@@ -432,6 +434,8 @@ class UnlinkPortal:
             if link is None or not link.revoke(RevokedBy.PATIENT, now):
                 raise NotFound("portal link")  # revoked by staff a moment ago
             entry.tenant.portal_links.update(link)
+            # M6b-P3 (R39): an ended link keeps no medicine-reminder choices.
+            entry.tenant.reminder_prefs.delete_for_link(link.account_id, link.patient_id)
             _patient_event(
                 uow,
                 self._ids,

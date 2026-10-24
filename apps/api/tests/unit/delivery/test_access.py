@@ -47,6 +47,10 @@ EXPECTED_POLICIES = {
     "portal_records.get_prescription": (Access.PATIENT, None),
     "portal_records.prescription_pdf": (Access.PATIENT, None),
     "portal_records.list_reminders": (Access.PATIENT, None),
+    # M6b-P3: the medicine plan and the person's reminder choices.
+    "portal_records.medicine_plan": (Access.PATIENT, None),
+    "portal_records.medicine_courses": (Access.PATIENT, None),
+    "portal_records.set_medicine_reminder": (Access.PATIENT, None),
     "patient_portal.invite": (Access.CLINIC, Permission.PATIENTS_MANAGE),
     "patient_portal.status": (Access.CLINIC, Permission.PATIENTS_MANAGE),
     "patient_portal.unlink": (Access.CLINIC, Permission.PATIENTS_MANAGE),
@@ -144,6 +148,8 @@ EXPECTED_POLICIES = {
     "rx_library.replace_template": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "rx_library.delete_template": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "rx_library.suggest_medicines": (Access.CLINIC, Permission.CLINICAL_WRITE),
+    # M6b-P3: the engine's slot sets and codes, for the editor; no clinic data.
+    "rx_library.rx_vocabulary": (Access.CLINIC, Permission.CLINICAL_VIEW),
     "ops.replace_schedule": (Access.OPS, None),
     "ops.create_clinic": (Access.OPS, None),
     "ops.list_clinics": (Access.OPS, None),

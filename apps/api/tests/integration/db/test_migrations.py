@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0026"
+HEAD = "0027"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -44,6 +44,7 @@ M6A_P3_TABLES = sorted(
 M6A_P4_TABLES = sorted([*M6A_P3_TABLES, "email_tokens"])
 M6A_P7_TABLES = sorted([*M6A_P4_TABLES, "notification_preferences", "notifications"])
 M6B_P1_TABLES = sorted([*M6A_P7_TABLES, "patient_account_links", "patient_portal_invites"])
+M6B_P3_TABLES = sorted([*M6B_P1_TABLES, "medicine_reminder_prefs"])
 
 
 @pytest.fixture
@@ -651,7 +652,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6B_P1_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6B_P3_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -771,5 +772,41 @@ def test_0026_adds_the_portal_language_to_patient_accounts(
         command.downgrade(alembic_config, "0025")
         with engine.connect() as conn:
             assert conn.execute(text(columns)).all() == []
+    finally:
+        engine.dispose()
+
+
+def test_0027_adds_the_medicine_plan(alembic_config: Config, scratch_database_url: str) -> None:
+    """M6b-P3: any 0/1 pattern, duration kinds, start day, slot times and reminder choices.
+
+    A row issued before 0027 keeps its null kind and start (issued rows are immutable), and every
+    frequency the old list allowed is still allowed.
+    """
+    command.upgrade(alembic_config, "0027")
+    assert _tables(scratch_database_url) == M6B_P3_TABLES
+    engine = create_engine(scratch_database_url)
+    column = (
+        "SELECT count(*) FROM information_schema.columns WHERE table_name = :t AND column_name = :c"
+    )
+    try:
+        with engine.connect() as conn:
+            rule = _check(conn, "ck_prescription_items_frequency")
+            assert "SOS" in rule and "[01]" in rule
+            assert "UNTIL_REVIEW" in _check(conn, "ck_prescription_items_duration_kind")
+            assert "05:00" in _check(conn, "ck_patient_accounts_slot_times_in_order")
+            for table, name in (
+                ("prescription_items", "duration_kind"),
+                ("prescriptions", "starts_on"),
+                ("patient_accounts", "night_time"),
+            ):
+                assert conn.execute(text(column), {"t": table, "c": name}).scalar_one() == 1
+        command.downgrade(alembic_config, "0026")
+        assert _tables(scratch_database_url) == M6B_P1_TABLES
+        with engine.connect() as conn:
+            assert "'1-1-1-1'" in _check(conn, "ck_prescription_items_frequency")
+            assert (
+                conn.execute(text(column), {"t": "prescriptions", "c": "starts_on"}).scalar_one()
+                == 0
+            )
     finally:
         engine.dispose()

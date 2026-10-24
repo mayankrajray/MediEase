@@ -31,8 +31,8 @@ from mediease_api.domain.prescriptions.errors import (
     NotIssued,
     Stale,
 )
+from mediease_api.domain.prescriptions.schedule import DurationKind, Frequency
 from mediease_api.domain.prescriptions.vocabulary import (
-    Frequency,
     Preparation,
     PreparationCode,
     Storage,
@@ -51,6 +51,8 @@ MAX_ADVICE_ENTRIES = 10
 ADVICE_ENTRY_MAX = 300
 ADVICE_NOTES_MAX = 2000
 FOLLOW_UP_MAX_DAYS = 365
+# M6b-P3 (prescriptions R24): a chosen start lies within this many days of the issue day.
+START_WINDOW_DAYS = 30
 DURATION_MAX_DAYS = 365
 NAME_MAX = 200
 SHORT_MAX = 100  # form, strength, dose, quantity, custom frequency
@@ -58,7 +60,8 @@ WARNINGS_MAX = 500
 ITEM_NOTES_MAX = 1000
 # The printed layout new issues get (M4-P5). Raise it with a new template in adapters/pdf, keeping
 # the old one, so a prescription issued before a layout change still prints as it was issued.
-CURRENT_LAYOUT = 1
+# Layout 2 (M6b-P3, prescriptions R25) adds the Medicine schedule section.
+CURRENT_LAYOUT = 2
 
 
 class PrescriptionStatus(StrEnum):
@@ -96,6 +99,9 @@ class PrescriptionItem:
     storage: tuple[Storage, ...] = ()
     warnings: str | None = None
     notes: str | None = None
+    # M6b-P3 (prescriptions R23): DAYS (with duration_days), UNTIL_REVIEW, ONGOING; None = not
+    # stated. Rows from before M6b-P3 with a number of days read as DAYS.
+    duration_kind: DurationKind | None = None
     # M4-P3: the doctor's favourite this line came from (counted at issue, decision 3A).
     favourite_id: UUID | None = None
 
@@ -113,6 +119,7 @@ class PrescriptionItem:
         frequency_text: str | None = None,
         timing: Timing | None = None,
         duration_days: int | None = None,
+        duration_kind: DurationKind | None = None,
         quantity: str | None = None,
         preparation: Sequence[Preparation] = (),
         storage: Sequence[Storage] = (),
@@ -123,8 +130,12 @@ class PrescriptionItem:
     ) -> PrescriptionItem:
         at = at or f"items.{position - 1}"
         custom = optional_text(frequency_text, f"{at}.frequency_text", max_length=SHORT_MAX)
-        if (frequency is Frequency.CUSTOM) != (custom is not None):
+        if (frequency is not None and frequency.is_custom) != (custom is not None):
             raise InvalidValue(f"{at}.frequency_text", "is required for CUSTOM and only then")
+        if duration_kind is None and duration_days is not None:
+            duration_kind = DurationKind.DAYS  # callers from before M6b-P3 send days only
+        if (duration_kind is DurationKind.DAYS) != (duration_days is not None):
+            raise InvalidValue(f"{at}.duration_days", "is required for DAYS and only then")
         if duration_days is not None and not 1 <= duration_days <= DURATION_MAX_DAYS:
             raise InvalidValue(f"{at}.duration_days", f"must be 1-{DURATION_MAX_DAYS}")
         if len(preparation) > MAX_PREPARATIONS:
@@ -146,6 +157,7 @@ class PrescriptionItem:
             frequency_text=custom,
             timing=timing,
             duration_days=duration_days,
+            duration_kind=duration_kind,
             quantity=optional_text(quantity, f"{at}.quantity", max_length=SHORT_MAX),
             preparation=tuple(preparation),
             storage=tuple(storage),
@@ -303,6 +315,9 @@ class Prescription:
     template_id: UUID | None = None
     # M4-P5: the printed layout fixed at issue (`CURRENT_LAYOUT` then); drafts carry the current.
     layout_version: int = CURRENT_LAYOUT
+    # M6b-P3 (prescriptions R24): the doctor's chosen first day; None = the issue day. A
+    # revision starts empty (the doctor decides whether to continue the earlier course).
+    starts_on: date | None = None
 
     # --- Creating -----------------------------------------------------------------------------
 
@@ -401,6 +416,7 @@ class Prescription:
         today: date,
         now: datetime,
         template_id: UUID | None = None,
+        starts_on: date | None = None,
     ) -> None:
         """Decision 3A: the whole draft at once, from the revision it was loaded at."""
         now = require_utc(now, "now")
@@ -411,7 +427,9 @@ class Prescription:
         if [i.position for i in items] != list(range(1, len(items) + 1)):
             raise InvalidValue("items", "positions must run 1, 2, 3 …")
         _check_follow_up(follow_up_date, today)
+        _check_start(starts_on, today)
         self.items = tuple(items)
+        self.starts_on = starts_on
         self.advice = advice
         self.follow_up_date = follow_up_date
         self.template_id = template_id
@@ -440,6 +458,7 @@ class Prescription:
         assert doctor.id == self.doctor_id, "the visit's own doctor"
         snapshot = DoctorSnapshot.of(doctor)
         _check_follow_up(self.follow_up_date, today)
+        _check_start(self.starts_on, today)
         self.status = PrescriptionStatus.ISSUED
         self.issued_at = now
         self.layout_version = CURRENT_LAYOUT
@@ -489,6 +508,12 @@ class Prescription:
         self.updated_at = now
 
 
+def _check_start(starts_on: date | None, today: date) -> None:
+    """R24: within 30 days either side of the (expected) issue day."""
+    if starts_on is not None and abs((starts_on - today).days) > START_WINDOW_DAYS:
+        raise InvalidValue("starts_on", f"must be within {START_WINDOW_DAYS} days of today")
+
+
 def _check_follow_up(follow_up: date | None, today: date) -> None:
     if follow_up is None:
         return
@@ -509,6 +534,7 @@ def item_json(item: PrescriptionItem) -> dict[str, object]:
         "frequency_text": item.frequency_text,
         "timing": item.timing.value if item.timing else None,
         "duration_days": item.duration_days,
+        "duration_kind": item.duration_kind.value if item.duration_kind else None,
         "quantity": item.quantity,
         "preparation": [p.as_json() for p in item.preparation],
         "storage": [s.as_json() for s in item.storage],
@@ -530,6 +556,7 @@ def item_from_json(data: dict[str, Any], *, id: UUID, position: int) -> Prescrip
         frequency_text=data.get("frequency_text"),
         timing=Timing(data["timing"]) if data.get("timing") else None,
         duration_days=data.get("duration_days"),
+        duration_kind=_duration_kind(data),
         quantity=data.get("quantity"),
         preparation=tuple(
             Preparation(PreparationCode(p["code"]), p.get("text"))
@@ -541,6 +568,12 @@ def item_from_json(data: dict[str, Any], *, id: UUID, position: int) -> Prescrip
         warnings=data.get("warnings"),
         notes=data.get("notes"),
     )
+
+
+def _duration_kind(data: dict[str, Any]) -> DurationKind | None:
+    if data.get("duration_kind"):
+        return DurationKind(data["duration_kind"])
+    return DurationKind.DAYS if data.get("duration_days") else None  # bodies from before M6b-P3
 
 
 def latest_issued(chain: Sequence[Prescription]) -> Prescription | None:

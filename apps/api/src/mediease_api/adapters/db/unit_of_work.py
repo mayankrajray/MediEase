@@ -41,6 +41,7 @@ from mediease_api.adapters.db.portal_links import (
     SqlAlchemyPortalInviteRepository,
     SqlAlchemyPortalLinkRepository,
     SqlAlchemyPortalLookup,
+    SqlAlchemyReminderPrefRepository,
 )
 from mediease_api.adapters.db.reminders import SqlAlchemyNoShowSweep, SqlAlchemyReminderRepository
 from mediease_api.adapters.db.repositories import (
@@ -100,6 +101,7 @@ class SqlAlchemyTenantRepositories:
         self._patient_links = SqlAlchemyPatientLinkRepository(session, clinic_id)
         self._portal_links = SqlAlchemyPortalLinkRepository(session, clinic_id)
         self._portal_invites = SqlAlchemyPortalInviteRepository(session, clinic_id)
+        self._reminder_prefs = SqlAlchemyReminderPrefRepository(session, clinic_id)
         self._messages = SqlAlchemyMessageRepository(session, clinic_id)
         self._reminders = SqlAlchemyReminderRepository(session, clinic_id)
         self._notifications = SqlAlchemyNotificationRepository(session, clinic_id)
@@ -178,6 +180,10 @@ class SqlAlchemyTenantRepositories:
     @property
     def portal_invites(self) -> SqlAlchemyPortalInviteRepository:
         return self._portal_invites
+
+    @property
+    def reminder_prefs(self) -> SqlAlchemyReminderPrefRepository:
+        return self._reminder_prefs
 
     @property
     def messages(self) -> SqlAlchemyMessageRepository:

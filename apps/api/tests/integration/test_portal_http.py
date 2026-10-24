@@ -72,6 +72,13 @@ def test_fr_prt_01_sign_up_creates_an_account_and_sets_only_portal_cookies(
         "sign_in_method": "PASSWORD",
         "email_verified": False,
         "language": "en",
+        # M6b-P3 (R34): the medicine plan's default times of day.
+        "slot_times": {
+            "morning": "08:00",
+            "afternoon": "14:00",
+            "evening": "18:00",
+            "night": "21:00",
+        },
     }
     assert set(body["session"]) == {"access_expires_at", "refresh_expires_at"}
     cookies = _cookies(resp)

@@ -23,6 +23,7 @@ from mediease_api.adapters.db.notifications import (
 from mediease_api.adapters.db.portal_links import (
     SqlAlchemyPortalInviteRepository,
     SqlAlchemyPortalLinkRepository,
+    SqlAlchemyReminderPrefRepository,
 )
 from mediease_api.adapters.db.reminders import SqlAlchemyReminderRepository
 from mediease_api.adapters.db.repositories import (
@@ -615,6 +616,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "patient_links",
             "patient_account_links",
             "patient_portal_invites",
+            "medicine_reminder_prefs",
             "messages",
             "reminders",
             "notifications",
@@ -642,6 +644,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyPatientLinkRepository,
         SqlAlchemyPortalLinkRepository,
         SqlAlchemyPortalInviteRepository,
+        SqlAlchemyReminderPrefRepository,
         SqlAlchemyMessageRepository,
         SqlAlchemyReminderRepository,
         SqlAlchemyNotificationRepository,

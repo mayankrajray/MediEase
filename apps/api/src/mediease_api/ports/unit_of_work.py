@@ -32,7 +32,12 @@ from mediease_api.ports.messaging import (
     WebhookEventRepository,
 )
 from mediease_api.ports.notifications import NotificationRepository, PreferenceRepository
-from mediease_api.ports.portal import PortalInviteRepository, PortalLinkRepository, PortalLookup
+from mediease_api.ports.portal import (
+    PortalInviteRepository,
+    PortalLinkRepository,
+    PortalLookup,
+    ReminderPrefRepository,
+)
 from mediease_api.ports.reminders import NoShowSweep, ReminderRepository
 from mediease_api.ports.repositories import (
     AppointmentHistoryRepository,
@@ -104,6 +109,11 @@ class TenantRepositories(Protocol):
 
     @property
     def portal_invites(self) -> PortalInviteRepository: ...
+    @property
+    def reminder_prefs(self) -> ReminderPrefRepository:
+        """A patient account's medicine-reminder preferences (M6b-P3)."""
+        ...
+
     @property
     def messages(self) -> MessageRepository: ...
     @property

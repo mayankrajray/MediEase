@@ -51,6 +51,7 @@ from mediease_api.domain.portal.account import (
     PatientAccount,
     SignInMethod,
 )
+from mediease_api.domain.portal.medicines import SlotTimes
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.errors import InvalidValue
 from mediease_api.domain.shared.text import required_text
@@ -386,26 +387,40 @@ class AuthenticatePatient:
 
 
 class SetPortalLanguage:
-    """`PATCH /portal/me {language}` (M6b-P2, spec R21): the account's portal language.
+    """`PATCH /portal/me` (M6b-P2 R21; M6b-P3 R34): the portal language and the slot times.
 
-    A display preference of the account itself, holding no clinic data: logged, not audited.
+    Display preferences of the account itself, holding no clinic data: logged, not audited. Slot
+    times only place the plan on a clock; they never change a prescription (R28).
     """
 
     def __init__(self, *, uow: UnitOfWork, clock: ClockPort) -> None:
         self._uow = uow
         self._clock = clock
 
-    def execute(self, principal: PatientPrincipal, language: Language) -> PatientAccountView:
+    def execute(
+        self,
+        principal: PatientPrincipal,
+        language: Language | None = None,
+        slot_times: SlotTimes | None = None,
+    ) -> PatientAccountView:
         with self._uow as uow:
             account = uow.patient_accounts.get(principal.account_id, for_update=True)
             if account is None:  # authenticated a moment ago; accounts are never deleted
                 raise PortalAccountDisabled()
-            if account.set_language(language, now=self._clock.now()):
+            now = self._clock.now()
+            language_changed = language is not None and account.set_language(language, now=now)
+            times_changed = slot_times is not None and account.set_slot_times(slot_times, now=now)
+            if language_changed or times_changed:
                 uow.patient_accounts.update(account)
                 uow.commit()
+            if language_changed:
                 logger.info(
-                    "portal.language_changed", account_id=str(account.id), language=language.value
+                    "portal.language_changed",
+                    account_id=str(account.id),
+                    language=account.language.value,
                 )
+            if times_changed:
+                logger.info("portal.slot_times_changed", account_id=str(account.id))
         return PatientAccountView.of(account)
 
 

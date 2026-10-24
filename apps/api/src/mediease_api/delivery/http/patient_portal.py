@@ -10,6 +10,8 @@ Patients (``@patient``, under ``/api/v1/portal``, the portal cookies):
 | ``GET /appointments`` | grouped by clinic (R11) |
 | ``GET /prescriptions`` / ``/{rx_id}`` / ``/{rx_id}/pdf`` | issued versions (R12) |
 | ``GET /reminders`` | reminders with their visible status (R13) |
+| ``GET /medicine-plan?date=`` / ``/medicine-plan/courses`` | the medicine plan (M6b-P3, R35) |
+| ``PUT /medicine-plan/reminders`` | a reminder choice for one line and slot (R38) |
 
 Staff (``PATIENTS_MANAGE``, under ``/api/v1/patients/{patient_id}``): ``POST /portal-invite``,
 ``GET /portal``, ``DELETE /portal-link`` (R1, R8, R14).
@@ -21,6 +23,7 @@ reason and no staff fields; staff never see the account's email or name.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import date, time
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -38,6 +41,18 @@ from mediease_api.application.portal.linking import (
     UnlinkPatient,
     UnlinkPortal,
 )
+from mediease_api.application.portal.medicines import (
+    CourseView,
+    GetMedicinePlan,
+    LineWords,
+    ListMedicineCourses,
+    MedicinePlan,
+    PlanContext,
+    PlanEntry,
+    Reminder,
+    ReminderChoice,
+    SetMedicineReminder,
+)
 from mediease_api.application.portal.records import (
     GetPortalPrescription,
     ListPortalAppointments,
@@ -54,6 +69,7 @@ from mediease_api.delivery.http.request_info import request_info
 from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.patients.patient import Language
+from mediease_api.domain.prescriptions.schedule import Slot
 from mediease_api.domain.shared.errors import InvalidValue
 
 
@@ -68,6 +84,9 @@ class PortalRecordUseCases(Protocol):
     def get_portal_prescription(self) -> GetPortalPrescription: ...
     def portal_prescription_pdf(self) -> PortalPrescriptionPdf: ...
     def list_portal_reminders(self) -> ListPortalReminders: ...
+    def get_medicine_plan(self) -> GetMedicinePlan: ...
+    def list_medicine_courses(self) -> ListMedicineCourses: ...
+    def set_medicine_reminder(self) -> SetMedicineReminder: ...
 
 
 class PatientPortalUseCases(Protocol):
@@ -81,6 +100,116 @@ class PrescriptionLinkRequest(BaseModel):
 
     token: str = Field(min_length=1, max_length=512)
     phone_last4: str = Field(pattern=r"^[0-9]{4}$")
+
+
+class ReminderRequest(BaseModel):
+    """M6b-P3 (R38): ``remind_at`` null = the slot's own time."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prescription_id: UUID
+    item_id: UUID
+    slot: Slot
+    enabled: bool
+    remind_at: time | None = None
+
+
+def _hhmm(value: time | None) -> str | None:
+    return value.strftime("%H:%M") if value is not None else None
+
+
+def reminder_body(r: Reminder) -> dict[str, Any]:
+    return {"enabled": r.enabled, "remind_at": _hhmm(r.remind_at)}
+
+
+def _context_body(c: PlanContext) -> dict[str, Any]:
+    return {
+        "prescription_id": str(c.prescription_id),
+        "version": c.version,
+        "clinic_id": str(c.clinic_id),
+        "clinic_name": c.clinic_name,
+        "clinic_phone_e164": c.clinic_phone_e164,
+        "doctor_name": c.doctor_name,
+        "starts_on": c.starts_on.isoformat(),
+    }
+
+
+def _line_body(w: LineWords) -> dict[str, Any]:
+    return {
+        "item_id": str(w.item_id),
+        "medicine_name": w.medicine_name,
+        "form_strength": w.form_strength,
+        "dose": w.dose,
+        "as_written": w.as_written,
+        "timing": w.timing,
+        "how": w.how,
+        "duration": w.duration,
+    }
+
+
+def _entry_body(e: PlanEntry) -> dict[str, Any]:
+    return {
+        **_context_body(e.context),
+        **_line_body(e.line),
+        "day": e.day,
+        "days_total": e.days_total,
+        "reminder": reminder_body(e.reminder) if e.reminder else None,
+    }
+
+
+def medicine_plan_body(p: MedicinePlan) -> dict[str, Any]:
+    """R35, R36: words in the account's language; the doctor's text as written."""
+    return {
+        "date": p.on_date.isoformat(),
+        "today": p.today.isoformat(),
+        "language": p.language.value,
+        "has_prescriptions": p.has_prescriptions,
+        "slots": [
+            {
+                "slot": s.slot.value,
+                "label": s.label,
+                "time": _hhmm(s.time),
+                "entries": [_entry_body(e) for e in s.entries],
+            }
+            for s in p.slots
+        ],
+        "as_written": [_entry_body(e) for e in p.as_written],
+    }
+
+
+def course_body(c: CourseView) -> dict[str, Any]:
+    return {
+        **_context_body(c.context),
+        "revised": c.revised,
+        "reminders_set": c.reminders_set,
+        "ends_on": c.ends_on.isoformat() if c.ends_on else None,
+        "lines": [
+            {
+                **_line_body(line.line),
+                "ends_on": line.ends_on.isoformat() if line.ends_on else None,
+                "slots": [
+                    {
+                        "slot": s.slot.value,
+                        "label": s.label,
+                        "time": _hhmm(s.time),
+                        "reminder": reminder_body(s.reminder),
+                    }
+                    for s in line.slots
+                ],
+            }
+            for line in c.lines
+        ],
+    }
+
+
+def _plan_date() -> date | None:
+    raw = request.args.get("date")
+    if raw is None:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        raise InvalidValue("date", "must be a date as YYYY-MM-DD") from None
 
 
 def _no_store(response: Response) -> Response:
@@ -257,6 +386,31 @@ def create_portal_records_blueprint(use_cases: PortalRecordUseCases) -> Blueprin
             }
             for r in use_cases.list_portal_reminders().execute(current_patient())
         )
+
+    @bp.get("/medicine-plan")
+    @patient
+    def medicine_plan() -> Response:
+        plan = use_cases.get_medicine_plan().execute(current_patient(), _plan_date())
+        return jsonify(medicine_plan_body(plan))
+
+    @bp.get("/medicine-plan/courses")
+    @patient
+    def medicine_courses() -> Response:
+        return _items(
+            course_body(c) for c in use_cases.list_medicine_courses().execute(current_patient())
+        )
+
+    @bp.put("/medicine-plan/reminders")
+    @patient
+    def set_medicine_reminder() -> Response:
+        body = parse_json(ReminderRequest)
+        reminder = use_cases.set_medicine_reminder().execute(
+            current_patient(),
+            ReminderChoice(
+                body.prescription_id, body.item_id, body.slot, body.enabled, body.remind_at
+            ),
+        )
+        return jsonify(reminder_body(reminder))
 
     return bp
 

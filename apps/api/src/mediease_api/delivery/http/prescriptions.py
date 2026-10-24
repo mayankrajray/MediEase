@@ -57,9 +57,9 @@ from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.prescriptions import prescription as limits
 from mediease_api.domain.prescriptions.prescription import Advice
+from mediease_api.domain.prescriptions.schedule import DurationKind, Frequency
 from mediease_api.domain.prescriptions.vocabulary import (
     PHRASE_TEXT_MAX,
-    Frequency,
     Preparation,
     PreparationCode,
     Storage,
@@ -107,10 +107,13 @@ class ItemRequest(BaseModel):
     form: str | None = Field(default=None, max_length=limits.SHORT_MAX)
     strength: str | None = Field(default=None, max_length=limits.SHORT_MAX)
     dose: str | None = Field(default=None, max_length=limits.SHORT_MAX)
-    frequency: Frequency | None = None
+    # M6b-P3 (prescriptions R21): a 0/1 pattern (``1-0-1``, ``101``, ``1-1-0-1``) or SOS, ONCE,
+    # CUSTOM; checked by ``Frequency.parse`` so the error names the line.
+    frequency: str | None = Field(default=None, max_length=limits.SHORT_MAX)
     frequency_text: str | None = Field(default=None, max_length=limits.SHORT_MAX)
     timing: Timing | None = None
     duration_days: int | None = None
+    duration_kind: DurationKind | None = None
     quantity: str | None = Field(default=None, max_length=limits.SHORT_MAX)
     preparation: list[PreparationRequest] = Field(
         default_factory=list, max_length=limits.MAX_PREPARATIONS
@@ -142,6 +145,8 @@ class DraftRequest(BaseModel):
     follow_up_date: date | None = None
     # M4-P3: the template the body came from (counted at issue).
     template_id: UUID | None = None
+    # M6b-P3 (prescriptions R24): the first day of the course; null = the issue day.
+    starts_on: date | None = None
 
 
 class IssueRequest(BaseModel):
@@ -157,10 +162,11 @@ def item_input(i: int, item: ItemRequest, at: str | None = None) -> ItemInput:
         form=item.form,
         strength=item.strength,
         dose=item.dose,
-        frequency=item.frequency,
+        frequency=(Frequency.parse(item.frequency, f"{at}.frequency") if item.frequency else None),
         frequency_text=item.frequency_text,
         timing=item.timing,
         duration_days=item.duration_days,
+        duration_kind=item.duration_kind,
         quantity=item.quantity,
         preparation=tuple(
             Preparation.of(p.code, p.text, f"{at}.preparation.{j}")
@@ -213,6 +219,7 @@ def create_prescriptions_blueprint(
             ),
             follow_up_date=body.follow_up_date,
             template_id=body.template_id,
+            starts_on=body.starts_on,
         )
         view = use_cases.replace_prescription().execute(current_context(), rx_id=rx_id, body=draft)
         return jsonify(prescription_body(view))

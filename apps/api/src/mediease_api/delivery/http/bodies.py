@@ -25,6 +25,7 @@ from mediease_api.domain.clinics.onboarding import OnboardingChecklist, Onboardi
 from mediease_api.domain.identity.access import StaffMember
 from mediease_api.domain.prescriptions.document import RxField
 from mediease_api.domain.prescriptions.patient_view import PatientPage
+from mediease_api.domain.prescriptions.plan import line_slots, line_warnings
 from mediease_api.domain.prescriptions.prescription import Prescription, PrescriptionItem
 from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
 from mediease_api.domain.scheduling.exceptions import ScheduleException
@@ -390,6 +391,11 @@ def item_body(item: PrescriptionItem) -> dict[str, Any]:
         "frequency_text": item.frequency_text,
         "timing": item.timing.value if item.timing else None,
         "duration_days": item.duration_days,
+        "duration_kind": item.duration_kind.value if item.duration_kind else None,
+        # M6b-P3 (R21, R22): the slots the pattern marks, from the one engine, and the
+        # non-blocking warnings for the doctor.
+        "slots": [s.value for s in line_slots(item)],
+        "line_warnings": [w.value for w in line_warnings(item)],
         "quantity": item.quantity,
         "preparation": [p.as_json() for p in item.preparation],
         "storage": [s.as_json() for s in item.storage],
@@ -414,6 +420,8 @@ def prescription_body(view: PrescriptionView) -> dict[str, Any]:
         "items": [item_body(i) for i in rx.items],
         "advice": rx.advice.as_json(),
         "follow_up_date": rx.follow_up_date.isoformat() if rx.follow_up_date else None,
+        "starts_on": rx.starts_on.isoformat() if rx.starts_on else None,
+        "previous_starts_on": view.previous_start.isoformat() if view.previous_start else None,
         "language": rx.language.value if rx.language else None,
         "issued_at": _iso(rx.issued_at),
         "doctor_snapshot": rx.doctor_snapshot.as_json() if rx.doctor_snapshot else None,
@@ -464,6 +472,23 @@ def patient_view_body(v: PatientPage) -> dict[str, Any]:
         "advice": [{"heading": a.heading, "entries": list(a.entries)} for a in v.advice],
         "advice_notes": _field(v.advice_notes) if v.advice_notes else None,
         "follow_up": _field(v.follow_up) if v.follow_up else None,
+        # M6b-P3 (prescriptions R25): the Medicine schedule, from the one engine.
+        "schedule_heading": v.schedule_heading,
+        "schedule_columns": list(v.schedule_columns),
+        "schedule_as_written": v.schedule_as_written,
+        "schedule": [
+            {
+                "number": r.number,
+                "name": r.name,
+                "dose": r.dose,
+                "marks": list(r.marks),
+                "as_written": r.as_written,
+                "timing": r.timing,
+                "how": r.how,
+                "duration": r.duration,
+            }
+            for r in v.schedule
+        ],
     }
 
 
@@ -505,6 +530,7 @@ def prescription_summary_body(rx: Prescription) -> dict[str, Any]:
                 "frequency_text": i.frequency_text,
                 "timing": i.timing.value if i.timing else None,
                 "duration_days": i.duration_days,
+                "duration_kind": i.duration_kind.value if i.duration_kind else None,
             }
             for i in rx.items
         ],

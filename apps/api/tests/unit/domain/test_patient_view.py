@@ -71,7 +71,7 @@ def test_the_page_leaves_out_the_patients_own_details() -> None:
 def test_m4_p5_issue_fixes_the_current_layout_version() -> None:
     rx = issued()
     assert rx.status is PrescriptionStatus.ISSUED
-    assert rx.layout_version == CURRENT_LAYOUT == 1
+    assert rx.layout_version == CURRENT_LAYOUT == 2  # M6b-P3 added layout 2
 
 
 def test_m4_p6_the_preview_shows_a_draft_as_issuing_today_would() -> None:

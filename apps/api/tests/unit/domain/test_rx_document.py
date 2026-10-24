@@ -21,8 +21,8 @@ from mediease_api.domain.prescriptions.prescription import (
     Prescription,
     PrescriptionItem,
 )
+from mediease_api.domain.prescriptions.schedule import Frequency
 from mediease_api.domain.prescriptions.vocabulary import (
-    Frequency,
     Preparation,
     PreparationCode,
     Storage,
