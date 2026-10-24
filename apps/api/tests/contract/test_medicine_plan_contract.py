@@ -75,3 +75,41 @@ def test_adr_0008_the_medicine_plan_matches_the_contract(
         _psend(patient, "PATCH", f"{PORTAL}/me", {"slot_times": {**times, "night": "06:00"}}),
         422,
     )
+
+
+def test_adr_0008_dose_marks_and_history_match_the_contract(
+    openapi: OpenAPI,  # noqa: F811
+    world: World,
+) -> None:
+    """M6b-P3b: mark, change, clear, the refused windows and the history."""
+    from tests.integration.test_dose_tracking_http import TABLET as DOSE_TABLET
+    from tests.integration.test_dose_tracking_http import _choice
+
+    doctor, visit, rx = _draft(world)
+    issued = _issue(
+        doctor, rx, [DOSE_TABLET, AS_NEEDED], starts_on=(_today() - timedelta(days=3)).isoformat()
+    )
+    patient = portal_client(world, "contract.doses@example.test")
+    link_by_invite(world.client_for(world.a.owner), patient, visit["patient_id"])
+    doses = f"{PORTAL}/medicine-plan/doses"
+    last_night = _choice(issued, 1)
+    _expect(openapi, _psend(patient, "PUT", doses, {**last_night, "state": "TAKEN"}), 200)
+    _expect(openapi, _psend(patient, "PUT", doses, {**last_night, "state": "SKIPPED"}), 200)
+    _expect(
+        openapi, _psend(patient, "GET", f"{PORTAL}/medicine-plan?date={last_night['on_date']}"), 200
+    )
+    history = f"{PORTAL}/medicine-plan/history?prescription_id={issued['id']}"
+    _expect(openapi, _psend(patient, "GET", history), 200)
+    query = "&".join(f"{k}={v}" for k, v in last_night.items())
+    _expect(openapi, _psend(patient, "DELETE", f"{doses}?{query}"), 200)
+    _expect(openapi, _psend(patient, "PUT", doses, {**_choice(issued, 3), "state": "TAKEN"}), 409)
+    _expect(
+        openapi,
+        _psend(patient, "PUT", doses, {**_choice(issued, 1, "AFTERNOON"), "state": "TAKEN"}),
+        422,
+    )
+    _expect(
+        openapi,
+        _psend(patient, "GET", f"{PORTAL}/medicine-plan/history?prescription_id={rx['visit_id']}"),
+        404,
+    )

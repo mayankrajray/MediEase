@@ -21,6 +21,7 @@ from mediease_api.adapters.db.models.portal import (
     PatientRefreshTokenRow,
 )
 from mediease_api.adapters.db.models.portal_links import (
+    DoseRecordRow,
     MedicineReminderPrefRow,
     PatientAccountLinkRow,
     PatientPortalInviteRow,
@@ -44,6 +45,7 @@ __all__ = [
     "ClinicRow",
     "DoctorRow",
     "DoctorScheduleRow",
+    "DoseRecordRow",
     "EmailTokenRow",
     "ExternalIdentityRow",
     "JobRow",

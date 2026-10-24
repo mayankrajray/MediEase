@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID
 
+from mediease_api.domain.portal.doses import DoseRecord
 from mediease_api.domain.portal.link import PatientAccountLink, PatientPortalInvite
 from mediease_api.domain.portal.medicines import MedicineReminderPref
 from mediease_api.domain.prescriptions.schedule import Slot
@@ -69,6 +72,49 @@ class ReminderPrefRepository(Protocol):
     def delete_for_link(self, account_id: UUID, patient_id: UUID) -> int:
         """R40: an unlinked record keeps no preferences. Returns how many were removed."""
         ...
+
+
+class DoseRecordRepository(Protocol):
+    """``dose_records`` of one clinic (tenant-scoped; M6b-P3b, R45-R52). Patient routes only."""
+
+    def for_account(
+        self, account_id: UUID, prescription_ids: Sequence[UUID]
+    ) -> Sequence[DoseRecord]:
+        """The account's records for these versions, any date."""
+        ...
+
+    def get(
+        self, account_id: UUID, prescription_id: UUID, item_id: UUID, on_date: date, slot: Slot
+    ) -> DoseRecord | None: ...
+
+    def add(self, record: DoseRecord) -> None: ...
+    def update(self, record: DoseRecord) -> None: ...
+    def delete(self, record: DoseRecord) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class DoseExport:
+    """One record as the patient's export carries it (R54): IDs, day, slot, state and time."""
+
+    clinic_id: UUID
+    patient_id: UUID
+    prescription_id: UUID
+    item_id: UUID
+    on_date: date
+    slot: str
+    state: str
+    marked_at: datetime
+
+
+class DoseLifecycle(Protocol):
+    """R54, reviewed cross-clinic exception: an account's records in every clinic, for support.
+
+    Run only on the patient's own request (RUNBOOK), until FR-PRT-10's screens exist.
+    """
+
+    def export_for_account(self, account_id: UUID) -> Sequence[DoseExport]: ...
+
+    def delete_for_account(self, account_id: UUID) -> int: ...
 
 
 class PortalLookup(Protocol):

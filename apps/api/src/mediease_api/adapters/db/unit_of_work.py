@@ -38,6 +38,8 @@ from mediease_api.adapters.db.portal import (
     SqlAlchemyPatientRefreshTokenRepository,
 )
 from mediease_api.adapters.db.portal_links import (
+    SqlAlchemyDoseLifecycle,
+    SqlAlchemyDoseRecordRepository,
     SqlAlchemyPortalInviteRepository,
     SqlAlchemyPortalLinkRepository,
     SqlAlchemyPortalLookup,
@@ -102,6 +104,7 @@ class SqlAlchemyTenantRepositories:
         self._portal_links = SqlAlchemyPortalLinkRepository(session, clinic_id)
         self._portal_invites = SqlAlchemyPortalInviteRepository(session, clinic_id)
         self._reminder_prefs = SqlAlchemyReminderPrefRepository(session, clinic_id)
+        self._dose_records = SqlAlchemyDoseRecordRepository(session, clinic_id)
         self._messages = SqlAlchemyMessageRepository(session, clinic_id)
         self._reminders = SqlAlchemyReminderRepository(session, clinic_id)
         self._notifications = SqlAlchemyNotificationRepository(session, clinic_id)
@@ -186,6 +189,10 @@ class SqlAlchemyTenantRepositories:
         return self._reminder_prefs
 
     @property
+    def dose_records(self) -> SqlAlchemyDoseRecordRepository:
+        return self._dose_records
+
+    @property
     def messages(self) -> SqlAlchemyMessageRepository:
         return self._messages
 
@@ -228,6 +235,8 @@ class _OpenUnit:
         self.staff_invites = SqlAlchemyStaffInviteRepository(session)
         # M6b-P1: the portal's cross-clinic start (an account's active links, IDs only).
         self.portal_lookup = SqlAlchemyPortalLookup(session)
+        # M6b-P3b (R54): one account's dose records, for its export or deletion on request.
+        self.dose_lifecycle = SqlAlchemyDoseLifecycle(session)
         self.rate_limits = SqlAlchemyRateLimitRepository(session)
         # Shares the session, so an audit row commits with the change (R11).
         self.audit = SqlAlchemyAuditWriter(session)
@@ -310,6 +319,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def portal_lookup(self) -> SqlAlchemyPortalLookup:
         return self._require_open().portal_lookup
+
+    @property
+    def dose_lifecycle(self) -> SqlAlchemyDoseLifecycle:
+        return self._require_open().dose_lifecycle
 
     @property
     def rate_limits(self) -> SqlAlchemyRateLimitRepository:

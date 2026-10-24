@@ -8,7 +8,7 @@ and an invite digest's clinic, nothing else.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from sqlalchemy import Select, delete, select
@@ -16,11 +16,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from mediease_api.adapters.db.models.portal_links import (
+    DoseRecordRow,
     MedicineReminderPrefRow,
     PatientAccountLinkRow,
     PatientPortalInviteRow,
 )
 from mediease_api.adapters.db.tenancy import TenantScopedRepository
+from mediease_api.domain.portal.doses import DoseRecord, DoseState
 from mediease_api.domain.portal.link import (
     AlreadyLinked,
     LinkMethod,
@@ -30,6 +32,7 @@ from mediease_api.domain.portal.link import (
 )
 from mediease_api.domain.portal.medicines import MedicineReminderPref
 from mediease_api.domain.prescriptions.schedule import Slot
+from mediease_api.ports.portal import DoseExport
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -265,6 +268,133 @@ class SqlAlchemyReminderPrefRepository(TenantScopedRepository[MedicineReminderPr
                 MedicineReminderPrefRow.account_id == account_id,
                 MedicineReminderPrefRow.patient_id == patient_id,
             )
+        )
+        self._session.flush()
+        return int(result.rowcount)  # type: ignore[attr-defined]
+
+
+def _dose(row: DoseRecordRow) -> DoseRecord:
+    return DoseRecord(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        patient_id=row.patient_id,
+        account_id=row.account_id,
+        prescription_id=row.prescription_id,
+        item_id=row.item_id,
+        on_date=row.on_date,
+        slot=Slot(row.slot),
+        state=DoseState(row.state),
+        marked_at=row.marked_at.astimezone(UTC),
+        keep_until=row.keep_until,
+        created_at=row.created_at.astimezone(UTC),
+        updated_at=row.updated_at.astimezone(UTC),
+    )
+
+
+class SqlAlchemyDoseRecordRepository(TenantScopedRepository[DoseRecordRow]):
+    """M6b-P3b (R45-R52): one account's dose marks in this clinic. Patient routes only."""
+
+    model = DoseRecordRow
+    entity_name = "dose record"
+
+    def for_account(
+        self, account_id: UUID, prescription_ids: Sequence[UUID]
+    ) -> Sequence[DoseRecord]:
+        if not prescription_ids:
+            return []
+        query = (
+            self._scoped_select()
+            .where(
+                DoseRecordRow.account_id == account_id,
+                DoseRecordRow.prescription_id.in_(sorted(prescription_ids)),
+            )
+            .order_by(DoseRecordRow.on_date, DoseRecordRow.slot)
+        )
+        return [_dose(row) for row in self._session.scalars(query)]
+
+    def get(
+        self, account_id: UUID, prescription_id: UUID, item_id: UUID, on_date: date, slot: Slot
+    ) -> DoseRecord | None:
+        query = self._scoped_select().where(
+            DoseRecordRow.account_id == account_id,
+            DoseRecordRow.prescription_id == prescription_id,
+            DoseRecordRow.item_id == item_id,
+            DoseRecordRow.on_date == on_date,
+            DoseRecordRow.slot == slot.value,
+        )
+        row = self._session.scalars(query.with_for_update()).one_or_none()
+        return _dose(row) if row else None
+
+    def add(self, record: DoseRecord) -> None:
+        self._check_owned(record.clinic_id)
+        self._session.add(
+            DoseRecordRow(
+                id=record.id,
+                clinic_id=self.clinic_id,
+                patient_id=record.patient_id,
+                account_id=record.account_id,
+                prescription_id=record.prescription_id,
+                item_id=record.item_id,
+                on_date=record.on_date,
+                slot=record.slot.value,
+                state=record.state.value,
+                marked_at=record.marked_at,
+                keep_until=record.keep_until,
+                created_at=record.created_at,
+                updated_at=record.updated_at,
+            )
+        )
+        self._session.flush()
+
+    def update(self, record: DoseRecord) -> None:
+        self._check_owned(record.clinic_id)
+        row = self._require_row(record.id)
+        row.state = record.state.value
+        row.marked_at = record.marked_at
+        row.updated_at = record.updated_at
+        self._session.flush()
+
+    def delete(self, record: DoseRecord) -> None:
+        self._check_owned(record.clinic_id)
+        self._session.execute(
+            delete(DoseRecordRow).where(
+                DoseRecordRow.clinic_id == self.clinic_id, DoseRecordRow.id == record.id
+            )
+        )
+        self._session.flush()
+
+
+class SqlAlchemyDoseLifecycle:
+    """R54, a reviewed cross-clinic exception: one account's records, for its own export or
+    deletion on request. Selects by account alone; nothing else reads dose records across clinics.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def export_for_account(self, account_id: UUID) -> Sequence[DoseExport]:
+        query = (
+            select(DoseRecordRow)
+            .where(DoseRecordRow.account_id == account_id)
+            .order_by(DoseRecordRow.on_date, DoseRecordRow.slot, DoseRecordRow.id)
+        )
+        return [
+            DoseExport(
+                clinic_id=row.clinic_id,
+                patient_id=row.patient_id,
+                prescription_id=row.prescription_id,
+                item_id=row.item_id,
+                on_date=row.on_date,
+                slot=row.slot,
+                state=row.state,
+                marked_at=row.marked_at.astimezone(UTC),
+            )
+            for row in self._session.scalars(query)
+        ]
+
+    def delete_for_account(self, account_id: UUID) -> int:
+        result = self._session.execute(
+            delete(DoseRecordRow).where(DoseRecordRow.account_id == account_id)
         )
         self._session.flush()
         return int(result.rowcount)  # type: ignore[attr-defined]

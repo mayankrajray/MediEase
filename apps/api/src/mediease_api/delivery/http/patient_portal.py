@@ -12,6 +12,8 @@ Patients (``@patient``, under ``/api/v1/portal``, the portal cookies):
 | ``GET /reminders`` | reminders with their visible status (R13) |
 | ``GET /medicine-plan?date=`` / ``/medicine-plan/courses`` | the medicine plan (M6b-P3, R35) |
 | ``PUT /medicine-plan/reminders`` | a reminder choice for one line and slot (R38) |
+| ``PUT`` / ``DELETE /medicine-plan/doses`` | mark a dose Taken or Skipped, or clear it (R45) |
+| ``GET /medicine-plan/history?prescription_id=`` | a version's doses by day (R47, R49) |
 
 Staff (``PATIENTS_MANAGE``, under ``/api/v1/patients/{patient_id}``): ``POST /portal-invite``,
 ``GET /portal``, ``DELETE /portal-link`` (R1, R8, R14).
@@ -23,13 +25,21 @@ reason and no staff fields; staff never see the account's email or name.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import date, time
+from datetime import date, datetime, time
 from typing import Any, Protocol
 from uuid import UUID
 
 from flask import Blueprint, Response, jsonify, request
 from pydantic import BaseModel, ConfigDict, Field
 
+from mediease_api.application.portal.doses import (
+    ClearDose,
+    DoseChoice,
+    DoseHistory,
+    DoseResult,
+    GetDoseHistory,
+    MarkDose,
+)
 from mediease_api.application.portal.linking import (
     AcceptPortalInvite,
     DescribePortalInvite,
@@ -43,6 +53,7 @@ from mediease_api.application.portal.linking import (
 )
 from mediease_api.application.portal.medicines import (
     CourseView,
+    DoseView,
     GetMedicinePlan,
     LineWords,
     ListMedicineCourses,
@@ -69,6 +80,7 @@ from mediease_api.delivery.http.request_info import request_info
 from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.patients.patient import Language
+from mediease_api.domain.portal.doses import DoseState
 from mediease_api.domain.prescriptions.schedule import Slot
 from mediease_api.domain.shared.errors import InvalidValue
 
@@ -87,6 +99,9 @@ class PortalRecordUseCases(Protocol):
     def get_medicine_plan(self) -> GetMedicinePlan: ...
     def list_medicine_courses(self) -> ListMedicineCourses: ...
     def set_medicine_reminder(self) -> SetMedicineReminder: ...
+    def mark_dose(self) -> MarkDose: ...
+    def clear_dose(self) -> ClearDose: ...
+    def dose_history(self) -> GetDoseHistory: ...
 
 
 class PatientPortalUseCases(Protocol):
@@ -114,6 +129,71 @@ class ReminderRequest(BaseModel):
     remind_at: time | None = None
 
 
+class DoseRequest(BaseModel):
+    """M6b-P3b (R45): one scheduled dose and what the patient marks it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prescription_id: UUID
+    item_id: UUID
+    on_date: date
+    slot: Slot
+    state: DoseState
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def dose_body(d: DoseView | DoseResult) -> dict[str, Any]:
+    """R45-R47: the state in a word, the time marked, and whether it can still be changed."""
+    return {"status": d.status.value, "marked_at": _iso(d.marked_at), "markable": d.markable}
+
+
+def history_body(h: DoseHistory) -> dict[str, Any]:
+    return {
+        "prescription_id": str(h.prescription_id),
+        "version": h.version,
+        "clinic_name": h.clinic_name,
+        "clinic_phone_e164": h.clinic_phone_e164,
+        "timezone": h.timezone,
+        "starts_on": h.starts_on.isoformat(),
+        "counts": {k.value: v for k, v in h.counts.items()},
+        "days": [
+            {
+                "date": d.on_date.isoformat(),
+                "doses": [
+                    {
+                        "item_id": str(x.item_id),
+                        "medicine_name": x.medicine_name,
+                        "dose": x.dose,
+                        "slot": x.slot.value,
+                        "status": x.status.value,
+                        "marked_at": _iso(x.marked_at),
+                    }
+                    for x in d.doses
+                ],
+            }
+            for d in h.days
+        ],
+        "versions": [
+            {
+                "prescription_id": str(v.prescription_id),
+                "version": v.version,
+                "status": v.status.value,
+            }
+            for v in h.versions
+        ],
+    }
+
+
+def _uuid_arg(name: str) -> UUID:
+    try:
+        return UUID(request.args[name])
+    except (KeyError, ValueError):
+        raise InvalidValue(name, "must be an ID") from None
+
+
 def _hhmm(value: time | None) -> str | None:
     return value.strftime("%H:%M") if value is not None else None
 
@@ -131,6 +211,7 @@ def _context_body(c: PlanContext) -> dict[str, Any]:
         "clinic_phone_e164": c.clinic_phone_e164,
         "doctor_name": c.doctor_name,
         "starts_on": c.starts_on.isoformat(),
+        "timezone": c.timezone,
     }
 
 
@@ -154,6 +235,8 @@ def _entry_body(e: PlanEntry) -> dict[str, Any]:
         "day": e.day,
         "days_total": e.days_total,
         "reminder": reminder_body(e.reminder) if e.reminder else None,
+        # M6b-P3b: the patient's mark (``dose`` above is the doctor's dose, as written).
+        "mark": dose_body(e.dose) if e.dose else None,
     }
 
 
@@ -411,6 +494,34 @@ def create_portal_records_blueprint(use_cases: PortalRecordUseCases) -> Blueprin
             ),
         )
         return jsonify(reminder_body(reminder))
+
+    @bp.put("/medicine-plan/doses")
+    @patient
+    def mark_dose() -> Response:
+        body = parse_json(DoseRequest)
+        result = use_cases.mark_dose().execute(
+            current_patient(),
+            DoseChoice(body.prescription_id, body.item_id, body.on_date, body.slot),
+            body.state,
+        )
+        return jsonify(dose_body(result))
+
+    @bp.delete("/medicine-plan/doses")
+    @patient
+    def clear_dose() -> Response:
+        try:
+            on_date = date.fromisoformat(request.args.get("on_date", ""))
+            slot = Slot(request.args.get("slot", ""))
+        except ValueError:
+            raise InvalidValue("on_date", "send on_date (YYYY-MM-DD) and slot") from None
+        choice = DoseChoice(_uuid_arg("prescription_id"), _uuid_arg("item_id"), on_date, slot)
+        return jsonify(dose_body(use_cases.clear_dose().execute(current_patient(), choice)))
+
+    @bp.get("/medicine-plan/history")
+    @patient
+    def dose_history() -> Response:
+        history = use_cases.dose_history().execute(current_patient(), _uuid_arg("prescription_id"))
+        return jsonify(history_body(history))
 
     return bp
 

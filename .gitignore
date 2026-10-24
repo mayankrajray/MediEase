@@ -49,3 +49,6 @@ Thumbs.db
 
 # AI tool local state (shared settings in .claude/settings.json stay committed)
 .claude/settings.local.json
+
+# make dose-data exports (patient health data; never commit)
+.exports/

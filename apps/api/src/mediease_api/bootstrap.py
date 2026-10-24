@@ -126,6 +126,7 @@ from mediease_api.application.patients.my_patients import ListMyPatients
 from mediease_api.application.patients.queries import GetPatient, LookupPatients
 from mediease_api.application.patients.register_patient import RegisterPatient
 from mediease_api.application.patients.update_patient import UpdatePatient
+from mediease_api.application.portal.doses import ClearDose, GetDoseHistory, MarkDose
 from mediease_api.application.portal.linking import (
     AcceptPortalInvite,
     DescribePortalInvite,
@@ -742,6 +743,16 @@ class _UseCases:
     def set_medicine_reminder(self) -> SetMedicineReminder:
         return SetMedicineReminder(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    # M6b-P3b: the patient's own dose marks.
+    def mark_dose(self) -> MarkDose:
+        return MarkDose(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def clear_dose(self) -> ClearDose:
+        return ClearDose(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def dose_history(self) -> GetDoseHistory:
+        return GetDoseHistory(uow=self._uow(), clock=self.clock)
+
     def list_printable(self) -> ListPrintable:
         return ListPrintable(uow=self._uow())
 
@@ -836,6 +847,12 @@ def build_seed_dependencies(settings: AppSettings) -> SeedDependencies:
         ids=Uuid7Generator(),
         hasher=build_password_hasher(),
     )
+
+
+def build_support_uow(settings: AppSettings) -> UnitOfWork:
+    """A unit of work for the support commands (``delivery/cli/dose_data.py``, M6b-P3b)."""
+    configure_logging(settings)
+    return SqlAlchemyUnitOfWork(build_session_factory(build_engine(settings)))
 
 
 def _interruptible_sleep(stop: threading.Event) -> Callable[[float], None]:

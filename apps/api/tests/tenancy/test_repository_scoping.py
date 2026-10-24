@@ -21,6 +21,7 @@ from mediease_api.adapters.db.notifications import (
     SqlAlchemyPreferenceRepository,
 )
 from mediease_api.adapters.db.portal_links import (
+    SqlAlchemyDoseRecordRepository,
     SqlAlchemyPortalInviteRepository,
     SqlAlchemyPortalLinkRepository,
     SqlAlchemyReminderPrefRepository,
@@ -122,6 +123,11 @@ class Tenant:
 # account's active links (IDs, method, dates) and an invite digest's clinic ID, nothing else; every
 # record is then read through that clinic's tenant repositories, filtered by the linked patient
 # (application/portal/scope.py; tests/tenancy/test_portal_scope.py).
+#
+# Reviewed exception (M6b-P3b, patient portal R54): SqlAlchemyDoseLifecycle selects dose_records
+# by account alone, in every clinic, for the patient's own export or deletion on request. Only the
+# support command delivery/cli/dose_data.py uses it (tests/tenancy/test_dose_privacy.py). The
+# retention purge deletes dose_records by keep_until alone, like its other tables.
 NOT_TENANT_SCOPED = {"audit_events", "jobs"}
 
 
@@ -617,6 +623,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "patient_account_links",
             "patient_portal_invites",
             "medicine_reminder_prefs",
+            "dose_records",
             "messages",
             "reminders",
             "notifications",
@@ -645,6 +652,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyPortalLinkRepository,
         SqlAlchemyPortalInviteRepository,
         SqlAlchemyReminderPrefRepository,
+        SqlAlchemyDoseRecordRepository,
         SqlAlchemyMessageRepository,
         SqlAlchemyReminderRepository,
         SqlAlchemyNotificationRepository,

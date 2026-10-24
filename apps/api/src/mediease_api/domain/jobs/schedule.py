@@ -7,7 +7,7 @@ workers ticking at once still produce one job.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from mediease_api.domain.jobs.job import NO_SHOW_SWEEP_KIND, PURGE_KIND, RECONCILE_KIND
 from mediease_api.domain.shared.time import require_utc
@@ -64,6 +64,8 @@ class RetentionCutoffs:
     webhook_events: datetime | None = None
     # M6a-P7 (decision 8A): notifications 90 days after they were created.
     notifications: datetime | None = None
+    # M6b-P3b (R53): dose records whose keep-until day is before this one.
+    dose_records: date | None = None
 
     @classmethod
     def at(cls, now: datetime) -> RetentionCutoffs:
@@ -75,6 +77,7 @@ class RetentionCutoffs:
             dead_jobs=now - DEAD_JOB_RETENTION,
             webhook_events=now - WEBHOOK_EVENT_RETENTION,
             notifications=now - NOTIFICATION_RETENTION,
+            dose_records=now.date(),
         )
 
 
@@ -87,3 +90,4 @@ class PurgeCounts:
     # M6a-P4: email tokens 30 days after they expired.
     email_tokens: int = 0
     notifications: int = 0
+    dose_records: int = 0

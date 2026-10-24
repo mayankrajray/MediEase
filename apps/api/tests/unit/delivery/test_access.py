@@ -51,6 +51,10 @@ EXPECTED_POLICIES = {
     "portal_records.medicine_plan": (Access.PATIENT, None),
     "portal_records.medicine_courses": (Access.PATIENT, None),
     "portal_records.set_medicine_reminder": (Access.PATIENT, None),
+    # M6b-P3b: the patient's own dose marks; no staff or ops route reaches them.
+    "portal_records.mark_dose": (Access.PATIENT, None),
+    "portal_records.clear_dose": (Access.PATIENT, None),
+    "portal_records.dose_history": (Access.PATIENT, None),
     "patient_portal.invite": (Access.CLINIC, Permission.PATIENTS_MANAGE),
     "patient_portal.status": (Access.CLINIC, Permission.PATIENTS_MANAGE),
     "patient_portal.unlink": (Access.CLINIC, Permission.PATIENTS_MANAGE),

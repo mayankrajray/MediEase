@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0027"
+HEAD = "0028"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -45,6 +45,7 @@ M6A_P4_TABLES = sorted([*M6A_P3_TABLES, "email_tokens"])
 M6A_P7_TABLES = sorted([*M6A_P4_TABLES, "notification_preferences", "notifications"])
 M6B_P1_TABLES = sorted([*M6A_P7_TABLES, "patient_account_links", "patient_portal_invites"])
 M6B_P3_TABLES = sorted([*M6B_P1_TABLES, "medicine_reminder_prefs"])
+M6B_P3B_TABLES = sorted([*M6B_P3_TABLES, "dose_records"])
 
 
 @pytest.fixture
@@ -652,7 +653,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6B_P3_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6B_P3B_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -808,5 +809,24 @@ def test_0027_adds_the_medicine_plan(alembic_config: Config, scratch_database_ur
                 conn.execute(text(column), {"t": "prescriptions", "c": "starts_on"}).scalar_one()
                 == 0
             )
+    finally:
+        engine.dispose()
+
+
+def test_0028_adds_dose_records(alembic_config: Config, scratch_database_url: str) -> None:
+    """M6b-P3b: one tenant table; one row per account, version, line, day and slot."""
+    command.upgrade(alembic_config, "0028")
+    assert _tables(scratch_database_url) == M6B_P3B_TABLES
+    engine = create_engine(scratch_database_url)
+    index = "SELECT indexdef FROM pg_indexes WHERE indexname = :name"
+    try:
+        with engine.connect() as conn:
+            assert (
+                "UNIQUE" in conn.execute(text(index), {"name": "uq_dose_records_dose"}).scalar_one()
+            )
+            assert "SKIPPED" in _check(conn, "ck_dose_records_state")
+            assert conn.execute(text(index), {"name": "ix_dose_records_keep_until"}).scalar_one()
+        command.downgrade(alembic_config, "0027")
+        assert _tables(scratch_database_url) == M6B_P3_TABLES
     finally:
         engine.dispose()
