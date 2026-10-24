@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.29.0
+  version: 0.30.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -581,6 +581,43 @@ paths:
           $ref: '#/components/responses/PortalError'
         '403':
           $ref: '#/components/responses/PortalError'
+    patch:
+      tags: [portal]
+      operationId: updatePortalMe
+      summary: Change the account's portal language
+      description: |
+        M6b-P2 (spec R21, decision 2A). @patient. The language every portal screen uses, kept
+        across devices; the prescription page in the portal opens in it. Logged, not audited.
+        Needs X-CSRF-Token equal to me_pt_csrf.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortalAccountUpdate'
+      responses:
+        '200':
+          description: The account
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientMe'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '422':
+          $ref: '#/components/responses/PortalError'
   /api/v1/portal/links:
     get:
       tags: [portal]
@@ -835,7 +872,7 @@ paths:
         - name: lang
           in: query
           required: false
-          description: en or hi; the record's language when absent
+          description: en or hi; the account's language when absent (M6b-P2)
           schema:
             $ref: '#/components/schemas/Language'
       responses:
@@ -6006,6 +6043,10 @@ components:
           maxLength: 1024
           format: password
           description: At least 12 characters (the staff policy); checked by the API
+        language:
+          description: |
+            M6b-P2: the new account's portal language; absent, the me_pt_lang cookie, else en
+          $ref: '#/components/schemas/Language'
     PatientSignInRequest:
       type: object
       additionalProperties: false
@@ -6027,7 +6068,7 @@ components:
     PatientAccount:
       type: object
       additionalProperties: false
-      required: [id, full_name, email, sign_in_method, email_verified]
+      required: [id, full_name, email, sign_in_method, email_verified, language]
       properties:
         id:
           type: string
@@ -6041,6 +6082,16 @@ components:
         email_verified:
           type: boolean
           description: Google accounts are verified; password accounts from M6a-P4
+        language:
+          description: The portal's language (M6b-P2), en or hi
+          $ref: '#/components/schemas/Language'
+    PortalAccountUpdate:
+      type: object
+      additionalProperties: false
+      required: [language]
+      properties:
+        language:
+          $ref: '#/components/schemas/Language'
     PatientSession:
       type: object
       required: [account, session]
@@ -6274,13 +6325,17 @@ components:
       description: How a patient account was linked to a record (M6b-P1; BOOKING from P5)
     PortalClinic:
       type: object
-      required: [id, name, phone_e164, address_line, city]
+      required: [id, name, phone_e164, address_line, city, timezone]
       properties:
         id: {type: string, format: uuid}
         name: {type: string}
         phone_e164: {type: [string, 'null']}
         address_line: {type: [string, 'null']}
         city: {type: [string, 'null']}
+        timezone:
+          type: string
+          description: The clinic's IANA time zone; times are shown on its clock (M6b-P2)
+          examples: [Asia/Kolkata]
     PortalLink:
       type: object
       description: One linked clinic (spec R10)
@@ -6399,10 +6454,12 @@ components:
           $ref: '#/components/schemas/AppointmentStatus'
     PortalAppointmentGroup:
       type: object
-      required: [clinic_id, clinic_name, appointments]
+      required: [clinic_id, clinic_name, timezone, phone_e164, appointments]
       properties:
         clinic_id: {type: string, format: uuid}
         clinic_name: {type: string}
+        timezone: {type: string, description: The clinic's IANA time zone (M6b-P2)}
+        phone_e164: {type: [string, 'null'], description: The clinic's phone for a call button}
         appointments:
           type: array
           items:

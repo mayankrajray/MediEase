@@ -147,6 +147,7 @@ from mediease_api.application.portal.sessions import PatientSessionIssuer
 from mediease_api.application.portal.use_cases import (
     AuthenticatePatient,
     RefreshPatientSession,
+    SetPortalLanguage,
     SignInPatient,
     SignOutPatient,
     SignUpPatient,
@@ -673,6 +674,9 @@ class _UseCases:
             renderer=self.pdf_renderer,
             storage=self.blob_storage,
         )
+
+    def set_portal_language(self) -> SetPortalLanguage:
+        return SetPortalLanguage(uow=self._uow(), clock=self.clock)
 
     # M6b-P1: linking a patient account and the portal's reads.
     def invite_to_portal(self) -> InviteToPortal:

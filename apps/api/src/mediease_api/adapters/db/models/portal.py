@@ -15,6 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from mediease_api.adapters.db.models.base import Base, Keyed, Timestamps, enum_check
 from mediease_api.domain.identity.email_token import EmailTokenPurpose
 from mediease_api.domain.identity.external import IdentityProvider
+from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.portal.account import AccountStatus, SignInMethod
 
 
@@ -23,6 +24,7 @@ class PatientAccountRow(Keyed, Timestamps, Base):
     __table_args__ = (
         enum_check("sign_in_method", SignInMethod),
         enum_check("status", AccountStatus),
+        enum_check("language", Language),
         CheckConstraint("email = lower(email)", name="email_lower_case"),
         CheckConstraint("failed_login_count >= 0", name="failed_login_count_non_negative"),
         # A password account has a hash and a Google account never does.
@@ -49,6 +51,8 @@ class PatientAccountRow(Keyed, Timestamps, Base):
     failed_login_count: Mapped[int] = mapped_column(server_default=text("0"))
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # M6b-P2 (migration 0026): the portal's language.
+    language: Mapped[str] = mapped_column(Text, server_default=text("'en'"))
 
 
 class PatientRefreshTokenRow(Keyed, Timestamps, Base):

@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0025"
+HEAD = "0026"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -749,5 +749,27 @@ def test_0025_adds_patient_account_links_and_portal_invites(
             assert "RX_LINK" in _check(conn, "ck_patient_account_links_method")
         command.downgrade(alembic_config, "0024")
         assert _tables(scratch_database_url) == M6A_P7_TABLES
+    finally:
+        engine.dispose()
+
+
+def test_0026_adds_the_portal_language_to_patient_accounts(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    """M6b-P2: no new table; ``patient_accounts.language`` (en or hi, default en)."""
+    command.upgrade(alembic_config, "0026")
+    assert _tables(scratch_database_url) == M6B_P1_TABLES
+    engine = create_engine(scratch_database_url)
+    columns = (
+        "SELECT column_default FROM information_schema.columns"
+        " WHERE table_name = 'patient_accounts' AND column_name = 'language'"
+    )
+    try:
+        with engine.connect() as conn:
+            assert "'en'" in str(conn.execute(text(columns)).scalar_one())
+            assert "'hi'" in _check(conn, "ck_patient_accounts_language")
+        command.downgrade(alembic_config, "0025")
+        with engine.connect() as conn:
+            assert conn.execute(text(columns)).all() == []
     finally:
         engine.dispose()

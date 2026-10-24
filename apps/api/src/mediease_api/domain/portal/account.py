@@ -28,6 +28,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from mediease_api.domain.identity.user import LOCKOUT_DURATION, MAX_FAILED_SIGN_INS
+from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.errors import DomainError, InvalidValue
 from mediease_api.domain.shared.text import required_text
@@ -75,6 +76,8 @@ class PatientAccount:
     failed_sign_in_count: int = 0
     locked_until: datetime | None = None
     last_signed_in_at: datetime | None = None
+    # M6b-P2 (FR-PRT-04, NFR-11): the portal's language, chosen by the person (decision 2A).
+    language: Language = Language.EN
 
     @classmethod
     def with_password(
@@ -85,6 +88,7 @@ class PatientAccount:
         email: EmailAddress,
         password_hash: str,
         now: datetime,
+        language: Language = Language.EN,
     ) -> PatientAccount:
         if not password_hash:
             raise InvalidValue("password_hash", "must not be empty")
@@ -98,11 +102,18 @@ class PatientAccount:
             created_at=now,
             updated_at=now,
             password_hash=password_hash,
+            language=language,
         )
 
     @classmethod
     def from_google(
-        cls, *, id: UUID, full_name: str, email: EmailAddress, now: datetime
+        cls,
+        *,
+        id: UUID,
+        full_name: str,
+        email: EmailAddress,
+        now: datetime,
+        language: Language = Language.EN,
     ) -> PatientAccount:
         """Google proved the address (``email_verified`` in the ID token), so it is verified."""
         now = require_utc(now, "now")
@@ -115,6 +126,7 @@ class PatientAccount:
             created_at=now,
             updated_at=now,
             email_verified_at=now,
+            language=language,
         )
 
     @property
@@ -162,6 +174,14 @@ class PatientAccount:
         self.updated_at = require_utc(now, "now")
         self.failed_sign_in_count = 0
         self.locked_until = None
+
+    def set_language(self, language: Language, *, now: datetime) -> bool:
+        """Change the portal's language. Returns False when it already was this one."""
+        if self.language is language:
+            return False
+        self.language = language
+        self.updated_at = require_utc(now, "now")
+        return True
 
     def verify_email(self, *, now: datetime) -> bool:
         """Mark the address proved. Returns False when it already was (idempotent)."""

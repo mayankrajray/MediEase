@@ -23,6 +23,7 @@ from mediease_api.adapters.db.models import (
 from mediease_api.domain.identity.email_token import EmailToken, EmailTokenPurpose
 from mediease_api.domain.identity.external import ExternalIdentity, IdentityProvider
 from mediease_api.domain.identity.session import RefreshToken
+from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.portal.account import (
     AccountStatus,
     EmailTaken,
@@ -60,6 +61,7 @@ def _account_from_row(row: PatientAccountRow) -> PatientAccount:
         failed_sign_in_count=row.failed_login_count,
         locked_until=_utc_or_none(row.locked_until),
         last_signed_in_at=_utc_or_none(row.last_login_at),
+        language=Language(row.language),
     )
 
 
@@ -73,6 +75,7 @@ def _write_account(row: PatientAccountRow, account: PatientAccount) -> None:
     row.failed_login_count = account.failed_sign_in_count
     row.locked_until = account.locked_until
     row.last_login_at = account.last_signed_in_at
+    row.language = account.language.value
     row.updated_at = account.updated_at
 
 

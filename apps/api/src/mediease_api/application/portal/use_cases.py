@@ -44,6 +44,7 @@ from mediease_api.application.portal.views import (
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.identity.password import validate_password
 from mediease_api.domain.identity.session import RefreshTokenState
+from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.portal.account import (
     MAX_NAME_LENGTH,
     EmailTaken,
@@ -71,6 +72,8 @@ class SignUpCommand:
     full_name: str
     email: str
     password: str
+    # M6b-P2: the language the sign-up page was in (decision 2A).
+    language: Language = Language.EN
 
     def __repr__(self) -> str:
         return "SignUpCommand(<redacted>)"
@@ -121,6 +124,7 @@ class SignUpPatient:
                 email=email,
                 password_hash=password_hash,
                 now=now,
+                language=cmd.language,
             )
             account.record_successful_sign_in(now=now)
             uow.patient_accounts.add(account)  # EmailTaken if a parallel sign-up won
@@ -379,6 +383,30 @@ class AuthenticatePatient:
                 logger.info("portal.rejected", reason="account_disabled")
                 raise PortalAccountDisabled()
         return PatientPrincipal(account=account, session_id=claims.session_id)
+
+
+class SetPortalLanguage:
+    """`PATCH /portal/me {language}` (M6b-P2, spec R21): the account's portal language.
+
+    A display preference of the account itself, holding no clinic data: logged, not audited.
+    """
+
+    def __init__(self, *, uow: UnitOfWork, clock: ClockPort) -> None:
+        self._uow = uow
+        self._clock = clock
+
+    def execute(self, principal: PatientPrincipal, language: Language) -> PatientAccountView:
+        with self._uow as uow:
+            account = uow.patient_accounts.get(principal.account_id, for_update=True)
+            if account is None:  # authenticated a moment ago; accounts are never deleted
+                raise PortalAccountDisabled()
+            if account.set_language(language, now=self._clock.now()):
+                uow.patient_accounts.update(account)
+                uow.commit()
+                logger.info(
+                    "portal.language_changed", account_id=str(account.id), language=language.value
+                )
+        return PatientAccountView.of(account)
 
 
 def account_view(principal: PatientPrincipal) -> PatientAccountView:

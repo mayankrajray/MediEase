@@ -156,6 +156,7 @@ def create_portal_records_blueprint(use_cases: PortalRecordUseCases) -> Blueprin
                     "phone_e164": v.clinic_phone_e164,
                     "address_line": v.clinic_address_line,
                     "city": v.clinic_city,
+                    "timezone": v.clinic_timezone,
                 },
                 "patient_first_name": v.patient_first_name,
                 "patient_code": v.patient_code,
@@ -205,6 +206,8 @@ def create_portal_records_blueprint(use_cases: PortalRecordUseCases) -> Blueprin
             {
                 "clinic_id": str(g.clinic_id),
                 "clinic_name": g.clinic_name,
+                "timezone": g.clinic_timezone,
+                "phone_e164": g.clinic_phone_e164,
                 "appointments": [portal_appointment_body(a) for a in g.appointments],
             }
             for g in use_cases.list_portal_appointments().execute(current_patient())

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from mediease_api.application.auth.views import SessionTokens
+from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.portal.account import PatientAccount, SignInMethod
 
 
@@ -16,6 +17,7 @@ class PatientAccountView:
     email: str
     sign_in_method: SignInMethod
     email_verified: bool
+    language: Language
 
     @classmethod
     def of(cls, account: PatientAccount) -> PatientAccountView:
@@ -25,6 +27,7 @@ class PatientAccountView:
             email=account.email.value,
             sign_in_method=account.sign_in_method,
             email_verified=account.is_email_verified,
+            language=account.language,
         )
 
 

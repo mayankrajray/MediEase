@@ -312,7 +312,9 @@ def test_ac3_fr_prt_03_a_linked_account_reads_its_record_and_nothing_clinical(
     assert [p["id"] for p in patient.get(f"{PORTAL}/prescriptions").get_json()["items"]] == [
         rx["id"]
     ]
-    for body in (groups, listed, reminders):
+    # The clinic's own phone is on the group (a call button, M6b-P2); no patient's phone anywhere.
+    assert set(groups[0]) == {"clinic_id", "clinic_name", "timezone", "phone_e164", "appointments"}
+    for body in (groups[0]["appointments"], listed, reminders):
         for word in ("notes", "diagnosis", "vitals", "reason", "findings", "phone_e164"):
             assert f'"{word}"' not in str(body).replace("'", '"')
 

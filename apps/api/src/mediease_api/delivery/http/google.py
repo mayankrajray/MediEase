@@ -31,6 +31,7 @@ from mediease_api.application.auth.google import (
     StartGoogleSignIn,
 )
 from mediease_api.delivery.http.access import public
+from mediease_api.delivery.http.portal import cookie_language
 from mediease_api.delivery.http.request_info import request_info
 from mediease_api.delivery.http.session_cookies import (
     PORTAL_COOKIES,
@@ -121,6 +122,7 @@ def create_google_blueprint(use_cases: GoogleUseCases, *, cookie_secure: bool) -
                 code=request.args.get("code"),
                 error=request.args.get("error"),
                 info=request_info(),
+                language=cookie_language(),
             )
         except GoogleSignInFailed as exc:
             response = _failed(exc.intent, exc.reason)
