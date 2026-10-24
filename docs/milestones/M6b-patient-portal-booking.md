@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight) |
+| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight); P1 built and confirmed (draft PR #52); P2 designed, awaiting approval |
 | PRD | v1.2 §0 (C7, C9), §8.9, §8.13, §8.14, §13; NFR-02, NFR-10, NFR-11, NFR-18, NFR-19 |
 | Specs | `docs/specs/patient-portal.md` (Draft, P1–P3, P6), `docs/specs/booking-requests.md` (written at P4) |
 | ADR | ADR-0015 (patient accounts), ADR-0017 (notification service); ADR-0018 at P4 if the soft hold changes how a session's places are counted |
@@ -16,7 +16,7 @@
 | Phase | Builds | Requirements | Design |
 |---|---|---|---|
 | P1 | **Linking and the patient API.** A link between a patient account and one clinic's patient record, made by a clinic invite or by the prescription link's last-4 check; revocable by both sides. Read-only portal API for what the clinic gave the patient: linked clinics, appointments, issued prescriptions, reminders. The portal tenancy suite | FR-PRT-02, FR-PRT-03, FR-PRT-06 (b, c), NFR-18 | Below (approved 24 Oct 2026) |
-| P2 | **Portal web.** The fresh dashboard with *Find a doctor*, My Appointments grouped by clinic, prescriptions (the patient page and PDF), reminders; link and unlink screens; English and Hindi; 360 px; the patient-page budget | FR-PRT-03, 04, 05, 07, NFR-02, NFR-10, NFR-11 | At its start |
+| P2 | **Portal web.** The fresh dashboard with *Find a doctor*, My Appointments grouped by clinic, prescriptions (the patient page and PDF), reminders; link and unlink screens; English and Hindi; 360 px; the patient-page budget | FR-PRT-03, 04, 05, 07, NFR-02, NFR-10, NFR-11 | Below (proposed 24 Oct 2026) |
 | P3 | **Medicine planner.** Daily dose times derived only from each issued line's frequency, timing and days; *today* and *this course* views; optional in-app reminders | FR-REM-03 | At its start |
 | P4 | **Public page and booking requests.** `/c/{slug}` with the clinic's hours, doctors and bookable slots or sessions; a request from a verified account with a short reason, a soft hold, rate limits and a cap of five open requests; `BookingRequested` to the front desk | FR-PUB-01..04, FR-BKG-01..03, 07, FR-DIS-05 (slots), NFR-19 | At its start |
 | P5 | **The front-desk inbox.** Accept (match or create the patient record, link the account, create the appointment), decline with a reason, propose another slot, expiry after the response window; an expired count and the response rate for the owner | FR-BKG-04..06, 08, FR-PRT-06 (a), FR-UX-03 | At its start |
@@ -137,3 +137,76 @@ Built 24 Oct 2026 to the approved design, with these details settled in the buil
   cross-clinic cases for the three staff routes, migration `0025`, the contract
   (`tests/contract/test_portal_linking_contract.py`), web unit tests and the Playwright journey
   `e2e/portal-linking.spec.ts`.
+
+---
+
+## M6b-P2 — Portal web
+
+Proposed 24 Oct 2026, **awaiting the developer's approval.** Covers FR-PRT-03, FR-PRT-04,
+FR-PRT-05, FR-PRT-07, NFR-02, NFR-10 and NFR-11. Rules are in `docs/specs/patient-portal.md`
+R15–R27 (Draft for P2). The medicine plan (FR-REM-03) is P3; booking requests in My Appointments
+(`Requested`, `Declined`, `Expired`) arrive with P4 and P5; patient notifications with P6.
+
+Facts the design rests on:
+
+- **The P1 API is the data.** `GET /portal/links`, `/appointments` (by clinic), `/prescriptions`
+  (+ page and PDF), `/reminders`, `DELETE /links/{id}`; all through `PortalScope`.
+- **Portal pages cannot be server-rendered with the session.** The access cookie `me_pt_access`
+  has `Path=/api/v1/portal` (ADR-0015 decision 2), so a request for `/portal/...` never carries
+  it. Signed-in portal screens therefore fetch in the browser (`portalGet`, refresh once), as the
+  M6a-P3 account page does. Keeping that cookie scope is worth more than server rendering.
+- **The patient-page rules** (`apps/web/CLAUDE.md`): mobile-first at 360 px, < 200 KB
+  transferred, no analytics SDK, strings in `src/lib/i18n/`. Today only `/p/{token}` is
+  bilingual (`features/patient-link/strings.ts`); the portal is English and sits inside the
+  sign-in card (`AuthFrame`).
+- **Times.** The API returns UTC; the portal bodies do not yet say each clinic's time zone, so a
+  slot cannot be shown on the clinic's clock (NFR-11).
+- **Statuses.** Appointments carry `BOOKED`, `ARRIVED`, `IN_CONSULTATION`, `COMPLETED`,
+  `CANCELLED`, `NO_SHOW`; FR-PRT-07 names `Requested`, `Confirmed`, `Declined`, `Cancelled`,
+  `Completed` for the patient.
+
+| # | Question | A (rec) | Rejected |
+|---|---|---|---|
+| 1 | Shell and navigation | A signed-in **portal shell** apart from the sign-in card: a header (MediEase, the language switch) and a **bottom tab bar** at 360 px (a top bar from 768 px): *Home*, *Appointments*, *Prescriptions*, *Account*. P3 adds *Medicines*. The sign-in, sign-up, reset and verify pages keep `AuthFrame`. Done with route groups, so no URL changes: `/portal/(auth)/…` and `/portal/(app)/…`; the P1 link pages move into the shell | B: one long page with sections (no deep links; slow to scan once several clinics are linked). C: a hamburger drawer like staff (an extra tap for every screen on a phone) |
+| 2 | Where the language lives | On the **account**: `patient_accounts.language` (`en`, `hi`; migration `0026`), changed by `PATCH /portal/me {language}` from the header switch, so it follows the person to another phone and P6's notifications can use it. Before sign-in, a `me_pt_lang` cookie (not a secret, readable by the server) chooses the auth pages' language and seeds the account's at sign-up. The prescription page in the portal opens in the account's language, with its own switch | B: the cookie only (lost on a new device; P6 would have nothing to send in). C: per linked clinic, from the record's `language` (one person, several clinics, possibly two languages; FR-PRT-10's per-clinic language is a later P1 item) |
+| 3 | Budget and rendering | **Client components, held to the patient-page budget:** each portal screen's first load < 200 KB transferred at 360 px, measured in Playwright like `/p/{token}` (NFR-02's figure, applied to the portal). No new runtime dependency; strings are plain typed objects; screens load only their own data | B: a looser 300 KB for the portal (the portal is opened on the same phones as the prescription page). C: change the access cookie's path to `/` so pages can server-render (widens where the token travels; ADR-0015 chose the narrow path on purpose) |
+| 4 | The fresh dashboard and *Find a doctor* (FR-PRT-05) | *Home* with nothing linked: "No appointments yet", one primary button **Find a doctor**, and a secondary "Have an invitation from your clinic?" that explains the two ways to link. Until M6c, *Find a doctor* opens `/portal/find`: search is coming; meanwhile open your clinic's own page (from P4, `/c/{slug}`) or ask the clinic for an invitation. With records: the **next appointment** (clinic, doctor, day and time or token, status), the **latest prescription**, **upcoming reminders** (next 3), and *Find a doctor* kept as a secondary action | B: hide *Find a doctor* until M6c (FR-PRT-05 makes it the first action). C: a search box over linked clinics only (looks like discovery and is not) |
+| 5 | My Appointments (FR-PRT-07) | Grouped by clinic, each group with its name and phone (call button); inside, **Upcoming** then **Past** (the API's order). Each row: doctor, day and time in the **clinic's time zone** (slot) or "Token 4, morning session 10:00–13:00" (token), and a patient-facing status: `BOOKED` → *Confirmed*, `ARRIVED` / `IN_CONSULTATION` → *At the clinic*, `COMPLETED` → *Completed*, `CANCELLED` → *Cancelled*, `NO_SHOW` → *Missed*. *Requested*, *Declined* and *Expired* join with booking requests (P4, P5). Text, not colour alone | B: one list across clinics by date (FR-PRT-07 says grouped; a clinic's records must never sit among another's). C: return the patient status from the API now (P4 will reshape this list with requests anyway; the labels are the web's, in two languages) |
+| 6 | Prescriptions | A list grouped by clinic (doctor, issued date, "updated" when version > 1). Opening one shows the **same patient page component** as `/p/{token}` (`PrescriptionView`, labels from the API in the chosen language, a switch), plus **Download PDF**, fetched through the portal session (refresh once) and opened as a file, never a bare link that would fail with an expired token | B: a new portal-specific layout of the prescription (two renderings of one clinical document drift apart). C: link to `/p/{token}` (the portal does not hold the token, and the last-4 check would be asked again) |
+| 7 | Clinics, unlinking and reminders | *Account* holds the profile, the language, **Your clinics** (each: name, address, phone, "linked by invite since…", **Unlink** with a confirmation that says what disappears), and sign-out. Reminders appear on *Home* (upcoming) and inside each clinic group of *Appointments* (a follow-up due date with its visible status). No separate reminders tab until P3's *Medicines* | B: a *Clinics* tab (a fifth tab for a rare action). C: a reminders tab (thin until the medicine plan exists) |
+| 8 | Accessibility proof (NFR-10, FR-PRT-04) | Add **`@axe-core/playwright`** (dev-only, pinned, e2e image only, never shipped) and run it on every portal screen in English and Hindi at 360 px, failing on serious or critical violations; plus the existing habits (labelled controls, focus moved to errors, text alongside colour, 44 px targets, `lang` on the page) | B: manual checks only (WCAG AA is a P1 requirement; regressions would be silent). C: axe in unit tests with jsdom (misses layout, contrast and focus order) |
+
+Fixed points:
+
+- **API (small).** Migration `0026`: `patient_accounts.language text not null default 'en'`
+  (CHECK `en`, `hi`). `PatientAccount` gains `language`; `PATCH /portal/me {language}` changes it
+  (logged as `portal.language_changed`, not audited: a display preference of the account itself,
+  holding no clinic data). `PortalClinic` and `PortalAppointmentGroup` gain the clinic's `timezone`; reminders and
+  prescriptions carry `clinic_id`, so the web reads the zone from the links. Contract 0.30.0.
+  `GET /portal/prescriptions/{rx_id}` without `?lang` uses the account's language.
+- **Strings.** `src/lib/i18n/portal.ts` (typed `en` and `hi` objects) for every portal word,
+  including the P1 link pages and the sign-in pages; dates and times with `Intl` in `en-IN` and
+  `hi-IN` on the clinic's zone. Known error codes get portal words in both languages; anything
+  else shows the API's message and the Ref. Hindi is reviewed with the phrasebook (L-07), as for
+  the prescription page.
+- **Code.** `src/app/(patient)/portal/(app)/{page,appointments,prescriptions,prescriptions/[id],account,find}`
+  and `(auth)/…`; `features/portal/` gains the shell, `Home`, `MyAppointments`,
+  `PortalPrescriptions`, `PortalPrescription`, `PortalAccountPage`, `FindADoctor`;
+  `lib/auth/portal-session.ts` gains `portalPatch` and `portalDelete`.
+- **Unchanged:** every API rule of P1, the staff app, `/p/{token}` and its budget.
+
+Planned verification:
+
+- **Unit (Vitest):** each screen's empty, loaded, failed and ended-session states; status labels
+  in both languages; the clinic's time zone on a slot and a token; grouping never mixes clinics;
+  the language switch calls `PATCH /portal/me` and re-renders; unlink asks first; the PDF button
+  refreshes once on an expired session.
+- **API:** `PATCH /portal/me` (valid, invalid language, a staff session refused), migration
+  `0026` up and down, the time zone on links and groups, the page's default language; contract.
+- **Playwright (360 px):** a new account sees the fresh dashboard with *Find a doctor*; after an
+  invite, Home shows the next appointment, Appointments the clinic group with *Confirmed*,
+  Prescriptions opens the page and downloads the PDF; switch to Hindi and every screen is Hindi
+  and stays Hindi after signing in again; unlink removes the clinic everywhere. Each screen
+  < 200 KB and no horizontal overflow; axe passes in both languages. Failure path: an unlinked
+  clinic's prescription URL shows "not found".
+- **Gates:** `make lint typecheck contract-check test` and `make e2e`.
