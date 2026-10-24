@@ -13,10 +13,11 @@ import { PORTAL_SIGN_IN_PATH, portalGet, portalPost } from "@/lib/auth/portal-se
 import { portalReasonForEndedSession } from "./messages";
 
 type Account = components["schemas"]["PatientAccount"];
+type PortalLink = components["schemas"]["PortalLink"];
 
 type Load =
   | { readonly status: "loading" }
-  | { readonly status: "ready"; readonly account: Account }
+  | { readonly status: "ready"; readonly account: Account; readonly links: readonly PortalLink[] }
   | { readonly status: "failed"; readonly error: unknown }
   | { readonly status: "leaving" };
 
@@ -27,7 +28,7 @@ const METHOD_LABELS: Record<Account["sign_in_method"], string> = {
 
 /**
  * The patient's account page (M6a-P3, decision 8): who they are, how they sign in, and that no
- * clinic is linked yet. Linking and the portal dashboard come in M6b. The API re-checks the
+ * clinic is linked yet, or which clinics are (M6b-P1). The portal dashboard comes in M6b-P2. The API re-checks the
  * portal session on every call; this only decides what to render.
  */
 export function PortalAccount() {
@@ -49,15 +50,18 @@ export function PortalAccount() {
 
   useEffect(() => {
     let cancelled = false;
-    portalGet("/api/v1/portal/me").then(
-      ({ data }) => {
-        if (!cancelled) setLoad({ status: "ready", account: data.account });
-      },
-      (error: unknown) => {
-        if (cancelled || leave(error)) return;
-        setLoad({ status: "failed", error });
-      },
-    );
+    // One after the other: the first call may refresh the session, and the second reuses it.
+    portalGet("/api/v1/portal/me")
+      .then(async (me) => [me, await portalGet("/api/v1/portal/links")] as const)
+      .then(
+        ([me, links]) => {
+          if (!cancelled) setLoad({ status: "ready", account: me.data.account, links: links.data.items });
+        },
+        (error: unknown) => {
+          if (cancelled || leave(error)) return;
+          setLoad({ status: "failed", error });
+        },
+      );
     return () => {
       cancelled = true;
     };
@@ -99,7 +103,7 @@ export function PortalAccount() {
     );
   }
 
-  const { account } = load;
+  const { account, links } = load;
   return (
     <section aria-labelledby="portal-account-heading" className="space-y-5 p-6 sm:p-8">
       <div>
@@ -118,12 +122,26 @@ export function PortalAccount() {
 
       {!account.email_verified && account.sign_in_method === "PASSWORD" && <VerifyBanner />}
 
-      <Card title="No clinic linked yet">
-        <p className="text-slate-800">
-          Your appointments and prescriptions will appear here once a clinic links this account to
-          your record there, for example when you open a prescription link from your clinic.
-        </p>
-      </Card>
+      {links.length === 0 ? (
+        <Card title="No clinic linked yet">
+          <p className="text-slate-800">
+            Your appointments and prescriptions will appear here once you link your record at a clinic:
+            open the invitation your clinic gives you, or choose &ldquo;Save to my MediEase&rdquo; on a
+            prescription link.
+          </p>
+        </Card>
+      ) : (
+        <Card title="Your clinics">
+          <ul className="space-y-2" aria-label="Linked clinics">
+            {links.map((link) => (
+              <li key={link.id}>
+                <span className="font-semibold">{link.clinic.name}</span>{" · "}
+                {link.patient_first_name} · <span className="font-mono">{link.patient_code}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <Button onClick={() => void signOut()} disabled={signingOut} className="w-full">
         {signingOut ? "Signing out…" : "Sign out"}

@@ -115,9 +115,34 @@ describe("PortalSignInForm (M6a-P3)", () => {
   });
 });
 
+const NO_LINKS = { "GET /api/v1/portal/links": () => json(200, { items: [] }) };
+
 describe("PortalAccount (M6a-P3, decision 8)", () => {
+  it("M6b-P1 (FR-PRT-02): lists the linked clinics with the record's first name and code", async () => {
+    mockApi({
+      "GET /api/v1/portal/me": () => json(200, { account: ACCOUNT }),
+      "GET /api/v1/portal/links": () =>
+        json(200, {
+          items: [
+            {
+              id: "0192f0a0-0000-7000-8000-0000000000e1",
+              clinic: { id: "0192f0a0-0000-7000-8000-0000000000e2", name: "Sample Clinic", phone_e164: null, address_line: null, city: null },
+              patient_first_name: "Asha",
+              patient_code: "SC-0004",
+              method: "INVITE",
+              linked_at: "2026-10-24T05:30:00Z",
+            },
+          ],
+        }),
+    });
+    render(<PortalAccount />);
+    const clinics = await screen.findByRole("list", { name: "Linked clinics" });
+    expect(clinics).toHaveTextContent("Sample Clinic · Asha · SC-0004");
+    expect(screen.queryByRole("region", { name: "No clinic linked yet" })).not.toBeInTheDocument();
+  });
+
   it("FR-PRT-01: shows the account, how it signs in, and that no clinic is linked", async () => {
-    mockApi({ "GET /api/v1/portal/me": () => json(200, { account: ACCOUNT }) });
+    mockApi({ ...NO_LINKS, "GET /api/v1/portal/me": () => json(200, { account: ACCOUNT }) });
     render(<PortalAccount />);
 
     expect(await screen.findByRole("heading", { name: "Hello, Asha Patient" })).toBeInTheDocument();
@@ -128,6 +153,7 @@ describe("PortalAccount (M6a-P3, decision 8)", () => {
 
   it("FR-AUTH-08: an unverified password account sees the banner and can resend", async () => {
     const api = mockApi({
+      ...NO_LINKS,
       "GET /api/v1/portal/me": () => json(200, { account: ACCOUNT }),
       "POST /api/v1/portal/auth/verify-email/resend": () => json(202, { accepted: true }),
     });
@@ -142,6 +168,7 @@ describe("PortalAccount (M6a-P3, decision 8)", () => {
 
   it("a verified or Google account sees no banner", async () => {
     mockApi({
+      ...NO_LINKS,
       "GET /api/v1/portal/me": () => json(200, { account: { ...ACCOUNT, email_verified: true } }),
     });
     render(<PortalAccount />);
@@ -151,6 +178,7 @@ describe("PortalAccount (M6a-P3, decision 8)", () => {
 
   it("ADR-0015: signs out with the portal's CSRF key, not the staff one", async () => {
     const api = mockApi({
+      ...NO_LINKS,
       "GET /api/v1/portal/me": () => json(200, { account: { ...ACCOUNT, sign_in_method: "GOOGLE" } }),
       "POST /api/v1/portal/auth/sign-out": () => noContent(),
     });
@@ -165,6 +193,7 @@ describe("PortalAccount (M6a-P3, decision 8)", () => {
 
   it("refreshes an expired portal session once, then shows the account", async () => {
     const api = mockApi({
+      ...NO_LINKS,
       "GET /api/v1/portal/me": [
         () => apiError(401, "AUTH_SESSION_EXPIRED", "Your session has ended."),
         () => apiError(401, "AUTH_SESSION_EXPIRED", "Your session has ended."),
@@ -181,6 +210,7 @@ describe("PortalAccount (M6a-P3, decision 8)", () => {
 
   it("sends an ended session back to the portal sign-in with a reason", async () => {
     mockApi({
+      ...NO_LINKS,
       "GET /api/v1/portal/me": () => apiError(401, "AUTH_REFRESH_REUSED", "Ended for safety."),
     });
     render(<PortalAccount />);
@@ -190,7 +220,7 @@ describe("PortalAccount (M6a-P3, decision 8)", () => {
   });
 
   it("shows a failure with the Ref and Try again", async () => {
-    mockApi({ "GET /api/v1/portal/me": () => apiError(500, "SYS_UNEXPECTED", "An unexpected error occurred.") });
+    mockApi({ ...NO_LINKS, "GET /api/v1/portal/me": () => apiError(500, "SYS_UNEXPECTED", "An unexpected error occurred.") });
     render(<PortalAccount />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Ref: test-ref");
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();

@@ -85,6 +85,8 @@ describe("proxy (sign-in hint)", () => {
       ].every(isPublicPath),
     ).toBe(true);
     expect(["/", "/queue", "/ops", "/invite", "/portal", "/portal/x"].some(isPublicPath)).toBe(false);
+    // M6b-P1: linking needs a signed-in patient; the proxy sends others to sign in and back.
+    expect(["/portal/link/x", "/portal/link/prescription/x"].some(isPublicPath)).toBe(false);
   });
 });
 

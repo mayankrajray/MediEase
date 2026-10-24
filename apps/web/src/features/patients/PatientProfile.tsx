@@ -15,6 +15,7 @@ import { formatPhone } from "@/lib/format/phone";
 import { usePatientApi } from "./api";
 import { ConsentPanel } from "./ConsentPanel";
 import { EditPatientForm } from "./EditPatientForm";
+import { PatientPortalCard } from "./PatientPortalCard";
 import { ageText, clinicToday, isNotFound, LANGUAGE_LABELS, SEX_LABELS, type Patient } from "./fields";
 
 type Load =
@@ -34,6 +35,7 @@ export function PatientProfile({ patientId }: { patientId: string }) {
   const canViewClinical = permissions.includes("CLINICAL_VIEW");
   const canPrint = permissions.includes("RX_PRINT");
   const canRemind = permissions.includes("REMINDERS_SCHEDULE");
+  const canManage = permissions.includes("PATIENTS_MANAGE");
   const api = usePatientApi();
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
@@ -143,6 +145,8 @@ export function PatientProfile({ patientId }: { patientId: string }) {
       </section>
 
       <ConsentPanel patient={patient} timeZone={clinic.timezone} onChange={show} />
+
+      {canManage && <PatientPortalCard patient={patient} />}
 
       <PatientAppointments patient={patient} />
 
