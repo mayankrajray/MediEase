@@ -57,6 +57,7 @@ def _from_row(row: ReminderRow) -> Reminder:
         cancelled_at=row.cancelled_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        appointment_id=row.appointment_id,
     )
 
 
@@ -130,6 +131,7 @@ class SqlAlchemyReminderRepository(TenantScopedRepository[ReminderRow]):
             kind=reminder.kind.value,
             source=reminder.source.value,
             source_id=reminder.source_id,
+            appointment_id=reminder.appointment_id,
             created_by=reminder.created_by,
             created_at=reminder.created_at,
         )
@@ -151,6 +153,20 @@ class SqlAlchemyReminderRepository(TenantScopedRepository[ReminderRow]):
             ReminderRow.status == ReminderStatus.SCHEDULED.value,
         )
         return self._one(query, for_update)
+
+    def scheduled_for_appointment(self, appointment_id: UUID) -> Sequence[Reminder]:
+        """M6a-P8: an appointment's reminders still to go, locked (they are about to change)."""
+        query = (
+            self._scoped_select()
+            .where(
+                ReminderRow.appointment_id == appointment_id,
+                ReminderRow.status == ReminderStatus.SCHEDULED.value,
+            )
+            .order_by(ReminderRow.due_at, ReminderRow.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return [_from_row(row) for row in self._session.scalars(query)]
 
     def sent_for_chain(self, chain_id: UUID, follow_up_date: date) -> bool:
         query = self._scoped_select().where(

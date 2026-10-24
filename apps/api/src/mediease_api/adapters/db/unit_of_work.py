@@ -17,7 +17,7 @@ from uuid import UUID
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from mediease_api.adapters.db.audit import SqlAlchemyAuditWriter
+from mediease_api.adapters.db.audit import SqlAlchemyAuditReader, SqlAlchemyAuditWriter
 from mediease_api.adapters.db.dashboard import SqlAlchemyDashboardReads
 from mediease_api.adapters.db.jobs import SqlAlchemyJobQueue, SqlAlchemyRetentionRepository
 from mediease_api.adapters.db.messages import (
@@ -98,6 +98,7 @@ class SqlAlchemyTenantRepositories:
         self._notifications = SqlAlchemyNotificationRepository(session, clinic_id)
         self._notification_preferences = SqlAlchemyPreferenceRepository(session, clinic_id)
         self._dashboard = SqlAlchemyDashboardReads(session, clinic_id)
+        self._audit_log = SqlAlchemyAuditReader(session, clinic_id)
 
     @property
     def clinic_id(self) -> UUID:
@@ -182,6 +183,10 @@ class SqlAlchemyTenantRepositories:
     @property
     def dashboard(self) -> SqlAlchemyDashboardReads:
         return self._dashboard
+
+    @property
+    def audit_log(self) -> SqlAlchemyAuditReader:
+        return self._audit_log
 
 
 class _OpenUnit:

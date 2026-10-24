@@ -54,6 +54,10 @@ class ReminderRepository(Protocol):
         """Whether a reminder for this chain and date was already handed to messaging."""
         ...
 
+    def scheduled_for_appointment(self, appointment_id: UUID) -> Sequence[Reminder]:
+        """M6a-P8: the appointment's ``SCHEDULED`` reminders, locked for update."""
+        ...
+
     def list_for_patient(self, patient_id: UUID, *, limit: int) -> Sequence[ReminderRead]: ...
 
     def pending_follow_ups(

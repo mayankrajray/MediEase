@@ -33,6 +33,8 @@ class Permission(StrEnum):
     # without seeing its content on screen; only the latest version unless CLINICAL_VIEW (1A).
     RX_PRINT = "RX_PRINT"
     USAGE_METRICS_VIEW = "USAGE_METRICS_VIEW"
+    # M6a-P8 (FR-AUD-03, decision 8A): the clinic's audit log and its export. Owners only.
+    AUDIT_VIEW = "AUDIT_VIEW"
 
 
 _EVERY_ROLE = frozenset(
@@ -55,6 +57,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
         Permission.SCHEDULES_MANAGE,
         Permission.CLINICAL_VIEW,
         Permission.USAGE_METRICS_VIEW,
+        Permission.AUDIT_VIEW,
     },
     Role.DOCTOR: _EVERY_ROLE
     | {Permission.CLINICAL_VIEW, Permission.CLINICAL_WRITE, Permission.USAGE_METRICS_VIEW},

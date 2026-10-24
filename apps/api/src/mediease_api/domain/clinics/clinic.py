@@ -43,6 +43,9 @@ class PaperSize(StrEnum):
     A4 = "A4"
 
 
+REMINDER_HOURS_MAX = 6
+
+
 class ClinicOwnerRequired(DomainError):
     """I1: a clinic cannot be active without an active owner."""
 
@@ -79,6 +82,10 @@ class Clinic:
     # M4-P4 (decision 3A): applied when a prescription version is first rendered, then fixed in
     # its stored PDF, so changing it never alters a printed prescription.
     rx_paper_size: PaperSize = PaperSize.A5
+    # M6a-P8 (FR-APT-08, decision 3A): appointment reminders, the evening before and some hours
+    # before the visit (0 = off). Applied to bookings made or moved after a change.
+    reminder_evening_before: bool = True
+    reminder_hours_before: int = 2
 
     @classmethod
     def create(
@@ -194,6 +201,18 @@ class Clinic:
         for attribute, value in validated.items():
             if value is not None:
                 setattr(self, attribute, value)
+
+    def change_reminders(
+        self, *, now: datetime, evening_before: bool | None = None, hours_before: int | None = None
+    ) -> None:
+        """Decision 3A: the clinic's appointment reminders; only the values given change."""
+        if hours_before is not None and not 0 <= hours_before <= REMINDER_HOURS_MAX:
+            raise InvalidValue("reminder_hours_before", f"must be 0-{REMINDER_HOURS_MAX}")
+        self.updated_at = require_utc(now, "now")
+        if evening_before is not None:
+            self.reminder_evening_before = evening_before
+        if hours_before is not None:
+            self.reminder_hours_before = hours_before
 
     def change_booking_mode(self, mode: BookingMode, *, now: datetime) -> bool:
         """Switch slots/tokens; True if it changed. The caller has checked every block (R19)."""

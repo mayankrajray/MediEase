@@ -59,6 +59,8 @@ from mediease_api.application.appointments.no_show import MarkNoShows, SweepNoSh
 from mediease_api.application.appointments.queries import GetAppointment, ListPatientAppointments
 from mediease_api.application.appointments.queue import AddWalkIn, GetQueue, TransitionAppointment
 from mediease_api.application.appointments.reschedule import RescheduleAppointment
+from mediease_api.application.appointments.to_move import ListBookingsToMove
+from mediease_api.application.audit_log.use_cases import ExportAuditEvents, ListAuditEvents
 from mediease_api.application.auth._session import SessionIssuer
 from mediease_api.application.auth.authenticate import AuthenticateRequest
 from mediease_api.application.auth.emails import SendAuthEmail
@@ -98,6 +100,7 @@ from mediease_api.application.links.use_cases import (
     ViewPrescription,
 )
 from mediease_api.application.messaging.booking import SendBookingConfirmation
+from mediease_api.application.messaging.cancellation import SendCancellationNotice
 from mediease_api.application.messaging.opt_out import OptOutByReply, SendOptOutConfirmation
 from mediease_api.application.messaging.rx_link import SendRxLink
 from mediease_api.application.messaging.sender import MessageSender
@@ -175,6 +178,7 @@ from mediease_api.config.settings import AppEnv, AppSettings
 from mediease_api.delivery.errors import register_error_handlers
 from mediease_api.delivery.http.access import check_every_route_has_policy, register_access_control
 from mediease_api.delivery.http.appointments import create_appointments_blueprint
+from mediease_api.delivery.http.audit_log import create_audit_log_blueprint
 from mediease_api.delivery.http.auth import create_auth_blueprint
 from mediease_api.delivery.http.clinic import create_clinic_blueprint
 from mediease_api.delivery.http.csrf import register_csrf_protection
@@ -212,6 +216,7 @@ from mediease_api.domain.jobs.job import (
 )
 from mediease_api.domain.messaging.jobs import (
     BOOKING_CONFIRMATION_KIND,
+    CANCELLATION_NOTICE_KIND,
     OPT_OUT_CONFIRMATION_KIND,
     REMINDER_KIND,
     RX_LINK_KIND,
@@ -492,6 +497,16 @@ class _UseCases:
 
     def set_notification_preferences(self) -> SetNotificationPreferences:
         return SetNotificationPreferences(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    # M6a-P8: the owner's audit log and the bookings a schedule change left to move.
+    def list_audit_events(self) -> ListAuditEvents:
+        return ListAuditEvents(uow=self._uow(), clock=self.clock)
+
+    def export_audit_events(self) -> ExportAuditEvents:
+        return ExportAuditEvents(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def list_bookings_to_move(self) -> ListBookingsToMove:
+        return ListBookingsToMove(uow=self._uow(), clock=self.clock)
 
     def record_consent(self) -> RecordConsent:
         return RecordConsent(uow=self._uow(), clock=self.clock, ids=self.ids)
@@ -837,6 +852,8 @@ def _messaging_handlers(
         NO_SHOW_SWEEP_KIND: SweepNoShows(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
         MARK_NO_SHOWS_KIND: MarkNoShows(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
         BOOKING_CONFIRMATION_KIND: SendBookingConfirmation(sender=sender),
+        # M6a-P8 (decision 7A): a visit the clinic cancelled.
+        CANCELLATION_NOTICE_KIND: SendCancellationNotice(sender=sender),
         RX_LINK_KIND: SendRxLink(
             sender=sender,
             ids=ids,
@@ -1015,6 +1032,7 @@ def create_app(
     app.register_blueprint(create_reminders_blueprint(use_cases))
     app.register_blueprint(create_dashboard_blueprint(use_cases))
     app.register_blueprint(create_notifications_blueprint(use_cases))
+    app.register_blueprint(create_audit_log_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

@@ -29,6 +29,8 @@ class NotificationKind(StrEnum):
     PATIENT_ARRIVED = "appointment.arrived"
     MESSAGE_FAILED = "message.failed"
     STAFF_JOINED = "staff.joined"
+    # M6a-P8 (FR-APT-09): leave or a schedule change closed sessions with bookings in them.
+    BOOKINGS_TO_MOVE = "schedule.bookings_to_move"
 
 
 class Channel(StrEnum):
@@ -53,6 +55,7 @@ KINDS: dict[NotificationKind, KindInfo] = {
     NotificationKind.PATIENT_ARRIVED: KindInfo("My patient has arrived"),
     NotificationKind.MESSAGE_FAILED: KindInfo("A message to a patient failed"),
     NotificationKind.STAFF_JOINED: KindInfo("Someone joined the team"),
+    NotificationKind.BOOKINGS_TO_MOVE: KindInfo("Bookings need moving after a schedule change"),
 }
 
 
@@ -127,6 +130,18 @@ def message_failed_title(patient: PatientRef) -> str:
 
 def staff_joined_title(person: PersonName, role: RoleLabel) -> str:
     return f"{person.text[:80]} joined the team as {role.text}"
+
+
+def bookings_to_move_title(doctor: PersonName, count: int, on_date: date | None) -> str:
+    """E.g. "Dr. Sample on leave 24 Oct: 3 bookings to move": a doctor, a day and a count."""
+    what = "1 booking" if count == 1 else f"{count} bookings"
+    name = doctor.text[:80]
+    if on_date is None:
+        return f"{name}'s schedule changed: {what} to move"
+    return f"{name} on leave {on_date.day} {_MONTHS[on_date.month - 1]}: {what} to move"
+
+
+BOOKINGS_TO_MOVE_LINK = "/bookings-to-move"
 
 
 def queue_link(on_date: date) -> str:

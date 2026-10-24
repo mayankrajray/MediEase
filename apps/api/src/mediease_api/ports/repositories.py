@@ -391,6 +391,15 @@ class AppointmentRepository(Protocol):
         """Appointments still ``BOOKED`` whose session ended by ``cutoff`` (M5-P4, R10)."""
         ...
 
+    def list_to_move(
+        self, *, from_date: date, doctor_id: UUID | None = None, limit: int
+    ) -> Sequence[tuple[Appointment, Session]]:
+        """M6a-P8 (FR-APT-09): ``BOOKED`` or ``ARRIVED`` bookings in ``CLOSED`` sessions on or
+        after ``from_date``, earliest first, each with its session."""
+        ...
+
+    def count_to_move(self, *, from_date: date, doctor_id: UUID | None = None) -> int: ...
+
 
 class AppointmentHistoryRepository(Protocol):
     """Append-only status history (FR-APT-05)."""

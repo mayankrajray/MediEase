@@ -5,7 +5,16 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, UniqueConstraint, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    SmallInteger,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +33,9 @@ class ClinicRow(Keyed, Timestamps, Base):
         enum_check("rx_paper_size", PaperSize),
         CheckConstraint("patient_code_prefix ~ '^[A-Z]{2,4}$'", name="patient_code_prefix_format"),
         CheckConstraint("next_patient_seq >= 1", name="next_patient_seq_positive"),
+        CheckConstraint(
+            "reminder_hours_before BETWEEN 0 AND 6", name="reminder_hours_before_range"
+        ),
     )
 
     name: Mapped[str] = mapped_column(Text)
@@ -43,6 +55,9 @@ class ClinicRow(Keyed, Timestamps, Base):
     booking_mode: Mapped[str] = mapped_column(Text, server_default=text("'TOKENS'"))
     # M4-P4 (migration 0012): prescription stationery, read when a version is first rendered.
     rx_paper_size: Mapped[str] = mapped_column(Text, server_default=text("'A5'"))
+    # M6a-P8 (migration 0024): appointment reminders, the evening before and hours before.
+    reminder_evening_before: Mapped[bool] = mapped_column(server_default=text("true"))
+    reminder_hours_before: Mapped[int] = mapped_column(SmallInteger, server_default=text("2"))
 
 
 class DoctorRow(TenantOwned, Timestamps, Base):

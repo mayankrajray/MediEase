@@ -23,6 +23,7 @@ from mediease_api.application.scheduling.generation import neighbours, plan_for,
 from mediease_api.application.scheduling.schedules import load_clinic, load_doctor
 from mediease_api.application.scheduling.views import ExceptionChange
 from mediease_api.domain.audit.actions import AuditAction
+from mediease_api.domain.notifications.events import BookingsToMove
 from mediease_api.domain.scheduling.blocks import BlockShape
 from mediease_api.domain.scheduling.errors import LeaveExists, ScheduleOverlap
 from mediease_api.domain.scheduling.exceptions import (
@@ -125,6 +126,25 @@ class AddException:
                     "kept_sessions": str(len(kept)),
                 },
             )
+            # M6a-P8 (FR-APT-09): booked sessions it closed are listed for the desk, who is told.
+            if kept:
+                # Imported here: the service reaches the appointments, which load the clinic
+                # through this package.
+                from mediease_api.application.notifications.service import publish
+
+                publish(
+                    uow,
+                    BookingsToMove(
+                        doctor.id,
+                        exception.id,
+                        on_date if exception.kind is ExceptionKind.LEAVE else None,
+                    ),
+                    clinic_id=clinic_id,
+                    ids=self._ids,
+                    now=now,
+                    request_id=actor.info.request_id,
+                    actor_user_id=actor.user_id,
+                )
             uow.commit()
 
         logger.info(
@@ -182,6 +202,21 @@ class RemoveException:
                     "kept_sessions": str(len(kept)),
                 },
             )
+            # M6a-P8 (FR-APT-09): booked sessions it closed are listed for the desk, who is told.
+            if kept:
+                # Imported here: the service reaches the appointments, which load the clinic
+                # through this package.
+                from mediease_api.application.notifications.service import publish
+
+                publish(
+                    uow,
+                    BookingsToMove(doctor.id, self._ids.new_id(), None),
+                    clinic_id=clinic_id,
+                    ids=self._ids,
+                    now=now,
+                    request_id=actor.info.request_id,
+                    actor_user_id=actor.user_id,
+                )
             uow.commit()
 
         logger.info(

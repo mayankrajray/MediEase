@@ -19,19 +19,26 @@ So an event exists exactly when the change commits, and no feature calls WhatsAp
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 import structlog
 
 from mediease_api.application.messaging.booking import enqueue_booking_confirmation
+from mediease_api.application.messaging.cancellation import enqueue_cancellation_notice
 from mediease_api.application.messaging.rx_link import enqueue_rx_link
+from mediease_api.application.reminders.appointment import (
+    cancel_appointment_reminders,
+    schedule_appointment_reminders,
+)
 from mediease_api.domain.appointments.appointment import Appointment
+from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.identity.membership import MembershipStatus, Role
 from mediease_api.domain.notifications.events import (
     AppointmentBooked,
     AppointmentCancelled,
     AppointmentRescheduled,
+    BookingsToMove,
     Event,
     MessageFailed,
     PatientArrived,
@@ -39,6 +46,7 @@ from mediease_api.domain.notifications.events import (
     StaffJoined,
 )
 from mediease_api.domain.notifications.notification import (
+    BOOKINGS_TO_MOVE_LINK,
     Channel,
     Notification,
     NotificationKind,
@@ -48,13 +56,17 @@ from mediease_api.domain.notifications.notification import (
     RoleLabel,
     arrived_title,
     booked_title,
+    bookings_to_move_title,
     cancelled_title,
     message_failed_title,
     queue_link,
     rescheduled_title,
     staff_joined_title,
 )
+from mediease_api.domain.patients.patient import Patient
 from mediease_api.domain.scheduling.mode import BookingMode
+from mediease_api.domain.scheduling.sessions import Session
+from mediease_api.domain.shared.time import local_date
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.unit_of_work import TenantRepositories, UnitOfWork
 
@@ -63,6 +75,9 @@ logger = structlog.get_logger(__name__)
 ROLE_WORDS = {Role.OWNER: "an owner", Role.DOCTOR: "a doctor", Role.FRONT_DESK: "front desk"}
 
 Title = Callable[[PatientRef, Place], str]
+AppointmentEvent = (
+    AppointmentBooked | AppointmentRescheduled | AppointmentCancelled | PatientArrived
+)
 
 
 def publish(
@@ -122,7 +137,7 @@ class NotificationService:
                 return self._appointment(
                     uow,
                     tenant,
-                    event.appointment_id,
+                    event,
                     kind,
                     title,
                     confirm=confirm,
@@ -169,6 +184,10 @@ class NotificationService:
                     now=now,
                     actor=actor_user_id,
                 )
+            case BookingsToMove(doctor_id=doctor_id, change_id=change_id, on_date=on_date):
+                return self._bookings_to_move(
+                    uow, tenant, doctor_id, change_id, on_date, now=now, actor=actor_user_id
+                )
         return 0  # pragma: no cover - every event is matched above
 
     # --- events about an appointment ------------------------------------------------------------
@@ -177,7 +196,7 @@ class NotificationService:
         self,
         uow: UnitOfWork,
         tenant: TenantRepositories,
-        appointment_id: UUID,
+        event: AppointmentEvent,
         kind: NotificationKind,
         title: Title,
         *,
@@ -186,7 +205,7 @@ class NotificationService:
         request_id: str | None,
         actor: UUID | None,
     ) -> int:
-        appointment = tenant.appointments.get(appointment_id)
+        appointment = tenant.appointments.get(event.appointment_id)
         if appointment is None:  # pragma: no cover - published in the change's transaction
             return 0
         session = tenant.sessions.get(appointment.session_id)
@@ -205,6 +224,18 @@ class NotificationService:
                 request_id=request_id,
                 now=now,
             )
+        self._reminders(
+            uow,
+            tenant,
+            event,
+            clinic=clinic,
+            appointment=appointment,
+            session=session,
+            patient=patient,
+            now=now,
+            request_id=request_id,
+            actor=actor,
+        )
         place = Place.of(
             starts_at=appointment.slot_start or session.starts_at,
             token_number=appointment.token_number if session.mode is BookingMode.TOKENS else None,
@@ -218,6 +249,96 @@ class NotificationService:
             title=title(PatientRef.of(patient.full_name, patient.code), place),
             link=queue_link(session.on_date),
             entity=("appointment", appointment.id),
+            now=now,
+            actor=actor,
+        )
+
+    def _reminders(
+        self,
+        uow: UnitOfWork,
+        tenant: TenantRepositories,
+        event: AppointmentEvent,
+        *,
+        clinic: Clinic,
+        appointment: Appointment,
+        session: Session,
+        patient: Patient,
+        now: datetime,
+        request_id: str | None,
+        actor: UUID | None,
+    ) -> None:
+        """M6a-P8: the patient's reminders follow the booking (4A); a clinic cancellation is told
+        to the patient (7A)."""
+        if isinstance(event, AppointmentRescheduled):
+            cancel_appointment_reminders(
+                uow,
+                tenant,
+                ids=self._ids,
+                appointment_id=event.from_appointment_id,
+                request_id=request_id,
+                now=now,
+            )
+        if isinstance(event, AppointmentBooked | AppointmentRescheduled):
+            schedule_appointment_reminders(
+                uow,
+                tenant,
+                ids=self._ids,
+                clinic=clinic,
+                appointment=appointment,
+                session=session,
+                patient=patient,
+                created_by=actor,
+                request_id=request_id,
+                now=now,
+            )
+        elif isinstance(event, AppointmentCancelled):
+            cancel_appointment_reminders(
+                uow,
+                tenant,
+                ids=self._ids,
+                appointment_id=appointment.id,
+                request_id=request_id,
+                now=now,
+            )
+            enqueue_cancellation_notice(
+                uow,
+                ids=self._ids,
+                clinic=clinic,
+                appointment=appointment,
+                patient=patient,
+                request_id=request_id,
+                now=now,
+            )
+
+    def _bookings_to_move(
+        self,
+        uow: UnitOfWork,
+        tenant: TenantRepositories,
+        doctor_id: UUID,
+        change_id: UUID,
+        on_date: date | None,
+        *,
+        now: datetime,
+        actor: UUID | None,
+    ) -> int:
+        """M6a-P8 (FR-APT-09, decision 6A): the desk and the owners hear what needs moving."""
+        clinic = uow.clinics.get(tenant.clinic_id)
+        doctor = tenant.doctors.get(doctor_id)
+        if clinic is None or doctor is None:  # pragma: no cover - foreign keys keep them
+            return 0
+        count = tenant.appointments.count_to_move(
+            from_date=local_date(now, clinic.timezone), doctor_id=doctor_id
+        )
+        if count == 0:
+            return 0
+        return self._in_app(
+            tenant,
+            NotificationKind.BOOKINGS_TO_MOVE,
+            self._members(tenant, {Role.OWNER, Role.FRONT_DESK}),
+            event_key=f"{NotificationKind.BOOKINGS_TO_MOVE.value}:{change_id}",
+            title=bookings_to_move_title(PersonName(doctor.display_name), count, on_date),
+            link=BOOKINGS_TO_MOVE_LINK,
+            entity=("doctor", doctor_id),
             now=now,
             actor=actor,
         )

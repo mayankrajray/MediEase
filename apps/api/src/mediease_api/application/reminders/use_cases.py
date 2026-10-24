@@ -22,7 +22,12 @@ from mediease_api.application.scheduling.schedules import load_clinic, load_doct
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.messaging.message import Message
 from mediease_api.domain.patients.patient import Patient
-from mediease_api.domain.reminders.errors import ClinicPhoneMissing, InPast, NoConsent
+from mediease_api.domain.reminders.errors import (
+    ClinicPhoneMissing,
+    FollowsAppointment,
+    InPast,
+    NoConsent,
+)
 from mediease_api.domain.reminders.reminder import Reminder, ReminderSource
 from mediease_api.domain.reminders.rules import follow_up_due_at
 from mediease_api.domain.shared.errors import InvalidValue, NotFound
@@ -142,6 +147,8 @@ class ChangeReminder(_UseCase):
                 action = AuditAction.REMINDER_CANCELLED
             else:
                 assert cmd.follow_up_date is not None
+                if reminder.follows_appointment:
+                    raise FollowsAppointment()  # M6a-P8 decision 4A: move the appointment
                 if cmd.follow_up_date <= local_date(now, clinic.timezone):
                     raise InPast()
                 reminder.move(

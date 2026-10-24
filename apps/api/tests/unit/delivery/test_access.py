@@ -65,6 +65,10 @@ EXPECTED_POLICIES = {
     "notifications.read_all_notifications": (Access.CLINIC, Permission.CLINIC_VIEW),
     "notifications.notification_preferences": (Access.CLINIC, Permission.CLINIC_VIEW),
     "notifications.set_notification_preferences": (Access.CLINIC, Permission.CLINIC_VIEW),
+    # M6a-P8: bookings to move, and the owner's audit log.
+    "appointments.list_bookings_to_move": (Access.CLINIC, Permission.APPOINTMENTS_MANAGE),
+    "audit_log.list_audit_events": (Access.CLINIC, Permission.AUDIT_VIEW),
+    "audit_log.export_audit_events": (Access.CLINIC, Permission.AUDIT_VIEW),
     "patients.lookup_patients": (Access.CLINIC, Permission.PATIENTS_MANAGE),
     "patients.get_patient": (Access.CLINIC, Permission.PATIENTS_MANAGE),
     "patients.update_patient": (Access.CLINIC, Permission.PATIENTS_MANAGE),

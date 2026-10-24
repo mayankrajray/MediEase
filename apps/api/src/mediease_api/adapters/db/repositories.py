@@ -126,6 +126,8 @@ def _clinic_from_row(row: ClinicRow) -> Clinic:
         next_patient_seq=row.next_patient_seq,
         booking_mode=BookingMode(row.booking_mode),
         rx_paper_size=PaperSize(row.rx_paper_size),
+        reminder_evening_before=row.reminder_evening_before,
+        reminder_hours_before=row.reminder_hours_before,
     )
 
 
@@ -144,6 +146,8 @@ def _write_clinic(row: ClinicRow, clinic: Clinic) -> None:
     row.next_patient_seq = clinic.next_patient_seq
     row.booking_mode = clinic.booking_mode.value
     row.rx_paper_size = clinic.rx_paper_size.value
+    row.reminder_evening_before = clinic.reminder_evening_before
+    row.reminder_hours_before = clinic.reminder_hours_before
     row.updated_at = clinic.updated_at
 
 
@@ -1173,6 +1177,47 @@ class SqlAlchemyAppointmentRepository(TenantScopedRepository[AppointmentRow]):
             .limit(limit)
         )
         return list(self._session.scalars(query))
+
+    def _to_move(self, from_date: date, doctor_id: UUID | None) -> Select[AppointmentRow]:
+        query = (
+            select(AppointmentRow)
+            .join(SessionRow, SessionRow.id == AppointmentRow.session_id)
+            .where(
+                AppointmentRow.clinic_id == self.clinic_id,
+                SessionRow.clinic_id == self.clinic_id,
+                AppointmentRow.status.in_(
+                    [AppointmentStatus.BOOKED.value, AppointmentStatus.ARRIVED.value]
+                ),
+                SessionRow.status == SessionStatus.CLOSED.value,
+                SessionRow.on_date >= from_date,
+            )
+        )
+        if doctor_id is not None:
+            query = query.where(AppointmentRow.doctor_id == doctor_id)
+        return query
+
+    def list_to_move(
+        self, *, from_date: date, doctor_id: UUID | None = None, limit: int
+    ) -> Sequence[tuple[Appointment, BookableSession]]:
+        query = (
+            self._to_move(from_date, doctor_id)
+            .add_columns(SessionRow)
+            .order_by(
+                SessionRow.starts_at,
+                AppointmentRow.slot_start,
+                AppointmentRow.token_number,
+                AppointmentRow.id,
+            )
+            .limit(limit)
+        )
+        return [
+            (_appointment_from_row(appointment), _session_from_row(session))
+            for appointment, session in self._session.execute(query)
+        ]
+
+    def count_to_move(self, *, from_date: date, doctor_id: UUID | None = None) -> int:
+        query = select(func.count()).select_from(self._to_move(from_date, doctor_id).subquery())
+        return int(self._session.scalar(query) or 0)
 
 
 class SqlAlchemyAppointmentHistoryRepository(TenantScopedRepository[AppointmentStatusHistoryRow]):

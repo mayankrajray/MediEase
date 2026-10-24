@@ -70,6 +70,8 @@ class TodayView:
     sessions: tuple[TodaySession, ...]
     next_patients: tuple[NextPatient, ...]
     follow_ups_pending: int
+    # M6a-P8 (FR-APT-09): live bookings in closed sessions from today on; scope CLINIC only.
+    bookings_to_move: int | None
     # CLINIC scope only; None for a doctor.
     messages_failed: int | None
     # USAGE_METRICS_VIEW only, oldest first, ending today.
@@ -112,6 +114,11 @@ class GetToday:
                 next_patients=tuple(reads.next_patients(ids, limit=NEXT_LIMIT)),
                 follow_ups_pending=reads.pending_follow_up_count(
                     today=today, timezone=clinic.timezone
+                ),
+                bookings_to_move=(
+                    tenant.appointments.count_to_move(from_date=today)
+                    if scope is Scope.CLINIC
+                    else None
                 ),
                 messages_failed=(
                     reads.failed_message_count(

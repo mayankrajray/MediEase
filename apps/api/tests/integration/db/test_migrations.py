@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0023"
+HEAD = "0024"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -693,5 +693,36 @@ def test_0023_adds_notifications_and_their_preferences(
             assert "IN_APP" in _check(conn, "ck_notification_preferences_channel")
         command.downgrade(alembic_config, "0022")
         assert _tables(scratch_database_url) == M6A_P4_TABLES
+    finally:
+        engine.dispose()
+
+
+def test_0024_adds_appointment_reminders_and_clinic_settings(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    """M6a-P8: no new table; reminders gain the appointment kind, clinics their settings."""
+    command.upgrade(alembic_config, "0024")
+    assert _tables(scratch_database_url) == M6A_P7_TABLES
+    engine = create_engine(scratch_database_url)
+    columns = (
+        "SELECT column_name FROM information_schema.columns"
+        " WHERE table_name = :t AND column_name = ANY(:c)"
+    )
+    try:
+        with engine.connect() as conn:
+            assert "APPOINTMENT" in _check(conn, "ck_reminders_kind")
+            assert "schedule.bookings_to_move" in _check(conn, "ck_notifications_kind")
+            found = conn.execute(
+                text(columns),
+                {"t": "clinics", "c": ["reminder_evening_before", "reminder_hours_before"]},
+            ).all()
+            assert len(found) == 2
+        command.downgrade(alembic_config, "0023")
+        with engine.connect() as conn:
+            assert "APPOINTMENT" not in _check(conn, "ck_reminders_kind")
+            assert "schedule.bookings_to_move" not in _check(conn, "ck_notifications_kind")
+            assert (
+                conn.execute(text(columns), {"t": "reminders", "c": ["appointment_id"]}).all() == []
+            )
     finally:
         engine.dispose()

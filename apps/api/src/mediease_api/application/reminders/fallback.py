@@ -21,12 +21,18 @@ from uuid import UUID
 import structlog
 
 from mediease_api.application.messaging.sender import MessageSender, Send, Skip
+from mediease_api.application.reminders.appointment import (
+    appointment_variables,
+    still_applies,
+    visit_start,
+)
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.jobs.job import ClaimedJob, NewJob
 from mediease_api.domain.messaging.errors import MSG_NO_CONSENT, MSG_NOT_APPLICABLE
 from mediease_api.domain.messaging.formatting import follow_up_date_text
 from mediease_api.domain.messaging.jobs import (
+    APPOINTMENT_REMINDER,
     FOLLOW_UP_DUE,
     SMS_FALLBACK_KIND,
     reminder_message_key,
@@ -163,6 +169,23 @@ class SendSmsFallback:
                 return Skip("clinic_phone_missing", REM_CLINIC_PHONE_MISSING)
             doctor = tenant.doctors.get(reminder.doctor_id)
             assert doctor is not None
+            if reminder.follows_appointment:
+                # M6a-P8: the SMS of an appointment reminder, only while the visit still stands.
+                assert reminder.appointment_id is not None
+                appointment = tenant.appointments.get(reminder.appointment_id)
+                session = tenant.sessions.get(appointment.session_id) if appointment else None
+                if not still_applies(appointment, session):
+                    return Skip("appointment_changed", MSG_NOT_APPLICABLE)
+                assert appointment is not None and session is not None
+                if now >= visit_start(appointment, session):
+                    return Skip("too_late", MSG_NOT_APPLICABLE)
+                return Send(
+                    patient=patient,
+                    template_key=APPOINTMENT_REMINDER,
+                    variables=appointment_variables(clinic, doctor, appointment, session, patient),
+                    source_type=SourceType.REMINDER,
+                    source_id=reminder.id,
+                )
             return Send(
                 patient=patient,
                 template_key=FOLLOW_UP_DUE,
