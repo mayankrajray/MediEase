@@ -610,6 +610,7 @@ clinic. It holds no clinic data until a clinic links it (M6b, FR-PRT-06).
 | status | text not null | `ACTIVE` \| `DISABLED` |
 | password_hash | text null | Argon2id, the staff policy |
 | failed_login_count, locked_until, last_login_at | | The staff lockout (FR-AUTH-04) |
+| language | text not null default `'en'` | M6b-P2 (migration `0026`): the portal's language, `en` \| `hi` (`ck_patient_accounts_language`); set at sign-up from the page, changed by `PATCH /portal/me` |
 | created_at, updated_at | timestamptz | |
 
 ### `patient_refresh_tokens`

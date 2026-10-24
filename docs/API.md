@@ -88,7 +88,7 @@ and a portal session is 401 on every staff route.
 | POST | `/api/v1/portal/auth/sign-in` | Email and password | FR-PRT-01 | Implemented (M6a-P3) |
 | POST | `/api/v1/portal/auth/refresh` | Rotate the portal refresh token | FR-AUTH-02 | Implemented (M6a-P3) |
 | POST | `/api/v1/portal/auth/sign-out` | Revoke the portal session | FR-AUTH-02 | Implemented (M6a-P3) |
-| GET | `/api/v1/portal/me` | The signed-in account (linked records: below, M6b-P1) | FR-PRT-01 | Implemented (M6a-P3) |
+| GET | `/api/v1/portal/me` | The signed-in account, with its portal `language` (linked records: below, M6b-P1) | FR-PRT-01 | Implemented (M6a-P3) |
 | POST | `/api/v1/portal/auth/password-reset` | As staff; a Google-only account gets a "use Google" notice | FR-AUTH-05 | Implemented (M6a-P4) |
 | POST | `/api/v1/portal/auth/password-reset/complete` | As staff; also verifies the email | FR-AUTH-05 | Implemented (M6a-P4) |
 | POST | `/api/v1/portal/auth/verify-email` | `{token}` → 204 (the emailed page POSTs; a GET verifies nothing) | FR-AUTH-08 | Implemented (M6a-P4) |
@@ -297,6 +297,7 @@ cookies); every response is `Cache-Control: no-store`.
 | GET | `/api/v1/patients/{patient_id}/portal` | Staff: `NOT_LINKED`, `INVITED` (with expiry) or `LINKED` (method, since); never the account's details | FR-PRT-06 | Implemented (M6b-P1), `PATIENTS_MANAGE` |
 | DELETE | `/api/v1/patients/{patient_id}/portal-link` | Staff: end the link; returns the new status | FR-PRT-06 | Implemented (M6b-P1), `PATIENTS_MANAGE` |
 
+- **M6b-P2 (contract 0.30.0).** `PATCH /api/v1/portal/me {language: en|hi}` changes the account's portal language (logged as `portal.language_changed`, not audited); sign-up takes an optional `language`, else the `me_pt_lang` cookie the signed-out pages set, else `en` (a new Google account reads the same cookie). Links' `clinic` and each appointment group carry the clinic's `timezone` (groups also its `phone_e164`); `GET /portal/prescriptions/{rx_id}` without `?lang` uses the account's language.
 - **Scope (NFR-18).** Every patient read goes through `PortalScope`: the account's active links,
   read per request, each a (clinic, record) pair; a suspended clinic is left out. An ID outside it
   (another clinic, another record in the same clinic, a revoked link, a draft or superseded
