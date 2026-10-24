@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10, FR-AUD-01, NFR-07 |
 | Milestone / phases | M4 / P1–P6 |
-| Status | Approved (developer sign-off 2026-10-17: decisions D1–D5 with the developer's refinements; ADR-0012; D6 added 2026-10-18); M6b-P3 amendments R21–R25 Draft, awaiting approval (2026-10-24) |
+| Status | Approved (developer sign-off 2026-10-17: decisions D1–D5 with the developer's refinements; ADR-0012; D6 added 2026-10-18); M6b-P3 amendments R21–R25 approved 2026-10-24 and built (no backfill of issued rows: they are immutable; see the M6b design note's as-built) |
 | Last updated | 2026-10-17 (approved; §2 made precise for owners; R5 adjusted for M4 without the M5 worker; R14–R20 added for delivery, read audit, the PDF cache and bilingual rendering) |
 
 ## 1. Context
@@ -118,7 +118,7 @@ These are *formatting* vocabularies chosen by the doctor, not clinical recommend
   phrasebook completeness test. The PDF uses the prescription's `language`, captured at issue from
   the patient's preference, because it is rendered once per version.
 
-### Structured frequency, duration and start (M6b-P3, Draft)
+### Structured frequency, duration and start (M6b-P3, approved and built)
 Amends §3 and R1-R8 with the developer's decisions D1-D3 (design note
 `docs/milestones/M6b-patient-portal-booking.md`, "Medicine planner: the developer's decisions").
 - **R21** *Frequency.* A structured frequency is a pattern of `0` and `1` of length 3 (morning,

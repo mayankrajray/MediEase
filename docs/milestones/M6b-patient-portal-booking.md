@@ -270,7 +270,8 @@ not reopened below:
 
 ## M6b-P3 — Prescription structure, the medicine-plan engine and the planner
 
-Proposed 24 Oct 2026, **awaiting the developer's approval.** Covers FR-REM-03 (the plan and its
+Proposed 24 Oct 2026; **approved by the developer as written (10 points) and built** (see "As
+built (M6b-P3)" below). Covers FR-REM-03 (the plan and its
 reminder preferences) and the prescription-structure changes behind it (FR-RX-01, 03, 04 as
 amended here). Rules are in `docs/specs/patient-portal.md` R28–R44 and, for the doctor's side,
 `docs/specs/prescriptions.md` R21–R25 (both Draft for P3).
@@ -345,6 +346,50 @@ Planned verification:
   after reload; under 200 KB and axe-clean in both languages. Failure path: entering `0-0-0`
   shows the editor's error and saves nothing.
 - **Gates:** `make lint typecheck contract-check test` and `make e2e`.
+
+### As built (M6b-P3)
+
+Built 25 Oct 2026 to the approved design. Changes from it, and details settled in the build:
+
+- **No backfill (deviation from points 4 and 5).** Issued rows cannot be updated: the
+  `prescriptions_immutable` and `prescription_items_frozen` triggers compare whole rows. So
+  migration `0027` adds `duration_kind` and `starts_on` as nullable columns and writes nothing.
+  A row with `duration_days` and no kind reads as `DAYS` (repository and `item_from_json`); a
+  null `starts_on` is the issue day on the clinic's calendar (`plan.course_start`), and issuing
+  leaves it null rather than writing the day. The CHECK is `duration_kind IS NULL OR
+  (duration_kind = 'DAYS') = (duration_days IS NOT NULL)`.
+- **Favourites and templates** keep their lines as JSONB, so no CHECK changed there; their lines
+  carry `duration_kind` through `item_json`.
+- **Names.** The engine's notes on a line are `line_warnings` in the API (`warnings` is already
+  the doctor's own text). `medicine_reminder_prefs.item_id` has **no foreign key**: an issued
+  version's items can never be deleted, and a key would stand in front of AC1's TRUNCATE trigger
+  check. The unique key is `uq_medicine_reminder_prefs_line_slot` (the column-named default
+  passes 63 characters).
+- **Wording.** A pattern is worded from its slots, so `1-1-1` now reads "Three times a day,
+  morning, afternoon and night" and `1-1-1-1` names its four slots; `1-0-0`, `0-0-1` and `1-0-1`
+  read as before. A line with no frequency shows "Times not stated — ask your clinic" in the
+  schedule.
+- **Layout 2 only.** The schedule section and "Duration not stated — ask your clinic" appear only
+  on versions issued on layout 2 (`document.SCHEDULE_LAYOUT`); a layout-1 version keeps its
+  words. A test pins the SHA-256 of layout 1's three files. The PDF marks a slot with "•" and an
+  empty one with "—" (the vendored Noto Sans has no check mark).
+- **Editor.** The entry row's *Days* field also takes `R` (until review) and `G` (ongoing); *More*
+  has a frequency text field read the same way and a *How long* choice. *Course starts on* sits
+  under follow-up, with the revised version's start as a hint. *Review and issue* lists the
+  notes and shows the schedule table. The entry row waits for `/rx-vocabulary` before adding.
+- **Portal.** The patient page shows the schedule as a list per medicine (a table does not fit
+  360 px). Reminder controls are on *Courses* only; *Today* says "Reminder on at 07:30". A
+  changed time is saved with *Save time* (a time picker gives no reliable blur), and the screen
+  says reminders are sent in a later update. `PATCH /portal/me` takes `language`,
+  `slot_times` or both (`SetPortalLanguage` kept its name). *Today* is the first linked clinic's
+  calendar day (the pilot is one zone). The five tabs are as wide as their words, so
+  "Prescriptions" no longer breaks at 360 px.
+- **Access.** `/rx-vocabulary` is `CLINICAL_VIEW`. The plan routes take no ID in the path, so the
+  portal suite has a separate cross-account case for the plan, the courses and a reminder choice.
+- **Measured.** First loads at 360 px: `/portal/medicines` 180 KB, `/portal/account` 177 KB;
+  axe found nothing serious in English or Hindi. The e2e journey sets the reminder time with the
+  input's prototype setter: Playwright's `fill` on a time input is not seen by React.
+- **Gates.** API 1943 tests, 97.50% coverage; web 598; Playwright 35/35; smoke passed.
 
 ---
 

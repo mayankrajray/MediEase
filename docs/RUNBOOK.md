@@ -523,6 +523,13 @@ A patient account sees a clinic's records only through an active row in `patient
 (record it in the incident notes; the app path also writes `patient.portal_unlinked`). The account
 sees nothing of that clinic from its next request.
 
+**The medicine plan (M6b-P3).** The *Medicines* tab only lays out the doctor's issued lines; a
+patient who says it is wrong is shown what the prescription says (the patient page or PDF), and the
+clinic revises the prescription if needed. Times of day are the patient's own (*Account*,
+`patient_accounts.morning_time` …). Reminder choices are stored in `medicine_reminder_prefs` and
+not sent until M6b-P6; they are deleted when the link ends. Never read or quote a patient's
+choices into a ticket beyond their IDs.
+
 **The portal's language (M6b-P2).** Each patient account has a language (`en` or `hi`), chosen
 from the switch at the top of every portal screen and kept across devices
 (`SELECT language FROM patient_accounts WHERE id = '<account>';`). The signed-out pages follow a
