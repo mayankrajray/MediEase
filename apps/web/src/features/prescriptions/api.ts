@@ -26,6 +26,10 @@ export type ItemInput = S["PrescriptionItemInput"];
 export type ItemOutput = S["PrescriptionItemOutput"];
 export type AdviceInput = S["AdviceInput"];
 export type Frequency = S["Frequency"];
+export type Slot = S["Slot"];
+export type DurationKind = S["DurationKind"];
+export type LineWarning = S["LineWarning"];
+export type Vocabulary = S["RxVocabulary"];
 export type Timing = S["Timing"];
 export type PreparationPhrase = S["PreparationPhrase"];
 export type StoragePhrase = S["StoragePhrase"];
@@ -61,6 +65,8 @@ export interface RxApi {
   readonly saveTemplate: (body: S["RxTemplateInput"]) => Promise<RxTemplate>;
   readonly renameTemplate: (template: RxTemplate, name: string) => Promise<RxTemplate>;
   readonly deleteTemplate: (id: string) => Promise<void>;
+  /** M6b-P3: the engine's slot sets and codes (prescriptions R21, D8). */
+  readonly vocabulary: () => Promise<Vocabulary>;
 }
 
 const PDF_TIMEOUT_MS = 30_000;
@@ -179,6 +185,7 @@ export function useRxApi(): RxApi {
       deleteTemplate: async (id) => {
         await sessionDelete("/api/v1/rx-templates/{template_id}", { ...base, pathParams: { template_id: id } });
       },
+      vocabulary: async () => (await sessionGet("/api/v1/rx-vocabulary", base)).data,
     };
   }, [clinicId]);
 }

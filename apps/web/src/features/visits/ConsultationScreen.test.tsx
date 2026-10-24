@@ -109,6 +109,30 @@ describe("consultation screen (M4-P6, spec §6)", () => {
     expect(within(builder()).getByRole("list", { name: "Medicines" })).toHaveTextContent("Syrup X · every other day");
   });
 
+  it("M6b-P3 (R21-R23): any 0/1 pattern the API publishes, never all zeros; until review; the API's bedtime note under the line", async () => {
+    let revision = 1;
+    const api = mockApi({
+      ...screenRoutes(),
+      [`POST ${VISIT}/prescriptions`]: () => json(201, rx({ revision })),
+      [`PUT ${RX}`]: () =>
+        json(200, rx({ revision: ++revision, items: [{ ...syrupLine, frequency: "1-1-0", slots: ["MORNING", "AFTERNOON"], timing: "BEDTIME", line_warnings: ["BEDTIME_WITHOUT_NIGHT"] }] })),
+    });
+    await open();
+
+    typeLine("Tab Sample", { frequency: "000" });
+    expect(within(entry()).getByLabelText("Frequency")).toHaveAttribute("aria-invalid", "true");
+    fireEvent.change(within(entry()).getByLabelText("Frequency"), { target: { value: "110" } });
+    expect(within(entry()).getByText("1-1-0 · morning and afternoon")).toBeInTheDocument();
+    fireEvent.change(within(entry()).getByLabelText("Timing"), { target: { value: "BEDTIME" } });
+    fireEvent.change(within(entry()).getByLabelText("Days"), { target: { value: "r" } });
+    fireEvent.keyDown(within(entry()).getByLabelText("Days"), { key: "Enter" });
+    expect(within(builder()).getByRole("list", { name: "Medicines" })).toHaveTextContent("Tab Sample · 1-1-0 · at bedtime · until review");
+
+    await waitFor(() => expect(put(api)).toHaveLength(1), { timeout: 3000 });
+    expect(put(api)[0]?.body).toMatchObject({ items: [{ frequency: "1-1-0", duration_kind: "UNTIL_REVIEW", duration_days: null }], starts_on: null });
+    expect(await within(builder()).findByText(/Check: At bedtime, but the frequency has no night dose/)).toBeInTheDocument();
+  });
+
   it("FR-RX-05: a favourite picked from the suggestions inserts its whole line", async () => {
     const favourite = {
       id: "0192f0a0-0000-7000-8000-0000000006d1",

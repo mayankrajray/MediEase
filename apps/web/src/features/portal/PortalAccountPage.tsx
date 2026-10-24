@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
-import { PORTAL_SIGN_IN_PATH, portalDelete, portalGet, portalPost } from "@/lib/auth/portal-session";
+import { PORTAL_SIGN_IN_PATH, portalDelete, portalGet, portalPatch, portalPost } from "@/lib/auth/portal-session";
 import { type PortalLanguage, portalDate } from "@/lib/i18n/portal";
 
 import { type PortalLink, usePortalLoad } from "./data";
@@ -112,6 +112,8 @@ export function PortalAccountPage() {
         </fieldset>
       </PortalCard>
 
+      <SlotTimesCard onSaved={(text) => setStatus(text)} />
+
       <PortalCard id="clinics-heading" title={s.account.clinics}>
         {links.status === "loading" && <ScreenLoading label={s.loading} />}
         {links.status === "failed" && <ErrorNotice error={links.error} onRetry={links.retry} />}
@@ -177,6 +179,74 @@ export function PortalAccountPage() {
         {busy ? s.account.signingOut : s.account.signOut}
       </Button>
     </div>
+  );
+}
+
+const SLOT_KEYS = ["morning", "afternoon", "evening", "night"] as const;
+type SlotKey = (typeof SLOT_KEYS)[number];
+
+/** M6b-P3 (spec R34): the person's times of day for the medicine plan; never the prescription. */
+function SlotTimesCard({ onSaved }: Readonly<{ onSaved: (text: string) => void }>) {
+  const { account, s, leave, replaceAccount } = usePortal();
+  const [times, setTimes] = useState<Record<SlotKey, string>>({ ...account.slot_times });
+  const [problem, setProblem] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    const values = SLOT_KEYS.map((k) => times[k]);
+    const inOrder = values.every((v, i) => /^\d\d:\d\d$/.test(v) && v >= "05:00" && v <= "23:30" && (i === 0 || (values[i - 1] as string) < v));
+    setProblem(!inOrder);
+    if (!inOrder || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { data } = await portalPatch("/api/v1/portal/me", { slot_times: times });
+      replaceAccount(data.account);
+      onSaved(s.account.timesSaved);
+    } catch (failure) {
+      if (!leave(failure)) setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <PortalCard id="times-heading" title={s.account.times}>
+      <p className="text-sm text-slate-700" id="times-help">
+        {s.account.timesHelp}
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        {SLOT_KEYS.map((k) => (
+          <div key={k}>
+            <label htmlFor={`slot-time-${k}`} className="block font-medium">
+              {s.account.slots[k]}
+            </label>
+            <input
+              id={`slot-time-${k}`}
+              type="time"
+              min="05:00"
+              max="23:30"
+              step={60}
+              value={times[k]}
+              aria-describedby={problem ? "times-help times-problem" : "times-help"}
+              {...(problem ? { "aria-invalid": true } : {})}
+              onChange={(e) => setTimes((old) => ({ ...old, [k]: e.target.value }))}
+              className="min-h-11 w-full rounded-lg border border-slate-400 px-2"
+            />
+          </div>
+        ))}
+      </div>
+      {problem && (
+        <p id="times-problem" role="alert" className="text-sm font-medium text-red-900">
+          {s.account.timesOrder}
+        </p>
+      )}
+      {error !== null && <ErrorNotice error={error} />}
+      <Button size="sm" onClick={() => void save()} disabled={busy}>
+        {s.account.saveTimes}
+      </Button>
+    </PortalCard>
   );
 }
 

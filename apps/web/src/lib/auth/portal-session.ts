@@ -12,6 +12,7 @@ import {
   apiGet,
   apiPatch,
   apiPost,
+  apiPut,
   newRequestId,
   REQUEST_ID_HEADER,
   type ApiResult,
@@ -25,6 +26,9 @@ import {
   type PostBody,
   type PostPath,
   type PostResponse,
+  type PutBody,
+  type PutPath,
+  type PutResponse,
   type RequestOptions,
 } from "@/lib/api/client";
 import { PORTAL_CSRF_COOKIE } from "@/lib/api/csrf";
@@ -69,6 +73,18 @@ export function portalPatch<P extends PatchPath>(
 ): Promise<ApiResult<PatchResponse<P>>> {
   return withSessionRefresh(
     () => apiPatch(path, body, { ...options, csrfCookie: PORTAL_CSRF_COOKIE }),
+    PORTAL,
+  );
+}
+
+/** `apiPut` for a portal route (M6b-P3: a medicine-reminder choice). */
+export function portalPut<P extends PutPath>(
+  path: P,
+  body: PutBody<P>,
+  options: RequestOptions = {},
+): Promise<ApiResult<PutResponse<P>>> {
+  return withSessionRefresh(
+    () => apiPut(path, body, { ...options, csrfCookie: PORTAL_CSRF_COOKIE }),
     PORTAL,
   );
 }

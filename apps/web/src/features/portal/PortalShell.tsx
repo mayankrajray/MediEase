@@ -41,6 +41,8 @@ type Load =
 const TABS = [
   { href: "/portal", key: "home" },
   { href: "/portal/appointments", key: "appointments" },
+  // M6b-P3 (spec R36): the medicine plan.
+  { href: "/portal/medicines", key: "medicines" },
   { href: "/portal/prescriptions", key: "prescriptions" },
   { href: "/portal/account", key: "account" },
 ] as const;
@@ -159,15 +161,16 @@ export function PortalShell({ children }: Readonly<{ children: ReactNode }>) {
         </div>
         {portal !== null && (
           <nav aria-label={s.nav.label} className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white md:static md:border-t-0">
-            <ul className="mx-auto grid max-w-3xl grid-cols-4">
+            {/* Five tabs at 360 px: each as wide as its word (equal fifths split "Prescriptions"). */}
+            <ul className="mx-auto flex max-w-3xl">
               {TABS.map((tab) => {
                 const current = isCurrent(pathname, tab.href);
                 return (
-                  <li key={tab.key}>
+                  <li key={tab.key} className="flex-auto">
                     <Link
                       href={tab.href}
                       aria-current={current ? "page" : undefined}
-                      className={`flex min-h-14 items-center justify-center px-1 text-center text-sm ${
+                      className={`flex min-h-14 items-center justify-center whitespace-nowrap px-1 text-center text-xs sm:text-sm ${
                         current ? "border-t-4 border-brand-700 font-bold text-brand-800 md:border-b-4 md:border-t-0" : "text-slate-800"
                       }`}
                     >
