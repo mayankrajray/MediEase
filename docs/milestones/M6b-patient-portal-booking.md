@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight); P1 built and confirmed (draft PR #52); P2 approved (A on all eight) and built |
+| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight); P1 built and confirmed (draft PR #52); P2 approved (A on all eight) and built; P3 designed, awaiting approval |
 | PRD | v1.2 §0 (C7, C9), §8.9, §8.13, §8.14, §13; NFR-02, NFR-10, NFR-11, NFR-18, NFR-19 |
 | Specs | `docs/specs/patient-portal.md` (Draft, P1–P3, P6), `docs/specs/booking-requests.md` (written at P4) |
 | ADR | ADR-0015 (patient accounts), ADR-0017 (notification service); ADR-0018 at P4 if the soft hold changes how a session's places are counted |
@@ -17,7 +17,7 @@
 |---|---|---|---|
 | P1 | **Linking and the patient API.** A link between a patient account and one clinic's patient record, made by a clinic invite or by the prescription link's last-4 check; revocable by both sides. Read-only portal API for what the clinic gave the patient: linked clinics, appointments, issued prescriptions, reminders. The portal tenancy suite | FR-PRT-02, FR-PRT-03, FR-PRT-06 (b, c), NFR-18 | Below (approved 24 Oct 2026) |
 | P2 | **Portal web.** The fresh dashboard with *Find a doctor*, My Appointments grouped by clinic, prescriptions (the patient page and PDF), reminders; link and unlink screens; English and Hindi; 360 px; the patient-page budget | FR-PRT-03, 04, 05, 07, NFR-02, NFR-10, NFR-11 | Below (proposed 24 Oct 2026) |
-| P3 | **Medicine planner.** Daily dose times derived only from each issued line's frequency, timing and days; *today* and *this course* views; optional in-app reminders | FR-REM-03 | At its start |
+| P3 | **Medicine planner.** Daily dose times derived only from each issued line's frequency, timing and days; *today* and *this course* views; optional in-app reminders | FR-REM-03 | Below (proposed 24 Oct 2026) |
 | P4 | **Public page and booking requests.** `/c/{slug}` with the clinic's hours, doctors and bookable slots or sessions; a request from a verified account with a short reason, a soft hold, rate limits and a cap of five open requests; `BookingRequested` to the front desk | FR-PUB-01..04, FR-BKG-01..03, 07, FR-DIS-05 (slots), NFR-19 | At its start |
 | P5 | **The front-desk inbox.** Accept (match or create the patient record, link the account, create the appointment), decline with a reason, propose another slot, expiry after the response window; an expired count and the response rate for the owner | FR-BKG-04..06, 08, FR-PRT-06 (a), FR-UX-03 | At its start |
 | P6 | **Patient notifications and the live token link.** In-app notifications for patients (request accepted, declined or expired; appointment confirmed, moved or cancelled; prescription ready; medicine due; follow-up due) with read state; a public "you are 3rd in line" link per appointment | FR-NTF-04, 05 (patients), FR-QUE-06 | At its start |
@@ -244,3 +244,69 @@ Built 24 Oct 2026 to the approved design. Details settled in the build:
   staff (`features/auth`): they take optional `words` (`forgotWords`, `resetWords` in
   `lib/i18n/portal.ts`), default English, so staff pages are unchanged. Every portal page is now
   bilingual. The sign-in page's `?reason=` notices and the API's own error messages stay English.
+
+---
+
+## M6b-P3 — Medicine planner
+
+Proposed 24 Oct 2026, **awaiting the developer's approval.** Covers FR-REM-03 (both entries: the
+reminder, "optional per prescription, daily at chosen times until the course ends", and the plan,
+"daily times derived only from each prescribed line's frequency, timing and days, shown to the
+patient and optionally reminded in the app"). Rules are in `docs/specs/patient-portal.md`
+R28–R38 (Draft for P3). Delivering "medicine due" notices is P6's patient notification centre.
+
+Facts the design rests on:
+
+- **What a line holds.** `PrescriptionItem`: the medicine's name, form, strength and dose as the
+  doctor wrote them; `frequency` from a closed vocabulary (`1-0-0`, `0-1-0`, `0-0-1`, `1-0-1`,
+  `1-1-1`, `1-1-1-1`, `SOS`, `ONCE`, `CUSTOM` + `frequency_text`); `timing` (`BEFORE_FOOD`,
+  `AFTER_FOOD`, `WITH_FOOD`, `EMPTY_STOMACH`, `BEDTIME`, `ANY`); `duration_days` (optional).
+  Prescriptions are versioned; the current one is the chain's latest issued version.
+- **The boundary** (AGENTS.md §7, FR-RX-10): MediEase never generates medical advice, drug
+  suggestions or dosage logic. A plan may only *lay out* what the doctor wrote; it must never
+  compute a dose, merge lines, move a dose relative to food, or fill a gap the doctor left.
+- **The portal today.** P1's scope gives a linked record's current prescriptions; the patient
+  page already words frequency and timing in English and Hindi
+  (`domain/prescriptions/patient_view.py`). There are no patient notifications yet (P6), and
+  WhatsApp templates still wait for Meta (L-02).
+
+| # | Question | A (rec) | Rejected |
+|---|---|---|---|
+| 1 | How a line becomes times | A fixed table from the **frequency code only**: `1-0-0` morning; `0-1-0` afternoon; `0-0-1` night; `1-0-1` morning and night; `1-1-1` morning, afternoon, night; `1-1-1-1` morning, afternoon, evening, night. `SOS`, `ONCE` and `CUSTOM` get **no times**: they are listed as "As the doctor wrote" with the doctor's words (`frequency_text`). **Timing is shown in words** beside the dose ("after food"), never turned into an offset; `BEDTIME` puts a once-a-night line at the night slot, nothing more | B: derive clock offsets from timing ("30 minutes before breakfast"): dosage logic the doctor did not write. C: parse `frequency_text` ("every 6 hours"): free text, guessing |
+| 2 | Which clock times the slots are | The patient's own **daily times**, one per slot, defaults morning 08:00, afternoon 14:00, evening 18:00, night 21:00, changed under *Account* (each 05:00–23:30, in order). Stored on the account (migration `0027`). Times are wall-clock times of the clinic's zone (all linked clinics are in India today); the plan says the zone | B: one fixed clock (a night-shift worker cannot use it). C: per prescription (four times to set for every visit) |
+| 3 | Which days | A course starts on the **issue day of the current version** (clinic calendar) and lasts `duration_days` days, that day counted as day 1. A revision starts its own course from its issue day; the superseded version's plan disappears with it. A line **without** a duration is "Until the doctor says", shown every day without an end and with no day count. Courses that ended more than 7 days ago are not shown | B: start the day after issue (the doctor may have given the first dose in the clinic, but the prescription does not say so either way). C: hide lines without a duration (the patient still takes them) |
+| 4 | Where the plan is computed | In the **API**: a pure function in `domain/prescriptions/plan.py` from the issued versions and the account's times, behind `GET /portal/medicine-plan?date=YYYY-MM-DD` (today by default, ±30 days). One rule, unit-tested, reused by P6's reminders; the web only lays it out | B: in the web (P6's server-side reminders would need a second copy). C: precomputed rows in a table (a revision or a time change would have to rewrite them) |
+| 5 | What the patient sees | A fifth tab, **Medicines**: *Today* (by slot: Morning, Afternoon, Evening, Night, then "As the doctor wrote"; each entry: medicine, dose, timing in words, clinic, "day 3 of 5") and *This course* (per prescription: medicines, start and end, days left). A line appears **once per slot it was prescribed for**; two prescriptions with the same medicine are shown as two entries, never merged. Every screen carries "This plan only lays out your prescription. If anything is unclear, ask your doctor." | B: a calendar grid (heavy at 360 px, against the budget). C: merge identical medicines (a clinical judgement) |
+| 6 | Marking doses taken | **Not in P3.** No adherence record is kept; the plan is a view | B: a "taken" tick per dose (new health data about the patient, with consent, retention and display questions the PRD does not answer yet; can follow in a later phase) |
+| 7 | The optional reminder (FR-REM-03) | Per prescription, **Remind me** on *This course* (off by default), stored as a tenant row of the linked record (`medicine_reminder_choices`: clinic, patient, account, prescription chain, on/off), cleared when the link ends. P3 stores and shows the choice; **P6 delivers** it as an in-app "medicine due" notice at each slot time until the course ends, with no medicine name in the notice (FR-NTF-06). No WhatsApp | B: browser push now (a service worker and keys, new infrastructure, before the notification centre exists). C: WhatsApp (templates wait for L-02; message bodies may not name medicines, so it would add little) |
+| 8 | Wording and languages | Slot names, "day 3 of 5", "Until the doctor says" and the safety line in English and Hindi (`lib/i18n/portal.ts`); **frequency and timing words come from the patient page's own vocabulary** in the API, so the plan and the prescription never word a line differently; medicine names and doses exactly as written | B: new words for the plan (two ways to say the same instruction) |
+
+Fixed points:
+
+- **API.** Migration `0027`: `patient_accounts` gains `morning_time`, `afternoon_time`,
+  `evening_time`, `night_time` (`time`, with the defaults above and a CHECK that they increase);
+  table `medicine_reminder_choices` (tenant data, scoped repository, unique per account and
+  chain). `PATCH /portal/me` accepts the four times; `GET /portal/medicine-plan?date=`;
+  `PUT /portal/prescriptions/{rx_id}/reminder {on}` (the current version of a linked chain, else
+  404). Contract 0.31.0. Nothing here is audited (a patient's own view and preference); changes
+  are logged with IDs only.
+- **Code.** `domain/prescriptions/plan.py` (`plan_for_day`, `course_of`), use cases in
+  `application/portal/records.py`, the *Medicines* tab and screens in `features/portal/`.
+- **Unchanged:** prescriptions, the patient page, staff screens, every P1 and P2 rule.
+
+Planned verification:
+
+- **Unit:** every frequency code to its slots; `SOS`, `ONCE`, `CUSTOM` untimed with the doctor's
+  words; a duration's first and last day on the clinic's calendar; no duration; a revision
+  replacing its predecessor; two prescriptions of one medicine kept apart; the times' order.
+- **API:** the plan for a linked record only (another clinic's or record's never appears), a
+  date outside ±30 days is 422, the times' validation, the reminder choice (current version only,
+  cleared on unlink), migration `0027` up and down, contract; the portal tenancy suite gains the
+  new route with an ID.
+- **Web:** *Today* and *This course* in both languages, the safety line, a line under each of its
+  slots, untimed lines, the times form and the reminder switch.
+- **Playwright (360 px):** after linking the PRD sample (Syrup X, `1-0-1`, 5 days), *Medicines*
+  shows it under Morning and Night as "day 1 of 5", the course ends on day 5, changing the
+  morning time moves it, *Remind me* stays on after reload; under 200 KB and axe-clean in both
+  languages. Failure path: after unlinking, the plan is empty.
+- **Gates:** `make lint typecheck contract-check test` and `make e2e`.
