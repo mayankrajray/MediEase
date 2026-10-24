@@ -376,7 +376,7 @@ Built 25 Oct 2026 to the approved design. Changes from it, and details settled i
 - **Editor.** The entry row's *Days* field also takes `R` (until review) and `G` (ongoing); *More*
   has a frequency text field read the same way and a *How long* choice. *Course starts on* sits
   under follow-up, with the revised version's start as a hint. *Review and issue* lists the
-  notes and shows the schedule table. The entry row waits for `/rx-vocabulary` before adding.
+  notes and shows the schedule table. Until `/rx-vocabulary` has loaded, a typed pattern only shows the field's hint (the words S, O and C work at once); the row is not held, which a timing-dependent test caught in P3b.
 - **Portal.** The patient page shows the schedule as a list per medicine (a table does not fit
   360 px). Reminder controls are on *Courses* only; *Today* says "Reminder on at 07:30". A
   changed time is saved with *Save time* (a time picker gives no reliable blur), and the screen
@@ -395,7 +395,8 @@ Built 25 Oct 2026 to the approved design. Changes from it, and details settled i
 
 ## M6b-P3b — Dose tracking and its data lifecycle
 
-Proposed 24 Oct 2026, **awaiting the developer's approval** (with P3; built after it). Covers
+Proposed 24 Oct 2026; **approved by the developer as written (7 points) and built** (see "As
+built (M6b-P3b)" below; with P3; built after it). Covers
 FR-REM-03's patient side under decisions D4 and D5. Rules: `docs/specs/patient-portal.md`
 R45–R54 (Draft for P3b).
 
@@ -419,3 +420,39 @@ untimed refused), Not recorded derived and never stored, unlink hides and relink
 purge at one year, export and delete for an account, staff/ops cannot reach it (tenancy), no
 state in any log line (a log-capture test), Playwright: mark Taken, change to Skipped, see the
 history and the Contact your clinic action; axe and budget.
+
+### As built (M6b-P3b)
+
+Built 25 Oct 2026 to the approved design. Details settled in the build:
+
+- **Storage.** Migration `0028`: `dose_records` (tenant), unique per account, version, line, day
+  and slot (`uq_dose_records_dose`); `item_id` has no foreign key, as for reminder choices.
+  Each row carries **`keep_until`**, set when the dose is marked (course end, or the dose's day
+  for an open-ended line, plus 365 days), so the daily purge deletes by that date alone, like its
+  other tables; the retention audit row gains a `dose_records` count.
+- **API.** `PUT /portal/medicine-plan/doses` (Taken or Skipped; marking again changes the state
+  and the time marked), `DELETE` with the same four query parameters (clears it), `GET
+  /portal/medicine-plan/history?prescription_id=` (an issued or superseded version; newest day
+  first, at most 60 days back; counts per state; the chain's versions). Outside the window is
+  409 **`PRT_DOSE_NOT_MARKABLE`**; an untimed line, a slot the line lacks or a day outside the
+  course is 422. The plan's timed entries gain **`mark`** (status, time marked, markable) and
+  every entry the clinic's `timezone`; the field could not be called `dose`, which is the
+  doctor's dose. Contract 0.32.0.
+- **Window.** A dose is due at the person's slot time on its day, on the clinic's clock; it can be
+  marked from 00:00 that day until 48 hours after (`domain/portal/doses.py`). Not recorded and
+  Upcoming are computed on read and never stored.
+- **Privacy.** No audit row per mark; `dose.marked` and `dose.cleared` log the account, the
+  prescription and a count. `tests/tenancy/test_dose_privacy.py` fails if any module other than
+  the patient's own use cases calls the repository, or anything but the support command calls
+  the cross-clinic `dose_lifecycle`; staff reads of the same patient carry no marks.
+- **Export and deletion (R54).** `make dose-data ARGS="export <account> --out
+  /exports/<account>.json"` writes a new owner-only file under `.exports/` (gitignored; the JSON
+  never goes to the terminal, which carries the logs); `ARGS="delete <account> --confirm"`
+  deletes. RUNBOOK §"Dose records on request". They log IDs and counts; they write no audit row
+  (no clinic owns the request) — to revisit with FR-PRT-10.
+- **Web.** *Today*: Taken / Skipped on each timed entry, then the state with the time marked on
+  the clinic's clock and *Change* (Taken, Skipped, *Clear the mark*) while the window is open; for
+  Skipped and Not recorded only "If you are unsure what to do, contact your clinic." with the
+  call; a line saying only the patient sees the marks. *Courses*: *History* per course with counts
+  and a switch between versions. English and Hindi.
+- **Measured.** `/portal/medicines` with marks 181 KB at 360 px; axe found nothing serious.

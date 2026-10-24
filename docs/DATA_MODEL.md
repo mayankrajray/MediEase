@@ -770,6 +770,34 @@ Unique `uq_medicine_reminder_prefs_line_slot (account_id, prescription_id, item_
 `(clinic_id, patient_id)`. Deleted when the link ends (patient or staff unlink). Holds no
 medicine name, dose or instruction.
 
+## M6b — Dose records (migration `0028`, M6b-P3b)
+
+Patient portal spec R45–R54, decisions D4, D5. **Tenant data and health data (C3)**
+(`SqlAlchemyDoseRecordRepository`, `tenant.dose_records`), reached only from the patient's own
+routes through `PortalScope`. The one cross-clinic reader is `SqlAlchemyDoseLifecycle`
+(`uow.dose_lifecycle`), a reviewed exception used only by the support command for the patient's
+export or deletion on request.
+
+### `dose_records`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | |
+| patient_id | uuid FK patients not null | The linked record |
+| account_id | uuid FK patient_accounts not null | Whose mark it is |
+| prescription_id | uuid FK prescriptions not null | The **version**; a revision starts with none (R49) |
+| item_id | uuid not null | The line; no foreign key (issued items are never deleted) |
+| on_date | date not null | The dose's day on the clinic's calendar |
+| slot | text not null | `MORNING` \| `AFTERNOON` \| `EVENING` \| `NIGHT` (CHECK) |
+| state | text not null | `TAKEN` \| `SKIPPED` (CHECK). "Not recorded" is never stored |
+| marked_at | timestamptz not null | When the patient marked it (moves with a change) |
+| keep_until | date not null | Course end (or the dose's day when open-ended) + 365 days; the purge deletes after it (R53, **subject to privacy and legal review**) |
+| created_at, updated_at | timestamptz | |
+
+Unique `uq_dose_records_dose (account_id, prescription_id, item_id, on_date, slot)`; indexes
+`(account_id, prescription_id)` and `keep_until`. No reason, no free text, no medicine name.
+Kept on unlink (hidden by the scope; a relink of the same record shows them again).
+
 ---
 
 ## Retention and erasure
@@ -778,6 +806,7 @@ medicine name, dose or instruction.
 |---|---|---|
 | Clinical records (visits, prescriptions) | As required of the clinic by law; clinic-configurable, default indefinite while the clinic is active | Export + delete on contract end |
 | Messages | 18 months | Scheduled purge job |
+| Dose records (M6b-P3b) | One year after the course ends, or after the dose's day when open-ended (`keep_until`); a product period subject to privacy and legal review | The daily purge (`PurgeExpired`); export or delete on the patient's request with `make dose-data` (RUNBOOK) until FR-PRT-10 |
 | Audit events | 3 years minimum | Partitioned by month (post-pilot) |
 | Refresh tokens | 30 days after expiry | Purge job (staff and, from M6a-P3, portal sessions) |
 | Email tokens | 30 days after expiry | Purge job (M6a-P4) |

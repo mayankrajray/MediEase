@@ -523,6 +523,20 @@ A patient account sees a clinic's records only through an active row in `patient
 (record it in the incident notes; the app path also writes `patient.portal_unlinked`). The account
 sees nothing of that clinic from its next request.
 
+**Dose records on request (M6b-P3b, R54).** A patient's Taken / Skipped marks are theirs alone; no
+screen shows them to the clinic. Until the portal's own data-rights screens exist (FR-PRT-10),
+support exports or deletes them when the patient asks from the account's own email:
+
+1. Find the account: `SELECT id FROM patient_accounts WHERE email = lower('<email>');`
+2. Export: `make dose-data ARGS="export <account-id> --out /exports/<account-id>.json"`. It
+   writes a new file under `.exports/` (gitignored, owner-only on Linux; a Windows-mounted
+   folder does not keep the mode). Send it to the patient over the support channel, then
+   delete the file. Never paste it into a ticket.
+3. Delete: `make dose-data ARGS="delete <account-id> --confirm"`; it prints how many were deleted.
+
+Both log only the account ID and a count. The daily purge also deletes records a year after their
+course ends (`keep_until`).
+
 **The medicine plan (M6b-P3).** The *Medicines* tab only lays out the doctor's issued lines; a
 patient who says it is wrong is shown what the prescription says (the patient page or PDF), and the
 clinic revises the prescription if needed. Times of day are the patient's own (*Account*,

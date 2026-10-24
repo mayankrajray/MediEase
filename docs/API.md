@@ -295,6 +295,9 @@ cookies); every response is `Cache-Control: no-store`.
 | GET | `/api/v1/portal/reminders` | Kind, date, due time and visible status | FR-REM-05 | Implemented (M6b-P1) |
 | GET | `/api/v1/portal/medicine-plan?date=` | One day's plan by slot, then "As the doctor wrote"; default today, ±30 days (else 422) | FR-REM-03 | Implemented (M6b-P3) |
 | GET | `/api/v1/portal/medicine-plan/courses` | Each current version's course with the reminder choices per line and slot | FR-REM-03 | Implemented (M6b-P3) |
+| PUT | `/api/v1/portal/medicine-plan/doses` | Mark a dose Taken or Skipped (409 `PRT_DOSE_NOT_MARKABLE` outside its window; 422 untimed line, slot or day) | FR-REM-03 | Implemented (M6b-P3b), not audited |
+| DELETE | `/api/v1/portal/medicine-plan/doses?prescription_id&item_id&on_date&slot` | Clear a dose's mark within its window | FR-REM-03 | Implemented (M6b-P3b) |
+| GET | `/api/v1/portal/medicine-plan/history?prescription_id=` | A version's doses by day with counts per state | FR-REM-03 | Implemented (M6b-P3b) |
 | PUT | `/api/v1/portal/medicine-plan/reminders` | A reminder choice for one line and slot (422 untimed line or slot it lacks; 404 out of scope or not current) | FR-REM-03 | Implemented (M6b-P3), stored only |
 | POST | `/api/v1/patients/{patient_id}/portal-invite` | Staff: a single-use invite `{url, expires_at}`, shown once (7 days; supersedes the pending one) | FR-PRT-06 (b) | Implemented (M6b-P1), `PATIENTS_MANAGE` |
 | GET | `/api/v1/patients/{patient_id}/portal` | Staff: `NOT_LINKED`, `INVITED` (with expiry) or `LINKED` (method, since); never the account's details | FR-PRT-06 | Implemented (M6b-P1), `PATIENTS_MANAGE` |
@@ -302,6 +305,7 @@ cookies); every response is `Cache-Control: no-store`.
 
 - **M6b-P2 (contract 0.30.0).** `PATCH /api/v1/portal/me {language: en|hi}` changes the account's portal language (logged as `portal.language_changed`, not audited); sign-up takes an optional `language`, else the `me_pt_lang` cookie the signed-out pages set, else `en` (a new Google account reads the same cookie). Links' `clinic` and each appointment group carry the clinic's `timezone` (groups also its `phone_e164`); `GET /portal/prescriptions/{rx_id}` without `?lang` uses the account's language.
 - **M6b-P3 (contract 0.31.0).** `frequency` is a 0/1 pattern of 3 or 4 slots (the input may be `101` or `1 0 1`; all zeros or other digits are 422 on `items.N.frequency`) or SOS, ONCE, CUSTOM. Lines gain `duration_kind` and, in responses, the engine's `slots` and non-blocking `line_warnings`; drafts take `starts_on` and a revision's draft returns `previous_starts_on`. `PATCH /portal/me` also takes `slot_times`; the account carries them. The patient page gains the Medicine schedule (`schedule*`, empty before layout 2). Plan reads and reminder choices are not audited; logs carry IDs only.
+- **M6b-P3b (contract 0.32.0).** The plan's timed entries carry `mark` (`status` TAKEN / SKIPPED / NOT_RECORDED / UPCOMING, `marked_at`, `markable`) and every entry the clinic's `timezone`. Dose records are private to the account (no staff or ops route), not audited, and logged with IDs and counts only.
 - **Scope (NFR-18).** Every patient read goes through `PortalScope`: the account's active links,
   read per request, each a (clinic, record) pair; a suspended clinic is left out. An ID outside it
   (another clinic, another record in the same clinic, a revoked link, a draft or superseded
