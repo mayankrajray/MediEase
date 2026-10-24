@@ -21,6 +21,14 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6b-P3b (#51): dose tracking (FR-REM-03; portal R45–R54; decisions D4, D5). On *Today* the
+  patient marks each timed dose Taken or Skipped, with the time marked, and may change or clear it
+  from 00:00 of its day until 48 hours after its time; a past dose with no mark shows "Not recorded"
+  and is never stored; for Skipped and Not recorded the only guidance is to contact the clinic.
+  *Courses* show each version's history with counts per state. Private to the patient: no staff
+  or ops route, no audit row per mark, IDs and counts only in logs. Kept one year after the course
+  (subject to privacy and legal review); `make dose-data` exports or deletes an account's records
+  on request. Migration `0028`, contract 0.32.0.
 - M6b-P3 (#51): the medicine planner (FR-REM-03; prescriptions R21–R25; portal R28–R44;
   decisions D1–D3, D6, D8, D9). Frequency is now any 0/1 pattern of 3 or 4 slots (or SOS, ONCE,
   CUSTOM), read by one domain engine (`schedule.py`, `plan.py`) that the editor (via

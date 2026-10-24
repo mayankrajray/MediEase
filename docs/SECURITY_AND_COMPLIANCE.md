@@ -21,7 +21,7 @@
 
 | Class | Examples | Handling |
 |---|---|---|
-| **C3 Clinical** | Visit notes, diagnosis, vitals, prescription items, advice, attachments | Tenant-scoped; never in logs/messages/analytics; access audited; encrypted at rest |
+| **C3 Clinical** | Visit notes, diagnosis, vitals, prescription items, advice, attachments; the patient's own dose marks (M6b-P3b, `dose_records`) | Tenant-scoped; never in logs/messages/analytics; access audited; encrypted at rest |
 | **C2 Personal** | Patient name, phone, DOB, guardian, staff contact details | Tenant-scoped; phones masked in logs; export/erasure supported |
 | **C1 Operational** | IDs, statuses, timestamps, counts, error codes | May appear in logs and metrics |
 | **S Secrets** | Passwords, tokens, keys, provider credentials | Environment/secret store only; never logged |
@@ -50,6 +50,7 @@ Use this list in the M6 security review. Each row names where it is implemented.
 - [x] `clinic_id` on every tenant table; scoped repositories only (M1-P1: `TenantScopedRepository`, reachable only through `UnitOfWork.tenant(clinic_id)`; M1-P3: that ID comes from the request's resolved membership, never from the body)
 - [ ] Permanent cross-tenant test suite covering every endpoint (M1-P1 repositories; M1-P3 adds the HTTP suite and a guard that fails when a clinic route taking a resource ID has no cross-clinic case; extended by every later milestone)
 - [x] Cross-tenant access returns 404 (M1-P3: AC3 proved over HTTP; scoped repositories raise `NotFound`, logged as `tenancy.not_found`)
+- [x] Dose records (M6b-P3b, R50–R54) are the patient's alone: no staff, ops or clinic route reads them (`tests/tenancy/test_dose_privacy.py` fails on any new reader), no audit row per mark, logs carry IDs and counts only (AC22's log-capture test), never sent to analytics or a model. Kept on unlink, shown again on a relink of the same record. Retention one year after the course ends (or the dose's day when open-ended) — **a product period subject to privacy and legal review (L-04), not a claimed DPDP requirement**. Export and deletion on request by support (`make dose-data`) until FR-PRT-10
 - [x] The medicine plan and reminder choices (M6b-P3) stay in the account's scope: plan routes read through `PortalScope` (a cross-account case in the portal suite), choices are tenant rows deleted on unlink, reads and choices are not audited and logs carry IDs and counts only (a test checks no medicine or dose is logged). The plan only lays out the doctor's lines; it never computes a dose or adds an instruction (D9)
 - [x] A patient account reads only the records linked to it (M6b-P1, NFR-18): every `@patient` read goes through `PortalScope` (the account's active links, per request), an ID outside it is 404, and `tests/tenancy/test_portal_scope.py` fails when a `@patient` route with an ID has no cross-account case. Links are made only from proof the clinic gave (an invite shown once, stored as a digest; or the prescription link's last-4 check from a verified account, with its lockout), never by matching a phone, email or name
 - [ ] PostgreSQL Row-Level Security as defence in depth (post-pilot, ADR-0003)

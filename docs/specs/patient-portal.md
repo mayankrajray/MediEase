@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-PRT-02, 03, 06 (b, c); NFR-18 (P1). FR-PRT-04, 05, 07 (P2), FR-REM-03 (P3) and patient notifications (P6) are added in their phases |
 | Milestone / phases | M6b / P1, P2, P3, P3b, P6 |
-| Status | P1 approved (developer sign-off 24 Oct 2026, A on all eight) and built; P2 (R15–R27, AC7–AC12) approved and built; P3 (R28–R44, AC13–AC18) approved 24 Oct 2026 and built (as-built notes in the M6b design note); P3b (R45–R54, AC19–AC22) approved, not yet built |
+| Status | P1 approved (developer sign-off 24 Oct 2026, A on all eight) and built; P2 (R15–R27, AC7–AC12) approved and built; P3 (R28–R44, AC13–AC18) approved 24 Oct 2026 and built (as-built notes in the M6b design note); P3b (R45–R54, AC19–AC22) approved and built |
 | Last updated | 2026-10-24 |
 
 ## 1. Context
@@ -186,7 +186,7 @@ Developer decisions D1–D9 (design note "Medicine planner: the developer's deci
 - **R44** Prescriptions with no current version for a linked record (none issued) give an empty
   plan with "No medicines from your prescriptions yet".
 
-### Dose tracking (P3b, approved)
+### Dose tracking (P3b, approved and built)
 - **R45** The patient may mark a timed dose of the current plan **Taken** or **Skipped**; the time
   marked is recorded. Untimed lines cannot be marked.
 - **R46** A dose can be marked, changed or cleared from 00:00 of its day (clinic time) until 48
@@ -209,7 +209,7 @@ Developer decisions D1–D9 (design note "Medicine planner: the developer's deci
 - **R54** Account deletion removes them and the patient's export includes them (repository
   functions in P3b; run by support on request until FR-PRT-10's screens exist).
 ## 5. API surface
-See API.md "Patient portal" and `contracts/openapi.yaml` 0.29.0. P3 (0.31.0): `GET /portal/medicine-plan`, `/courses`, `PUT /portal/medicine-plan/reminders`, `slot_times` on the account and `PATCH /portal/me`. P2 (0.30.0): `language` on the account and `PATCH /portal/me`; the clinic's `timezone` on links and appointment groups; the prescription page's default language is the account's.
+See API.md "Patient portal" and `contracts/openapi.yaml` 0.29.0. P3b (0.32.0): `PUT` / `DELETE /portal/medicine-plan/doses`, `GET /portal/medicine-plan/history`, `mark` on the plan's timed entries. P3 (0.31.0): `GET /portal/medicine-plan`, `/courses`, `PUT /portal/medicine-plan/reminders`, `slot_times` on the account and `PATCH /portal/me`. P2 (0.30.0): `language` on the account and `PATCH /portal/me`; the clinic's `timezone` on links and appointment groups; the prescription page's default language is the account's.
 
 ## 6. UI notes
 - P1: the staff *Patient app* card on the patient profile (status, *Invite to the patient app*
