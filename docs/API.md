@@ -88,7 +88,7 @@ and a portal session is 401 on every staff route.
 | POST | `/api/v1/portal/auth/sign-in` | Email and password | FR-PRT-01 | Implemented (M6a-P3) |
 | POST | `/api/v1/portal/auth/refresh` | Rotate the portal refresh token | FR-AUTH-02 | Implemented (M6a-P3) |
 | POST | `/api/v1/portal/auth/sign-out` | Revoke the portal session | FR-AUTH-02 | Implemented (M6a-P3) |
-| GET | `/api/v1/portal/me` | The signed-in account (no clinic data until M6b) | FR-PRT-01 | Implemented (M6a-P3) |
+| GET | `/api/v1/portal/me` | The signed-in account (linked records: below, M6b-P1) | FR-PRT-01 | Implemented (M6a-P3) |
 | POST | `/api/v1/portal/auth/password-reset` | As staff; a Google-only account gets a "use Google" notice | FR-AUTH-05 | Implemented (M6a-P4) |
 | POST | `/api/v1/portal/auth/password-reset/complete` | As staff; also verifies the email | FR-AUTH-05 | Implemented (M6a-P4) |
 | POST | `/api/v1/portal/auth/verify-email` | `{token}` → 204 (the emailed page POSTs; a GET verifies nothing) | FR-AUTH-08 | Implemented (M6a-P4) |
@@ -275,6 +275,41 @@ Contract 0.28.0. `AUDIT_VIEW` is held by owners only: doctors and the front desk
 - **Tenancy.** Both routes read through `SqlAlchemyAuditReader`, reached only as
   `uow.tenant(clinic).audit_log`: the events, memberships and patients it joins are filtered by the
   request's clinic (a reviewed exception in the tenancy suite, with its own case).
+
+### Patient portal: linking and the patient's records (M6b-P1)
+
+Contract 0.29.0; spec `docs/specs/patient-portal.md`. Patient routes are `@patient` (the portal
+cookies); every response is `Cache-Control: no-store`.
+
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| GET | `/api/v1/portal/links` | The account's linked clinics: the clinic (name, phone, address, city), the record's first name and code, method, since | FR-PRT-02 | Implemented (M6b-P1) |
+| DELETE | `/api/v1/portal/links/{link_id}` | Unlink one; 200 `{id, revoked_at}` | FR-PRT-02 | Implemented (M6b-P1) |
+| POST | `/api/v1/portal/links/prescription` | `{token, phone_last4}`: link the record a prescription link names; verified accounts only (403 `PRT_UNVERIFIED_ACCOUNT`); the page's own last-4 check and lockout | FR-PRT-06 (c) | Implemented (M6b-P1) |
+| GET | `/api/v1/portal/invites/{token}` | Who a clinic's invite is for (clinic, first name, code) | FR-PRT-06 (b) | Implemented (M6b-P1) |
+| POST | `/api/v1/portal/invites/{token}/accept` | Link the invited record (201) | FR-PRT-06 (b) | Implemented (M6b-P1) |
+| GET | `/api/v1/portal/appointments` | Grouped by clinic, upcoming first then past; at most 50 per clinic; no reason or notes | FR-PRT-03 | Implemented (M6b-P1) |
+| GET | `/api/v1/portal/prescriptions` | Each chain's latest issued version (doctor, date, version) | FR-PRT-03 | Implemented (M6b-P1) |
+| GET | `/api/v1/portal/prescriptions/{rx_id}?lang=en\|hi` | The patient page, as the prescription link shows it | FR-PRT-03 | Implemented (M6b-P1) |
+| GET | `/api/v1/portal/prescriptions/{rx_id}/pdf` | The same PDF the clinic prints (rendered once) | FR-PRT-03 | Implemented (M6b-P1) |
+| GET | `/api/v1/portal/reminders` | Kind, date, due time and visible status | FR-REM-05 | Implemented (M6b-P1) |
+| POST | `/api/v1/patients/{patient_id}/portal-invite` | Staff: a single-use invite `{url, expires_at}`, shown once (7 days; supersedes the pending one) | FR-PRT-06 (b) | Implemented (M6b-P1), `PATIENTS_MANAGE` |
+| GET | `/api/v1/patients/{patient_id}/portal` | Staff: `NOT_LINKED`, `INVITED` (with expiry) or `LINKED` (method, since); never the account's details | FR-PRT-06 | Implemented (M6b-P1), `PATIENTS_MANAGE` |
+| DELETE | `/api/v1/patients/{patient_id}/portal-link` | Staff: end the link; returns the new status | FR-PRT-06 | Implemented (M6b-P1), `PATIENTS_MANAGE` |
+
+- **Scope (NFR-18).** Every patient read goes through `PortalScope`: the account's active links,
+  read per request, each a (clinic, record) pair; a suspended clinic is left out. An ID outside it
+  (another clinic, another record in the same clinic, a revoked link, a draft or superseded
+  version) is 404 `REQ_NOT_FOUND`, never 403. `tests/tenancy/test_portal_scope.py` fails when a new
+  `@patient` route with an ID has no cross-account case.
+- **Linking.** Nothing links automatically (not by phone, email or name). An invite is one answer
+  when unknown, used, superseded or expired: 404 `PRT_INVITE_INVALID`. A record with another
+  account, or an account already linked in that clinic, is 409 `PRT_ALREADY_LINKED` (an invite
+  stays usable). The prescription route answers `LINK_CHALLENGE_FAILED` / `LINK_LOCKED` like the
+  page, and its wrong answers count towards the page's lock.
+- **Audit.** `patient.portal_invited` (STAFF), `patient.portal_linked` (PATIENT, with the method),
+  `patient.portal_unlinked` (PATIENT or STAFF), on the `patient` entity; a wrong last-4
+  `patient_link.challenge_failed` (PATIENT). Reading the portal is not audited (decision 7A).
 
 ### Patients (M2)
 

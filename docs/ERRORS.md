@@ -107,6 +107,21 @@ or a portal token on a staff route, is `AUTH_SESSION_EXPIRED` (`auth.rejected` /
 | `AUTH_GOOGLE_FAILED` | redirect | Google sign-in did not finish | The callback answers with a redirect to `/sign-in` or `/portal/sign-in` and `?reason=` instead of an envelope: `google_failed` (flow cookie missing, expired or tampered with, `state` mismatch, ID token refused, email not verified, fake provider without a login hint), `google_cancelled` (Google returned `error`, e.g. `access_denied`), `account_disabled`, `too_many_attempts` | `google.failed` with `intent` and `reason` (`flow_invalid`, `state_mismatch`, `provider_error`, `id_token_invalid`, `nonce_mismatch`, `token_refused`, `jwks_unreachable`, `email_not_verified`, `fake_login_hint_missing`, …) |
 | `AUTH_GOOGLE_NO_STAFF_ACCOUNT` | redirect | No MediEase staff account uses this Google address | Staff Google sign-in whose verified email matches no staff user, or a platform ops user (who may not use Google). Google never creates staff access (FR-AUTH-07); redirect reason `google_no_account` | `google.failed` `intent=staff` `reason=unknown_email` or `platform_ops`; invite the address first |
 
+## Patient portal linking (M6b-P1)
+
+Patient portal spec R2-R9. Logged as `portal.*` with IDs only (never a digit, name or email).
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `PRT_INVITE_INVALID` | 404 | This invitation is no longer valid | One answer for an unknown, used, superseded (staff invited again) or expired (7 days) invite, or a suspended clinic's | `portal.invite_invalid` with `invite_id` when known; `patient_portal_invites` (`used_at`, `superseded_at`, `expires_at`) |
+| `PRT_ALREADY_LINKED` | 409 | These records can't be linked to this account | The record already has an active link to an account (also when staff invite it), or this account already has a record in that clinic (one per clinic until dependents, FR-PRT-09). An invite stays usable | `portal.link_refused` `reason=PRT_ALREADY_LINKED`; `patient_account_links WHERE revoked_at IS NULL` |
+| `PRT_UNVERIFIED_ACCOUNT` | 403 | Verify your email address first | Linking by a prescription link from a password account whose email is not verified; checked before the last-4 check, so nothing is counted | `portal.link_refused` `reason=PRT_UNVERIFIED_ACCOUNT`; the patient resends the verification email (RUNBOOK §20) |
+
+The prescription route's wrong or locked answers are the patient link codes (`LINK_CHALLENGE_FAILED`,
+`LINK_LOCKED`, `LINK_INVALID`, `LINK_EXPIRED`, `LINK_REVOKED`, `LINK_RATE_LIMITED`, "Patient links"
+below) and count towards the same link's lock. An ID outside the account's links is
+`REQ_NOT_FOUND` (`portal.not_found`).
+
 ## Emailed links and account email (M6a-P4)
 
 ADR-0016. A reset request always answers 202 `{"accepted": true}`; whether an email went out is

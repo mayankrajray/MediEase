@@ -21,7 +21,18 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
-- M6a-P8 (#49): appointment reminders, bookings to move after leave, and the owner's audit log
+- M6b-P1 (#51): linking a patient account to a clinic's record, and the read-only patient API
+  (FR-PRT-02, FR-PRT-03, FR-PRT-06 b and c, NFR-18; decisions 1A–8A). Staff invite a patient from
+  the profile's new *Patient app* card (a single-use link and QR code, shown once, 7 days); the
+  patient opens it signed in (or signs up on the way) and confirms. A verified account can also
+  choose *Save to my MediEase* on a prescription page and pass the same last-4 check, with the
+  same lockout. Either side can unlink. The portal API lists the linked clinics, appointments by
+  clinic, current prescriptions (the patient page and PDF) and reminders, all through one scope
+  of the account's active links, so another clinic's or another record's ID is 404; a new tenancy
+  suite enforces it for every `@patient` route with an ID. Migration `0025`
+  (`patient_account_links`, `patient_portal_invites`), contract 0.29.0, errors
+  `PRT_INVITE_INVALID`, `PRT_ALREADY_LINKED`, `PRT_UNVERIFIED_ACCOUNT`, audit actions
+  `patient.portal_invited`, `patient.portal_linked`, `patient.portal_unlinked`.- M6a-P8 (#49): appointment reminders, bookings to move after leave, and the owner's audit log
   (FR-APT-08, FR-APT-09, FR-AUD-03; decisions 1A–8A). A booking now gets WhatsApp reminders at
   19:00 the evening before and a set number of hours before the visit (per clinic, default 2;
   never 21:00–08:00), scheduled, moved and cancelled with the booking by the notification service

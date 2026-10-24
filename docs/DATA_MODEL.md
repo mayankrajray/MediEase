@@ -699,6 +699,46 @@ M6a-P8 adds no table for *Bookings to move* (FR-APT-09): the list is derived fro
 (`BOOKED` or `ARRIVED`, from today) whose `sessions` row is `CLOSED`. The clinic job kind
 `send_cancellation_notice` (key `appointment_cancelled:<appointment>`) needs no migration either.
 
+## M6b — Patient account links (migration `0025`, M6b-P1)
+
+Patient portal spec R1-R9. Both tables are **tenant data** with scoped repositories
+(`SqlAlchemyPortalLinkRepository`, `SqlAlchemyPortalInviteRepository`). The portal's one
+cross-clinic start, `SqlAlchemyPortalLookup` (`uow.portal_lookup`), is a reviewed tenancy
+exception: an account's active links (IDs, method, dates) and an invite digest's clinic ID only.
+
+### `patient_account_links`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | |
+| patient_id | uuid FK patients not null | The clinic's record |
+| account_id | uuid FK patient_accounts not null | The patient's account |
+| method | text not null | `INVITE` \| `RX_LINK` (CHECK); `BOOKING` arrives in P5 |
+| created_at | timestamptz not null | |
+| created_by_user_id | uuid FK users null | The staff member behind an invite; null for a prescription link |
+| revoked_at, revoked_by | timestamptz, text null | Both or neither (`ck_patient_account_links_revoked_together`); `PATIENT` \| `STAFF` |
+
+One **active** link per record (`uq_patient_account_links_patient_active` on
+`(clinic_id, patient_id) WHERE revoked_at IS NULL`) and per account in a clinic
+(`uq_patient_account_links_account_active`); `ix_patient_account_links_account_id_active` serves
+the portal scope. Revoked rows are kept as history and never deleted.
+
+### `patient_portal_invites`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | |
+| patient_id | uuid FK patients not null | |
+| token_hash | text unique | SHA-256 of a 256-bit secret; the secret is returned once and never stored |
+| expires_at, created_at | timestamptz not null | Seven days |
+| used_at, used_by_account_id | timestamptz, uuid FK patient_accounts null | Both or neither (`ck_patient_portal_invites_used_together`) |
+| superseded_at | timestamptz null | A newer invite replaced it; never both used and superseded |
+| created_by | uuid FK users not null | |
+
+One pending invite per record (`uq_patient_portal_invites_patient_pending`, partial on
+`used_at IS NULL AND superseded_at IS NULL`). Expired invites are kept (a few rows per patient);
+a purge can be added with the retention job if they ever matter.
+
 ---
 
 ## Retention and erasure

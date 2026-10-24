@@ -496,3 +496,29 @@ appointment from today in a `CLOSED` session, earliest first, with *Reschedule* 
 or cancelled; nothing is cancelled automatically.
 
 Both templates need Meta approval (L-02); until then the console provider sends them locally.
+
+### 23. Patient app links (M6b-P1)
+
+A patient account sees a clinic's records only through an active row in `patient_account_links`
+(patient portal spec R9). Staff manage it on the patient's profile, card *Patient app*.
+
+**"I can't link" / "the invitation doesn't work":**
+1. **Which invite.** An invite works once, for 7 days, and a newer one replaces it; every failure
+   reads "no longer valid" (`PRT_INVITE_INVALID`) on purpose. Ask the front desk to choose
+   *Invite again* and hand over the new link or QR code (the link is shown only once).
+2. **Already linked.** `PRT_ALREADY_LINKED`: the record has another account, or this account
+   already has a record at the clinic. Check in `make psql`:
+   ```sql
+   SELECT id, account_id, method, created_at FROM patient_account_links
+   WHERE clinic_id = '<clinic>' AND patient_id = '<patient>' AND revoked_at IS NULL;
+   ```
+   If the wrong person linked (for example a relative who knew the phone's last digits), staff
+   choose *Unlink* on the profile; the record itself is not changed.
+3. **From a prescription link.** *Save to my MediEase* needs a verified email (or Google) and the
+   last 4 digits again. Five wrong answers lock the link for the prescription page too: unlock it
+   from the prescription's link panel (*Unlock link*, M4-P5).
+
+**Removing access at once** (a lost phone, a dispute): unlink from the profile, or in an emergency
+`UPDATE patient_account_links SET revoked_at = now(), revoked_by = 'STAFF' WHERE id = '<link>';`
+(record it in the incident notes; the app path also writes `patient.portal_unlinked`). The account
+sees nothing of that clinic from its next request.

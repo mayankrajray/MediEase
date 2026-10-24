@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-PRT-02, 03, 06 (b, c); NFR-18 (P1). FR-PRT-04, 05, 07 (P2), FR-REM-03 (P3) and patient notifications (P6) are added in their phases |
 | Milestone / phases | M6b / P1 (this version), P2, P3, P6 |
-| Status | Draft (with the M6b-P1 design, 24 Oct 2026) |
+| Status | Approved for P1 (developer sign-off 24 Oct 2026, with the M6b-P1 design: A on all eight) |
 | Last updated | 2026-10-24 |
 
 ## 1. Context
