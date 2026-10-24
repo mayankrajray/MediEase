@@ -26,6 +26,7 @@ const CONTEXT = {
   clinic_phone_e164: "+919000000010",
   doctor_name: "Dr. Sample Doctor",
   starts_on: "2026-10-25",
+  timezone: "Asia/Kolkata",
 };
 const TAB = {
   ...CONTEXT,
@@ -40,6 +41,7 @@ const TAB = {
   day: 1,
   days_total: 5,
   reminder: { enabled: false, remind_at: null },
+  mark: { status: "UPCOMING", marked_at: null, markable: true },
 };
 const SYRUP = {
   ...CONTEXT,
@@ -54,6 +56,7 @@ const SYRUP = {
   day: 1,
   days_total: null,
   reminder: null,
+  mark: null,
 };
 
 function plan(overrides: Record<string, unknown> = {}) {
@@ -72,10 +75,11 @@ function plan(overrides: Record<string, unknown> = {}) {
 }
 
 function course(overrides: Record<string, unknown> = {}) {
-  const { day, days_total, reminder, ...tab } = TAB;
+  const { day, days_total, reminder, mark, ...tab } = TAB;
   void day;
   void days_total;
   void reminder;
+  void mark;
   return {
     ...CONTEXT,
     revised: false,
@@ -175,6 +179,78 @@ describe("My medicines (M6b-P3, spec R28-R44)", () => {
   it("R29: the screen never reads a frequency; the API's plan is all it shows", () => {
     const source = readFileSync(join(process.cwd(), "src", "features", "portal", "Medicines.tsx"), "utf8");
     expect(source).not.toMatch(/frequency|slot_sets|"1-0-1"/);
+  });
+});
+
+describe("Dose marks (M6b-P3b, R45-R48)", () => {
+  it("R45, R46: Taken, then Change to Skipped, through the session; only Contact your clinic is said", async () => {
+    let state = "TAKEN";
+    const api = mockApi({
+      ...me(),
+      "GET /api/v1/portal/medicine-plan": () => json(200, plan()),
+      "PUT /api/v1/portal/medicine-plan/doses": (call) => {
+        state = (call.body as { state: string }).state;
+        return json(200, { status: state, marked_at: "2026-10-25T02:42:00Z", markable: true });
+      },
+    });
+    await renderPortal(<PortalMedicines />);
+    const morning = await screen.findByRole("region", { name: "Morning · 08:00" });
+    expect(within(morning).getByText("Upcoming")).toBeInTheDocument();
+    fireEvent.click(within(morning).getByRole("button", { name: "Taken: Tab Sample, Morning" }));
+    expect(await within(morning).findByText(/^Taken at 8:12/)).toBeInTheDocument();
+    const first = api.calls.find((c) => c.method === "PUT");
+    expect(first?.body).toEqual({ prescription_id: RX_ID, item_id: TAB_ID, on_date: "2026-10-25", slot: "MORNING", state: "TAKEN" });
+    expect(first?.headers.get("X-CSRF-Token")).toBe("portal-csrf");
+    expect(within(morning).queryByText(/contact your clinic/)).not.toBeInTheDocument();
+
+    fireEvent.click(within(morning).getByRole("button", { name: "Change" }));
+    fireEvent.click(within(morning).getByRole("button", { name: "Skipped: Tab Sample, Morning" }));
+    expect(await within(morning).findByText(/^Skipped at 8:12/)).toBeInTheDocument();
+    expect(within(morning).getByText(/If you are unsure what to do, contact your clinic/)).toBeInTheDocument();
+    expect(within(morning).getByRole("link", { name: "Contact your clinic" })).toHaveAttribute("href", "tel:+919000000010");
+  });
+
+  it("R46, R47: an unmarked past dose outside its window is Not recorded, with no buttons", async () => {
+    const old = { ...TAB, mark: { status: "NOT_RECORDED", marked_at: null, markable: false } };
+    mockApi({ ...me(), "GET /api/v1/portal/medicine-plan": () => json(200, plan({ slots: [{ slot: "MORNING", label: "Morning", time: "08:00", entries: [old] }] })) });
+    await renderPortal(<PortalMedicines />);
+    const morning = await screen.findByRole("region", { name: "Morning · 08:00" });
+    expect(within(morning).getByText("Not recorded")).toBeInTheDocument();
+    expect(within(morning).queryByRole("button", { name: /^Taken/ })).not.toBeInTheDocument();
+    expect(within(morning).getByText(/If you are unsure what to do, contact your clinic/)).toBeInTheDocument();
+  });
+
+  it("R47, R49: the history lists each day with counts, never a score", async () => {
+    mockApi({
+      ...me(),
+      "GET /api/v1/portal/medicine-plan": () => json(200, plan()),
+      "GET /api/v1/portal/medicine-plan/courses": () => json(200, { items: [course()] }),
+      "GET /api/v1/portal/medicine-plan/history": () =>
+        json(200, {
+          prescription_id: RX_ID,
+          version: 1,
+          clinic_name: "Sample Clinic",
+          clinic_phone_e164: "+919000000010",
+          timezone: "Asia/Kolkata",
+          starts_on: "2026-10-24",
+          counts: { TAKEN: 1, SKIPPED: 0, NOT_RECORDED: 1, UPCOMING: 2 },
+          days: [
+            { date: "2026-10-24", doses: [
+              { item_id: TAB_ID, medicine_name: "Tab Sample", dose: "1 tablet", slot: "MORNING", status: "TAKEN", marked_at: "2026-10-24T02:42:00Z" },
+              { item_id: TAB_ID, medicine_name: "Tab Sample", dose: "1 tablet", slot: "AFTERNOON", status: "NOT_RECORDED", marked_at: null },
+            ] },
+          ],
+          versions: [{ prescription_id: RX_ID, version: 1, status: "ISSUED" }],
+        }),
+    });
+    await renderPortal(<PortalMedicines />);
+    fireEvent.click(await screen.findByRole("button", { name: "Courses" }));
+    fireEvent.click(await screen.findByRole("button", { name: "History" }));
+    const history = await screen.findByRole("region", { name: "History · version 1" });
+    expect(within(history).getByText("Taken 1 · Skipped 0 · Not recorded 1")).toBeInTheDocument();
+    expect(within(history).getByText(/Morning · Tab Sample \(1 tablet\): Taken at 8:12/)).toBeInTheDocument();
+    expect(within(history).getByText(/Afternoon · Tab Sample \(1 tablet\): Not recorded/)).toBeInTheDocument();
+    expect(within(history).queryByText(/%/)).not.toBeInTheDocument();
   });
 });
 
