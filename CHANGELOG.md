@@ -6,6 +6,13 @@ first production release.
 
 ## [Unreleased]
 
+### Security
+- Next.js 16.4.0 → 16.4.3 (#49): the October 2026 out-of-band release fixing GHSA-2464-fhr4-w9xw
+  (critical: remote code execution in the Image Optimization API with SVG files), GHSA-673q-mjm6-r5xr
+  (critical: remote code execution in `use cache` functions) and GHSA-p3m5-59mp-jv5r (denial of
+  service with Server Actions). Found by CI's blocking production `npm audit`. `eslint-config-next`
+  stays at 16.3.8 (dev only).
+
 ### Changed
 - CI (#19): web `npm audit` now blocks on production dependencies only (`--omit=dev`); the
   full-tree audit still runs but is non-blocking. Reason: braces advisory GHSA-vfj7-8cjw-p6xm
