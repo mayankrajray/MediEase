@@ -58,6 +58,18 @@ describe("the patient page (M4-P5, spec §6, R11, R12, AC2)", () => {
     expect(screen.getByRole("main")).toHaveAttribute("lang", "hi");
     expect(screen.getByRole("link", { name: "View in English" })).toBeInTheDocument();
   });
+
+  it("M6b-P1 (FR-PRT-06 c): offers Save to my MediEase, a plain link, in the page's language", () => {
+    const { unmount } = render(
+      <PrescriptionView page={PAGE} strings={stringsFor("en")} switchHref="/p/t?lang=hi" saveHref="/portal/link/prescription/t" />,
+    );
+    expect(screen.getByRole("link", { name: "Save to my MediEase" })).toHaveAttribute("href", "/portal/link/prescription/t");
+    unmount();
+    render(
+      <PrescriptionView page={{ ...PAGE, language: "hi" }} strings={stringsFor("hi")} switchHref="/p/t" saveHref="/portal/link/prescription/t" />,
+    );
+    expect(screen.getByRole("link", { name: "मेरे MediEase में सहेजें" })).toBeInTheDocument();
+  });
 });
 
 describe("the last-4 check (M4-P5, spec R10)", () => {

@@ -13,7 +13,8 @@ export function PrescriptionView({
   page,
   strings,
   switchHref,
-}: Readonly<{ page: Page; strings: PageStrings; switchHref: string }>) {
+  saveHref,
+}: Readonly<{ page: Page; strings: PageStrings; switchHref: string; saveHref?: string }>) {
   const lang: PageLanguage = page.language;
   return (
     <main lang={lang} className="mx-auto max-w-xl px-4 pb-10 pt-4 text-base leading-relaxed text-slate-900">
@@ -110,6 +111,14 @@ export function PrescriptionView({
         </p>
       )}
       <p className="mt-5 text-sm text-slate-700">{strings.askDoctor}</p>
+      {saveHref !== undefined && (
+        <p className="mt-5 border-t border-slate-300 pt-4 text-sm">
+          {strings.saveHelp}{" "}
+          <a href={saveHref} className="font-semibold text-brand-800 underline">
+            {strings.saveToAccount}
+          </a>
+        </p>
+      )}
     </main>
   );
 }

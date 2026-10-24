@@ -22,6 +22,9 @@ export interface PageStrings {
   readonly revoked: string;
   readonly switchTo: string;
   readonly askDoctor: string;
+  // M6b-P1 (FR-PRT-06 c): keep it in the patient app.
+  readonly saveToAccount: string;
+  readonly saveHelp: string;
 }
 
 const EN: PageStrings = {
@@ -41,6 +44,8 @@ const EN: PageStrings = {
   revoked: "This link is no longer active. Please ask the clinic for a new one.",
   switchTo: "हिन्दी में देखें",
   askDoctor: "If anything here is unclear, ask your doctor or the clinic.",
+  saveToAccount: "Save to my MediEase",
+  saveHelp: "Keep your prescriptions and appointments from this clinic in one place.",
 };
 
 const HI: PageStrings = {
@@ -60,6 +65,8 @@ const HI: PageStrings = {
   revoked: "यह लिंक अब काम नहीं करता। क्लिनिक से नया लिंक माँगें।",
   switchTo: "View in English",
   askDoctor: "कुछ भी समझ न आए तो अपने डॉक्टर या क्लिनिक से पूछें।",
+  saveToAccount: "मेरे MediEase में सहेजें",
+  saveHelp: "इस क्लिनिक के अपने पर्चे और अपॉइंटमेंट एक जगह रखें।",
 };
 
 export function stringsFor(language: PageLanguage): PageStrings {

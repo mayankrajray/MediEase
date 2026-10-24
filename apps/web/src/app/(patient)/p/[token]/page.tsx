@@ -85,7 +85,14 @@ export default async function PatientPrescriptionPage({
   if (view !== undefined) {
     const page = await loadPage(token, view, asked);
     if (typeof page === "object") {
-      return <PrescriptionView page={page} strings={stringsFor(page.language)} switchHref={switchTo(page.language)} />;
+      return (
+        <PrescriptionView
+          page={page}
+          strings={stringsFor(page.language)}
+          switchHref={switchTo(page.language)}
+          saveHref={`/portal/link/prescription/${encodeURIComponent(token)}`}
+        />
+      );
     }
     if (page !== "ask" && page !== "failed") {
       const lang = asked ?? "en";

@@ -52,6 +52,11 @@ export const workspaceRoutes = {
   // M5-P6: the profile's reminders and message history, and the consultation's reminder chip.
   [`GET /api/v1/patients/${PATIENT_ID}/reminders`]: () => json(200, { items: [] }),
   [`GET /api/v1/patients/${PATIENT_ID}/messages`]: () => json(200, { items: [] }),
+  // M6b-P1: the profile's Patient app card.
+  [`GET /api/v1/patients/${PATIENT_ID}/portal`]: () =>
+    json(200, { status: "NOT_LINKED", method: null, linked_at: null, invite_expires_at: null }),
+  [`GET /api/v1/patients/${OTHER_ID}/portal`]: () =>
+    json(200, { status: "NOT_LINKED", method: null, linked_at: null, invite_expires_at: null }),
   "GET /api/v1/clinic/doctors": () => json(200, { items: [] }),
   // M6a-P7: the header's notification bell.
   "GET /api/v1/notifications/summary": () => json(200, { unread: 0, latest_id: null }),

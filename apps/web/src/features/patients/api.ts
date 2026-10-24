@@ -12,9 +12,13 @@ import { useMemo } from "react";
 
 import { useSession } from "@/features/auth/SessionProvider";
 import type { RequestOptions } from "@/lib/api/client";
-import { sessionGet, sessionPatch, sessionPost, sessionPut } from "@/lib/auth/refresh";
+import type { components } from "@/lib/api/schema";
+import { sessionDelete, sessionGet, sessionPatch, sessionPost, sessionPut } from "@/lib/auth/refresh";
 
 import type { NewPatient, Patient, PatientUpdate } from "./fields";
+
+export type PortalStatus = components["schemas"]["PatientPortalStatus"];
+export type PortalInvitation = components["schemas"]["PortalInvitation"];
 
 export interface PatientApi {
   readonly lookup: (q: string, signal?: AbortSignal) => Promise<readonly Patient[]>;
@@ -24,6 +28,10 @@ export interface PatientApi {
   readonly recordConsent: (id: string, whatsapp: boolean, sms: boolean) => Promise<Patient>;
   readonly optOut: (id: string) => Promise<Patient>;
   readonly optIn: (id: string, whatsapp: boolean, sms: boolean) => Promise<Patient>;
+  // M6b-P1: the record's link to a patient app account.
+  readonly portalStatus: (id: string) => Promise<PortalStatus>;
+  readonly invitePortal: (id: string) => Promise<PortalInvitation>;
+  readonly unlinkPortal: (id: string) => Promise<PortalStatus>;
 }
 
 export function usePatientApi(): PatientApi {
@@ -50,6 +58,10 @@ export function usePatientApi(): PatientApi {
       optOut: async (id) => (await sessionPost("/api/v1/patients/{patient_id}/opt-out", undefined, one(id))).data,
       optIn: async (id, whatsapp, sms) =>
         (await sessionPost("/api/v1/patients/{patient_id}/opt-in", { whatsapp, sms }, one(id))).data,
+      portalStatus: async (id) => (await sessionGet("/api/v1/patients/{patient_id}/portal", one(id))).data,
+      invitePortal: async (id) =>
+        (await sessionPost("/api/v1/patients/{patient_id}/portal-invite", undefined, one(id))).data,
+      unlinkPortal: async (id) => (await sessionDelete("/api/v1/patients/{patient_id}/portal-link", one(id))).data,
     };
   }, [clinicId]);
 }
