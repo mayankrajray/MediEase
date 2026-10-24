@@ -14,10 +14,19 @@ export function PrescriptionView({
   strings,
   switchHref,
   saveHref,
-}: Readonly<{ page: Page; strings: PageStrings; switchHref: string; saveHref?: string }>) {
+  embedded = false,
+}: Readonly<{
+  page: Page;
+  strings: PageStrings;
+  switchHref: string;
+  saveHref?: string;
+  /** Inside the portal's own `main` (M6b-P2): an `article`, so the page has one main landmark. */
+  embedded?: boolean;
+}>) {
   const lang: PageLanguage = page.language;
+  const Root = embedded ? "article" : "main";
   return (
-    <main lang={lang} className="mx-auto max-w-xl px-4 pb-10 pt-4 text-base leading-relaxed text-slate-900">
+    <Root lang={lang} className="mx-auto max-w-xl px-4 pb-10 pt-4 text-base leading-relaxed text-slate-900">
       <header className="border-b border-slate-300 pb-3">
         <p className="text-sm">
           <a className="underline" href={switchHref} hrefLang={lang === "hi" ? "en" : "hi"}>
@@ -119,6 +128,6 @@ export function PrescriptionView({
           </a>
         </p>
       )}
-    </main>
+    </Root>
   );
 }

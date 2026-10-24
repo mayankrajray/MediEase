@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 
-import { PortalAccount } from "@/features/portal/PortalAccount";
+import { Home } from "@/features/portal/Home";
 
-export const metadata: Metadata = { title: "Your account · MediEase" };
+export const metadata: Metadata = { title: "MediEase for patients" };
 
-/** The signed-in patient's account (M6a-P3). The proxy sends a signed-out visitor to sign in. */
-export default function PortalPage() {
-  return <PortalAccount />;
+/** *Home* (M6b-P2; FR-PRT-05, spec R16, R17). */
+export default function PortalHomePage() {
+  return <Home />;
 }
