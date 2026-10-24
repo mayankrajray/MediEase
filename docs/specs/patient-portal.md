@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Requirements | FR-PRT-02, 03, 06 (b, c); NFR-18 (P1). FR-PRT-04, 05, 07 (P2), FR-REM-03 (P3) and patient notifications (P6) are added in their phases |
-| Milestone / phases | M6b / P1 (this version), P2, P3, P6 |
-| Status | P1 approved (developer sign-off 24 Oct 2026, A on all eight) and built; P2 (R15–R27, AC7–AC12) approved and built; P3 (R28–R38, AC13–AC17) Draft, awaiting approval |
+| Milestone / phases | M6b / P1, P2, P3, P3b, P6 |
+| Status | P1 approved (developer sign-off 24 Oct 2026, A on all eight) and built; P2 (R15–R27, AC7–AC12) approved and built; P3 (R28–R44, AC13–AC18) and P3b (R45–R54, AC19–AC22) Draft, awaiting approval |
 | Last updated | 2026-10-24 |
 
 ## 1. Context
@@ -136,38 +136,78 @@ stateDiagram-v2
   and nothing personal is written to local storage.
 
 ### The medicine planner (P3, Draft)
-- **R28** The plan uses only each issued line's frequency, timing and duration, as the doctor
-  wrote them. It never computes or changes a dose, never merges lines or prescriptions, never
-  moves a dose relative to food, and never fills in what the doctor left out.
-- **R29** Frequency to slots: `1-0-0` morning; `0-1-0` afternoon; `0-0-1` night; `1-0-1` morning
-  and night; `1-1-1` morning, afternoon and night; `1-1-1-1` morning, afternoon, evening and
-  night. `SOS`, `ONCE` and `CUSTOM` have no slot: they are shown as "As the doctor wrote" with the
-  doctor's words. Timing is shown in words beside the dose and never changes a time.
-- **R30** Slot times are the account's daily times (defaults morning 08:00, afternoon 14:00,
-  evening 18:00, night 21:00), each between 05:00 and 23:30 and in that order, changed under
-  *Account*, on the clinic's clock.
-- **R31** A course starts on the issue day of the chain's current version (clinic calendar) and
-  lasts `duration_days` days, the issue day being day 1. A line without a duration is "Until the
-  doctor says": shown every day, with no end and no day count. A superseded version has no plan.
-- **R32** `GET /portal/medicine-plan?date=` returns the day's plan (default today; at most 30 days
-  either side, else 422) for the account's linked records only, through `PortalScope`.
-- **R33** *Medicines* shows *Today* (by slot, then "As the doctor wrote"; each entry with the
-  medicine and dose as written, timing in words, the clinic, and "day N of M" when there is a
-  duration) and *This course* (per current prescription: its medicines, start, end and days left).
-  Courses that ended more than 7 days ago are not shown. A line appears once under each of its
-  slots; the same medicine on two prescriptions is two entries.
-- **R34** Every planner screen says: "This plan only lays out your prescription. If anything is
-  unclear, ask your doctor." (and its Hindi).
-- **R35** No dose is marked as taken; no adherence data is recorded.
-- **R36** *Remind me* (FR-REM-03), off by default, is chosen per current prescription and kept for
-  that linked record; it is cleared when the link ends. Its delivery as an in-app "medicine due"
-  notice, without the medicine's name, is P6.
-- **R37** Frequency and timing are worded with the patient page's vocabulary, in the account's
-  language.
-- **R38** Reading the plan and changing the times or a reminder choice are not audited; they are
-  logged with IDs only.
+Developer decisions D1–D9 (design note "Medicine planner: the developer's decisions").
+- **R28** *Safety boundary.* The plan displays and organises what the doctor wrote. It never
+  decides how a medicine is taken, infers or adds an instruction, computes or changes a dose,
+  merges lines or prescriptions, or resolves a contradiction.
+- **R29** *One engine.* Every schedule shown anywhere (the portal, the PDF, the patient page,
+  P6's reminders) comes from the domain engine (`domain/prescriptions/schedule.py`, `plan.py`).
+  No screen interprets a frequency value; the web shows the API's plan.
+- **R30** *Slots.* A structured frequency is a pattern of `0`/`1`, read against the central slot
+  set for its length: 3 = morning, afternoon, night; 4 = morning, afternoon, evening, night. A
+  `1` schedules the medicine in that slot. `SOS`, `ONCE` and `CUSTOM` have no slot and are
+  listed under "As the doctor wrote" with the doctor's words.
+- **R31** *When and how stay apart.* Each entry shows when (slot and time, food timing) and how
+  (the preparation instructions) as the doctor chose them, in the patient page's words. Bedtime is
+  shown as written even when it may conflict with the slots.
+- **R32** *Course.* A course starts on the prescription's `starts_on` (default its issue day,
+  clinic calendar). `DAYS`: day 1 to day M, shown as "Day N of M". `UNTIL_REVIEW` ("Until your next
+  review"), `ONGOING` ("Ongoing — as prescribed") and a not-stated duration ("Duration not stated —
+  ask your clinic") show from the start while the version is current, with no invented end.
+- **R33** *Versions.* Only each chain's current version has a plan; a revision's plan starts from
+  its own `starts_on`; the earlier version and anything recorded against it are not changed.
+- **R34** *Daily times.* Scheduled times come from the account's slot times (defaults 08:00,
+  14:00, 18:00, 21:00; each 05:00–23:30 and increasing), changed under *Account*, on the clinic's
+  clock.
+- **R35** `GET /portal/medicine-plan?date=` (default today; ±30 days, else 422) and
+  `GET /portal/medicine-plan/courses` return plans for the account's linked records only, through
+  `PortalScope`; courses of `DAYS` that ended more than 7 days ago are left out.
+- **R36** *Medicines tab.* *Today* by slot (with its time), then "As the doctor wrote"; each entry:
+  medicine and dose as written, food timing, how to give, course progress or duration words,
+  clinic and doctor. *Courses* per prescription. The same medicine on two prescriptions is two
+  entries with their own context.
+- **R37** Every planner screen says "This plan only lays out your prescription. If anything is
+  unclear, ask your doctor." (and its Hindi) with *Contact your clinic* (a call button).
+- **R38** *Reminder preferences.* Per prescription line and per slot the line has: on or off
+  (default off) and a preferred time (default the slot's time, 05:00–23:30). Refused for untimed
+  lines and for slots the line does not have. They never change the prescribed frequency, dose,
+  duration or instructions.
+- **R39** A revision does not inherit reminder preferences; its first plan says "This
+  prescription was updated — set your reminders again". Preferences are cleared when the link
+  ends.
+- **R40** Reminder delivery ("medicine due", in-app, never naming the medicine) is P6; P3 stores
+  and shows the preferences only.
+- **R41** Reading the plan and changing times or preferences are not audited; logs carry IDs only,
+  never a medicine, dose or instruction.
+- **R42** Every planner word is in the account's language; medicine names, doses and the doctor's
+  own text are shown as written.
+- **R43** Each planner screen loads under 200 KB at 360 px and passes the automated accessibility
+  check in both languages.
+- **R44** Prescriptions with no current version for a linked record (none issued) give an empty
+  plan with "No medicines from your prescriptions yet".
 
-### Unlinking (cont.)
+### Dose tracking (P3b, Draft)
+- **R45** The patient may mark a timed dose of the current plan **Taken** or **Skipped**; the time
+  marked is recorded. Untimed lines cannot be marked.
+- **R46** A dose can be marked, changed or cleared from 00:00 of its day (clinic time) until 48
+  hours after its scheduled time; never for a future day; read-only after the window.
+- **R47** A past dose with no record is shown "Not recorded". Nothing is stored for it, and it is
+  never called missed or given a reason.
+- **R48** For Skipped and Not recorded, the only guidance is "If you are unsure what to do,
+  contact your clinic" with the call button. No other advice is ever shown.
+- **R49** Records belong to the prescription version and line they were made for; a revision
+  starts without records; history shows each version separately.
+- **R50** Records are visible only to the patient account, through `PortalScope`; no staff, ops
+  or clinic route reaches them.
+- **R51** Dose records are health data (C3): no audit rows per change, no state, medicine or time
+  in any log, never sent to analytics or a model.
+- **R52** On unlink they are hidden at once and kept; a relink of the same account and record
+  shows them again.
+- **R53** Retention: deleted one year after the course ends (`DAYS`), or one year after the dose
+  date for open-ended courses, by the purge job — a product period subject to privacy and legal
+  review.
+- **R54** Account deletion removes them and the patient's export includes them (repository
+  functions in P3b; run by support on request until FR-PRT-10's screens exist).
 ## 5. API surface
 See API.md "Patient portal" and `contracts/openapi.yaml` 0.29.0. P2 (0.30.0): `language` on the account and `PATCH /portal/me`; the clinic's `timezone` on links and appointment groups; the prescription page's default language is the account's.
 
@@ -226,18 +266,34 @@ See API.md "Patient portal" and `contracts/openapi.yaml` 0.29.0. P2 (0.30.0): `l
   overflow and passes the automated accessibility check in English and Hindi.
 - **AC12 (R20)** Given the patient unlinks a clinic from *Account*, then that clinic disappears
   from every screen at once.
-- **AC13 (FR-REM-03, R29, R31)** Given the PRD sample (Syrup X, 5 ml, `1-0-1`, after food, 5 days)
-  issued today and linked, then *Today* shows it under Morning and Night as "day 1 of 5, after
-  food", and *This course* ends on the fifth day.
-- **AC14 (R29)** Given a `SOS` line, then it is listed under "As the doctor wrote" with no time.
-- **AC15 (R30)** Given the morning time changed to 07:00, then the morning slot shows 07:00.
-- **AC16 (R36)** Given *Remind me* turned on, then it is still on after reload, and it is gone
-  after the clinic is unlinked.
-- **AC17 (R32, NFR-18)** A plan never contains a line of another clinic's or another record's
-  prescription.## 10. Observability
+- **AC13 (R30, R32)** Given a line `1-1-0`, after food, `DAYS` 5, started today, then *Today*
+  shows it under Morning and Afternoon as "Day 1 of 5, after food" and *Courses* ends on day 5;
+  given `1-0-1-1` it shows under Morning, Evening and Night.
+- **AC14 (R30)** Given an `SOS` line, then it is under "As the doctor wrote" with the doctor's
+  words, no time and no reminder switch.
+- **AC15 (R32)** Given a line with no duration stated, then it reads "Duration not stated — ask
+  your clinic" and has no end date.
+- **AC16 (R33)** Given a revision issued with a new start, then the plan shows the new version
+  only, and the earlier version and its PDF are unchanged.
+- **AC17 (R38, R39)** Given a reminder turned on for the morning slot at 07:30, then it is still on
+  after reload, cannot be set on an untimed line, does not carry to a revision, and is gone after
+  unlinking.
+- **AC18 (R35, NFR-18)** A plan never contains a line of another clinic's or another record's
+  prescription.
+- **AC19 (R45, R46)** Given a dose marked Taken at 08:12, then it shows "Taken at 08:12"; it can be
+  changed to Skipped within 48 hours and not after; tomorrow's doses cannot be marked.
+- **AC20 (R47, R48)** Given yesterday's evening dose not marked, then it shows "Not recorded" with
+  *Contact your clinic* and no other guidance, and no record exists for it.
+- **AC21 (R50, R52)** Staff and ops cannot read dose records through any route; after unlinking the
+  patient sees none, and after relinking the same record they reappear.
+- **AC22 (R51)** No log line written while marking contains a dose state, a medicine or a time.
+
+## 10. Observability
 Log events: `portal.invite_created`, `portal.linked` (method), `portal.unlinked`,
 `portal.invite_invalid`, `portal.link_refused` (reason). IDs only; never a phone digit, name or
-email.
+email. P2: `portal.language_changed`. P3: `portal.slot_times_changed`, `portal.reminder_pref_changed`
+(prescription and line IDs, slot, on/off). P3b: `dose.marked`, `dose.cleared` (IDs and counts only,
+never a state, medicine or time, R51).
 
 ## 11. Out of scope
 Booking requests and linking by an accepted request (P5, `booking-requests.md`); dependents on one
