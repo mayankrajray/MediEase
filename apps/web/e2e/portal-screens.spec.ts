@@ -67,7 +67,8 @@ test("M6b-P2: fresh dashboard, linked records, Hindi on the account, and unlinki
   await page.getByRole("navigation", { name: "Patient app" }).getByRole("link", { name: "Prescriptions" }).click();
   await checkScreen(page, browser, "My prescriptions");
   await page.getByRole("region", { name: "Sample Clinic" }).getByRole("link").first().click();
-  await expect(page.getByRole("listitem").filter({ hasText: "Syrup X" })).toBeVisible();
+  // The medicine card (M6b-P3 adds the schedule, which names the medicine too).
+  await expect(page.getByRole("listitem").filter({ hasText: "Syrup X" }).filter({ hasText: "How much" })).toBeVisible();
   const prescriptionUrl = page.url();
   await expectAccessible(page);
   await noHorizontalScroll(page);

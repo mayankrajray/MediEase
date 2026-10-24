@@ -2,12 +2,13 @@
 
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 
-import type { Favourite, Frequency, Suggestion, Timing } from "./api";
+import type { Favourite, Frequency, Suggestion, Timing, Vocabulary } from "./api";
 import { toLine, type Line } from "./draft";
 import { MedicineCombobox } from "./MedicineCombobox";
-import { TIMINGS, frequencyLabel, parseFrequency } from "./vocabulary";
+import { TIMINGS, frequencyLabel, parseDuration, parseFrequency } from "./vocabulary";
 
-const FREQUENCY_HINT = "Type 101 or 1-0-1, S for SOS, O for once, C for custom";
+const FREQUENCY_HINT = "Use 0 and 1 for each time of day (101, 110, 1-0-1-1), S for SOS, O for once, C for custom. Anything else: C and write it.";
+const DURATION_HINT = "Days 1 to 365, R for until review, G for ongoing, or leave it empty";
 
 interface Entry {
   readonly name: string;
@@ -21,28 +22,27 @@ interface Entry {
 const EMPTY: Entry = { name: "", dose: "", frequency: "", custom: "", timing: "", duration: "" };
 
 /** What is wrong with the entry, by field; empty when it can be added. */
-export function entryProblems(entry: Entry): Partial<Record<keyof Entry, string>> {
+export function entryProblems(entry: Entry, vocabulary: Vocabulary | undefined): Partial<Record<keyof Entry, string>> {
   const problems: Partial<Record<keyof Entry, string>> = {};
   if (entry.name.trim() === "") problems.name = "Type the medicine first";
-  const code = parseFrequency(entry.frequency);
+  const code = parseFrequency(entry.frequency, vocabulary);
   if (entry.frequency.trim() !== "" && code === undefined) problems.frequency = FREQUENCY_HINT;
   if (code === "CUSTOM" && entry.custom.trim() === "") problems.custom = "Say how often";
-  const days = entry.duration.trim();
-  if (days !== "" && !(/^\d+$/.test(days) && Number(days) >= 1 && Number(days) <= 365)) {
-    problems.duration = "Whole days, 1 to 365";
-  }
+  if (parseDuration(entry.duration) === undefined) problems.duration = DURATION_HINT;
   return problems;
 }
 
-function lineOf(entry: Entry): Line {
-  const frequency: Frequency | null = parseFrequency(entry.frequency) ?? null;
+function lineOf(entry: Entry, vocabulary: Vocabulary | undefined): Line {
+  const frequency: Frequency | null = parseFrequency(entry.frequency, vocabulary) ?? null;
+  const duration = parseDuration(entry.duration) ?? { kind: null, days: null };
   return toLine({
     medicine_name: entry.name.trim(),
     dose: entry.dose.trim() === "" ? null : entry.dose.trim(),
     frequency,
     frequency_text: frequency === "CUSTOM" ? entry.custom.trim() : null,
     timing: entry.timing === "" ? null : entry.timing,
-    duration_days: entry.duration.trim() === "" ? null : Number(entry.duration),
+    duration_days: duration.days,
+    duration_kind: duration.kind,
   });
 }
 
@@ -54,16 +54,17 @@ function lineOf(entry: Entry): Line {
 export function EntryRow({
   onAdd,
   favourites,
+  vocabulary,
   disabled,
-}: Readonly<{ onAdd: (line: Line) => void; favourites: readonly Favourite[]; disabled: boolean }>) {
+}: Readonly<{ onAdd: (line: Line) => void; favourites: readonly Favourite[]; vocabulary: Vocabulary | undefined; disabled: boolean }>) {
   const base = useId();
   const [entry, setEntry] = useState<Entry>(EMPTY);
   const [tried, setTried] = useState(false);
   const [message, setMessage] = useState("");
   const medicine = useRef<HTMLInputElement>(null);
-  const problems = entryProblems(entry);
+  const problems = entryProblems(entry, vocabulary);
   const shown = tried ? problems : { ...problems, name: undefined };
-  const code = parseFrequency(entry.frequency);
+  const code = parseFrequency(entry.frequency, vocabulary);
   const set = (patch: Partial<Entry>) => setEntry((e) => ({ ...e, ...patch }));
 
   function reset(text: string) {
@@ -79,7 +80,7 @@ export function EntryRow({
       setTried(true);
       return;
     }
-    const line = lineOf(entry);
+    const line = lineOf(entry, vocabulary);
     onAdd(line);
     reset(`${line.medicine_name} added.`);
   }
@@ -146,7 +147,7 @@ export function EntryRow({
             className={input}
           />
           <p id={`${fieldId("frequency")}-hint`} className="text-xs text-slate-700">
-            {code === undefined ? "101, 1-0-1, S, O, C" : frequencyLabel(code, null)}
+            {code === undefined ? "101, 110, 1-0-1-1, S, O, C" : frequencyLabel(code, null, vocabulary)}
           </p>
           {code === "CUSTOM" && (
             <>
@@ -185,13 +186,15 @@ export function EntryRow({
           <input
             id={fieldId("duration")}
             value={entry.duration}
-            inputMode="numeric"
-            maxLength={3}
+            maxLength={12}
             aria-invalid={errorOf("duration") !== undefined ? true : undefined}
-            aria-describedby={describe("duration")}
+            aria-describedby={describe("duration", true)}
             onChange={(e) => set({ duration: e.target.value })}
             className={input}
           />
+          <p id={`${fieldId("duration")}-hint`} className="text-xs text-slate-700">
+            5, R, G
+          </p>
         </div>
         <button
           type="button"

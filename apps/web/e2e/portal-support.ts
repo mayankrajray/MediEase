@@ -18,8 +18,11 @@ const SAMPLE = {
   storage: [{ code: "DISCARD_AFTER_DAYS", days: 7 }],
 };
 
-/** The issued sample's link path (`/p/<token>`); the synthetic patient's phone ends in 0101. */
-export async function issuedLink(request: APIRequestContext): Promise<string> {
+/**
+ * The issued sample's link path (`/p/<token>`); the synthetic patient's phone ends in 0101.
+ * M6b-P3: `items` replaces the sample's lines (the medicine-plan journey).
+ */
+export async function issuedLink(request: APIRequestContext, items: readonly object[] = [SAMPLE]): Promise<string> {
   const { sessionId } = await sessionRunningNow(request);
   const patient = await newPatient(request, "Isha");
   let csrf = await signInApi(request, DESK);
@@ -49,7 +52,7 @@ export async function issuedLink(request: APIRequestContext): Promise<string> {
   const rx = (await created.json()) as { id: string };
   const saved = await request.put(`/api/v1/prescriptions/${rx.id}`, {
     headers,
-    data: { revision: 1, items: [SAMPLE], advice: { return_if: ["breathing is difficult"] } },
+    data: { revision: 1, items, advice: { return_if: ["breathing is difficult"] } },
   });
   expect(saved.status(), await saved.text()).toBe(200);
   const issued = await request.post(`/api/v1/prescriptions/${rx.id}/issue`, { headers, data: { revision: 2 } });
@@ -87,6 +90,13 @@ export async function expectAccessible(page: Page): Promise<void> {
     .filter((v) => v.impact === "serious" || v.impact === "critical")
     .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
   expect(serious, `axe on ${page.url()}`).toEqual([]);
+}
+
+export async function signInWithGoogle(page: Page, email: string): Promise<void> {
+  await page.goto("/portal/sign-in");
+  await page.locator("#portal-email").fill(email);
+  await page.getByRole("link", { name: /Continue with Google/ }).click();
+  await expect(page).toHaveURL(/\/portal$/);
 }
 
 export async function noHorizontalScroll(page: Page): Promise<void> {

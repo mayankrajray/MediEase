@@ -14,6 +14,7 @@ export const PORTAL_ACCOUNT = {
   sign_in_method: "PASSWORD",
   email_verified: true,
   language: "en",
+  slot_times: { morning: "08:00", afternoon: "14:00", evening: "18:00", night: "21:00" },
 } as const;
 
 export const CLINIC_ID = "0192f0a0-0000-7000-8000-0000000000e2";

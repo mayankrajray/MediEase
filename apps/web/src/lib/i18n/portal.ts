@@ -41,7 +41,14 @@ export interface PortalStrings {
   readonly brandTagline: string;
   readonly switchLanguage: string;
   readonly switchLanguageLabel: string;
-  readonly nav: { readonly label: string; readonly home: string; readonly appointments: string; readonly prescriptions: string; readonly account: string };
+  readonly nav: {
+    readonly label: string;
+    readonly home: string;
+    readonly appointments: string;
+    readonly medicines: string;
+    readonly prescriptions: string;
+    readonly account: string;
+  };
   readonly loading: string;
   readonly tryAgain: string;
   readonly goHome: string;
@@ -88,8 +95,41 @@ export interface PortalStrings {
     readonly downloading: string;
     readonly back: string;
   };
+  /** M6b-P3 (spec R36-R44): the planner's own words; the medicine's come from the API. */
+  readonly medicines: {
+    readonly title: string;
+    readonly views: string;
+    readonly today: string;
+    readonly courses: string;
+    readonly safety: string;
+    readonly contact: string;
+    readonly asWritten: string;
+    readonly empty: string;
+    readonly nothingOn: string;
+    readonly previousDay: string;
+    readonly nextDay: string;
+    readonly backToToday: string;
+    readonly dayOf: (n: number, m: number) => string;
+    readonly from: (date: string) => string;
+    readonly until: (date: string) => string;
+    readonly by: (doctor: string, clinic: string) => string;
+    readonly remindMe: (slot: string, time: string) => string;
+    readonly reminderTime: (slot: string) => string;
+    readonly reminderOn: (time: string) => string;
+    readonly reminderSaved: string;
+    readonly saveTime: string;
+    readonly remindersLater: string;
+    readonly updated: string;
+    readonly noCourses: string;
+  };
   readonly account: {
     readonly title: string;
+    readonly times: string;
+    readonly timesHelp: string;
+    readonly slots: { readonly morning: string; readonly afternoon: string; readonly evening: string; readonly night: string };
+    readonly saveTimes: string;
+    readonly timesSaved: string;
+    readonly timesOrder: string;
     readonly signsInWith: string;
     readonly google: string;
     readonly password: string;
@@ -166,7 +206,7 @@ const EN: PortalStrings = {
   brandTagline: "Your appointments and prescriptions, in one place",
   switchLanguage: "हिन्दी",
   switchLanguageLabel: "हिन्दी में देखें (view in Hindi)",
-  nav: { label: "Patient app", home: "Home", appointments: "Appointments", prescriptions: "Prescriptions", account: "Account" },
+  nav: { label: "Patient app", home: "Home", appointments: "Appointments", medicines: "Medicines", prescriptions: "Prescriptions", account: "Account" },
   loading: "Loading…",
   tryAgain: "Try again",
   goHome: "Go to Home",
@@ -230,8 +270,40 @@ const EN: PortalStrings = {
     downloading: "Downloading…",
     back: "All prescriptions",
   },
+  medicines: {
+    title: "My medicines",
+    views: "Show",
+    today: "Today",
+    courses: "Courses",
+    safety: "This plan only lays out your prescription. If anything is unclear, ask your doctor.",
+    contact: "Contact your clinic",
+    asWritten: "As the doctor wrote",
+    empty: "No medicines from your prescriptions yet.",
+    nothingOn: "No medicines on this day.",
+    previousDay: "Previous day",
+    nextDay: "Next day",
+    backToToday: "Today",
+    dayOf: (n, m) => `Day ${n} of ${m}`,
+    from: (date) => `From ${date}`,
+    until: (date) => `Until ${date}`,
+    by: (doctor, clinic) => `${doctor} · ${clinic}`,
+    remindMe: (slot, time) => `Remind me · ${slot} (${time})`,
+    reminderTime: (slot) => `Reminder time, ${slot}`,
+    reminderOn: (time) => `Reminder on at ${time}`,
+    reminderSaved: "Your reminder choice is saved.",
+    saveTime: "Save time",
+    remindersLater: "Reminders will be sent in a later update of the app. Your choices are saved now.",
+    updated: "This prescription was updated — set your reminders again.",
+    noCourses: "No courses yet.",
+  },
   account: {
     title: "Account",
+    times: "Your times of day",
+    timesHelp: "Used to show your medicines on a clock. They never change your prescription.",
+    slots: { morning: "Morning", afternoon: "Afternoon", evening: "Evening", night: "Night" },
+    saveTimes: "Save times",
+    timesSaved: "Your times of day are saved.",
+    timesOrder: "Each time must be later than the one before, between 05:00 and 23:30.",
     signsInWith: "Signs in with",
     google: "Google",
     password: "Email and password",
@@ -323,7 +395,7 @@ const HI: PortalStrings = {
   brandTagline: "आपके अपॉइंटमेंट और पर्चे, एक जगह",
   switchLanguage: "English",
   switchLanguageLabel: "View in English (अंग्रेज़ी में देखें)",
-  nav: { label: "मरीज़ ऐप", home: "होम", appointments: "अपॉइंटमेंट", prescriptions: "पर्चे", account: "खाता" },
+  nav: { label: "मरीज़ ऐप", home: "होम", appointments: "अपॉइंटमेंट", medicines: "दवाइयाँ", prescriptions: "पर्चे", account: "खाता" },
   loading: "लोड हो रहा है…",
   tryAgain: "फिर कोशिश करें",
   goHome: "होम पर जाएँ",
@@ -387,8 +459,40 @@ const HI: PortalStrings = {
     downloading: "डाउनलोड हो रहा है…",
     back: "सभी पर्चे",
   },
+  medicines: {
+    title: "मेरी दवाइयाँ",
+    views: "दिखाएँ",
+    today: "आज",
+    courses: "दवा के कोर्स",
+    safety: "यह योजना सिर्फ़ आपके पर्चे को क्रम से दिखाती है। कुछ भी साफ़ न हो तो अपने डॉक्टर से पूछें।",
+    contact: "अपने क्लिनिक से संपर्क करें",
+    asWritten: "जैसा डॉक्टर ने लिखा",
+    empty: "आपके पर्चों में अभी कोई दवा नहीं।",
+    nothingOn: "इस दिन कोई दवा नहीं।",
+    previousDay: "पिछला दिन",
+    nextDay: "अगला दिन",
+    backToToday: "आज",
+    dayOf: (n, m) => `${m} में से दिन ${n}`,
+    from: (date) => `${date} से`,
+    until: (date) => `${date} तक`,
+    by: (doctor, clinic) => `${doctor} · ${clinic}`,
+    remindMe: (slot, time) => `मुझे याद दिलाएँ · ${slot} (${time})`,
+    reminderTime: (slot) => `याद दिलाने का समय, ${slot}`,
+    reminderOn: (time) => `${time} पर याद दिलाना चालू`,
+    reminderSaved: "आपकी पसंद सहेज ली गई है।",
+    saveTime: "समय सहेजें",
+    remindersLater: "रिमाइंडर ऐप के अगले अपडेट में भेजे जाएँगे। आपकी पसंद अभी सहेज ली गई है।",
+    updated: "यह पर्चा बदला गया है — अपने रिमाइंडर फिर से चुनें।",
+    noCourses: "अभी कोई कोर्स नहीं।",
+  },
   account: {
     title: "खाता",
+    times: "आपके दिन के समय",
+    timesHelp: "इनसे आपकी दवाइयाँ घड़ी के समय पर दिखती हैं। इनसे आपका पर्चा कभी नहीं बदलता।",
+    slots: { morning: "सुबह", afternoon: "दोपहर", evening: "शाम", night: "रात" },
+    saveTimes: "समय सहेजें",
+    timesSaved: "आपके दिन के समय सहेज लिए गए।",
+    timesOrder: "हर समय पिछले वाले से बाद का हो, 05:00 से 23:30 के बीच।",
     signsInWith: "साइन इन",
     google: "Google",
     password: "ईमेल और पासवर्ड",

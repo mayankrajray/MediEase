@@ -2,7 +2,7 @@
 
 import { CLINIC_A, membership, person } from "@/features/auth/testing";
 import { patient, workspaceRoutes } from "@/features/patients/testing";
-import type { Consultation, PatientPage, Prescription, Visit, VisitSummary } from "@/features/prescriptions/api";
+import type { Consultation, PatientPage, Prescription, Visit, VisitSummary, Vocabulary } from "@/features/prescriptions/api";
 import { DOCTOR_ID, doctor } from "@/features/queue/testing";
 import { json } from "@/test/api";
 
@@ -94,6 +94,9 @@ export const syrupLine = {
   frequency_text: null,
   timing: "AFTER_FOOD" as const,
   duration_days: 5,
+  duration_kind: "DAYS" as const,
+  slots: ["MORNING" as const, "NIGHT" as const],
+  line_warnings: [],
   quantity: null,
   preparation: [{ code: "SHAKE_WELL", text: null }],
   storage: [],
@@ -129,8 +132,39 @@ export function page(language: "en" | "hi" = "en"): PatientPage {
     advice: [],
     advice_notes: null,
     follow_up: null,
+    schedule_heading: language === "en" ? "Medicine schedule" : "दवा लेने का समय",
+    schedule_columns: ["Morning", "Afternoon", "Evening", "Night"],
+    schedule_as_written: "As the doctor wrote",
+    schedule: [
+      {
+        number: 1,
+        name: "Syrup X",
+        dose: "5 ml",
+        marks: [true, false, false, true],
+        as_written: null,
+        timing: "after food",
+        how: null,
+        duration: "5 days",
+      },
+    ],
   };
 }
+
+/** What `GET /rx-vocabulary` returns (M6b-P3): the API's slot sets, here as test data. */
+export const vocabulary: Vocabulary = {
+  slot_sets: [
+    { length: 3, slots: ["MORNING", "AFTERNOON", "NIGHT"] },
+    { length: 4, slots: ["MORNING", "AFTERNOON", "EVENING", "NIGHT"] },
+  ],
+  special_frequencies: ["SOS", "ONCE", "CUSTOM"],
+  timings: ["BEFORE_FOOD", "AFTER_FOOD", "WITH_FOOD", "EMPTY_STOMACH", "BEDTIME", "ANY"],
+  preparations: ["SHAKE_WELL", "DILUTE_IN_WATER", "DISSOLVE", "CHEW", "DO_NOT_CRUSH", "WITH_WATER", "WITH_WARM_WATER", "WITH_MILK", "CUSTOM"],
+  storage: ["ROOM_TEMP", "REFRIGERATE", "AWAY_FROM_LIGHT", "DISCARD_AFTER_DAYS"],
+  duration_kinds: ["DAYS", "UNTIL_REVIEW", "ONGOING"],
+  line_warnings: ["BEDTIME_WITHOUT_NIGHT", "BEDTIME_WITH_OTHER_SLOTS", "BEDTIME_UNTIMED"],
+  duration_max_days: 365,
+  start_window_days: 30,
+};
 
 /** The routes the screen needs for the visit's own doctor ("u-1" is the signed-in person). */
 export function screenRoutes(c: Consultation = consultation()) {
@@ -141,5 +175,6 @@ export function screenRoutes(c: Consultation = consultation()) {
     [`GET ${VISIT}`]: () => json(200, c),
     "GET /api/v1/rx-favourites": () => json(200, { items: [] }),
     "GET /api/v1/rx-templates": () => json(200, { items: [] }),
+    "GET /api/v1/rx-vocabulary": () => json(200, vocabulary),
   };
 }

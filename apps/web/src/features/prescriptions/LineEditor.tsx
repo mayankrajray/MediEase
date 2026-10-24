@@ -4,9 +4,9 @@ import { useId, useState } from "react";
 
 import { Drawer } from "@/components/Drawer";
 
-import type { Frequency, PreparationPhrase, StoragePhrase, Timing } from "./api";
+import type { DurationKind, PreparationPhrase, StoragePhrase, Timing, Vocabulary } from "./api";
 import type { Line } from "./draft";
-import { FREQUENCIES, PREPARATIONS, STORAGES, TIMINGS } from "./vocabulary";
+import { DURATION_KINDS, PREPARATIONS, STORAGES, TIMINGS, frequencyLabel, parseFrequency } from "./vocabulary";
 
 const text = (value: string) => (value.trim() === "" ? null : value.trim());
 
@@ -18,11 +18,14 @@ const text = (value: string) => (value.trim() === "" ? null : value.trim());
 export function LineEditor({
   line,
   number,
+  vocabulary,
   onDone,
   onClose,
-}: Readonly<{ line: Line; number: number; onDone: (line: Line) => void; onClose: () => void }>) {
+}: Readonly<{ line: Line; number: number; vocabulary: Vocabulary | undefined; onDone: (line: Line) => void; onClose: () => void }>) {
   const base = useId();
   const [draft, setDraft] = useState<Line>(line);
+  const [frequency, setFrequency] = useState(line.frequency ?? "");
+  const [kind, setKind] = useState<DurationKind | "">(line.duration_kind ?? (line.duration_days === null || line.duration_days === undefined ? "" : "DAYS"));
   const [duration, setDuration] = useState(line.duration_days === null || line.duration_days === undefined ? "" : String(line.duration_days));
   const [tried, setTried] = useState(false);
   const set = (patch: Partial<Line>) => setDraft((d) => ({ ...d, ...patch }));
@@ -30,10 +33,14 @@ export function LineEditor({
   const preparation = draft.preparation ?? [];
   const storage = draft.storage ?? [];
 
+  const code = parseFrequency(frequency, vocabulary);
   const problems: Record<string, string> = {};
   if (draft.medicine_name.trim() === "") problems["name"] = "The medicine is required";
-  if (draft.frequency === "CUSTOM" && (draft.frequency_text ?? "").trim() === "") problems["custom"] = "Say how often";
-  if (duration.trim() !== "" && !(/^\d+$/.test(duration.trim()) && Number(duration) >= 1 && Number(duration) <= 365)) {
+  if (frequency.trim() !== "" && code === undefined) {
+    problems["frequency"] = "Use 0 and 1 for each time of day (e.g. 1-1-0), SOS, Once or Custom";
+  }
+  if (code === "CUSTOM" && (draft.frequency_text ?? "").trim() === "") problems["custom"] = "Say how often";
+  if (kind === "DAYS" && !(/^\d+$/.test(duration.trim()) && Number(duration) >= 1 && Number(duration) <= 365)) {
     problems["duration"] = "Whole days, 1 to 365";
   }
   for (const p of preparation) {
@@ -71,8 +78,10 @@ export function LineEditor({
       form: text(draft.form ?? ""),
       strength: text(draft.strength ?? ""),
       dose: text(draft.dose ?? ""),
-      frequency_text: draft.frequency === "CUSTOM" ? text(draft.frequency_text ?? "") : null,
-      duration_days: duration.trim() === "" ? null : Number(duration),
+      frequency: code ?? null,
+      frequency_text: code === "CUSTOM" ? text(draft.frequency_text ?? "") : null,
+      duration_kind: kind === "" ? null : kind,
+      duration_days: kind === "DAYS" ? Number(duration) : null,
       quantity: text(draft.quantity ?? ""),
       preparation: preparation.map((p) => ({ code: p.code, text: p.code === "DILUTE_IN_WATER" || p.code === "CUSTOM" ? text(p.text ?? "") : null })),
       warnings: text(draft.warnings ?? ""),
@@ -126,19 +135,19 @@ export function LineEditor({
           <label htmlFor={id("frequency")} className={labelCss}>
             Frequency
           </label>
-          <select
+          <input
             id={id("frequency")}
-            value={draft.frequency ?? ""}
-            onChange={(e) => set({ frequency: e.target.value === "" ? null : (e.target.value as Frequency) })}
+            value={frequency}
+            maxLength={20}
+            onChange={(e) => setFrequency(e.target.value)}
             className={field}
-          >
-            <option value="">—</option>
-            {FREQUENCIES.map((f) => (
-              <option key={f.code} value={f.code}>
-                {f.label}
-              </option>
-            ))}
-          </select>
+            aria-describedby={err("frequency") === undefined ? id("frequency-hint") : `${id("frequency-hint")} ${id("frequency-error")}`}
+            {...(err("frequency") === undefined ? {} : { "aria-invalid": true })}
+          />
+          <p id={id("frequency-hint")} className="text-xs text-slate-700">
+            {code === undefined ? "101, 110, 1-0-1-1, SOS, Once, Custom" : frequencyLabel(code, null, vocabulary)}
+          </p>
+          {error("frequency")}
         </div>
         <div>
           <label htmlFor={id("timing")} className={labelCss}>
@@ -158,7 +167,7 @@ export function LineEditor({
             ))}
           </select>
         </div>
-        {draft.frequency === "CUSTOM" && (
+        {code === "CUSTOM" && (
           <div className="col-span-2">
             <label htmlFor={id("custom")} className={labelCss}>
               How often (custom)
@@ -175,20 +184,34 @@ export function LineEditor({
           </div>
         )}
         <div>
-          <label htmlFor={id("duration")} className={labelCss}>
-            Days
+          <label htmlFor={id("duration-kind")} className={labelCss}>
+            How long
           </label>
-          <input
-            id={id("duration")}
-            value={duration}
-            inputMode="numeric"
-            maxLength={3}
-            onChange={(e) => setDuration(e.target.value)}
-            className={field}
-            {...invalid("duration")}
-          />
-          {error("duration")}
+          <select id={id("duration-kind")} value={kind} onChange={(e) => setKind(e.target.value as DurationKind | "")} className={field}>
+            {DURATION_KINDS.map((k) => (
+              <option key={k.code} value={k.code}>
+                {k.label}
+              </option>
+            ))}
+          </select>
         </div>
+        {kind === "DAYS" && (
+          <div>
+            <label htmlFor={id("duration")} className={labelCss}>
+              Days
+            </label>
+            <input
+              id={id("duration")}
+              value={duration}
+              inputMode="numeric"
+              maxLength={3}
+              onChange={(e) => setDuration(e.target.value)}
+              className={field}
+              {...invalid("duration")}
+            />
+            {error("duration")}
+          </div>
+        )}
       </div>
 
       <fieldset className="space-y-2">

@@ -380,10 +380,11 @@ export interface paths {
         readonly options?: never;
         readonly head?: never;
         /**
-         * Change the account's portal language
+         * Change the account's portal language or slot times
          * @description M6b-P2 (spec R21, decision 2A). @patient. The language every portal screen uses, kept
-         *     across devices; the prescription page in the portal opens in it. Logged, not audited.
-         *     Needs X-CSRF-Token equal to me_pt_csrf.
+         *     across devices; the prescription page in the portal opens in it. M6b-P3 (R34): the
+         *     medicine plan's times of day. Logged, not audited. Needs X-CSRF-Token equal to
+         *     me_pt_csrf.
          */
         readonly patch: operations["updatePortalMe"];
         readonly trace?: never;
@@ -601,6 +602,76 @@ export interface paths {
          */
         readonly get: operations["listPortalReminders"];
         readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/medicine-plan": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * One day's medicine plan across the linked records
+         * @description M6b-P3 (FR-REM-03, spec R28-R37, R42, R44). @patient. Laid out by the one engine from
+         *     each linked record's current versions: timed entries by slot (with the account's time
+         *     for it), then "As the doctor wrote" (SOS, ONCE, CUSTOM, no frequency). Words in the
+         *     account's language; medicine names, doses and the doctor's text as written. Never a
+         *     merged, inferred or changed instruction. Not audited.
+         */
+        readonly get: operations["getMedicinePlan"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/medicine-plan/courses": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Each current prescription's course
+         * @description M6b-P3 (spec R32, R35, R36, R39). @patient. Newest start first; a course whose lines all
+         *     have a number of days and that ended more than 7 days ago is left out. Each line's slots
+         *     carry the person's reminder choice. Not audited.
+         */
+        readonly get: operations["listMedicineCourses"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/medicine-plan/reminders": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * Turn a reminder on or off for one medicine at one time of day
+         * @description M6b-P3 (spec R38-R41). @patient. For a line of a current version in one of the slots its
+         *     frequency marks. 422 for an untimed line (item_id) or a slot the line does not have
+         *     (slot); a version outside the account's records, or no longer current, is 404. Stored
+         *     only (delivery is M6b-P6); never changes the prescription; not audited. Needs
+         *     X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly put: operations["setMedicineReminder"];
         readonly post?: never;
         readonly delete?: never;
         readonly options?: never;
@@ -2086,6 +2157,28 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/rx-vocabulary": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The medicine-schedule engine's slot sets and codes
+         * @description M6b-P3 (prescriptions R21-R23, D8). Permission CLINICAL_VIEW. The one definition of the
+         *     slot set for each pattern length and every code the editor offers, so it reads a pattern
+         *     exactly as the API will. No clinic data; not audited.
+         */
+        readonly get: operations["getRxVocabulary"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/medicine-suggestions": {
         readonly parameters: {
             readonly query?: never;
@@ -2592,15 +2685,36 @@ export interface components {
             }[];
         };
         /**
-         * @description Morning-afternoon-night (and bedtime) pattern; CUSTOM needs frequency_text
+         * @description M6b-P3 (prescriptions R21): a 0/1 pattern read against the slot set for its length
+         *     (GET /rx-vocabulary): 3 = morning-afternoon-night, 4 = morning-afternoon-evening-night,
+         *     with at least one 1; or SOS, ONCE, CUSTOM (CUSTOM needs frequency_text). Saved in the
+         *     canonical dashed form.
+         */
+        readonly Frequency: string;
+        /**
+         * @description As Frequency; the digits may also be sent without dashes or with spaces (101, 1 0 1).
+         *     Anything else (all zeros, 2-0-2, other lengths) is 422 REQ_VALIDATION_FAILED on
+         *     items.N.frequency: write it as CUSTOM with the doctor's words.
+         */
+        readonly FrequencyInput: string;
+        /** @enum {string} */
+        readonly Slot: "MORNING" | "AFTERNOON" | "EVENING" | "NIGHT";
+        /**
+         * @description M6b-P3 (prescriptions R23): DAYS needs duration_days; null = not stated ("Duration not
+         *     stated - ask your clinic"). A line saved with duration_days alone is DAYS.
          * @enum {string}
          */
-        readonly Frequency: "1-0-0" | "0-1-0" | "0-0-1" | "1-0-1" | "1-1-1" | "1-1-1-1" | "SOS" | "ONCE" | "CUSTOM";
+        readonly DurationKind: "DAYS" | "UNTIL_REVIEW" | "ONGOING";
+        /**
+         * @description Non-blocking notes for the doctor (prescriptions R22); issuing is never refused
+         * @enum {string}
+         */
+        readonly LineWarning: "BEDTIME_WITHOUT_NIGHT" | "BEDTIME_WITH_OTHER_SLOTS" | "BEDTIME_UNTIMED";
         /** @enum {string} */
         readonly Timing: "BEFORE_FOOD" | "AFTER_FOOD" | "WITH_FOOD" | "EMPTY_STOMACH" | "BEDTIME" | "ANY";
         readonly PreparationPhrase: {
             /** @enum {string} */
-            readonly code: "SHAKE_WELL" | "DILUTE_IN_WATER" | "DISSOLVE" | "CHEW" | "DO_NOT_CRUSH" | "CUSTOM";
+            readonly code: "SHAKE_WELL" | "DILUTE_IN_WATER" | "DISSOLVE" | "CHEW" | "DO_NOT_CRUSH" | "WITH_WATER" | "WITH_WARM_WATER" | "WITH_MILK" | "CUSTOM";
             /** @description The amount for DILUTE_IN_WATER, the doctor's words for CUSTOM; else absent */
             readonly text?: string | null;
         };
@@ -2615,10 +2729,11 @@ export interface components {
             readonly form?: string | null;
             readonly strength?: string | null;
             readonly dose?: string | null;
-            readonly frequency?: components["schemas"]["Frequency"] | null;
+            readonly frequency?: components["schemas"]["FrequencyInput"] | null;
             readonly frequency_text?: string | null;
             readonly timing?: components["schemas"]["Timing"] | null;
             readonly duration_days?: number | null;
+            readonly duration_kind?: components["schemas"]["DurationKind"] | null;
             readonly quantity?: string | null;
             readonly preparation?: readonly components["schemas"]["PreparationPhrase"][];
             readonly storage?: readonly components["schemas"]["StoragePhrase"][];
@@ -2642,6 +2757,10 @@ export interface components {
             readonly frequency_text: string | null;
             readonly timing: components["schemas"]["Timing"] | null;
             readonly duration_days: number | null;
+            readonly duration_kind: components["schemas"]["DurationKind"] | null;
+            /** @description The slots the frequency marks, from the engine (empty for SOS, ONCE, CUSTOM) */
+            readonly slots: readonly components["schemas"]["Slot"][];
+            readonly line_warnings: readonly components["schemas"]["LineWarning"][];
             readonly quantity: string | null;
             readonly preparation: readonly {
                 readonly code: string;
@@ -2685,6 +2804,12 @@ export interface components {
              * @description The template the body came from (M4-P3, counted at issue)
              */
             readonly template_id?: string | null;
+            /**
+             * Format: date
+             * @description M6b-P3 (prescriptions R24): the first day of the course, within 30 days of today
+             *     (and of the issue day); null = the issue day
+             */
+            readonly starts_on?: string | null;
         };
         readonly PrescriptionIssue: {
             readonly revision: number;
@@ -2743,6 +2868,16 @@ export interface components {
             /** Format: date */
             readonly follow_up_date: string | null;
             /**
+             * Format: date
+             * @description M6b-P3 (R24) the first day of the course; null = the issue day
+             */
+            readonly starts_on?: string | null;
+            /**
+             * Format: date
+             * @description A revision's draft only - the first day of the version it revises (a hint)
+             */
+            readonly previous_starts_on?: string | null;
+            /**
              * @description The patient's language at issue; the PDF uses it (R20)
              * @enum {string|null}
              */
@@ -2774,6 +2909,7 @@ export interface components {
                 readonly frequency_text: string | null;
                 readonly timing: components["schemas"]["Timing"] | null;
                 readonly duration_days: number | null;
+                readonly duration_kind?: components["schemas"]["DurationKind"] | null;
             }[];
         };
         readonly NewVisit: {
@@ -2953,9 +3089,25 @@ export interface components {
             readonly email_verified: boolean;
             /** @description The portal's language (M6b-P2), en or hi */
             readonly language: components["schemas"]["Language"];
+            readonly slot_times: components["schemas"]["SlotTimes"];
         };
+        /** @description HH:MM on the clinic's clock, 05:00-23:30 */
+        readonly ClockTime: string;
+        /**
+         * @description M6b-P3 (patient portal R34): the person's times of day for the medicine plan (defaults
+         *     08:00, 14:00, 18:00, 21:00); each 05:00-23:30 and later than the one before (else 422 on
+         *     slot_times). They place the plan on a clock and never change a prescription.
+         */
+        readonly SlotTimes: {
+            readonly morning: components["schemas"]["ClockTime"];
+            readonly afternoon: components["schemas"]["ClockTime"];
+            readonly evening: components["schemas"]["ClockTime"];
+            readonly night: components["schemas"]["ClockTime"];
+        };
+        /** @description At least one of language and slot_times (else 422) */
         readonly PortalAccountUpdate: {
-            readonly language: components["schemas"]["Language"];
+            readonly language?: components["schemas"]["Language"];
+            readonly slot_times?: components["schemas"]["SlotTimes"];
         };
         readonly PatientSession: {
             readonly account: components["schemas"]["PatientAccount"];
@@ -3209,6 +3361,130 @@ export interface components {
         readonly PortalReminderList: {
             readonly items: readonly components["schemas"]["PortalReminder"][];
         };
+        /** @description R38 - off by default; remind_at null = the slot's own time */
+        readonly MedicineReminder: {
+            readonly enabled: boolean;
+            readonly remind_at: components["schemas"]["ClockTime"] | null;
+        };
+        readonly MedicineReminderInput: {
+            /** Format: uuid */
+            readonly prescription_id: string;
+            /** Format: uuid */
+            readonly item_id: string;
+            readonly slot: components["schemas"]["Slot"];
+            readonly enabled: boolean;
+            readonly remind_at?: components["schemas"]["ClockTime"] | null;
+        };
+        /**
+         * @description One prescribed line and where it comes from (R36). Words in the account's language;
+         *     medicine_name, form_strength and dose as the doctor wrote them.
+         */
+        readonly MedicineLine: {
+            /** Format: uuid */
+            readonly prescription_id: string;
+            readonly version: number;
+            /** Format: uuid */
+            readonly clinic_id: string;
+            readonly clinic_name: string;
+            readonly clinic_phone_e164: string | null;
+            readonly doctor_name: string;
+            /** Format: date */
+            readonly starts_on: string;
+            /** Format: uuid */
+            readonly item_id: string;
+            readonly medicine_name: string;
+            readonly form_strength: string | null;
+            readonly dose: string | null;
+            /** @description SOS, ONCE, CUSTOM or no frequency - the words, instead of a slot */
+            readonly as_written: string | null;
+            /** @description Food timing words */
+            readonly timing: string | null;
+            /** @description How to give (preparation) words */
+            readonly how: string | null;
+            /** @description Duration words (never an invented end) */
+            readonly duration: string;
+        };
+        readonly MedicinePlanEntry: components["schemas"]["MedicineLine"] & {
+            /** @description Day N of the course */
+            readonly day: number;
+            /** @description M for a number of days; else null */
+            readonly days_total: number | null;
+            /** @description Timed entries only */
+            readonly reminder: components["schemas"]["MedicineReminder"] | null;
+        };
+        readonly MedicinePlan: {
+            /** Format: date */
+            readonly date: string;
+            /** Format: date */
+            readonly today: string;
+            readonly language: components["schemas"]["Language"];
+            /** @description R44 - false when no linked record has a current version */
+            readonly has_prescriptions: boolean;
+            /** @description Only the slots with an entry, morning to night */
+            readonly slots: readonly {
+                readonly slot: components["schemas"]["Slot"];
+                readonly label: string;
+                readonly time: components["schemas"]["ClockTime"];
+                readonly entries: readonly components["schemas"]["MedicinePlanEntry"][];
+            }[];
+            readonly as_written: readonly components["schemas"]["MedicinePlanEntry"][];
+        };
+        readonly MedicineCourse: {
+            /** Format: uuid */
+            readonly prescription_id: string;
+            readonly version: number;
+            /** Format: uuid */
+            readonly clinic_id: string;
+            readonly clinic_name: string;
+            readonly clinic_phone_e164: string | null;
+            readonly doctor_name: string;
+            /** Format: date */
+            readonly starts_on: string;
+            /** @description R39 - a version after the first (reminders are set again) */
+            readonly revised: boolean;
+            readonly reminders_set: boolean;
+            /**
+             * Format: date
+             * @description When every line has a number of days; else null
+             */
+            readonly ends_on: string | null;
+            readonly lines: readonly {
+                /** Format: uuid */
+                readonly item_id: string;
+                readonly medicine_name: string;
+                readonly form_strength: string | null;
+                readonly dose: string | null;
+                readonly as_written: string | null;
+                readonly timing: string | null;
+                readonly how: string | null;
+                readonly duration: string;
+                /** Format: date */
+                readonly ends_on: string | null;
+                readonly slots: readonly {
+                    readonly slot: components["schemas"]["Slot"];
+                    readonly label: string;
+                    readonly time: components["schemas"]["ClockTime"];
+                    readonly reminder: components["schemas"]["MedicineReminder"];
+                }[];
+            }[];
+        };
+        readonly MedicineCourseList: {
+            readonly items: readonly components["schemas"]["MedicineCourse"][];
+        };
+        readonly RxVocabulary: {
+            readonly slot_sets: readonly {
+                readonly length: number;
+                readonly slots: readonly components["schemas"]["Slot"][];
+            }[];
+            readonly special_frequencies: readonly ("SOS" | "ONCE" | "CUSTOM")[];
+            readonly timings: readonly components["schemas"]["Timing"][];
+            readonly preparations: readonly string[];
+            readonly storage: readonly string[];
+            readonly duration_kinds: readonly components["schemas"]["DurationKind"][];
+            readonly line_warnings: readonly components["schemas"]["LineWarning"][];
+            readonly duration_max_days: number;
+            readonly start_window_days: number;
+        };
         /** @description What the clinic sees about a patient link (M4-P5 decision 6A); no content. */
         readonly PatientLinkInfo: {
             /** Format: uuid */
@@ -3268,6 +3544,26 @@ export interface components {
             }[];
             readonly advice_notes: components["schemas"]["PageField"] | null;
             readonly follow_up: components["schemas"]["PageField"] | null;
+            readonly schedule_heading: string;
+            /** @description The four times of day, in the page's language (morning to night) */
+            readonly schedule_columns: readonly string[];
+            readonly schedule_as_written: string;
+            /**
+             * @description M6b-P3 (prescriptions R25): the Medicine schedule from the one engine; empty for a
+             *     version issued before layout 2. marks has one entry per schedule column.
+             */
+            readonly schedule: readonly components["schemas"]["ScheduleRow"][];
+        };
+        readonly ScheduleRow: {
+            readonly number: number;
+            readonly name: string;
+            readonly dose: string | null;
+            readonly marks: readonly boolean[];
+            /** @description SOS, ONCE, CUSTOM or no frequency - the words instead of marks */
+            readonly as_written: string | null;
+            readonly timing: string | null;
+            readonly how: string | null;
+            readonly duration: string;
         };
         /**
          * @description The clinic's prescription paper (M4-P4 decision 3A). Applied when a version is first
@@ -5390,6 +5686,99 @@ export interface operations {
             };
             readonly 401: components["responses"]["PortalError"];
             readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly getMedicinePlan: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description Default today on the clinic's calendar; within 30 days of it (else 422) */
+                readonly date?: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The day's plan */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["MedicinePlan"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
+        };
+    };
+    readonly listMedicineCourses: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The courses */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["MedicineCourseList"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly setMedicineReminder: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["MedicineReminderInput"];
+            };
+        };
+        readonly responses: {
+            /** @description The saved choice */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["MedicineReminder"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
         };
     };
     readonly getClinic: {
@@ -8414,6 +8803,41 @@ export interface operations {
             readonly 400: components["responses"]["PermissionError"];
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly getRxVocabulary: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The vocabulary */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["RxVocabulary"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["PermissionError"];
         };
     };

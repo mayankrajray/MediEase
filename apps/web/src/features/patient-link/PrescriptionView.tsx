@@ -77,6 +77,41 @@ export function PrescriptionView({
         </section>
       )}
 
+      {page.schedule.length > 0 && (
+        <section aria-labelledby="schedule" className="mt-5">
+          <h2 id="schedule" className="text-lg font-bold">
+            {page.schedule_heading}
+          </h2>
+          {/* M6b-P3 (prescriptions R25): the API's engine marks the times of day; nothing here reads a frequency. */}
+          <ul className="mt-2 space-y-2">
+            {page.schedule.map((row) => (
+              <li key={row.number} className="rounded-card border border-slate-200 p-3">
+                <p className="font-semibold [overflow-wrap:anywhere]">
+                  {row.number}. {row.name}
+                  {row.dose !== null && <span className="font-normal"> ({row.dose})</span>}
+                </p>
+                {row.as_written !== null ? (
+                  <p>
+                    <span className="font-semibold">{page.schedule_as_written}:</span> {row.as_written}
+                  </p>
+                ) : (
+                  <p className="mt-1 flex flex-wrap gap-1">
+                    {row.marks.map((marked, i) =>
+                      marked ? (
+                        <span key={i} className="rounded-full border border-brand-700 bg-brand-50 px-2 py-0.5 text-sm font-semibold text-brand-900">
+                          {page.schedule_columns[i]}
+                        </span>
+                      ) : null,
+                    )}
+                  </p>
+                )}
+                <p className="text-sm text-slate-700 [overflow-wrap:anywhere]">{[row.timing, row.how, row.duration].filter((n) => n !== null).join(" · ")}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {(page.advice.length > 0 || page.advice_notes !== null) && (
         <section aria-labelledby="advice" className="mt-5">
           <h2 id="advice" className="text-lg font-bold">

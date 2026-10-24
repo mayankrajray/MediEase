@@ -1,21 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from "react";
+import { useCallback, useEffect, useId, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from "react";
 
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { saveText, useAutosave } from "@/features/visits/useAutosave";
 import { ApiError } from "@/lib/api/client";
-import { addDays } from "@/lib/format/time";
+import { addDays, formatDay } from "@/lib/format/time";
 
 import { AdviceEditor } from "./AdviceEditor";
-import { useRxApi, type Favourite, type Prescription, type RxTemplate } from "./api";
+import { useRxApi, type Favourite, type LineWarning, type Prescription, type RxTemplate, type Vocabulary } from "./api";
 import { EMPTY_BODY, MAX_LINES, draftBody, fromPrescription, fromTemplate, isEmpty, moveLine, type Body, type Line } from "./draft";
 import { EntryRow } from "./EntryRow";
 import { IssueReview } from "./IssueReview";
 import { LibraryDrawer, SaveFavouriteDialog, SaveTemplateDialog } from "./Library";
 import { LineEditor } from "./LineEditor";
-import { lineSummary } from "./vocabulary";
+import { WARNING_TEXT, lineSummary } from "./vocabulary";
 
 /** What the consultation screen may ask of the builder: Repeat adds a past visit's lines. */
 export interface BuilderHandle {
@@ -63,6 +63,10 @@ export function RxBuilder({
   const [body, setBody] = useState<Body>(() => (draft === undefined ? EMPTY_BODY : fromPrescription(draft)));
   const [favourites, setFavourites] = useState<readonly Favourite[]>([]);
   const [templates, setTemplates] = useState<readonly RxTemplate[]>([]);
+  // M6b-P3: the engine's slot sets (R21) and the API's notes on each saved line (R22).
+  const [vocabulary, setVocabulary] = useState<Vocabulary | undefined>(undefined);
+  const [warnings, setWarnings] = useState<readonly (readonly LineWarning[])[]>(() => draft?.items.map((i) => i.line_warnings) ?? []);
+  const startId = useId();
   const [library, setLibrary] = useState(0);
   const [overlay, setOverlay] = useState<Overlay | undefined>(undefined);
   const [message, setMessage] = useState("");
@@ -92,6 +96,7 @@ export function RxBuilder({
       }
       const saved = await api.saveDraft(rxId.current, draftBody(next, revision.current));
       revision.current = saved.revision;
+      setWarnings(saved.items.map((i) => i.line_warnings));
     },
     [api, visitId],
   );
@@ -100,6 +105,21 @@ export function RxBuilder({
   const stale = autosave.state.kind === "stale";
 
   useEffect(() => register(flush), [register, flush]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.vocabulary().then(
+      (found) => {
+        if (!cancelled) setVocabulary(found);
+      },
+      (failure: unknown) => {
+        if (!cancelled) endSession(failure);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [api, endSession]);
 
   useEffect(() => {
     let cancelled = false;
@@ -223,6 +243,11 @@ export function RxBuilder({
                 {(line.preparation?.length ?? 0) + (line.storage?.length ?? 0) > 0 && (
                   <span className="text-sm text-slate-700"> · with instructions</span>
                 )}
+                {(warnings[index] ?? []).map((w) => (
+                  <span key={w} className="mt-1 block rounded border border-amber-700 bg-amber-50 px-2 py-0.5 text-sm text-amber-950">
+                    Check: {WARNING_TEXT[w]}
+                  </span>
+                ))}
               </span>
               <span className="flex flex-wrap gap-1">
                 <button
@@ -283,7 +308,12 @@ export function RxBuilder({
       )}
       {lines.length > 0 && <p className="text-sm text-slate-700">Alt+↑ and Alt+↓ move the line you are on.</p>}
 
-      <EntryRow onAdd={(line) => setLines([...lines, line])} favourites={favourites} disabled={stale || lines.length >= MAX_LINES} />
+      <EntryRow
+        onAdd={(line) => setLines([...lines, line])}
+        favourites={favourites}
+        vocabulary={vocabulary}
+        disabled={stale || vocabulary === undefined || lines.length >= MAX_LINES}
+      />
 
       <h3 className="font-bold">Advice and follow-up</h3>
       <AdviceEditor
@@ -295,6 +325,29 @@ export function RxBuilder({
         onFollowUp={(followUp) => update({ ...body, followUp })}
         onLeave={() => void flush()}
       />
+      <div>
+        <label htmlFor={startId} className="block font-medium">
+          Course starts on
+        </label>
+        <input
+          id={startId}
+          type="date"
+          value={body.startsOn}
+          min={addDays(today, -(vocabulary?.start_window_days ?? 30))}
+          max={addDays(today, vocabulary?.start_window_days ?? 30)}
+          disabled={stale}
+          aria-describedby={`${startId}-hint`}
+          onChange={(e) => update({ ...body, startsOn: e.target.value })}
+          onBlur={() => void flush()}
+          className="rounded-lg border border-slate-400 px-2 py-1.5"
+        />
+        <p id={`${startId}-hint`} className="text-sm text-slate-700">
+          Leave it empty to start on the day it is issued.
+          {draft?.previous_starts_on !== null && draft?.previous_starts_on !== undefined
+            ? ` The version this revises started on ${formatDay(draft.previous_starts_on)}.`
+            : ""}
+        </p>
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-300 pt-3">
         <p role="status" aria-live="polite" className="text-sm text-slate-800">
@@ -315,6 +368,7 @@ export function RxBuilder({
         <LineEditor
           line={lines[overlay.index] as Line}
           number={overlay.index + 1}
+          vocabulary={vocabulary}
           onDone={(edited) => {
             setLines(lines.map((l, i) => (i === overlay.index ? edited : l)));
             setOverlay(undefined);
@@ -355,7 +409,13 @@ export function RxBuilder({
         />
       )}
       {overlay?.kind === "review" && (
-        <IssueReview language={language} prepare={prepare} onIssued={onIssued} onClose={() => setOverlay(undefined)} />
+        <IssueReview
+          language={language}
+          prepare={prepare}
+          notes={lines.flatMap((line, i) => (warnings[i] ?? []).map((w) => `Line ${i + 1}, ${line.medicine_name}: ${WARNING_TEXT[w]}`))}
+          onIssued={onIssued}
+          onClose={() => setOverlay(undefined)}
+        />
       )}
     </section>
   );

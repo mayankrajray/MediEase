@@ -22,10 +22,12 @@ export interface Body {
   readonly advice: AdviceText;
   readonly followUp: string;
   readonly templateId: string | null;
+  /** M6b-P3 (R24): the first day of the course, YYYY-MM-DD; "" = the day it is issued. */
+  readonly startsOn: string;
 }
 
 export const EMPTY_ADVICE: AdviceText = { diet: "", activity: "", return_if: "", notes: "" };
-export const EMPTY_BODY: Body = { lines: [], advice: EMPTY_ADVICE, followUp: "", templateId: null };
+export const EMPTY_BODY: Body = { lines: [], advice: EMPTY_ADVICE, followUp: "", templateId: null, startsOn: "" };
 export const MAX_LINES = 40;
 
 let counter = 0;
@@ -42,6 +44,7 @@ export interface LineSource {
   readonly frequency_text?: string | null;
   readonly timing?: ItemInput["timing"];
   readonly duration_days?: number | null;
+  readonly duration_kind?: ItemInput["duration_kind"];
   readonly quantity?: string | null;
   readonly preparation?: readonly { readonly code: string; readonly text?: string | null }[];
   readonly storage?: readonly { readonly code: string; readonly days?: number | null }[];
@@ -61,6 +64,8 @@ export function toLine(item: LineSource, favouriteId?: string | null): Line {
     frequency_text: item.frequency_text ?? null,
     timing: item.timing ?? null,
     duration_days: item.duration_days ?? null,
+    // A line saved before M6b-P3 with days only is a number of days (as the API reads it).
+    duration_kind: item.duration_kind ?? (item.duration_days === null || item.duration_days === undefined ? null : "DAYS"),
     quantity: item.quantity ?? null,
     preparation: (item.preparation ?? []).map((p) => ({ code: p.code as PreparationPhrase["code"], text: p.text ?? null })),
     storage: (item.storage ?? []).map((s) => ({ code: s.code as StoragePhrase["code"], days: s.days ?? null })),
@@ -110,6 +115,7 @@ export function draftBody(body: Body, revision: number): PrescriptionDraft {
     advice: adviceInput(body.advice),
     follow_up_date: body.followUp === "" ? null : body.followUp,
     template_id: body.templateId,
+    starts_on: body.startsOn === "" ? null : body.startsOn,
   };
 }
 
@@ -119,6 +125,7 @@ export function fromPrescription(rx: Prescription): Body {
     advice: adviceText(rx.advice),
     followUp: rx.follow_up_date ?? "",
     templateId: rx.template_id ?? null,
+    startsOn: rx.starts_on ?? "",
   };
 }
 
@@ -129,6 +136,7 @@ export function fromTemplate(template: RxTemplate, today: string, addDays: (date
     advice: adviceText(template.advice),
     followUp: template.follow_up_days === null ? "" : addDays(today, template.follow_up_days),
     templateId: template.id,
+    startsOn: "",
   };
 }
 

@@ -31,10 +31,13 @@ export function issueMessage(error: unknown): string | undefined {
 export function IssueReview({
   language,
   prepare,
+  notes = [],
   onIssued,
   onClose,
 }: Readonly<{
   language: Lang;
+  /** M6b-P3 (prescriptions R22): the API's notes for the doctor; they never block issuing. */
+  notes?: readonly string[];
   /** Saves what is waiting; the draft to issue, or undefined when saving failed. */
   prepare: () => Promise<{ readonly rxId: string; readonly revision: number } | undefined>;
   onIssued: (rx: Prescription) => void;
@@ -103,6 +106,16 @@ export function IssueReview({
           </button>
         ))}
       </div>
+      {notes.length > 0 && (
+        <div className="rounded-lg border border-amber-700 bg-amber-50 p-2">
+          <p className="font-semibold">Please check (issuing is still allowed)</p>
+          <ul className="list-disc pl-5 text-sm">
+            {notes.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {target === null && <p role="alert">The prescription could not be saved, so it cannot be issued yet. Close this and check the message.</p>}
       {target !== null && page === undefined && error === undefined && <p role="status">Preparing the preview…</p>}
       {page !== undefined && <Preview page={page} />}
@@ -189,6 +202,67 @@ function Preview({ page }: Readonly<{ page: PatientPage }>) {
           {page.follow_up.label}: {page.follow_up.value}
         </p>
       )}
+      <ScheduleTable page={page} />
     </section>
+  );
+}
+
+/**
+ * M6b-P3 (prescriptions R25): the Medicine schedule, laid out by the API's engine: a mark where the
+ * doctor's pattern has a 1, the doctor's words for SOS, once and custom lines.
+ */
+export function ScheduleTable({ page }: Readonly<{ page: PatientPage }>) {
+  if (page.schedule.length === 0) return null;
+  return (
+    <div>
+      <h3 className="font-bold">{page.schedule_heading}</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr>
+              <th scope="col" className="border border-slate-300 p-1 text-left">
+                {page.medicines_heading}
+              </th>
+              {page.schedule_columns.map((c) => (
+                <th key={c} scope="col" className="border border-slate-300 p-1 text-center">
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {page.schedule.map((row) => (
+              <tr key={row.number}>
+                <th scope="row" className="border border-slate-300 p-1 text-left font-normal">
+                  <span className="font-semibold">
+                    {row.number}. {row.name}
+                  </span>
+                  {row.dose !== null && <span> ({row.dose})</span>}
+                  {[row.timing, row.how, row.duration].map((note, i) =>
+                    note === null ? null : (
+                      <span key={i} className="block text-slate-700">
+                        {note}
+                      </span>
+                    ),
+                  )}
+                </th>
+                {row.as_written !== null ? (
+                  <td colSpan={page.schedule_columns.length} className="border border-slate-300 p-1">
+                    <span className="font-semibold">{page.schedule_as_written}:</span> {row.as_written}
+                  </td>
+                ) : (
+                  row.marks.map((marked, i) => (
+                    <td key={i} className="border border-slate-300 p-1 text-center">
+                      <span aria-hidden="true">{marked ? "\u25CF" : "\u2014"}</span>
+                      {marked && <span className="sr-only">{page.schedule_columns[i]}</span>}
+                    </td>
+                  ))
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

@@ -65,6 +65,10 @@ const PAGE = {
   advice: [],
   advice_notes: null,
   follow_up: null,
+  schedule_heading: "Medicine schedule",
+  schedule_columns: ["Morning", "Afternoon", "Evening", "Night"],
+  schedule_as_written: "As the doctor wrote",
+  schedule: [],
 };
 
 beforeEach(() => {
@@ -80,11 +84,11 @@ afterEach(() => {
 });
 
 describe("the portal shell (M6b-P2, R15, R21, R25)", () => {
-  it("R15: four tabs, the current one marked", async () => {
+  it("R15, M6b-P3 R36: five tabs, the current one marked", async () => {
     mockApi({ ...me(), "GET /api/v1/portal/links": () => json(200, { items: [] }) });
     await renderPortal(<Home />);
     const nav = screen.getByRole("navigation", { name: "Patient app" });
-    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Home", "Appointments", "Prescriptions", "Account"]);
+    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Home", "Appointments", "Medicines", "Prescriptions", "Account"]);
     expect(within(nav).getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
   });
 

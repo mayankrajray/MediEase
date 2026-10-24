@@ -37,6 +37,22 @@ const PAGE: Page = {
   advice: [{ heading: "Come back immediately if", entries: ["breathing is difficult"] }],
   advice_notes: null,
   follow_up: { label: "Next visit", value: "24 Oct 2026" },
+  schedule_heading: "Medicine schedule",
+  schedule_columns: ["Morning", "Afternoon", "Evening", "Night"],
+  schedule_as_written: "As the doctor wrote",
+  schedule: [
+    {
+      number: 1,
+      name: "Syrup X",
+      dose: "5 ml",
+      marks: [true, false, false, true],
+      as_written: null,
+      timing: "after food",
+      how: null,
+      duration: "5 days",
+    },
+    { number: 2, name: "Syrup Y", dose: null, marks: [false, false, false, false], as_written: "Only when needed", timing: null, how: null, duration: "Ongoing — as prescribed" },
+  ],
 };
 
 describe("the patient page (M4-P5, spec §6, R11, R12, AC2)", () => {
@@ -51,6 +67,17 @@ describe("the patient page (M4-P5, spec §6, R11, R12, AC2)", () => {
     expect(screen.getByRole("link", { name: "Call the clinic" })).toHaveAttribute("href", "tel:+919000000000");
     expect(screen.getByRole("link", { name: "हिन्दी में देखें" })).toHaveAttribute("href", "/p/t?lang=hi");
     expect(screen.getByRole("main")).toHaveAttribute("lang", "en");
+  });
+
+  it("M6b-P3 (prescriptions R25): the Medicine schedule shows the API's marked times and the as-written words", () => {
+    render(<PrescriptionView page={PAGE} strings={stringsFor("en")} switchHref="/p/t?lang=hi" />);
+    const section = screen.getByRole("region", { name: "Medicine schedule" });
+    const [syrup, asNeeded] = within(section).getAllByRole("listitem");
+    expect(within(syrup as HTMLElement).getByText("Morning")).toBeInTheDocument();
+    expect(within(syrup as HTMLElement).getByText("Night")).toBeInTheDocument();
+    expect(within(syrup as HTMLElement).queryByText("Afternoon")).not.toBeInTheDocument();
+    expect(within(syrup as HTMLElement).getByText("after food · 5 days")).toBeInTheDocument();
+    expect(asNeeded).toHaveTextContent("As the doctor wrote: Only when needed");
   });
 
   it("R19: a Hindi page is marked as Hindi and offers English", () => {

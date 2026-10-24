@@ -92,6 +92,10 @@ test("the doctor writes and issues the sample with the keyboard; the front desk 
   await expect(doctor.getByLabel("Dose")).toBeFocused();
   await doctor.keyboard.type("5 ml");
   await doctor.keyboard.press("Tab");
+  // M6b-P3 (prescriptions R21), failure path: all zeros is not a pattern; it is refused on the field.
+  await doctor.keyboard.type("000");
+  await expect(doctor.getByLabel("Frequency")).toHaveAttribute("aria-invalid", "true");
+  for (let i = 0; i < 3; i++) await doctor.keyboard.press("Backspace");
   await doctor.keyboard.type("101");
   await expect(doctor.getByText("1-0-1 · morning and night")).toBeVisible();
   await doctor.keyboard.press("Tab");
