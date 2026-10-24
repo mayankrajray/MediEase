@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design proposed, awaiting the developer's approval |
+| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight) |
 | PRD | v1.2 §0 (C7, C9), §8.9, §8.13, §8.14, §13; NFR-02, NFR-10, NFR-11, NFR-18, NFR-19 |
 | Specs | `docs/specs/patient-portal.md` (Draft, P1–P3, P6), `docs/specs/booking-requests.md` (written at P4) |
 | ADR | ADR-0015 (patient accounts), ADR-0017 (notification service); ADR-0018 at P4 if the soft hold changes how a session's places are counted |
@@ -15,7 +15,7 @@
 
 | Phase | Builds | Requirements | Design |
 |---|---|---|---|
-| P1 | **Linking and the patient API.** A link between a patient account and one clinic's patient record, made by a clinic invite or by the prescription link's last-4 check; revocable by both sides. Read-only portal API for what the clinic gave the patient: linked clinics, appointments, issued prescriptions, reminders. The portal tenancy suite | FR-PRT-02, FR-PRT-03, FR-PRT-06 (b, c), NFR-18 | Below (proposed) |
+| P1 | **Linking and the patient API.** A link between a patient account and one clinic's patient record, made by a clinic invite or by the prescription link's last-4 check; revocable by both sides. Read-only portal API for what the clinic gave the patient: linked clinics, appointments, issued prescriptions, reminders. The portal tenancy suite | FR-PRT-02, FR-PRT-03, FR-PRT-06 (b, c), NFR-18 | Below (approved 24 Oct 2026) |
 | P2 | **Portal web.** The fresh dashboard with *Find a doctor*, My Appointments grouped by clinic, prescriptions (the patient page and PDF), reminders; link and unlink screens; English and Hindi; 360 px; the patient-page budget | FR-PRT-03, 04, 05, 07, NFR-02, NFR-10, NFR-11 | At its start |
 | P3 | **Medicine planner.** Daily dose times derived only from each issued line's frequency, timing and days; *today* and *this course* views; optional in-app reminders | FR-REM-03 | At its start |
 | P4 | **Public page and booking requests.** `/c/{slug}` with the clinic's hours, doctors and bookable slots or sessions; a request from a verified account with a short reason, a soft hold, rate limits and a cap of five open requests; `BookingRequested` to the front desk | FR-PUB-01..04, FR-BKG-01..03, 07, FR-DIS-05 (slots), NFR-19 | At its start |
@@ -26,7 +26,7 @@
 
 ## M6b-P1 — Linking and the patient API
 
-Proposed 24 Oct 2026. Recommendations are marked (rec). Covers FR-PRT-02, FR-PRT-03,
+Proposed 24 Oct 2026; **approved by the developer 24 Oct 2026: A on all eight.** Covers FR-PRT-02, FR-PRT-03,
 FR-PRT-06 (b) and (c), and NFR-18. Rules are in `docs/specs/patient-portal.md` R1–R14 (Draft).
 Linking by an accepted booking request (FR-PRT-06 a) uses the same link and arrives in P5.
 
@@ -100,3 +100,40 @@ Planned verification:
   invite, links, and the API lists that clinic; failure path: a used invite says it is no longer
   valid.
 - **Gates:** `make lint typecheck contract-check test` and `make e2e`.
+
+### As built (M6b-P1)
+
+Built 24 Oct 2026 to the approved design, with these details settled in the build:
+
+- **Code.** `domain/portal/link.py` (`PatientAccountLink`, `PatientPortalInvite`, the three
+  errors); `application/portal/linking.py` (staff `InviteToPortal`, `GetPortalStatus`,
+  `UnlinkPatient`; patient `DescribePortalInvite`, `AcceptPortalInvite`, `LinkByPrescription`,
+  `UnlinkPortal`), `application/portal/scope.py` (`PortalScope`) and
+  `application/portal/records.py` (the reads); `adapters/db/portal_links.py`;
+  `delivery/http/patient_portal.py` (blueprints `portal_records` and `patient_portal`).
+- **One check, shared.** The last-4 comparison, counter, lockout and their audit moved from
+  `VerifyChallenge` into `check_last4` (`application/links/use_cases.py`); the portal uses it
+  through `ProveWithLink`, which runs the link creation in the same transaction after a right
+  answer. A right answer in the portal clears the count but is not an *open* (the page was not
+  shown). The PDF's render-once logic is shared the same way (`DownloadPrescriptionPdf.file_for`);
+  a patient's download is not audited (decision 7A).
+- **Races.** Linking locks the patient row; the partial unique indexes turn the race the lock
+  cannot see (one account, two records at once) into the same `PRT_ALREADY_LINKED`.
+- **Cross-clinic start.** `SqlAlchemyPortalLookup` (`uow.portal_lookup`) is the reviewed
+  exception: an account's active links and an invite digest's clinic, IDs only. A suspended
+  clinic's links are left out of the scope until it is active again (spec §8).
+- **Audit entity.** Portal events are on the `patient` entity, so the owner's audit log shows the
+  record's code; metadata holds the link or invite ID, the account ID, the method and who.
+- **Responses.** Both unlink routes answer 200 with a body (the staff route the new status) like
+  the other deletes, rather than 204.
+- **Web.** The *Patient app* card on the profile (every role with `PATIENTS_MANAGE`), the two link
+  pages under `/portal/link/…` (protected by the proxy like every portal page, so a signed-out
+  visitor signs in or up and comes back), *Save to my MediEase* on the prescription page (a plain
+  link, in English and Hindi; the page weighed 153 KB in the 360 px journey), and the account page
+  now lists linked clinics until P2's dashboard replaces it.
+- **Tests.** Unit (`tests/unit/domain/test_portal_link.py`), integration
+  (`tests/integration/test_portal_linking_http.py`, AC1-AC6), the portal tenancy suite
+  (`tests/tenancy/test_portal_scope.py`, with its route guard), repository scoping, HTTP
+  cross-clinic cases for the three staff routes, migration `0025`, the contract
+  (`tests/contract/test_portal_linking_contract.py`), web unit tests and the Playwright journey
+  `e2e/portal-linking.spec.ts`.

@@ -317,6 +317,12 @@ flowchart LR
   a table with `clinic_id` has no scoped repository. `tests/tenancy/test_http_isolation.py`
   (M1-P3) proves the same over HTTP and fails if a clinic route that takes a resource ID has no
   cross-clinic case.
+- **The patient portal (M6b-P1, NFR-18).** A portal caller names no clinic. `PortalScope`
+  (`application/portal/scope.py`) starts from the account's active `patient_account_links`,
+  read through `uow.portal_lookup` (a reviewed platform read: IDs, method and dates only), and
+  reaches every record through `uow.tenant(link.clinic_id)` filtered by that link's patient.
+  `tests/tenancy/test_portal_scope.py` is the portal's guard: every `@patient` route with an ID
+  has a cross-account case.
 
 ## 7. Background jobs
 
