@@ -56,6 +56,7 @@ export function todayOf(overrides: Partial<Today> = {}): Today {
       },
     ],
     follow_ups_pending: 2,
+    bookings_to_move: 0,
     messages_failed: 1,
     week: null,
     ...overrides,

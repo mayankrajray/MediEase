@@ -61,6 +61,8 @@ export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
     { href: "/follow-ups", label: "Follow-ups", requires: "REMINDERS_SCHEDULE" },
     { href: "/team", label: "Team", requires: "STAFF_MANAGE" },
     { href: "/settings/schedule", label: "Schedule", requires: "SCHEDULES_MANAGE" },
+    // M6a-P8 (FR-AUD-03): the clinic's audit log, owners only.
+    { href: "/settings/audit", label: "Audit log", requires: "AUDIT_VIEW" },
     { href: "/settings/notifications", label: "Notifications" },
   ],
   DOCTOR: [

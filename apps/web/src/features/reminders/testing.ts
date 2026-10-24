@@ -22,6 +22,7 @@ export function reminder(overrides: Partial<Reminder> = {}): Reminder {
     kind: "FOLLOW_UP",
     source: "PRESCRIPTION",
     prescription_id: CHAIN_ID,
+    appointment_id: null,
     follow_up_date: "2026-10-20",
     due_at: "2026-10-19T03:30:00+00:00", // 09:00 IST
     status: "SCHEDULED",

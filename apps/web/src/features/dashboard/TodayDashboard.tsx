@@ -170,6 +170,16 @@ function Overview({ today, timeZone }: { today: Today; timeZone: string }) {
               tone="brand"
               href="/follow-ups"
             />
+            {today.bookings_to_move !== null && today.bookings_to_move > 0 && (
+              // M6a-P8 (FR-APT-09): closed by leave or a schedule change; move or cancel each.
+              <StatTile
+                label="Bookings to move"
+                value={today.bookings_to_move}
+                hint="In sessions closed by leave or a schedule change"
+                tone="danger"
+                href="/bookings-to-move"
+              />
+            )}
             {today.messages_failed !== null && (
               <StatTile
                 label="Messages failed today"

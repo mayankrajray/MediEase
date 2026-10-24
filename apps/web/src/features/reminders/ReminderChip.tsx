@@ -16,13 +16,20 @@ const TONE: Record<Reminder["status"], string> = {
   SKIPPED_NO_CONSENT: "bg-amber-50 ring-amber-700 text-amber-950",
 };
 
+export const KIND_LABELS: Record<Reminder["kind"], string> = {
+  FOLLOW_UP: "Follow-up reminder",
+  // M6a-P8: before a booked visit; it follows its appointment.
+  APPOINTMENT: "Appointment reminder",
+};
+
 /** "Follow-up reminder · Mon 19 Oct, 09:00 · Scheduled", and why, when it did not go (spec §6). */
 export function ReminderChip({ reminder, timeZone }: Readonly<{ reminder: Reminder; timeZone: string }>) {
   const why = explainFailure(reminder.status, reminder.error_code);
   return (
     <span className="inline-flex flex-col gap-0.5">
       <span className={`inline-block rounded px-2 py-0.5 text-sm font-medium ring-1 ring-inset ${TONE[reminder.status]}`}>
-        Follow-up reminder · {formatDayTime(reminder.due_at, timeZone)} · {REMINDER_STATUS_LABELS[reminder.status]}
+        {KIND_LABELS[reminder.kind]} · {formatDayTime(reminder.due_at, timeZone)} ·{" "}
+        {REMINDER_STATUS_LABELS[reminder.status]}
       </span>
       {why !== null && <span className="text-sm text-slate-800">{why}</span>}
     </span>

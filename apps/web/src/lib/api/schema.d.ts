@@ -593,6 +593,29 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/appointments/to-move": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Bookings a schedule change left to move
+         * @description M6a-P8 (FR-APT-09, decision 6A). BOOKED or ARRIVED appointments from today on whose session
+         *     is CLOSED, because the doctor took leave that day (reason LEAVE) or the weekly schedule
+         *     changed (SCHEDULE_CHANGED); earliest first, at most 200. Reschedule or cancel each with the
+         *     usual routes. The patient as code, first name and masked phone only. APPOINTMENTS_MANAGE.
+         */
+        readonly get: operations["listBookingsToMove"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/appointments/{appointment_id}": {
         readonly parameters: {
             readonly query?: never;
@@ -1941,6 +1964,51 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/audit-events": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The clinic's audit log, newest first
+         * @description M6a-P8 (FR-AUD-03, decision 8A). from and to are the clinic's calendar days, both
+         *     included (default the last 7 days; at most 92, else 422 AUD_RANGE_TOO_LONG). 50 a page;
+         *     pass next_cursor as cursor for the next. Reading is not audited. AUDIT_VIEW (owners).
+         */
+        readonly get: operations["listAuditEvents"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/audit-events/export": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Export the clinic's audit log as CSV
+         * @description M6a-P8 (FR-AUD-03, FR-AUD-01 "data exports"). Every entry of the range (rules as for the
+         *     list), at most 20,000 rows (else 422 AUD_RANGE_TOO_LONG). Columns: Time (clinic time),
+         *     Person, Role, Category, Action, Record type, Record ID, Patient code, Details. A cell
+         *     starting with = + - @ is prefixed with '. Records audit.exported. AUDIT_VIEW (owners).
+         */
+        readonly get: operations["exportAuditEvents"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/notifications": {
         readonly parameters: {
             readonly query?: never;
@@ -2066,21 +2134,35 @@ export interface components {
             readonly patient_id: string;
             /** Format: uuid */
             readonly doctor_id: string;
+            /**
+             * @description M6a-P8 APPOINTMENT reminds of a booked visit; it follows its appointment
+             * @enum {string}
+             */
+            readonly kind: "FOLLOW_UP" | "APPOINTMENT";
             /** @enum {string} */
-            readonly kind: "FOLLOW_UP";
-            /** @enum {string} */
-            readonly source: "PRESCRIPTION" | "MANUAL";
+            readonly source: "PRESCRIPTION" | "MANUAL" | "APPOINTMENT";
             /**
              * Format: uuid
              * @description The prescription chain (its version 1) for an automatic reminder
              */
             readonly prescription_id: string | null;
-            /** Format: date */
+            /**
+             * Format: uuid
+             * @description The appointment an APPOINTMENT reminder is for (M6a-P8)
+             */
+            readonly appointment_id: string | null;
+            /**
+             * Format: date
+             * @description The follow-up date, or the visit's date for an APPOINTMENT reminder
+             */
             readonly follow_up_date: string;
             /** Format: date-time */
             readonly due_at: string;
             readonly status: components["schemas"]["ReminderStatus"];
-            /** @description Why it failed (MSG_* or REM_CLINIC_PHONE_MISSING), else null */
+            /**
+             * @description Why it failed (MSG_* or REM_CLINIC_PHONE_MISSING), or why the system cancelled an
+             *     appointment reminder (REM_APPOINTMENT_CHANGED, REM_TOO_LATE); else null
+             */
             readonly error_code: string | null;
             readonly revision: number;
             /** Format: date-time */
@@ -2653,7 +2735,7 @@ export interface components {
         /** @enum {string} */
         readonly MembershipStatus: "INVITED" | "ACTIVE" | "DEACTIVATED";
         /** @enum {string} */
-        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "SCHEDULES_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW" | "RX_PRINT";
+        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "SCHEDULES_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW" | "RX_PRINT" | "AUDIT_VIEW";
         readonly Clinic: {
             /** Format: uuid */
             readonly id: string;
@@ -2673,6 +2755,10 @@ export interface components {
             readonly patient_code_prefix: string;
             readonly booking_mode: components["schemas"]["BookingMode"];
             readonly rx_paper_size: components["schemas"]["PaperSize"];
+            /** @description M6a-P8 appointment reminder at 19:00 clinic time the day before */
+            readonly reminder_evening_before: boolean;
+            /** @description M6a-P8 appointment reminder this many hours before the visit; 0 is off */
+            readonly reminder_hours_before: number;
         };
         /** @description What the clinic sees about a patient link (M4-P5 decision 6A); no content. */
         readonly PatientLinkInfo: {
@@ -2845,8 +2931,86 @@ export interface components {
         readonly PatientList: {
             readonly items: readonly components["schemas"]["Patient"][];
         };
+        readonly BookingToMove: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @enum {string} */
+            readonly status: "BOOKED" | "ARRIVED";
+            /** Format: uuid */
+            readonly doctor_id: string;
+            /** Format: uuid */
+            readonly session_id: string;
+            /** Format: date */
+            readonly on_date: string;
+            /**
+             * Format: date-time
+             * @description The slot's start, or the session's in token mode
+             */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly slot_start: string | null;
+            readonly token_number: number | null;
+            /** @enum {string} */
+            readonly reason: "LEAVE" | "SCHEDULE_CHANGED";
+            readonly patient: {
+                /** Format: uuid */
+                readonly id: string;
+                readonly code: string;
+                readonly first_name: string;
+                /** @description e.g. +91******0101 */
+                readonly phone_masked: string;
+            };
+        };
+        readonly BookingToMoveList: {
+            readonly items: readonly components["schemas"]["BookingToMove"][];
+        };
         /** @enum {string} */
-        readonly NotificationKind: "appointment.booked" | "appointment.rescheduled" | "appointment.cancelled" | "appointment.arrived" | "message.failed" | "staff.joined";
+        readonly AuditCategory: "SIGN_IN" | "TEAM" | "PATIENTS" | "APPOINTMENTS" | "CLINICAL" | "PRESCRIPTIONS" | "MESSAGES" | "SCHEDULE" | "SETTINGS";
+        readonly AuditEntry: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date-time */
+            readonly occurred_at: string;
+            /** @description The stable action name */
+            readonly action: string;
+            /** @description What happened */
+            readonly action_label: string;
+            readonly category: components["schemas"]["AuditCategory"];
+            readonly actor: {
+                /** @enum {string} */
+                readonly type: "STAFF" | "OPS" | "PATIENT_LINK" | "SYSTEM" | "PATIENT";
+                /** Format: uuid */
+                readonly user_id: string | null;
+                /** @description The member's current name, or MediEase support, System, a patient */
+                readonly label: string;
+                /** @enum {string|null} */
+                readonly role: "OWNER" | "DOCTOR" | "FRONT_DESK" | null;
+            };
+            readonly entity_type: string | null;
+            /** Format: uuid */
+            readonly entity_id: string | null;
+            /** @description Set when the record is a patient */
+            readonly patient_code: string | null;
+            /** @description IDs, codes and enums only (never names, phones or clinical text) */
+            readonly metadata: {
+                readonly [key: string]: string;
+            };
+        };
+        readonly AuditPage: {
+            /** Format: date */
+            readonly from: string;
+            /** Format: date */
+            readonly to: string;
+            readonly timezone: string;
+            readonly items: readonly components["schemas"]["AuditEntry"][];
+            readonly next_cursor: string | null;
+            readonly categories: readonly {
+                readonly value: components["schemas"]["AuditCategory"];
+                readonly label: string;
+            }[];
+        };
+        /** @enum {string} */
+        readonly NotificationKind: "appointment.booked" | "appointment.rescheduled" | "appointment.cancelled" | "appointment.arrived" | "message.failed" | "staff.joined" | "schedule.bookings_to_move";
         readonly Notification: {
             /** Format: uuid */
             readonly id: string;
@@ -3069,6 +3233,10 @@ export interface components {
             readonly booking_mode?: components["schemas"]["BookingMode"] | null;
             /** @description Applies to versions first rendered after the change (M4-P4). */
             readonly rx_paper_size?: components["schemas"]["PaperSize"] | null;
+            /** @description M6a-P8. Applies to bookings made or moved after the change. */
+            readonly reminder_evening_before?: boolean | null;
+            /** @description M6a-P8. 0 (off) to 6; applies to bookings made or moved after the change. */
+            readonly reminder_hours_before?: number | null;
         };
         /** @description I3 — every prescription prints the qualification and registration details. */
         readonly NewDoctor: {
@@ -3529,6 +3697,8 @@ export interface components {
             readonly sessions: readonly components["schemas"]["DashboardSession"][];
             readonly next_patients: readonly components["schemas"]["DashboardNextPatient"][];
             readonly follow_ups_pending: number;
+            /** @description M6a-P8 live bookings in closed sessions from today on; null in scope DOCTOR */
+            readonly bookings_to_move: number | null;
             /** @description Messages that failed today; null in scope DOCTOR */
             readonly messages_failed: number | null;
             /** @description The last 7 days ending today; null without USAGE_METRICS_VIEW */
@@ -4850,6 +5020,43 @@ export interface operations {
             readonly 409: components["responses"]["AppointmentError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["AppointmentError"];
+        };
+    };
+    readonly listBookingsToMove: {
+        readonly parameters: {
+            readonly query?: {
+                readonly doctor_id?: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The bookings to move */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["BookingToMoveList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 422: components["responses"]["AuthError"];
         };
     };
     readonly getAppointment: {
@@ -7592,6 +7799,87 @@ export interface operations {
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
             readonly 409: components["responses"]["ConflictError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly listAuditEvents: {
+        readonly parameters: {
+            readonly query?: {
+                readonly from?: string;
+                readonly to?: string;
+                readonly category?: components["schemas"]["AuditCategory"];
+                readonly actor_user_id?: string;
+                readonly cursor?: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description One page of the log */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly exportAuditEvents: {
+        readonly parameters: {
+            readonly query?: {
+                readonly from?: string;
+                readonly to?: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The CSV file */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    /** @description attachment; filename="audit-<clinic>-<from>-<to>.csv" */
+                    readonly "Content-Disposition"?: string;
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "text/csv": string;
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
             readonly 422: components["responses"]["AuthError"];
         };
     };

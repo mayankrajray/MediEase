@@ -70,6 +70,8 @@ export const workspaceRoutes = {
       state: null,
       pincode: null,
       patient_code_prefix: "SC",
+      reminder_evening_before: true,
+      reminder_hours_before: 2,
     }),
 };
 
