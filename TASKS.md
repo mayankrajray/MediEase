@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M6a — Auth, staff workspaces and notification core** (issue #49, branch `m6/49-mvp-demo`, one PR for the milestone). PRD v1.2 (22 Oct 2026) split the former M6 into M6a–M6d; #49 became M6a, and M6b–M6d each get their own issue, branch and PR when they open (ADR-0011). M5 merged in PR #41 on 20 Oct 2026 |
-| Active phase | **M6a-P8 — Appointment reminders, bookings to move after leave, the owner's audit log:** designed (`docs/milestones/M6-mvp-demo.md`, 8 decisions), awaiting the developer's approval. M6a-P1 to P7 confirmed and pushed (draft PR #50) |
+| Active phase | **M6a-P8 — Appointment reminders, bookings to move after leave, the owner's audit log:** built and verified (`docs/milestones/M6-mvp-demo.md` "M6a-P8 — as built"), awaiting the developer's confirmation. M6a-P1 to P7 confirmed and pushed (draft PR #50). P8 is the last M6a phase |
 | Design notes | `docs/milestones/M6-mvp-demo.md` (M6a); M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M6a phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -31,7 +31,7 @@ done before the pilot.
 | ID | Task | Owner | Needed by | Status |
 |---|---|---|---|---|
 | L-01 | Create Meta Business account, verify business, register WhatsApp number | Founder | M5 | ☐ |
-| L-02 | Draft and submit utility templates (booking confirmation, prescription ready, prescription updated, follow-up due) in English and Hindi | Product | M5 | ☐ |
+| L-02 | Draft and submit utility templates (booking confirmation, prescription ready, prescription updated, follow-up due; from M6a-P8 appointment reminder and appointment cancelled) in English and Hindi | Product | M5 | ☐ |
 | L-03 | SMS provider account + DLT registration (entity, sender ID, templates) | Founder | M5 | ☐ |
 | L-04 | Counsel review: DPDP roles, clinic–MediEase data processing agreement, patient notice template, prescription format | Founder | M6 | ☐ |
 | L-05 | Choose India-region hosting account; enable billing alerts | Engineering | M6 | ☐ |
@@ -155,7 +155,7 @@ notifications arrive; `make e2e` green. Deployment and hosting are out of scope 
 | M6a-P5 | Owner Team page: invite (emailed, or a link for phone-only), change role, deactivate, re-invite (FR-ORG-07, on the existing FR-ORG-04 API) | ✅ (confirmed 23 Oct 2026; PR #50) |
 | M6a-P6 | Role workspaces: Owner, Doctor and Front Desk navigation and home (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); the ops wizard marks the owner as Doctor 1 in the same step (FR-ORG-03) | ✅ (confirmed 23 Oct 2026; PR #50) |
 | M6a-P7 | Notification service with domain events and the in-app channel; notification centre per role (FR-NTF-02..06; replaces FR-NTF-01) | ✅ (confirmed 24 Oct 2026; PR #50) |
-| M6a-P8 | Appointment reminders (FR-APT-08), doctor-leave conflicts (FR-APT-09), owner audit view (FR-AUD-03) | ▶ (designed, awaiting approval) |
+| M6a-P8 | Appointment reminders (FR-APT-08), doctor-leave conflicts (FR-APT-09), owner audit view (FR-AUD-03) | ▶ (built 24 Oct 2026; awaiting confirmation) |
 
 ## M6b — Patient identity, portal and booking requests  `☐`
 

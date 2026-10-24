@@ -424,6 +424,19 @@ class MessagingPort(Protocol):
   from a feature to WhatsApp. The sender's final failure and the webhook's `FAILED` transition
   publish `MessageFailed`. Reminders keep their scheduler. The web bell polls
   `GET /notifications/summary` every 15 s with its ETag.
+- Appointment reminders and cancellation notices (M6a-P8, FR-APT-08, FR-APT-09): the notification
+  service schedules appointment reminders on `AppointmentBooked`, replaces them on
+  `AppointmentRescheduled` and cancels them on `AppointmentCancelled`, in the booking's
+  transaction (`application/reminders/appointment.py`; times from
+  `domain/reminders/rules.py::appointment_reminder_times`: 19:00 the day before and N hours before
+  the visit, per clinic). They are rows in `reminders` and send through the same `send_reminder`
+  job, which also checks the appointment is still `BOOKED` in an `OPEN` session
+  (`REM_APPOINTMENT_CHANGED`) and that it can still go before the visit outside the quiet hours (`REM_TOO_LATE`),
+  then sends `appointment_reminder`; the SMS fallback covers them. A cancellation by the clinic
+  (`DOCTOR_UNAVAILABLE`, `CLINIC_REQUEST`) is also delivered on the WhatsApp channel: the service
+  enqueues `send_cancellation_notice` (`application/messaging/cancellation.py`, template
+  `appointment_cancelled`). Schedule changes that keep booked sessions publish `BookingsToMove`,
+  which tells the owners and front desk in the app.
 
 ## 9. Security architecture
 
@@ -460,7 +473,13 @@ Full controls list: [SECURITY_AND_COMPLIANCE.md](SECURITY_AND_COMPLIANCE.md).
   non-superuser role (FR-AUD-02); lifting the guard is an approved, recorded procedure
   (RUNBOOK §18). Rows carry IDs, enums, the `request_id` and an HMAC of the caller's IP — never
   names, phone numbers or clinical content. Implementation (M1-P4): `domain/audit/`,
-  `application/audit.py`, `adapters/db/audit.py`, migration `0004`.
+  `application/audit.py`, `adapters/db/audit.py`, migration `0004`. **The owner's audit log
+  (M6a-P8, FR-AUD-03):** the only reader is `SqlAlchemyAuditReader` (`adapters/db/audit.py`),
+  reached only as `uow.tenant(clinic).audit_log` and held to `AUDIT_VIEW` (owners). It filters the
+  events, memberships and patients it joins by the one clinic: a reviewed tenancy exception,
+  because `audit_events.clinic_id` is nullable and the table is append-only, so it stays outside
+  `TenantScopedRepository`. IP fingerprints are never returned; exports are audited
+  (`audit.exported`).
 - **Transport and storage:** TLS termination at the edge; database and bucket encryption at rest;
   pre-signed, short-lived URLs for PDFs.
 - **Data minimisation:** analytics and logs use IDs and enums only.

@@ -1109,3 +1109,77 @@ Planned verification:
     exports CSV;
   - failure path: the front desk opening `/settings/audit` is told it is for owners.
 - **Gates:** `make lint typecheck contract-check test`, `make smoke` and `make e2e`.
+
+### M6a-P8 — as built (24 Oct 2026)
+
+Approved A on all eight. Where the build differs from the text above:
+
+- **No reminders for a patient without WhatsApp consent at booking.** The send job still reads
+  consent again; skipping at booking keeps the profile free of rows that could never send.
+- **A second reminder code, `REM_TOO_LATE`.** A reminder whose time could not be kept is not
+  scheduled at all; if the worker only reaches one after the visit started (an outage), the system
+  cancels it with this code instead of sending.
+- **The bookings-to-move notice comes from three changes**: adding leave, removing an extra
+  session, and replacing the weekly schedule, and only when booked sessions were kept.
+- **The Today tile shows only when something needs moving.**
+- **The audit reader is a reviewed tenancy exception**, not a `TenantScopedRepository`:
+  `audit_events.clinic_id` is nullable and the table is append-only. It is reachable only as
+  `uow.tenant(clinic).audit_log` and filters every table it joins by that clinic.
+- **The booking drawer's reschedule target needs only the appointment ID**, so *Bookings to move*
+  reuses it from its own rows.
+- **The cancellation notice is a message of `source_type` `APPOINTMENT`**, beside the booking
+  confirmation.
+- **The SMS fallback also covers appointment reminders** (behind the same flag).
+
+What was built:
+
+- **API.**
+  - Migration `0024`: `reminders` gains kind and source `APPOINTMENT`, `appointment_id` (CHECKs,
+    index) and a nullable `created_by`; `clinics` gains `reminder_evening_before` and
+    `reminder_hours_before` (0–6); the notification kind `schedule.bookings_to_move`.
+  - `domain/reminders/rules.py::appointment_reminder_times`; `Reminder.for_appointment`;
+    `Clinic.change_reminders`; the audit catalogue `domain/audit/catalogue.py` (a test fails when
+    an action has no words); `Permission.AUDIT_VIEW` (owners).
+  - `application/reminders/appointment.py` (schedule, cancel, the send-time check);
+    `SendReminder` and the SMS fallback send `appointment_reminder` for these;
+    `application/messaging/cancellation.py` (`send_cancellation_notice`,
+    `appointment_cancelled`); both templates in `templates.yaml` (en, hi, and an SMS wording for
+    the reminder).
+  - The notification service schedules, replaces and cancels the reminders on the appointment
+    events, enqueues the cancellation notice, and handles the new `BookingsToMove` event
+    (published by `AddException`, `RemoveException` and `ReplaceSchedule`).
+  - `PATCH /reminders/{id}` refuses moving an appointment reminder (`REM_FOLLOWS_APPOINTMENT`).
+  - `GET /appointments/to-move` (`ListBookingsToMove`); Today's `bookings_to_move`.
+  - `GET /audit-events` and `/audit-events/export` (`ListAuditEvents`, `ExportAuditEvents`,
+    `SqlAlchemyAuditReader`); errors `AUD_RANGE_TOO_LONG`; audit action `audit.exported`.
+  - Clinic reminder settings on `GET`/`PATCH /clinic`. Contract 0.28.0.
+- **Web.**
+  - *Appointment reminders* card on Schedule settings (owners).
+  - `/bookings-to-move` (`BookingsToMove`): who and where, reason, *Reschedule* (the booking
+    drawer) and *Cancel* (*Doctor unavailable* preselected); the Today tile; a banner on the queue
+    under a closed session that still has patients.
+  - `/settings/audit` (`AuditLog`): range and category filters, *Load more*, *Export CSV*; *Audit
+    log* in the owner's menu; others are told it is for owners.
+  - Reminders on the profile name their kind; an appointment reminder has no *Move*.
+- **Verification.**
+  - **Gates.** `make lint typecheck contract-check test` green. API: 1,810 tests, 97.48% package
+    coverage. Web: 58 files, 546 tests.
+  - **New tests.** `test_appointment_reminders_http.py` (9: the two times, consent and settings,
+    reschedule and cancel, the 409, sending the template, leave cancelling a due reminder, the
+    list, the notice, the cancellation notice and its send, a schedule change, another clinic);
+    `test_audit_log_http.py` (11: words and people, filters and paging, bad ranges and filters,
+    owners only, another clinic, the CSV and its own audit); unit tests for the times, the
+    catalogue, the clinic settings and the title; the tenancy suites (the audit log case), migration
+    `0024` up and down; web tests for the settings card, the list, the tile and the audit page.
+  - **Stack.** `make up`, `make seed` and `make smoke` green. Full Playwright suite 32/32, with:
+    - `bookings-to-move.spec.ts`: the owner adds leave on a day two patients are booked; the front
+      desk opens the Today tile, moves one to the next day and cancels the other as *Doctor
+      unavailable*, and both leave the list (the leave is removed afterwards);
+    - `audit-log.spec.ts`: the owner filters to Appointments, sees the front desk's cancellation
+      in words and exports CSV; failure path: the front desk has no menu item and is told the log
+      is for owners.
+  - **Run note.** As in P7, Playwright ran with the same image mounting the Windows path. The
+    known timing test `test_suggestions_over_20000_issued_lines_answer_quickly` failed once on
+    load (177 ms against 150 ms) in the first full run and passed in the final run.
+  - **Not verified.** Real WhatsApp sends of `appointment_reminder` and `appointment_cancelled`
+    (L-02); the queue's closed-session banner is not checked in a browser journey.
