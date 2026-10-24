@@ -14,7 +14,19 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
-- M6a-P7 (#49): the notification service and notification centre (FR-NTF-02..06; ADR-0017
+- M6a-P8 (#49): appointment reminders, bookings to move after leave, and the owner's audit log
+  (FR-APT-08, FR-APT-09, FR-AUD-03; decisions 1A–8A). A booking now gets WhatsApp reminders at
+  19:00 the evening before and a set number of hours before the visit (per clinic, default 2;
+  never 21:00–08:00), scheduled, moved and cancelled with the booking by the notification service
+  and re-checked when due (`REM_APPOINTMENT_CHANGED`, `REM_TOO_LATE`); staff cannot move one
+  alone (`REM_FOLLOWS_APPOINTMENT`). Leave or a schedule change that keeps booked sessions lists
+  them on *Bookings to move* (`GET /appointments/to-move`, a Today tile, a queue banner and an
+  in-app notice to the owners and front desk); cancelling one as *Doctor unavailable* or *Clinic
+  request* tells a consenting patient (`send_cancellation_notice`). Owners get *Audit log*
+  (`GET /audit-events`, a new `AUDIT_VIEW` permission): the clinic's events in words, filtered
+  and paged, with a bounded CSV export that is itself audited (`audit.exported`;
+  `AUD_RANGE_TOO_LONG`). Two templates (`appointment_reminder`, `appointment_cancelled`) await
+  L-02. Migration `0024`, contract 0.28.0. No new dependency.- M6a-P7 (#49): the notification service and notification centre (FR-NTF-02..06; ADR-0017
   Accepted; decisions 1A–8A). Features publish domain events in their own transaction
   (`publish(uow, event)`); `NotificationService` writes in-app notifications and is now the only
   path from a feature to WhatsApp. It enqueues the M5 booking confirmation and prescription link

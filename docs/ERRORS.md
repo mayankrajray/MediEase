@@ -17,7 +17,7 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | `PERM_` | Authorisation | | `LINK_` | Patient links |
 | `CLN_` | Clinic administration | | `REM_` | Reminders |
 | `PAT_` | Patients | | `MSG_` / `WH_` / `JOB_` | Messaging, webhooks, jobs |
-| `PRT_` | Patient portal accounts (M6a-P3) | | | |
+| `PRT_` | Patient portal accounts (M6a-P3) | | `AUD_` | Audit log (M6a-P8) |
 | `SYS_` | Unexpected server errors | | `WEB_` | Web app → API (raised in the browser/web server, never by the API) |
 
 ## Platform
@@ -196,6 +196,9 @@ only in the log (`auth.password_reset_requested` `sent=true|false`).
 | `REM_IN_PAST` | 422 | The follow-up date is not after today | Client/timezone | Clock, clinic timezone |
 | `REM_CLINIC_PHONE_MISSING` | 409 (or on a reminder) | The clinic has no phone number, which `follow_up_due` needs (M5-P4 decision 6A): manual reminders are refused; an automatic one becomes `FAILED` with this code at send time | Phone not entered at onboarding | Clinic settings |
 | `REM_NOT_SCHEDULED` | 409 | The reminder was sent, cancelled or skipped and can no longer be changed (M5-P4) | A stale screen | The reminder's status |
+| `REM_FOLLOWS_APPOINTMENT` | 409 | This reminder follows its appointment: move the appointment instead (M6a-P8) | `PATCH /reminders/{id}` with `follow_up_date` on an appointment reminder; cancelling it is still allowed | The reminder's `kind` and `appointment_id`; reschedule the appointment |
+| `REM_APPOINTMENT_CHANGED` | — (on a reminder) | M6a-P8: an appointment reminder was cancelled by the system at send time, with no message, because the appointment is no longer `BOOKED` or its session is no longer `OPEN` | An arrival, a no-show or a cancellation not seen earlier, or a session closed by leave or a schedule change | `reminders.error_code`; the appointment's `history`; `sessions.status`; RUNBOOK §22 |
+| `REM_TOO_LATE` | — (on a reminder) | M6a-P8: an appointment reminder was cancelled by the system because by the time it could go outside the quiet hours (21:00–08:00) the visit had started | The worker ran it late (an outage); a reminder that could not go before the visit is not scheduled in the first place | `reminders.error_code`, `due_at`; RUNBOOK §22 |
 | `MSG_TEMPLATE_NOT_FOUND` | — (job) | Template missing at provider | Name/language not approved | Meta template manager, `templates.yaml` |
 | `MSG_TEMPLATE_PARAMS` | — (job) | Template variables mismatch | Count/order differs from approved template | DEBUGGING §5.7 |
 | `MSG_RECIPIENT_INVALID` | — (job) | Number can't receive WhatsApp | Not on WhatsApp / invalid | A reminder falls back to one SMS when `MESSAGING_SMS_FALLBACK_ENABLED` and the patient consented to SMS (FR-REM-06, M5-P5) |
@@ -218,3 +221,9 @@ only in the log (`auth.password_reset_requested` `sent=true|false`).
 | `JOB_HANDLER_ERROR` | — (job) | A handler failed unexpectedly | A bug or an outage inside a handler; retried with back-off. The log has the exception's type only, never its message | `job.handler_error` in the worker log; `last_error_code` |
 | `JOB_LOCK_EXPIRED` | — (job) | The worker holding the job stopped renewing its lock | The worker was killed or lost its database; the attempt is already counted, the reaper requeues (or kills at `max_attempts`) | `job.lock_expired` in the log; `docker compose ps worker` |
 | `JOB_CLINIC_SUSPENDED` | — (job) | The clinic is suspended | The job was cancelled, not run; a reminder revised or a clinic unsuspended can enqueue its key again | `jobs.state = 'cancelled'` |
+
+## Audit log (M6a-P8)
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `AUD_RANGE_TOO_LONG` | 422 | Choose a shorter range | `GET /audit-events` or its export over more than 92 days, or an export of more than 20,000 rows (FR-AUD-03) | The request's `from` and `to` (clinic calendar days, both included); export a shorter range |

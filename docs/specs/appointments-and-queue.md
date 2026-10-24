@@ -5,7 +5,7 @@
 | Requirements | FR-APT-01..07, FR-QUE-01..05 |
 | Milestone / phases | M3 / P1–P5 |
 | Status | Approved (developer sign-off 2026-10-17: decisions D1–D9 for M3-P1 and D10–D16 for M3-P2, D17–D22 for M3-P3, D23–D26 for M3-P4, D27–D32 for M3-P5 in §12) |
-| Last updated | 2026-10-17 (approved; R1, R3, R4 made precise and R14–R20 added for schedules, exceptions and session generation; M3-P2 decisions D10–D16, R5's confirmation job from M5) |
+| Last updated | 2026-10-24 (M6a-P8: R16–R18 gain the *Bookings to move* list and notice); 2026-10-17 (approved; R1, R3, R4 made precise and R14–R20 added for schedules, exceptions and session generation; M3-P2 decisions D10–D16, R5's confirmation job from M5) |
 
 ## 1. Context
 Seven of fourteen clinics book through WhatsApp and phone with no central view (A7–A13).
@@ -89,6 +89,13 @@ stateDiagram-v2
   (`SCH_LEAVE_EXISTS`). Adding it deletes that day's already-generated sessions with
   `booked_count = 0` and keeps and returns those with bookings; removing it lets the day regenerate.
   A part-day absence is a `LEAVE` plus an `EXTRA` for the hours the doctor does work.
+  From M6a-P8 (FR-APT-09), for R16, R17 and R18: the kept bookings are listed for the front desk
+  and owners on *Bookings to move* (`GET /appointments/to-move`, every `BOOKED` or `ARRIVED`
+  appointment from today in a `CLOSED` session, reason `LEAVE` or `SCHEDULE_CHANGED`), with a Today
+  tile and a banner on the queue. When a change keeps booked sessions, the active owners and front
+  desk are told in the app (`schedule.bookings_to_move`), except the person who made it. Still
+  nothing is cancelled automatically; a clinic cancellation with *Doctor unavailable* or *Clinic
+  request* tells a consenting patient (reminders spec R22).
 - **R18** `EXTRA` adds one block on one date, validated like R14. Removing it deletes its unbooked
   session and returns a booked one in `kept_sessions`. Exceptions are for today or later only.
 - **R19** Changing the clinic's booking mode is refused with `SCH_MODE_INCOMPATIBLE` while any active

@@ -5,7 +5,7 @@
 | Requirements | FR-REM-01, 02, 04, 05, 06 (P5, behind a flag), 07; FR-MSG-01..05, 07; FR-APT-06; NFR-13 |
 | Milestone / phases | M5 / P1–P6 |
 | Status | Approved (developer sign-off 2026-10-18: the M5 plan with decisions 1A–5A and four refinements to the job queue, R9–R11 and R9a–R9e) |
-| Last updated | 2026-10-20 (M5-P6: R16 and §6 made precise for the screens; M5-P5: R14 and R18 made precise, R19 added for the SMS fallback; M5-P4: R2, R5 and R17 made precise; M5-P3: R15 rewritten — WhatsApp has no status lookup; M5-P2: R6 names P2's keys and the unknown-outcome rule; earlier: approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
+| Last updated | 2026-10-24 (M6a-P8: R21 appointment reminders and R22 the cancellation notice added, two templates, appointment reminders no longer out of scope); 2026-10-20 (M5-P6: R16 and §6 made precise for the screens; M5-P5: R14 and R18 made precise, R19 added for the SMS fallback; M5-P4: R2, R5 and R17 made precise; M5-P3: R15 rewritten — WhatsApp has no status lookup; M5-P2: R6 names P2's keys and the unknown-outcome rule; earlier: approved; §3 job lifecycle gains `cancelled` and drops `failed`; R9–R11 made precise; R9a–R9e, AC8–AC11 added) |
 
 ## 1. Context
 Post-visit follow-up depends on memory (A14); patients forget follow-ups and vaccination dates
@@ -36,6 +36,8 @@ window the patient's own STOP message opens:
 | `rx_updated` | clinic_name, link | FR-RX-09 |
 | `follow_up_due` | clinic_name, doctor_name, follow_up_date, clinic_phone | FR-REM-01 |
 | `opt_out_confirmed` | clinic_name | FR-MSG-05 (non-template service reply) |
+| `appointment_reminder` | clinic_name, doctor_name, date_time_or_token, clinic_phone | FR-APT-08 (M6a-P8; needs L-02) |
+| `appointment_cancelled` | clinic_name, doctor_name, date_time_or_token, clinic_phone | FR-APT-09 (M6a-P8; needs L-02) |
 
 ## 4. Behaviour
 
@@ -165,6 +167,29 @@ window the patient's own STOP message opens:
   failure or by webhook) also tells the clinic's owners and front desk in the app, once each
   (`message.failed`, linking to the patient). Reminders, the SMS fallback and the STOP
   confirmation are unchanged.
+- **R21** *Appointment reminders (M6a-P8, FR-APT-08).* A booking gets up to two `APPOINTMENT`
+  reminders (source `APPOINTMENT`, with `appointment_id`; `follow_up_date` holds the visit date):
+  the **evening before** at 19:00 clinic time on the day before, and **N hours before** the visit
+  start (the slot's start, or the session's start for tokens). Both are per clinic
+  (`reminder_evening_before`, default on; `reminder_hours_before` 0–6, default 2, 0 off). Each time
+  is moved out of the quiet hours (21:00–08:00 → 08:00) and dropped if it is less than 60 minutes
+  after the booking or not before the visit. The notification service schedules them on
+  `AppointmentBooked`, cancels the old appointment's and schedules the new one's on
+  `AppointmentRescheduled`, and cancels them on `AppointmentCancelled`, in the booking's
+  transaction, audited as SYSTEM (`reminder.scheduled`, `reminder.cancelled`). Walk-ins get none;
+  a patient without WhatsApp consent at booking gets none, and consent is re-read at send time
+  (R5). At send time an appointment no longer `BOOKED` or a session no longer `OPEN` cancels the
+  reminder with `REM_APPOINTMENT_CHANGED` (no message); one that can only go (outside the quiet
+  hours) at or after the visit start, e.g. after a worker outage, is cancelled with `REM_TOO_LATE`. Otherwise `appointment_reminder` is sent,
+  and the SMS fallback (R19) covers it. Staff may cancel one; moving one is refused with
+  `REM_FOLLOWS_APPOINTMENT`. Bookings made before M6a-P8 have none (no backfill).
+- **R22** *Cancellation notice (M6a-P8, FR-APT-09).* A cancellation with reason
+  `DOCTOR_UNAVAILABLE` or `CLINIC_REQUEST`, for a patient with WhatsApp consent, makes the
+  notification service enqueue `send_cancellation_notice` (key `appointment_cancelled:<appointment>`,
+  run time moved out of the quiet hours). The handler re-checks that the appointment is cancelled
+  for that reason, the consent and the clinic's phone (without one it skips), then sends
+  `appointment_cancelled` (message `source_type` `APPOINTMENT`). A patient's own cancellation, a
+  duplicate, `OTHER` and a reschedule send nothing.
 
 ## 5. API surface
 See API.md "Reminders and messaging".
@@ -195,6 +220,12 @@ See API.md "Reminders and messaging".
 | Patient number shared by two patients | One opt-out applies to both (same phone), in each clinic that messaged the number (M5-P5) |
 | Clinic suspended | Jobs for that clinic are skipped and marked `cancelled` (`JOB_CLINIC_SUSPENDED`) |
 | Worker killed mid-job | The attempt already counts (R9a); the reaper requeues it after 5 minutes, or marks it `dead` at `max_attempts` (R10) |
+| Booking made less than 60 minutes before a reminder's time (M6a-P8) | That reminder is not scheduled; the booking confirmation has just gone (R21) |
+| Patient arrives, is a no-show, or the session closes for leave before an appointment reminder goes | Cancelled by the system with `REM_APPOINTMENT_CHANGED`, no message (R21) |
+| A 1-hour reminder for an 08:00 visit (07:00 is quiet) | Not scheduled: 08:00 is not before the visit (R21) |
+| The worker runs an appointment reminder only after the visit started (an outage) | Cancelled with `REM_TOO_LATE`, no message (R21) |
+| Appointment rescheduled | The old reminders are cancelled and the new appointment gets its own; no cancellation notice (R21, R22) |
+| Clinic cancels with *Doctor unavailable* for a patient without consent, or the clinic has no phone | No cancellation notice (R22) |
 
 ## 9. Acceptance criteria
 - **AC1 (FR-REM-01)** Given an Rx issued with follow-up 20 Sep, then a reminder exists due
@@ -228,7 +259,7 @@ Metrics: queue depth, oldest job age, messages by status, failure rate by error 
 
 ## 11. Out of scope
 Medicine-course reminders (FR-REM-03), SMS fallback on by default (FR-REM-06), broadcasts,
-appointment reminders, clinic-owned sender numbers.
+clinic-owned sender numbers.
 
 ## 12. Open questions
 - Should follow-up reminders include a booking link once the public page exists (M7)?

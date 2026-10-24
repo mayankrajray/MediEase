@@ -31,6 +31,8 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 18. Read the audit log
 19. Google sign-in and patient accounts (M6a-P3)
 20. Account emails: Mailpit locally, the SMTP provider in production (M6a-P4)
+21. Notifications in the app (M6a-P7)
+22. Appointment reminders and bookings to move (M6a-P8)
 
 ---
 
@@ -319,8 +321,17 @@ every query run. Never export clinical data to a laptop.
 **Confirm:** the user signs in; `users.failed_login_count` is 0.
 
 ### 18. Read the audit log (M1-P4)
-**When:** a clinic asks "who changed this?", or an incident needs a timeline. There is no API for
-it yet (FR-AUD-03 is a later, owner-facing feature), so this is a `make psql` procedure.
+**When:** a clinic asks "who changed this?", or an incident needs a timeline.
+
+**Owners read it in the app (M6a-P8, FR-AUD-03).** *Audit log* in the owner's menu
+(`/settings/audit`) lists the clinic's events newest first, 50 at a time (*Load more*), with the
+time in the clinic's zone, the person, the action in words and the record. Filters: a range of up
+to 92 days (default the last 7), a category and a person. *Export CSV* downloads the range (at most
+20,000 rows) and is itself audited as `audit.exported`. Doctors and the front desk see "The audit
+log is for the clinic's owners…". A range that is too long is `AUD_RANGE_TOO_LONG`: choose a
+shorter one.
+
+**Ops (no membership) use `make psql`:**
 
 ```sql
 -- One clinic's recent activity (newest first)
@@ -434,3 +445,54 @@ Notifications are purged 90 days after creation by the retention job (`purge_exp
 whose `retention.purged` log and SYSTEM audit row count `notifications`). Titles never hold clinical text; if one ever
 does, handle it as a data-handling incident (§15) and fix the catalogue in
 `domain/notifications/notification.py`.
+
+### 22. Appointment reminders and bookings to move (M6a-P8)
+
+A booking gets up to two WhatsApp reminders: the evening before (19:00 clinic time) and a set
+number of hours before the visit (default 2). They are `reminders` rows of kind `APPOINTMENT`,
+scheduled by the system in the booking's transaction and sent by the `send_reminder` job
+(reminders spec R21).
+
+**A patient expected a reminder and got none:**
+1. **Who gets them.** Bookings made after M6a-P8 shipped (no backfill), not walk-ins, and only
+   patients who allowed WhatsApp at booking (consent is checked again at send time). A reminder
+   due less than 60 minutes after the booking, or not before the visit, is not scheduled.
+2. **The clinic's settings.** *Appointment reminders* on the Schedule settings page (owners):
+   *Evening before* on or off, *Before the visit* 0–6 hours (0 is off). In `make psql`:
+   `SELECT reminder_evening_before, reminder_hours_before FROM clinics WHERE id = '<clinic>';`.
+   A change applies to bookings made or moved after it.
+3. **The rows.**
+   ```sql
+   SELECT id, status, due_at, revision, error_code, cancelled_at
+   FROM reminders WHERE appointment_id = '<appointment id>' ORDER BY due_at;
+   ```
+   A rescheduled booking's reminders are on the new appointment; the old one's are `CANCELLED`.
+4. **The error code.** `REM_APPOINTMENT_CHANGED`: cancelled at send time because the patient had
+   arrived or been marked a no-show, or the session was closed by leave or a schedule change.
+   `REM_TOO_LATE`: when it could run outside the quiet hours (21:00–08:00) the visit had already
+   started, e.g. after a worker outage (reminders that early are not scheduled at all). `REM_CLINIC_PHONE_MISSING`: the clinic has no phone. `SKIPPED_NO_CONSENT`: consent was
+   withdrawn. A `SENT` reminder shows its message's status (§9; template `appointment_reminder`).
+
+**Staff try to move an appointment reminder:** 409 `REM_FOLLOWS_APPOINTMENT`. Reschedule the
+appointment instead; cancelling the reminder is allowed.
+
+**A patient was not told of a clinic cancellation:** only a cancellation with *Doctor unavailable*
+or *Clinic request*, for a patient with WhatsApp consent, sends one (template
+`appointment_cancelled`). Check the job:
+`SELECT state, run_at, last_error_code FROM jobs WHERE kind = 'send_cancellation_notice' AND
+dedupe_key = 'appointment_cancelled:<appointment id>';`. A `run_at` at 08:00 is the quiet hours;
+the handler skips when the clinic has no phone or consent changed (`make logs`).
+
+**Bookings to move.** A leave, a removed extra session or a new weekly schedule that keeps booked
+sessions closes them (`APT_SESSION_CLOSED` for new bookings). The front desk and owners then see:
+- a *Bookings to move* tile on Today (only when there are some);
+- a banner on the queue under a closed session that still has patients;
+- an in-app notification ("Dr. X on leave 24 Oct: 3 bookings to move"), except the person who
+  made the change.
+
+The page `/bookings-to-move` (`GET /appointments/to-move`) lists every `BOOKED` or `ARRIVED`
+appointment from today in a `CLOSED` session, earliest first, with *Reschedule* and *Cancel*
+(*Doctor unavailable* preselected). It is derived, so a booking leaves the list once it is moved
+or cancelled; nothing is cancelled automatically.
+
+Both templates need Meta approval (L-02); until then the console provider sends them locally.

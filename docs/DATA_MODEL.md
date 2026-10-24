@@ -98,6 +98,8 @@ set by the application). *P1* = created by migration `0002`.
 | next_patient_seq | integer not null default 1 | *M2-P1* Incremented under a row lock on the clinic (`ck_clinics_next_patient_seq_positive`); a code is never reused |
 | booking_mode | text not null default `'TOKENS'` | `SLOTS` \| `TOKENS` (M3-P1, migration `0007`); changing it is refused while a current block lacks the new mode's value (R19) |
 | rx_paper_size | text not null default `'A5'` | `A5` \| `A4` (M4-P4, migration `0012`): prescription paper, read when a version is first rendered |
+| reminder_evening_before | boolean not null default true | M6a-P8, migration `0024`: an appointment reminder at 19:00 clinic time the day before (FR-APT-08). Read when a booking is made or moved; reminders already scheduled stay |
+| reminder_hours_before | smallint not null default 2 | M6a-P8, migration `0024`: an appointment reminder this many hours before the visit; 0 is off. 0–6 (`ck_clinics_reminder_hours_before_range`) |
 | plan | text not null default `PILOT` | Billing (post-pilot) — `PILOT` \| `STARTER` \| `CLINIC` |
 
 ### `users`
@@ -491,18 +493,25 @@ Tenant-scoped (`SqlAlchemyReminderRepository`).
 |---|---|---|
 | id | uuid PK | |
 | clinic_id, patient_id, doctor_id | uuid FK | |
-| kind | text | `FOLLOW_UP` |
-| source, source_id | text, uuid null FK prescriptions | `PRESCRIPTION` with the chain's version 1, or `MANUAL` with none (CHECK) |
-| follow_up_date | date | |
-| due_at | timestamptz | 09:00 clinic time the day before (now if past), never 21:00–08:00 |
+| kind | text | `FOLLOW_UP` \| `APPOINTMENT` (M6a-P8). `ck_reminders_kind_source`: `APPOINTMENT` exactly when the source is `APPOINTMENT` |
+| source, source_id | text, uuid null FK prescriptions | `PRESCRIPTION` with the chain's version 1, `MANUAL` with none, or (M6a-P8) `APPOINTMENT` with none (CHECK) |
+| appointment_id | uuid null FK appointments | M6a-P8: set exactly when the source is `APPOINTMENT` (`ck_reminders_appointment_id`); index `ix_reminders_appointment_id` |
+| follow_up_date | date | The follow-up date; for an appointment reminder, the visit date |
+| due_at | timestamptz | Follow-up: 09:00 clinic time the day before (now if past). Appointment: 19:00 the day before, or N hours before the visit (`clinics.reminder_*`). Never 21:00–08:00 |
 | status | text | `SCHEDULED` \| `SENT` \| `CANCELLED` \| `SKIPPED_NO_CONSENT` \| `FAILED`; once `SENT`, the visible status is the message's (decision 3A) |
 | revision | smallint | Bumped by every move, deferral or cancel; each `send_reminder` job carries the revision it was made for (decision 1A) |
-| error_code | text null | `REM_CLINIC_PHONE_MISSING` on `FAILED` |
-| created_by, cancelled_by | uuid FK users | `cancelled_by` null when the system cancelled it |
+| error_code | text null | `REM_CLINIC_PHONE_MISSING` on `FAILED`; from M6a-P8 `REM_APPOINTMENT_CHANGED` or `REM_TOO_LATE` on an appointment reminder the system cancelled at send time |
+| created_by, cancelled_by | uuid null FK users | `created_by` null (from `0024`) when the system scheduled it (every appointment reminder); `cancelled_by` null when the system cancelled it |
 | cancelled_at | timestamptz null | Set exactly when `CANCELLED` (CHECK) |
 
 `uq_reminders_source_id_scheduled`: one `SCHEDULED` reminder per prescription chain. The message
 of a reminder has `source_type = REMINDER` and `source_id` = the reminder.
+
+Migration `0024` (M6a-P8, expand-only) adds the `APPOINTMENT` kind and source, `appointment_id`,
+its CHECK and index, and makes `created_by` nullable. Appointment reminders are scheduled and
+cancelled by the notification service on the booking's events, in its transaction (ADR-0017);
+walk-ins and patients without WhatsApp consent at booking get none, and earlier bookings were not
+backfilled. The send job cancels one whose appointment is no longer `BOOKED` in an `OPEN` session.
 
 ### `messages` (migration `0015`, M5-P2)
 One row per message, written before the provider is called (spec R6). Tenant-scoped
@@ -512,7 +521,7 @@ One row per message, written before the provider is called (spec R6). Tenant-sco
 |---|---|---|
 | id | uuid PK | |
 | clinic_id, patient_id | uuid FK | |
-| source_type, source_id | text, uuid | `APPOINTMENT` \| `PRESCRIPTION` \| `REMINDER` (P4) \| `OPT_OUT` (P5: the STOP reply; `source_id` is the patient) and its ID. A reminder may have two rows, WhatsApp and its SMS fallback (P5); it shows the latest |
+| source_type, source_id | text, uuid | `APPOINTMENT` (the booking confirmation and, from M6a-P8, the cancellation notice) \| `PRESCRIPTION` \| `REMINDER` (P4) \| `OPT_OUT` (P5: the STOP reply; `source_id` is the patient) and its ID. A reminder may have two rows, WhatsApp and its SMS fallback (P5); it shows the latest |
 | channel | text | `WHATSAPP` \| `SMS` \| `CONSOLE` |
 | provider | text | `console`, `whatsapp_cloud` (P3); an SMS row from the console SMS adapter is `SMS`/`console` (P5) |
 | template_key, template_version | text, smallint | From `templates.yaml` |
@@ -656,10 +665,10 @@ another member's notification is "not found".
 | id | uuid PK | |
 | clinic_id | uuid FK not null | |
 | recipient_user_id | uuid FK users not null | The staff member told |
-| kind | text not null | `appointment.booked` \| `appointment.rescheduled` \| `appointment.cancelled` \| `appointment.arrived` \| `message.failed` \| `staff.joined` (CHECK) |
+| kind | text not null | `appointment.booked` \| `appointment.rescheduled` \| `appointment.cancelled` \| `appointment.arrived` \| `message.failed` \| `staff.joined` \| `schedule.bookings_to_move` (M6a-P8, migration `0024`) (CHECK) |
 | event_key | text not null | `<kind>:<entity id>` (a staff join adds the acceptance time) |
 | title | text not null | ≤ 160 chars, from the typed catalogue: "Asha · SC-0004 booked for 23 Oct, token 4"; never clinical |
-| link | text not null | An in-app path (`/queue?date=…`, `/patients/{id}`, `/team`) |
+| link | text not null | An in-app path (`/queue?date=…`, `/patients/{id}`, `/team`, `/bookings-to-move`) |
 | entity_type, entity_id | text, uuid not null | `appointment`, `message` or `clinic_membership` |
 | created_at | timestamptz not null | Index for the purge |
 | read_at | timestamptz null | Set once; reading again keeps the first time |
@@ -677,7 +686,7 @@ default (on).
 | id | uuid PK | |
 | clinic_id | uuid FK not null | |
 | user_id | uuid FK users not null | |
-| kind | text not null | As `notifications.kind` (CHECK) |
+| kind | text not null | As `notifications.kind` (CHECK; `schedule.bookings_to_move` from `0024`) |
 | channel | text not null | `IN_APP` \| `WHATSAPP` \| `EMAIL` \| `SMS` (CHECK); only `IN_APP` is offered (decision 5A) |
 | enabled | boolean not null | |
 | created_at, updated_at | timestamptz not null | |
@@ -685,6 +694,10 @@ default (on).
 Unique `(clinic_id, user_id, kind, channel)` (an upsert). Kept while the membership exists. A
 patient's WhatsApp preference is their consent (`patients`), not a row here. Changing a choice is
 audited as `notification.preferences_changed` (metadata: the kinds turned on and off).
+
+M6a-P8 adds no table for *Bookings to move* (FR-APT-09): the list is derived from `appointments`
+(`BOOKED` or `ARRIVED`, from today) whose `sessions` row is `CLOSED`. The clinic job kind
+`send_cancellation_notice` (key `appointment_cancelled:<appointment>`) needs no migration either.
 
 ---
 

@@ -79,3 +79,15 @@ enqueued it, and a dedupe key makes it idempotent.
   four statements for a failed message: patient, members, their choices, one insert).
 - **A failed message is published from both places a message fails**: the sender's final failure
   and the webhook's `FAILED` transition. `ProcessWebhookEvent` now requires the ID port.
+
+## M6a-P8 additions
+
+- **Appointment reminders are scheduled by the service.** On `AppointmentBooked`, `AppointmentRescheduled`
+  and `AppointmentCancelled` it schedules, replaces or cancels the appointment's `reminders` rows in the
+  booking's transaction. They still send through the reminder scheduler (`send_reminder`, quiet hours,
+  revisions, the SMS fallback), which re-checks the appointment at send time. This revisits the
+  consequence above: due-time messages keep their scheduler, but the service decides that they exist.
+- **A cancellation by the clinic** (`DOCTOR_UNAVAILABLE`, `CLINIC_REQUEST`) is delivered on the WhatsApp
+  channel as `send_cancellation_notice`.
+- **A new event, `BookingsToMove`**, raised by schedule changes that keep booked sessions; in-app to
+  the owners and front desk.

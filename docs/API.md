@@ -130,7 +130,7 @@ Any tenant resource outside the request's clinic returns `404 REQ_NOT_FOUND` (R8
 | POST | `/api/v1/clinic/staff` | Invite staff, or invite a deactivated member back; emailed when they have an email address (`delivery: email`), else the link once (`delivery: link`); 10 an hour per clinic | OWNER (`STAFF_MANAGE`) | Implemented (M1-P5, M6a-P5) |
 | POST | `/api/v1/clinic/staff/{membership_id}/resend` | A pending invitation again; the old link stops working; 3 an hour per member | OWNER (`STAFF_MANAGE`) | Implemented (M6a-P5) |
 | PATCH | `/api/v1/clinic/staff/{membership_id}` | Change role and/or deactivate | OWNER (`STAFF_MANAGE`) | Implemented (M1-P4, M1-P5) |
-| GET | `/api/v1/clinic/audit-events` | Audit log | OWNER | FR-AUD-03 (P1) — backlog; not in the P0 permission matrix |
+| GET | `/api/v1/clinic/audit-events` | Audit log | OWNER | Not built at this path: the owner's audit log is `/api/v1/audit-events` (M6a-P8, "Audit log" below) |
 
 The doctor and staff lists return `{"items": [...]}` with no cursor: a clinic has one to four
 doctors and a handful of staff, so the paginated envelope above starts with the first list that
@@ -146,6 +146,12 @@ next request, and a deactivated member's next request is refused (FR-ORG-04, AC4
 both invitation routes take an optional `doctor_id` for an `OWNER` invitation: that unlinked,
 active doctor profile is linked to the invitee at once ("Doctor 1", FR-ONB-08) and counts once
 they accept (422 on `doctor_id` otherwise).
+
+**Appointment reminder settings (M6a-P8, FR-APT-08; contract 0.28.0).** `GET` and `PATCH
+/api/v1/clinic` carry `reminder_evening_before` (boolean, default true: 19:00 clinic time the day
+before) and `reminder_hours_before` (0–6, default 2; 0 is off; 422 `REQ_VALIDATION_FAILED`
+outside). Changing them needs `CLINIC_MANAGE` and is audited as `clinic.updated` with the field
+names only. A change applies to bookings made or moved after it.
 
 **Staff invitations** `POST /api/v1/clinic/staff` (and the ops equivalent below) →
 `201` with the member and `accept_url`. An email address or phone number is required, because
@@ -235,8 +241,40 @@ ops cannot browse patients. A file that cannot be read at all is `422 PAT_IMPORT
 Every audited action writes one row to `audit_events` in the same transaction as the change, so a
 committed change always has its record. Rows hold IDs, enums, the `request_id` and a salted IP
 fingerprint — never names, phone numbers or clinical content. The table refuses `UPDATE`,
-`DELETE` and `TRUNCATE` in the database itself (FR-AUD-02). There is no endpoint yet: reading it
-is a documented `make psql` procedure (RUNBOOK §18), and the owner-facing view is FR-AUD-03.
+`DELETE` and `TRUNCATE` in the database itself (FR-AUD-02). Until M6a-P8 there was no endpoint:
+reading it was a documented `make psql` procedure (RUNBOOK §18). From M6a-P8 owners read it in
+the app (below); ops still use RUNBOOK §18.
+
+### Audit log (M6a-P8)
+
+| Method | Path | Purpose | Req |
+|---|---|---|---|
+| GET | `/api/v1/audit-events?from&to&category&actor_user_id&cursor` | The clinic's audit log, 50 a page, newest first (`AUDIT_VIEW`, owners) | FR-AUD-03 |
+| GET | `/api/v1/audit-events/export?from&to` | The same range as CSV (`AUDIT_VIEW`, owners) | FR-AUD-03, FR-AUD-01 |
+
+Contract 0.28.0. `AUDIT_VIEW` is held by owners only: doctors and the front desk get 403
+`PERM_DENIED`.
+
+- **Range.** `from` and `to` are clinic calendar days (`YYYY-MM-DD`), both included; the default
+  is the last 7 days. More than 92 days is 422 `AUD_RANGE_TOO_LONG`.
+- **List.** `{items, next_cursor, from, to, timezone, categories}`. `next_cursor` is a keyset
+  cursor on `(occurred_at, id)`, null on the last page. `categories` lists `{value, label}`:
+  `SIGN_IN`, `TEAM`, `PATIENTS`, `APPOINTMENTS`, `CLINICAL`, `PRESCRIPTIONS`, `MESSAGES`,
+  `SCHEDULE`, `SETTINGS`.
+- **Entry.** `id`, `occurred_at`, `action`, `action_label`, `category`, `actor {type, user_id,
+  label, role}`, `entity_type`, `entity_id`, `patient_code` and the allow-listed `metadata`. The
+  actor's label is the member's current name, or "Former team member", "MediEase support",
+  "System", "Patient (prescription link)" or "Patient (portal)". Labels come from
+  `domain/audit/catalogue.py`. The IP fingerprint is never returned.
+- **Export.** `text/csv` with `Content-Disposition: attachment; filename=audit-<slug>-<from>-<to>.csv`.
+  Columns: Time, Person, Role, Category, Action, Record type, Record ID, Patient code, Details.
+  At most 92 days and 20,000 rows, else 422 `AUD_RANGE_TOO_LONG`. A cell starting with `=`, `+`,
+  `-`, `@`, a tab or a carriage return is prefixed with `'`.
+- **Audit.** Each export is audited as `audit.exported` (metadata `from`, `to`, `rows`); reading
+  the list is not. `Cache-Control: no-store`.
+- **Tenancy.** Both routes read through `SqlAlchemyAuditReader`, reached only as
+  `uow.tenant(clinic).audit_log`: the events, memberships and patients it joins are filtered by the
+  request's clinic (a reviewed exception in the tenancy suite, with its own case).
 
 ### Patients (M2)
 
@@ -301,6 +339,7 @@ Responses carry personal data and are `Cache-Control: no-store`. The clinic is t
 | GET | `/api/v1/queue?date=&doctor_id=&include_cancelled=` | The day's sessions with appointments, patients and waits — **M3-P3**; `ETag` / `If-None-Match` / 304 — **M3-P4** | FR-QUE-01/03 |
 | POST | `/api/v1/appointments/{id}/transitions` | `{ "from": "BOOKED", "to": "ARRIVED" }` (`QUEUE_MOVE`) — **M3-P3** | FR-QUE-02 |
 | POST | `/api/v1/queue/walk-ins` | Add a walk-in to today, arrived at once (`QUEUE_MOVE`) — **M3-P3** | FR-QUE-04 |
+| GET | `/api/v1/appointments/to-move?doctor_id=` | Bookings to move: live appointments in closed sessions (`APPOINTMENTS_MANAGE`) — **M6a-P8** | FR-APT-09 |
 
 M3-P1 rules (spec appointments R1–R4, R14–R20; contract 0.9.0):
 
@@ -356,6 +395,16 @@ M4-P6 (contract 0.18.0; P2 decision 6A): each queue entry also carries `visit_id
 and `prescription`, the visit's latest issued version as `{id, version, issued_at}` or `null`.
 No clinical content, so front desk sees "Prescription issued" and prints from the row without a
 call per row; the `ETag` covers both fields.
+
+M6a-P8 bookings to move (FR-APT-09; contract 0.28.0): `GET /api/v1/appointments/to-move` needs
+`APPOINTMENTS_MANAGE` (every role). It lists the `BOOKED` and `ARRIVED` appointments from the
+clinic's today on whose session is `CLOSED`, earliest first, at most 200, optionally for one
+`doctor_id`. Each item: `id`, `status`, `doctor_id`, `session_id`, `on_date`, `starts_at`,
+`slot_start`, `token_number`, `reason` (`LEAVE` when the doctor has leave that day, else
+`SCHEDULE_CHANGED`) and `patient {id, code, first_name, phone_masked}`. A derived list: moving or
+cancelling a booking takes it off. A leave, a removed extra session or a replaced weekly schedule
+that kept booked sessions also tells the active owners and front desk in the app
+(`schedule.bookings_to_move`), except the person who made the change.
 
 ### Visits and prescriptions (M4)
 
@@ -452,6 +501,13 @@ M5-P6 (contract 0.21.0): `GET /patients/{id}/messages` (`REMINDERS_SCHEDULE`) re
 patient's messages newest first, at most 50, status only: `template_key`, `source_type` and
 `source_id`, `channel`, `status`, `error_code` and the times; never the variables or the number.
 Another clinic's patient is a 404.
+M6a-P8 (contract 0.28.0): a reminder carries `kind` (`FOLLOW_UP` or `APPOINTMENT`) and
+`appointment_id` (set for `APPOINTMENT`). Appointment reminders are scheduled by the system when a
+booking is made or moved, and cancelled when it is cancelled or moved (FR-APT-08). Staff may
+cancel one with `PATCH {cancel: true}`; `PATCH {follow_up_date}` on one is 409
+`REM_FOLLOWS_APPOINTMENT` ("move the appointment instead"). At send time one whose appointment
+changed is cancelled with error code `REM_APPOINTMENT_CHANGED`, and one too late for the visit
+with `REM_TOO_LATE`.
 
 Webhook paths are outside `/api/v1` and are routed directly to the API by the reverse proxy.
 They are not in `contracts/openapi.yaml` (the web app never calls them; Meta's format is Meta's).
@@ -478,6 +534,8 @@ patient's code and first name only. `follow_ups_pending` is the clinic's, as
 `/follow-ups/pending` lists them. `week` (the last 7 days ending today, oldest first) needs
 `USAGE_METRICS_VIEW` and is null without it; in scope `DOCTOR` its `messages_sent` are null. Like
 the queue, a strong ETag and a bodiless 304 for `If-None-Match`; `Cache-Control: no-store`.
+M6a-P8 (contract 0.28.0): `bookings_to_move` is the number of bookings `GET
+/appointments/to-move` lists for the clinic; null in scope `DOCTOR`.
 
 ### Notifications (M6a-P7)
 
@@ -501,4 +559,6 @@ empty list is 422) and returns every kind with its label. A change is audited
 Notifications are written by the features' own transactions (ADR-0017): a booking, a
 reschedule, a cancellation and an arrival or walk-in tell the appointment's doctor; a message
 that fails tells the owners and the front desk; an accepted invitation tells the owners. The
-member who made the change is never told.
+member who made the change is never told. From M6a-P8 (contract 0.28.0) the kind
+`schedule.bookings_to_move` tells the active owners and front desk when a schedule change kept
+booked sessions (link `/bookings-to-move`).
