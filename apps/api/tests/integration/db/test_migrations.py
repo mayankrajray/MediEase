@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0024"
+HEAD = "0025"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -43,6 +43,7 @@ M6A_P3_TABLES = sorted(
 )
 M6A_P4_TABLES = sorted([*M6A_P3_TABLES, "email_tokens"])
 M6A_P7_TABLES = sorted([*M6A_P4_TABLES, "notification_preferences", "notifications"])
+M6B_P1_TABLES = sorted([*M6A_P7_TABLES, "patient_account_links", "patient_portal_invites"])
 
 
 @pytest.fixture
@@ -650,7 +651,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6A_P7_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6B_P1_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -724,5 +725,29 @@ def test_0024_adds_appointment_reminders_and_clinic_settings(
             assert (
                 conn.execute(text(columns), {"t": "reminders", "c": ["appointment_id"]}).all() == []
             )
+    finally:
+        engine.dispose()
+
+
+def test_0025_adds_patient_account_links_and_portal_invites(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    """M6b-P1: two tenant tables; one active link per record and per account in a clinic."""
+    command.upgrade(alembic_config, "0025")
+    assert _tables(scratch_database_url) == M6B_P1_TABLES
+    engine = create_engine(scratch_database_url)
+    index = "SELECT indexdef FROM pg_indexes WHERE indexname = :name"
+    try:
+        with engine.connect() as conn:
+            for name in (
+                "uq_patient_account_links_patient_active",
+                "uq_patient_account_links_account_active",
+                "uq_patient_portal_invites_patient_pending",
+            ):
+                definition = conn.execute(text(index), {"name": name}).scalar_one()
+                assert "UNIQUE" in definition and "WHERE" in definition, name
+            assert "RX_LINK" in _check(conn, "ck_patient_account_links_method")
+        command.downgrade(alembic_config, "0024")
+        assert _tables(scratch_database_url) == M6A_P7_TABLES
     finally:
         engine.dispose()

@@ -85,6 +85,9 @@ ACTIONS: dict[A, ActionInfo] = {
         (A.PATIENT_OPTED_OUT, "Patient opted out of messages"),
         (A.PATIENT_OPTED_IN, "Patient opted back in"),
         (A.PATIENT_IMPORTED, "Imported a patient"),
+        (A.PATIENT_PORTAL_INVITED, "Invited a patient to the patient app"),
+        (A.PATIENT_PORTAL_LINKED, "Patient linked their records to the patient app"),
+        (A.PATIENT_PORTAL_UNLINKED, "Unlinked a patient from the patient app"),
     ),
     **_c(
         AuditCategory.APPOINTMENTS,

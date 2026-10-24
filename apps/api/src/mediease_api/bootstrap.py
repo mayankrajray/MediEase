@@ -94,6 +94,7 @@ from mediease_api.application.links.use_cases import (
     DescribeLink,
     GetLink,
     LinkTokens,
+    ProveWithLink,
     ReplaceLink,
     ResetLink,
     VerifyChallenge,
@@ -125,6 +126,23 @@ from mediease_api.application.patients.my_patients import ListMyPatients
 from mediease_api.application.patients.queries import GetPatient, LookupPatients
 from mediease_api.application.patients.register_patient import RegisterPatient
 from mediease_api.application.patients.update_patient import UpdatePatient
+from mediease_api.application.portal.linking import (
+    AcceptPortalInvite,
+    DescribePortalInvite,
+    GetPortalStatus,
+    InviteToPortal,
+    LinkByPrescription,
+    UnlinkPatient,
+    UnlinkPortal,
+)
+from mediease_api.application.portal.records import (
+    GetPortalPrescription,
+    ListPortalAppointments,
+    ListPortalLinks,
+    ListPortalPrescriptions,
+    ListPortalReminders,
+    PortalPrescriptionPdf,
+)
 from mediease_api.application.portal.sessions import PatientSessionIssuer
 from mediease_api.application.portal.use_cases import (
     AuthenticatePatient,
@@ -188,6 +206,10 @@ from mediease_api.delivery.http.invites import create_invite_blueprint
 from mediease_api.delivery.http.me import create_me_blueprint
 from mediease_api.delivery.http.notifications import create_notifications_blueprint
 from mediease_api.delivery.http.ops import create_ops_blueprint
+from mediease_api.delivery.http.patient_portal import (
+    create_patient_portal_blueprint,
+    create_portal_records_blueprint,
+)
 from mediease_api.delivery.http.patients import (
     create_my_patients_blueprint,
     create_patients_blueprint,
@@ -652,6 +674,55 @@ class _UseCases:
             storage=self.blob_storage,
         )
 
+    # M6b-P1: linking a patient account and the portal's reads.
+    def invite_to_portal(self) -> InviteToPortal:
+        return InviteToPortal(
+            uow=self._uow(), clock=self.clock, ids=self.ids, secrets=self.invite_secrets
+        )
+
+    def get_portal_status(self) -> GetPortalStatus:
+        return GetPortalStatus(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def unlink_patient(self) -> UnlinkPatient:
+        return UnlinkPatient(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def describe_portal_invite(self) -> DescribePortalInvite:
+        return DescribePortalInvite(
+            uow=self._uow(), clock=self.clock, ids=self.ids, secrets=self.invite_secrets
+        )
+
+    def accept_portal_invite(self) -> AcceptPortalInvite:
+        return AcceptPortalInvite(
+            uow=self._uow(), clock=self.clock, ids=self.ids, secrets=self.invite_secrets
+        )
+
+    def link_by_prescription(self) -> LinkByPrescription:
+        proof = ProveWithLink(
+            uow=self._uow(), clock=self.clock, ids=self.ids, tokens=self.link_tokens
+        )
+        return LinkByPrescription(clock=self.clock, ids=self.ids, proof=proof)
+
+    def unlink_portal(self) -> UnlinkPortal:
+        return UnlinkPortal(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def list_portal_links(self) -> ListPortalLinks:
+        return ListPortalLinks(uow=self._uow())
+
+    def list_portal_appointments(self) -> ListPortalAppointments:
+        return ListPortalAppointments(uow=self._uow(), clock=self.clock)
+
+    def list_portal_prescriptions(self) -> ListPortalPrescriptions:
+        return ListPortalPrescriptions(uow=self._uow())
+
+    def get_portal_prescription(self) -> GetPortalPrescription:
+        return GetPortalPrescription(uow=self._uow())
+
+    def portal_prescription_pdf(self) -> PortalPrescriptionPdf:
+        return PortalPrescriptionPdf(uow=self._uow(), pdf=self.download_prescription_pdf())
+
+    def list_portal_reminders(self) -> ListPortalReminders:
+        return ListPortalReminders(uow=self._uow())
+
     def list_printable(self) -> ListPrintable:
         return ListPrintable(uow=self._uow())
 
@@ -1019,6 +1090,10 @@ def create_app(
         create_ops_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
     )
     app.register_blueprint(create_patients_blueprint(use_cases))
+    app.register_blueprint(
+        create_patient_portal_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
+    )
+    app.register_blueprint(create_portal_records_blueprint(use_cases))
     app.register_blueprint(create_my_patients_blueprint(use_cases))
     app.register_blueprint(create_scheduling_blueprint(use_cases))
     app.register_blueprint(create_appointments_blueprint(use_cases))

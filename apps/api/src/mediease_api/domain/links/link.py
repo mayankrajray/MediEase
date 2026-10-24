@@ -112,11 +112,15 @@ class PatientLink:
 
     def record_open(self, now: datetime) -> None:
         """R13: a right answer clears the count and is one open."""
+        self.record_success(now)
+        self.open_count += 1
+        self.last_opened_at = self.updated_at
+
+    def record_success(self, now: datetime) -> None:
+        """A right answer clears the count (also M6b-P1's portal check, which opens nothing)."""
         now = require_utc(now, "now")
         self.check_unlocked()
         self.failed_challenges = 0
-        self.open_count += 1
-        self.last_opened_at = now
         self.updated_at = now
 
     def reset(self, now: datetime) -> None:

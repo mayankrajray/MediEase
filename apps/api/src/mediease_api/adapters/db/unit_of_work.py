@@ -37,6 +37,11 @@ from mediease_api.adapters.db.portal import (
     SqlAlchemyPatientAccountRepository,
     SqlAlchemyPatientRefreshTokenRepository,
 )
+from mediease_api.adapters.db.portal_links import (
+    SqlAlchemyPortalInviteRepository,
+    SqlAlchemyPortalLinkRepository,
+    SqlAlchemyPortalLookup,
+)
 from mediease_api.adapters.db.reminders import SqlAlchemyNoShowSweep, SqlAlchemyReminderRepository
 from mediease_api.adapters.db.repositories import (
     SqlAlchemyAppointmentHistoryRepository,
@@ -93,6 +98,8 @@ class SqlAlchemyTenantRepositories:
         self._rx_favourites = SqlAlchemyRxFavouriteRepository(session, clinic_id)
         self._rx_templates = SqlAlchemyRxTemplateRepository(session, clinic_id)
         self._patient_links = SqlAlchemyPatientLinkRepository(session, clinic_id)
+        self._portal_links = SqlAlchemyPortalLinkRepository(session, clinic_id)
+        self._portal_invites = SqlAlchemyPortalInviteRepository(session, clinic_id)
         self._messages = SqlAlchemyMessageRepository(session, clinic_id)
         self._reminders = SqlAlchemyReminderRepository(session, clinic_id)
         self._notifications = SqlAlchemyNotificationRepository(session, clinic_id)
@@ -165,6 +172,14 @@ class SqlAlchemyTenantRepositories:
         return self._patient_links
 
     @property
+    def portal_links(self) -> SqlAlchemyPortalLinkRepository:
+        return self._portal_links
+
+    @property
+    def portal_invites(self) -> SqlAlchemyPortalInviteRepository:
+        return self._portal_invites
+
+    @property
     def messages(self) -> SqlAlchemyMessageRepository:
         return self._messages
 
@@ -205,6 +220,8 @@ class _OpenUnit:
         # M6a-P4: email verification and password-reset tokens.
         self.email_tokens = SqlAlchemyEmailTokenRepository(session)
         self.staff_invites = SqlAlchemyStaffInviteRepository(session)
+        # M6b-P1: the portal's cross-clinic start (an account's active links, IDs only).
+        self.portal_lookup = SqlAlchemyPortalLookup(session)
         self.rate_limits = SqlAlchemyRateLimitRepository(session)
         # Shares the session, so an audit row commits with the change (R11).
         self.audit = SqlAlchemyAuditWriter(session)
@@ -283,6 +300,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def staff_invites(self) -> SqlAlchemyStaffInviteRepository:
         return self._require_open().staff_invites
+
+    @property
+    def portal_lookup(self) -> SqlAlchemyPortalLookup:
+        return self._require_open().portal_lookup
 
     @property
     def rate_limits(self) -> SqlAlchemyRateLimitRepository:

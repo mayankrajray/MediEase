@@ -19,6 +19,8 @@ from werkzeug.test import TestResponse
 
 from mediease_api.delivery.http.access import Access, policy_of
 from tests.conftest import World
+from tests.integration.test_portal_http import portal_csrf
+from tests.portal_helpers import portal_client
 from tests.sessions_now import running_session
 
 # A date well inside the 180-day horizon whatever day the suite runs (M3-P1 exceptions).
@@ -84,6 +86,14 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/reminders/<uuid:reminder_id>": lambda w: _reminder_url(w),
     # M6a-P7: one of clinic B's doctor's notifications.
     "/api/v1/notifications/<uuid:notification_id>/read": lambda w: _notification_url(w),
+    # M6b-P1: a clinic B patient's portal invite, status and link.
+    "/api/v1/patients/<uuid:patient_id>/portal-invite": lambda w: (
+        f"{_patient_url(w)}/portal-invite"
+    ),
+    "/api/v1/patients/<uuid:patient_id>/portal": lambda w: f"{_patient_url(w)}/portal",
+    "/api/v1/patients/<uuid:patient_id>/portal-link": lambda w: (
+        f"{_linked_patient_url(w)}/portal-link"
+    ),
 }
 
 # Clinical writes need CLINICAL_WRITE and the visit's doctor (prescriptions spec §2), so these
@@ -139,6 +149,8 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
     ),
     "/api/v1/reminders/<uuid:reminder_id>": ("PATCH", {"cancel": True}),
     "/api/v1/notifications/<uuid:notification_id>/read": ("POST", {}),
+    "/api/v1/patients/<uuid:patient_id>/portal-invite": ("POST", {}),
+    "/api/v1/patients/<uuid:patient_id>/portal-link": ("DELETE", {}),
 }
 
 # Patients have their own read and write cross-clinic cases in integration/test_patients_http.py;
@@ -342,6 +354,19 @@ def _patient_url(world: World) -> str:
     )
     assert created.status_code == 201, created.get_json()
     return f"/api/v1/patients/{created.get_json()['id']}"
+
+
+def _linked_patient_url(world: World) -> str:
+    """Clinic B's patient linked to a portal account by an invite (M6b-P1)."""
+    url = _patient_url(world)
+    owner_of_b, headers = _owner_of_b(world)
+    invite = owner_of_b.post(f"{url}/portal-invite", headers=headers)
+    assert invite.status_code == 201, invite.get_json()
+    token = invite.get_json()["url"].rsplit("/portal/link/", 1)[1]
+    patient = portal_client(world, email="beta.patient@example.test")
+    accepted = patient.post(f"/api/v1/portal/invites/{token}/accept", headers=portal_csrf(patient))
+    assert accepted.status_code == 201, accepted.get_json()
+    return url
 
 
 def _opted_out_patient_url(world: World) -> str:

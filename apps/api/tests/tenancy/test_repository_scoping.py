@@ -20,6 +20,10 @@ from mediease_api.adapters.db.notifications import (
     SqlAlchemyNotificationRepository,
     SqlAlchemyPreferenceRepository,
 )
+from mediease_api.adapters.db.portal_links import (
+    SqlAlchemyPortalInviteRepository,
+    SqlAlchemyPortalLinkRepository,
+)
 from mediease_api.adapters.db.reminders import SqlAlchemyReminderRepository
 from mediease_api.adapters.db.repositories import (
     SqlAlchemyAppointmentHistoryRepository,
@@ -52,12 +56,15 @@ from mediease_api.domain.notifications.notification import (
     Preference,
 )
 from mediease_api.domain.patients.patient import Patient
+from mediease_api.domain.portal.account import PatientAccount
+from mediease_api.domain.portal.link import LinkMethod, PatientAccountLink, PatientPortalInvite
 from mediease_api.domain.prescriptions.library import Favourite, Template
 from mediease_api.domain.prescriptions.prescription import Advice, Prescription, PrescriptionItem
 from mediease_api.domain.scheduling.blocks import BlockShape, WeeklyBlock
 from mediease_api.domain.scheduling.exceptions import ScheduleException
 from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.scheduling.sessions import Session, SessionStatus, plan_day
+from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.visits.visit import Visit, VisitStatus
@@ -108,6 +115,12 @@ class Tenant:
 # console's monthly total (decision 7A), like the ops clinic list. It returns counts and sums per
 # clinic and channel only, never a message, patient or number, and only ops reach it
 # (tests/integration/test_message_costs_db.py).
+#
+# Reviewed exception (M6b-P1 decision 6A): SqlAlchemyPortalLookup reads patient_account_links and
+# patient_portal_invites across clinics, because a portal caller names no clinic. It returns an
+# account's active links (IDs, method, dates) and an invite digest's clinic ID, nothing else; every
+# record is then read through that clinic's tenant repositories, filtered by the linked patient
+# (application/portal/scope.py; tests/tenancy/test_portal_scope.py).
 NOT_TENANT_SCOPED = {"audit_events", "jobs"}
 
 
@@ -600,6 +613,8 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "rx_favourites",
             "rx_templates",
             "patient_links",
+            "patient_account_links",
+            "patient_portal_invites",
             "messages",
             "reminders",
             "notifications",
@@ -625,6 +640,8 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyRxFavouriteRepository,
         SqlAlchemyRxTemplateRepository,
         SqlAlchemyPatientLinkRepository,
+        SqlAlchemyPortalLinkRepository,
+        SqlAlchemyPortalInviteRepository,
         SqlAlchemyMessageRepository,
         SqlAlchemyReminderRepository,
         SqlAlchemyNotificationRepository,
@@ -703,3 +720,67 @@ def _a_message(tenant: Tenant, appointment_id: UUID) -> Message:
 
 def _fields(entity: object) -> dict[str, object]:
     return {name: getattr(entity, name) for name in entity.__slots__}  # type: ignore[attr-defined]
+
+
+def test_m6b_p1_portal_links_and_invites_are_scoped_to_their_clinic(
+    uow_factory: UowFactory, two_clinics: tuple[Tenant, Tenant]
+) -> None:
+    """Clinic A reaches neither B's account links nor B's portal invites (NFR-08, NFR-18)."""
+    a, b = two_clinics
+    account = PatientAccount.with_password(
+        id=new_id(),
+        full_name="Asha Patient",
+        email=EmailAddress.parse("scoping.patient@example.test"),
+        password_hash="hash",
+        now=NOW,
+    )
+    link = PatientAccountLink.create(
+        id=new_id(),
+        clinic_id=b.clinic_id,
+        patient_id=b.patient.id,
+        account_id=account.id,
+        method=LinkMethod.INVITE,
+        created_by_user_id=b.owner.user_id,
+        now=NOW,
+    )
+    invite = PatientPortalInvite.create(
+        id=new_id(),
+        clinic_id=b.clinic_id,
+        patient_id=b.patient.id,
+        token_hash="b" * 64,
+        created_by=b.owner.user_id,
+        now=NOW,
+    )
+    with uow_factory() as uow:
+        uow.patient_accounts.add(account)
+        staff_b = uow.tenant(b.clinic_id)
+        staff_b.portal_links.add(link)
+        staff_b.portal_invites.add(invite)
+        uow.commit()
+
+    with uow_factory() as uow:
+        staff_a = uow.tenant(a.clinic_id)
+        assert staff_a.portal_links.get(link.id) is None
+        assert staff_a.portal_links.get(link.id, for_update=True) is None
+        assert staff_a.portal_links.active_for_patient(b.patient.id) is None
+        assert staff_a.portal_links.active_for_account(account.id) is None
+        assert staff_a.portal_invites.get_by_digest(invite.token_hash) is None
+        assert staff_a.portal_invites.pending_for_patient(b.patient.id) is None
+        with pytest.raises(TenancyViolation):
+            staff_a.portal_links.add(link)
+        with pytest.raises(TenancyViolation):
+            staff_a.portal_links.update(link)
+        with pytest.raises(TenancyViolation):
+            staff_a.portal_invites.add(invite)
+        with pytest.raises(TenancyViolation):
+            staff_a.portal_invites.update(invite)
+
+    with uow_factory() as uow:
+        staff_b = uow.tenant(b.clinic_id)
+        assert staff_b.portal_links.get(link.id) == link
+        assert staff_b.portal_links.active_for_account(account.id) == link
+        assert staff_b.portal_invites.get_by_digest(invite.token_hash) == invite
+        # The reviewed lookup returns the link itself and the digest's clinic, nothing more.
+        assert uow.portal_lookup.active_links(account.id) == [link]
+        assert uow.portal_lookup.invite_clinic(invite.token_hash) == b.clinic_id
+        assert uow.portal_lookup.invite_clinic("c" * 64) is None

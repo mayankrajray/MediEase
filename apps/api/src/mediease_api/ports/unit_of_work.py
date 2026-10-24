@@ -32,6 +32,7 @@ from mediease_api.ports.messaging import (
     WebhookEventRepository,
 )
 from mediease_api.ports.notifications import NotificationRepository, PreferenceRepository
+from mediease_api.ports.portal import PortalInviteRepository, PortalLinkRepository, PortalLookup
 from mediease_api.ports.reminders import NoShowSweep, ReminderRepository
 from mediease_api.ports.repositories import (
     AppointmentHistoryRepository,
@@ -97,6 +98,13 @@ class TenantRepositories(Protocol):
     @property
     def patient_links(self) -> PatientLinkRepository: ...
     @property
+    def portal_links(self) -> PortalLinkRepository:
+        """Patient accounts linked to this clinic's records (M6b-P1)."""
+        ...
+
+    @property
+    def portal_invites(self) -> PortalInviteRepository: ...
+    @property
     def messages(self) -> MessageRepository: ...
     @property
     def reminders(self) -> ReminderRepository: ...
@@ -149,6 +157,11 @@ class UnitOfWork(Protocol):
 
     @property
     def staff_invites(self) -> StaffInviteRepository: ...
+    @property
+    def portal_lookup(self) -> PortalLookup:
+        """An account's active links and an invite's clinic (M6b-P1, reviewed cross-clinic)."""
+        ...
+
     @property
     def rate_limits(self) -> RateLimitRepository:
         """Public-route request counts (M4-P5); not tenant data."""
