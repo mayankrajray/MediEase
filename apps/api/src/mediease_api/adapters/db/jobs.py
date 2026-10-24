@@ -279,6 +279,15 @@ class SqlAlchemyRetentionRepository:
                 {"cutoff": cutoffs.notifications},
             )
             notifications = gone.rowcount  # type: ignore[attr-defined]
+        doses = 0
+        if cutoffs.dose_records is not None:
+            # M6b-P3b (R53): a year after the course end, or the dose date when open-ended
+            # (keep_until, set when the dose was marked). Selected by that date alone.
+            gone_doses = self._session.execute(
+                text("DELETE FROM dose_records WHERE keep_until < :cutoff"),
+                {"cutoff": cutoffs.dose_records},
+            )
+            doses = gone_doses.rowcount  # type: ignore[attr-defined]
         return PurgeCounts(
             refresh_tokens=tokens.rowcount + patient_tokens.rowcount,  # type: ignore[attr-defined]
             patient_links=links.rowcount,  # type: ignore[attr-defined]
@@ -286,6 +295,7 @@ class SqlAlchemyRetentionRepository:
             webhook_events=events,
             email_tokens=email_tokens.rowcount,  # type: ignore[attr-defined]
             notifications=notifications,
+            dose_records=doses,
         )
 
 

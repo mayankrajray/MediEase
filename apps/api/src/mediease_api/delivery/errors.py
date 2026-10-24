@@ -76,6 +76,8 @@ DOMAIN_ERROR_STATUS = {
     "PRT_INVITE_INVALID": 404,
     "PRT_ALREADY_LINKED": 409,
     "PRT_UNVERIFIED_ACCOUNT": 403,
+    # M6b-P3b (R46): a dose outside its marking window.
+    "PRT_DOSE_NOT_MARKABLE": 409,
     # M6a-P4: emailed verification and reset links.
     "AUTH_TOKEN_INVALID": 404,
     "AUTH_TOKEN_EXPIRED": 410,

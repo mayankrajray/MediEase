@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, time
+from datetime import date, datetime, time
 from uuid import UUID
 
 import structlog
@@ -22,6 +22,13 @@ from mediease_api.application.portal.scope import PortalScope, ScopeEntry
 from mediease_api.application.portal.views import PatientPrincipal
 from mediease_api.domain.clinics.clinic import DEFAULT_TIMEZONE
 from mediease_api.domain.patients.patient import Language
+from mediease_api.domain.portal.doses import (
+    DoseRecord,
+    DoseStatus,
+    scheduled_at,
+    status_of,
+    window_open,
+)
 from mediease_api.domain.portal.medicines import MedicineReminderPref, SlotTimes
 from mediease_api.domain.prescriptions.document import (
     duration_words,
@@ -91,6 +98,17 @@ class PlanContext:
     clinic_phone_e164: str | None
     doctor_name: str
     starts_on: date
+    # M6b-P3b: the clinic's zone, so a dose's marked time is shown on the clinic's clock.
+    timezone: str
+
+
+@dataclass(frozen=True, slots=True)
+class DoseView:
+    """M6b-P3b (R45-R47): one scheduled dose: its state, when it was marked, and if it can be."""
+
+    status: DoseStatus
+    marked_at: datetime | None
+    markable: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +118,7 @@ class PlanEntry:
     day: int
     days_total: int | None
     reminder: Reminder | None  # timed entries only
+    dose: DoseView | None = None  # timed entries only
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,6 +190,7 @@ def _sources(scope: PortalScope) -> list[_Source]:
                         clinic_phone_e164=entry.clinic.phone.e164 if entry.clinic.phone else None,
                         doctor_name=rx.doctor_snapshot.display_name,
                         starts_on=course_start(rx, tz),
+                        timezone=tz,
                     ),
                 )
             )
@@ -190,6 +210,24 @@ def _prefs(
             account_id, [s.plan.prescription.id for s in group]
         ):
             found[(pref.prescription_id, pref.item_id, pref.slot)] = pref
+    return found
+
+
+DoseKey = tuple[UUID, UUID, date, Slot]
+
+
+def dose_records(sources: Sequence[_Source], account_id: UUID) -> dict[DoseKey, DoseRecord]:
+    """M6b-P3b: the account's marks for these versions, read through each clinic's scope."""
+    by_clinic: dict[UUID, list[_Source]] = {}
+    for s in sources:
+        by_clinic.setdefault(s.entry.clinic.id, []).append(s)
+    found = {}
+    for group in by_clinic.values():
+        tenant = group[0].entry.tenant
+        for record in tenant.dose_records.for_account(
+            account_id, [s.plan.prescription.id for s in group]
+        ):
+            found[(record.prescription_id, record.item_id, record.on_date, record.slot)] = record
     return found
 
 
@@ -238,16 +276,31 @@ class GetMedicinePlan:
                 raise InvalidValue("date", f"must be within {PLAN_WINDOW_DAYS} days of today")
             sources = _sources(scope)
             prefs = _prefs(sources, principal.account_id)
+            doses = dose_records(sources, principal.account_id)
+        now = self._clock.now()
         contexts = {s.plan.prescription.id: s.context for s in sources}
         day = plan_for_day([s.plan for s in sources], on)
 
         def entry(line: PlanLine, slot: Slot | None) -> PlanEntry:
             rx = line.prescription
-            reminder = (
-                Reminder.of(prefs.get((rx.id, line.item.id, slot))) if slot is not None else None
-            )
+            if slot is None:
+                return PlanEntry(
+                    contexts[rx.id], _words(line.item, lang), line.day, line.days_total, None
+                )
+            tz = contexts[rx.id].timezone
+            due = scheduled_at(on, times.at(slot), tz)
+            record = doses.get((rx.id, line.item.id, on, slot))
             return PlanEntry(
-                contexts[rx.id], _words(line.item, lang), line.day, line.days_total, reminder
+                contexts[rx.id],
+                _words(line.item, lang),
+                line.day,
+                line.days_total,
+                Reminder.of(prefs.get((rx.id, line.item.id, slot))),
+                DoseView(
+                    status_of(record, due=due, now=now),
+                    record.marked_at if record else None,
+                    window_open(on_date=on, due=due, today=local_date(now, tz), now=now),
+                ),
             )
 
         slots = []

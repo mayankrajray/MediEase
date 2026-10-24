@@ -1,4 +1,4 @@
-﻿# MediEase developer commands. Every target is documented in AGENTS.md §4.
+# MediEase developer commands. Every target is documented in AGENTS.md §4.
 # Targets for later milestones are added in the milestone that needs them.
 
 SHELL := /bin/bash
@@ -28,7 +28,7 @@ CORE_COVERAGE := --include='*/mediease_api/domain/*,*/mediease_api/application/*
 
 .PHONY: help env-check up down ps logs psql migrate seed smoke install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
-	typecheck-web dev-web contract contract-check audit e2e worker
+	typecheck-web dev-web contract contract-check audit e2e worker dose-data
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | \
@@ -51,6 +51,10 @@ migrate: env-check ## Re-run database migrations (make up already runs them)
 
 seed: env-check ## Load synthetic demo data (APP_ENV=local only; make up first)
 	$(COMPOSE) run --rm --no-deps api python -m mediease_api.delivery.cli.seed
+
+dose-data: env-check ## A patient's dose records on request: ARGS="export <id> --out /exports/<id>.json" or "delete <id> --confirm"
+	@mkdir -p .exports && chmod 700 .exports
+	$(COMPOSE) run --rm --no-deps -v "$(CURDIR)/.exports:/exports" api python -m mediease_api.delivery.cli.dose_data $(ARGS)
 
 worker: env-check ## Run a job worker in the foreground (make up already runs one; a second is safe)
 	$(COMPOSE) run --rm --no-deps worker

@@ -33,6 +33,8 @@ from mediease_api.ports.messaging import (
 )
 from mediease_api.ports.notifications import NotificationRepository, PreferenceRepository
 from mediease_api.ports.portal import (
+    DoseLifecycle,
+    DoseRecordRepository,
     PortalInviteRepository,
     PortalLinkRepository,
     PortalLookup,
@@ -115,6 +117,11 @@ class TenantRepositories(Protocol):
         ...
 
     @property
+    def dose_records(self) -> DoseRecordRepository:
+        """A patient account's dose marks (M6b-P3b); reached only from patient routes."""
+        ...
+
+    @property
     def messages(self) -> MessageRepository: ...
     @property
     def reminders(self) -> ReminderRepository: ...
@@ -170,6 +177,11 @@ class UnitOfWork(Protocol):
     @property
     def portal_lookup(self) -> PortalLookup:
         """An account's active links and an invite's clinic (M6b-P1, reviewed cross-clinic)."""
+        ...
+
+    @property
+    def dose_lifecycle(self) -> DoseLifecycle:
+        """One account's dose records in every clinic, for export or deletion (M6b-P3b, R54)."""
         ...
 
     @property

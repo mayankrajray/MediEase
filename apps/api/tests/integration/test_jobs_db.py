@@ -576,6 +576,8 @@ def test_retention_writes_one_system_audit_event_with_counts_only(
         "webhook_events": "0",
         "email_tokens": "0",
         "notifications": "0",
+        # M6b-P3b: a count of dose records, never their content.
+        "dose_records": "0",
     }
 
 

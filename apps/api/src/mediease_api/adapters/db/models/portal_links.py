@@ -7,12 +7,13 @@ which clinic an invite digest belongs to) is ``SqlAlchemyPortalLookup``, a revie
 
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import date, datetime, time
 from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -24,6 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mediease_api.adapters.db.models.base import Base, TenantOwned, Timestamps, enum_check
+from mediease_api.domain.portal.doses import DoseState
 from mediease_api.domain.portal.link import LinkMethod, RevokedBy
 from mediease_api.domain.prescriptions.schedule import Slot
 
@@ -125,3 +127,37 @@ class MedicineReminderPrefRow(TenantOwned, Timestamps, Base):
     slot: Mapped[str] = mapped_column(Text)
     enabled: Mapped[bool] = mapped_column(Boolean)
     remind_at: Mapped[time | None] = mapped_column(Time)
+
+
+class DoseRecordRow(TenantOwned, Timestamps, Base):
+    """M6b-P3b (migration 0028, R45-R54): one account's Taken / Skipped mark for one dose.
+
+    Health data (C3), patient routes only. Not recorded is never stored; no reason, no text.
+    """
+
+    __tablename__ = "dose_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "account_id",
+            "prescription_id",
+            "item_id",
+            "on_date",
+            "slot",
+            name="uq_dose_records_dose",
+        ),
+        Index("ix_dose_records_account_id_prescription_id", "account_id", "prescription_id"),
+        Index("ix_dose_records_keep_until", "keep_until"),
+        enum_check("slot", Slot),
+        enum_check("state", DoseState),
+    )
+
+    patient_id: Mapped[UUID] = mapped_column(ForeignKey("patients.id"))
+    account_id: Mapped[UUID] = mapped_column(ForeignKey("patient_accounts.id"))
+    prescription_id: Mapped[UUID] = mapped_column(ForeignKey("prescriptions.id"))
+    # No foreign key, as for reminder choices: issued items are never deleted.
+    item_id: Mapped[UUID] = mapped_column()
+    on_date: Mapped[date] = mapped_column(Date)
+    slot: Mapped[str] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(Text)
+    marked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    keep_until: Mapped[date] = mapped_column(Date)

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.31.0
+  version: 0.32.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -1081,6 +1081,138 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MedicineReminder'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/PortalError'
+        '422':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/medicine-plan/doses:
+    put:
+      tags: [portal]
+      operationId: markDose
+      summary: Mark a scheduled dose Taken or Skipped
+      description: |
+        M6b-P3b (spec R45, R46, R51). @patient. A timed line of a current version, a slot its
+        frequency marks, a day of its course (else 422 on item_id, slot or on_date), from 00:00 of
+        that day to 48 hours after its time (else 409 PRT_DOSE_NOT_MARKABLE). Marking again
+        changes it and the time marked. Private to the account; not audited; logs carry IDs and
+        a count only. Needs X-CSRF-Token equal to me_pt_csrf.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DoseInput'
+      responses:
+        '200':
+          description: The dose
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicineDose'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/PortalError'
+        '409':
+          $ref: '#/components/responses/PortalError'
+        '422':
+          $ref: '#/components/responses/PortalError'
+    delete:
+      tags: [portal]
+      operationId: clearDose
+      summary: Clear a dose's mark within its window
+      description: |
+        M6b-P3b (R46). @patient. The same rules as marking; afterwards the dose is Not recorded
+        (its time has passed) or Upcoming. Clearing an unmarked dose changes nothing.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: prescription_id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+        - name: item_id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+        - name: on_date
+          in: query
+          required: true
+          schema: {type: string, format: date}
+        - name: slot
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/Slot'
+      responses:
+        '200':
+          description: The dose
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicineDose'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/PortalError'
+        '409':
+          $ref: '#/components/responses/PortalError'
+        '422':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/medicine-plan/history:
+    get:
+      tags: [portal]
+      operationId: getDoseHistory
+      summary: A version's doses by day
+      description: |
+        M6b-P3b (R47, R49). @patient. An issued or superseded version of a linked record: each
+        day and slot as Taken, Skipped, Not recorded or Upcoming, with counts per state. Not
+        audited.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: prescription_id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The history
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoseHistory'
         '401':
           $ref: '#/components/responses/PortalError'
         '403':
@@ -6772,7 +6904,8 @@ components:
         One prescribed line and where it comes from (R36). Words in the account's language;
         medicine_name, form_strength and dose as the doctor wrote them.
       required: [prescription_id, version, clinic_id, clinic_name, clinic_phone_e164, doctor_name,
-        starts_on, item_id, medicine_name, form_strength, dose, as_written, timing, how, duration]
+        starts_on, timezone, item_id, medicine_name, form_strength, dose, as_written, timing, how,
+        duration]
       properties:
         prescription_id: {type: string, format: uuid}
         version: {type: integer, minimum: 1}
@@ -6781,6 +6914,7 @@ components:
         clinic_phone_e164: {type: [string, 'null']}
         doctor_name: {type: string}
         starts_on: {type: string, format: date}
+        timezone: {type: string, description: "The clinic's zone, for times marked (M6b-P3b)"}
         item_id: {type: string, format: uuid}
         medicine_name: {type: string}
         form_strength: {type: [string, 'null']}
@@ -6795,8 +6929,13 @@ components:
       allOf:
         - $ref: '#/components/schemas/MedicineLine'
         - type: object
-          required: [day, days_total, reminder]
+          required: [day, days_total, reminder, mark]
           properties:
+            mark:
+              description: M6b-P3b - the patient's mark, timed entries only (dose is the doctor's)
+              oneOf:
+                - $ref: '#/components/schemas/MedicineDose'
+                - type: 'null'
             day: {type: integer, minimum: 1, description: Day N of the course}
             days_total: {type: [integer, 'null'], description: M for a number of days; else null}
             reminder:
@@ -6804,6 +6943,85 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/MedicineReminder'
                 - type: 'null'
+    DoseStatus:
+      type: string
+      enum: [TAKEN, SKIPPED, NOT_RECORDED, UPCOMING]
+      description: |
+        M6b-P3b (R45-R47): what the patient marked; NOT_RECORDED (its time has passed with no
+        mark) and UPCOMING are derived, never stored, and never mean "missed"
+    MedicineDose:
+      type: object
+      additionalProperties: false
+      required: [status, marked_at, markable]
+      properties:
+        status:
+          $ref: '#/components/schemas/DoseStatus'
+        marked_at: {type: [string, 'null'], format: date-time}
+        markable:
+          type: boolean
+          description: Within the window - from 00:00 of its day to 48 hours after its time
+    DoseInput:
+      type: object
+      additionalProperties: false
+      required: [prescription_id, item_id, on_date, slot, state]
+      properties:
+        prescription_id: {type: string, format: uuid}
+        item_id: {type: string, format: uuid}
+        on_date: {type: string, format: date}
+        slot:
+          $ref: '#/components/schemas/Slot'
+        state: {type: string, enum: [TAKEN, SKIPPED]}
+    DoseHistory:
+      type: object
+      additionalProperties: false
+      required: [prescription_id, version, clinic_name, clinic_phone_e164, timezone, starts_on,
+        counts, days, versions]
+      properties:
+        prescription_id: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        clinic_name: {type: string}
+        clinic_phone_e164: {type: [string, 'null']}
+        timezone: {type: string}
+        starts_on: {type: string, format: date}
+        counts:
+          type: object
+          description: Doses per state over the days shown (no score or percentage)
+          additionalProperties: {type: integer, minimum: 0}
+        days:
+          type: array
+          description: Newest first, from the course start (at most 60 days back) to today or its end
+          items:
+            type: object
+            additionalProperties: false
+            required: [date, doses]
+            properties:
+              date: {type: string, format: date}
+              doses:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [item_id, medicine_name, dose, slot, status, marked_at]
+                  properties:
+                    item_id: {type: string, format: uuid}
+                    medicine_name: {type: string}
+                    dose: {type: [string, 'null']}
+                    slot:
+                      $ref: '#/components/schemas/Slot'
+                    status:
+                      $ref: '#/components/schemas/DoseStatus'
+                    marked_at: {type: [string, 'null'], format: date-time}
+        versions:
+          type: array
+          description: The chain's issued and superseded versions, newest first (R49)
+          items:
+            type: object
+            additionalProperties: false
+            required: [prescription_id, version, status]
+            properties:
+              prescription_id: {type: string, format: uuid}
+              version: {type: integer, minimum: 1}
+              status: {type: string, enum: [ISSUED, SUPERSEDED]}
     MedicinePlan:
       type: object
       additionalProperties: false
