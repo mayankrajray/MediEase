@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-VIS-01..03, FR-VIS-05, FR-RX-01..10, FR-AUD-01, NFR-07 |
 | Milestone / phases | M4 / P1–P6 |
-| Status | Approved (developer sign-off 2026-10-17: decisions D1–D5 with the developer's refinements; ADR-0012; D6 added 2026-10-18) |
+| Status | Approved (developer sign-off 2026-10-17: decisions D1–D5 with the developer's refinements; ADR-0012; D6 added 2026-10-18); M6b-P3 amendments R21–R25 Draft, awaiting approval (2026-10-24) |
 | Last updated | 2026-10-17 (approved; §2 made precise for owners; R5 adjusted for M4 without the M5 worker; R14–R20 added for delivery, read audit, the PDF cache and bilingual rendering) |
 
 ## 1. Context
@@ -117,6 +117,35 @@ These are *formatting* vocabularies chosen by the doctor, not clinical recommend
   transliterated. A missing phrase in Hindi falls back to English for that phrase and fails the
   phrasebook completeness test. The PDF uses the prescription's `language`, captured at issue from
   the patient's preference, because it is rendered once per version.
+
+### Structured frequency, duration and start (M6b-P3, Draft)
+Amends §3 and R1-R8 with the developer's decisions D1-D3 (design note
+`docs/milestones/M6b-patient-portal-booking.md`, "Medicine planner: the developer's decisions").
+- **R21** *Frequency.* A structured frequency is a pattern of `0` and `1` of length 3 (morning,
+  afternoon, night) or 4 (morning, afternoon, evening, night), stored as `1-0-1` or `1-0-1-1`, or
+  one of `SOS`, `ONCE`, `CUSTOM` (+ the doctor's words). All-zero patterns, other lengths and other
+  characters are refused (422) with "Use 0 and 1 for 3 or 4 times of day, or choose Custom and
+  write it as you would". Anything with other digits (`2-0-2`, `½-0-½`) is `CUSTOM`, its amount in
+  the dose, as written. The slot sets are defined once in the domain and published by
+  `GET /api/v1/rx-vocabulary`; no client keeps its own copy.
+- **R22** *Bedtime warning.* A draft line with timing `BEDTIME` gets a warning when its pattern has
+  no night dose, has night and other slots, or is `SOS`, `ONCE` or `CUSTOM`. Warnings show under
+  the line and in *Review and issue*; they never block saving or issuing, and the issued document
+  shows the line exactly as written.
+- **R23** *Duration.* Each line has a duration kind: `DAYS` (1–365 days), `UNTIL_REVIEW`,
+  `ONGOING`, or none (not stated). Printed as "5 days", "Until your next review", "Ongoing — as
+  prescribed" or "Duration not stated — ask your clinic". The follow-up date never sets a
+  duration.
+- **R24** *Start.* A prescription has an optional `starts_on` (from 30 days before to 30 days after
+  the issue day); empty at issue means the issue day. A revision's draft starts empty and shows the
+  previous version's start for the doctor to keep or not; issuing a revision never changes the
+  earlier version.
+- **R25** *Instructions and the schedule section.* Preparation codes add `WITH_WATER`,
+  `WITH_WARM_WATER` and `WITH_MILK`, chosen by the doctor only; the system never adds an
+  instruction. Versions issued from M6b-P3 on carry a **Medicine schedule** section in the PDF and on
+  the patient page (medicine, dose, a mark per slot or "As the doctor wrote", food timing, how to
+  give, duration), built from the same engine and phrasebook; PDFs already stored are never
+  re-rendered.
 
 ## 5. API surface
 See API.md "Visits and prescriptions" and "Patient links". `GET /api/v1/prescriptions/{rx_id}/pdf`

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight); P1 built and confirmed (draft PR #52); P2 approved (A on all eight) and built; P3 designed, awaiting approval |
+| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight); P1 built and confirmed (draft PR #52); P2 approved (A on all eight) and built; P3 and P3b designed with the developer's decisions D1–D9, awaiting approval |
 | PRD | v1.2 §0 (C7, C9), §8.9, §8.13, §8.14, §13; NFR-02, NFR-10, NFR-11, NFR-18, NFR-19 |
 | Specs | `docs/specs/patient-portal.md` (Draft, P1–P3, P6), `docs/specs/booking-requests.md` (written at P4) |
 | ADR | ADR-0015 (patient accounts), ADR-0017 (notification service); ADR-0018 at P4 if the soft hold changes how a session's places are counted |
@@ -17,7 +17,8 @@
 |---|---|---|---|
 | P1 | **Linking and the patient API.** A link between a patient account and one clinic's patient record, made by a clinic invite or by the prescription link's last-4 check; revocable by both sides. Read-only portal API for what the clinic gave the patient: linked clinics, appointments, issued prescriptions, reminders. The portal tenancy suite | FR-PRT-02, FR-PRT-03, FR-PRT-06 (b, c), NFR-18 | Below (approved 24 Oct 2026) |
 | P2 | **Portal web.** The fresh dashboard with *Find a doctor*, My Appointments grouped by clinic, prescriptions (the patient page and PDF), reminders; link and unlink screens; English and Hindi; 360 px; the patient-page budget | FR-PRT-03, 04, 05, 07, NFR-02, NFR-10, NFR-11 | Below (proposed 24 Oct 2026) |
-| P3 | **Medicine planner.** Daily dose times derived only from each issued line's frequency, timing and days; *today* and *this course* views; optional in-app reminders | FR-REM-03 | Below (proposed 24 Oct 2026) |
+| P3 | **Prescription structure and the medicine planner.** Structured frequency patterns read against two central slot sets, the bedtime warning, explicit duration and start, new instruction codes, one medicine-plan engine (portal, PDF schedule section, patient page, P6), the *Medicines* tab and reminder preferences | FR-REM-03, FR-RX-01, 03, 04 (amended) | Below (proposed 24 Oct 2026, rewritten with the developer's decisions D1–D9) |
+| P3b | **Dose tracking.** Taken and Skipped with the time marked, Not recorded derived, a 48-hour correction window, private to the patient, hidden on unlink, one-year retention under review, export and deletion | FR-REM-03 (patient side) | Below (proposed 24 Oct 2026) |
 | P4 | **Public page and booking requests.** `/c/{slug}` with the clinic's hours, doctors and bookable slots or sessions; a request from a verified account with a short reason, a soft hold, rate limits and a cap of five open requests; `BookingRequested` to the front desk | FR-PUB-01..04, FR-BKG-01..03, 07, FR-DIS-05 (slots), NFR-19 | At its start |
 | P5 | **The front-desk inbox.** Accept (match or create the patient record, link the account, create the appointment), decline with a reason, propose another slot, expiry after the response window; an expired count and the response rate for the owner | FR-BKG-04..06, 08, FR-PRT-06 (a), FR-UX-03 | At its start |
 | P6 | **Patient notifications and the live token link.** In-app notifications for patients (request accepted, declined or expired; appointment confirmed, moved or cancelled; prescription ready; medicine due; follow-up due) with read state; a public "you are 3rd in line" link per appointment | FR-NTF-04, 05 (patients), FR-QUE-06 | At its start |
@@ -247,66 +248,129 @@ Built 24 Oct 2026 to the approved design. Details settled in the build:
 
 ---
 
-## M6b-P3 — Medicine planner
+## Medicine planner: the developer's decisions (24 Oct 2026)
 
-Proposed 24 Oct 2026, **awaiting the developer's approval.** Covers FR-REM-03 (both entries: the
-reminder, "optional per prescription, daily at chosen times until the course ends", and the plan,
-"daily times derived only from each prescribed line's frequency, timing and days, shown to the
-patient and optionally reminded in the app"). Rules are in `docs/specs/patient-portal.md`
-R28–R38 (Draft for P3). Delivering "medicine due" notices is P6's patient notification centre.
+The first P3 draft (a per-code slot table, "Until the doctor says" for a missing duration, no
+dose tracking) was reviewed with the developer and replaced. Settled before this design, and
+not reopened below:
+
+| # | Decision |
+|---|---|
+| D1 | Frequency is a **pattern** read against **two central slot sets by length**: 3 digits = morning, afternoon, night; 4 digits = morning, afternoon, evening, night. Only `0` and `1`; all-zero and any other length are refused when the doctor enters a structured frequency. Anything else (`2-0-2`, `½-0-½`, "every 6 hours") is `CUSTOM` with the doctor's words. No per-code tables anywhere |
+| D2 | `BEDTIME` is shown exactly as written; the prescription editor shows a **non-blocking warning** when the pattern and bedtime may conflict. The planner never resolves the conflict; issuing is never blocked |
+| D3 | Duration is **explicit**: a number of days, until review, or ongoing; an optional **start date** per prescription, default the issue date. An unspecified duration reads "Duration not stated — ask your clinic". A revision keeps its own start, date and version and never rewrites the previous one |
+| D4 | Dose tracking is **M6b-P3b**: private to the patient; Taken and Skipped with the time marked; a past dose without a record is shown "Not recorded", never stored or called missed; no future doses; corrections for 48 hours; no audit row per change; nothing to analytics, logs or an LLM; hidden on unlink, deleted with the account, included in the patient's export; kept one year after the course ends (a product period, **subject to privacy and legal review**, not a claimed DPDP requirement) |
+| D5 | No missed-dose advice, ever: a "Contact your clinic" action with the call button |
+| D6 | Reminder **preferences** are stored in M6b (per prescription line and per active slot: on or off, and a preferred time); **delivery is P6**. Preferences never change the prescribed frequency, dose, duration or instructions. `SOS`, `ONCE` and `CUSTOM` never create reminders |
+| D7 | Phases: **P3** prescription structure, the frequency engine, instruction codes, explicit duration and start, the medicine-plan API, the *Medicines* tab, reminder preferences. **P3b** dose tracking and its data lifecycle. **P4** booking requests after that |
+| D8 | **One tested engine** in the domain layer; the portal, the PDF, the patient page and P6's reminders all use it; no screen interprets a frequency |
+| D9 | The safety boundary stands: MediEase displays and organises the doctor's prescription; it never decides how a medicine is taken, infers an instruction, recommends a dose or resolves a contradiction |
+
+---
+
+## M6b-P3 — Prescription structure, the medicine-plan engine and the planner
+
+Proposed 24 Oct 2026, **awaiting the developer's approval.** Covers FR-REM-03 (the plan and its
+reminder preferences) and the prescription-structure changes behind it (FR-RX-01, 03, 04 as
+amended here). Rules are in `docs/specs/patient-portal.md` R28–R44 and, for the doctor's side,
+`docs/specs/prescriptions.md` R21–R25 (both Draft for P3).
 
 Facts the design rests on:
 
-- **What a line holds.** `PrescriptionItem`: the medicine's name, form, strength and dose as the
-  doctor wrote them; `frequency` from a closed vocabulary (`1-0-0`, `0-1-0`, `0-0-1`, `1-0-1`,
-  `1-1-1`, `1-1-1-1`, `SOS`, `ONCE`, `CUSTOM` + `frequency_text`); `timing` (`BEFORE_FOOD`,
-  `AFTER_FOOD`, `WITH_FOOD`, `EMPTY_STOMACH`, `BEDTIME`, `ANY`); `duration_days` (optional).
-  Prescriptions are versioned; the current one is the chain's latest issued version.
-- **The boundary** (AGENTS.md §7, FR-RX-10): MediEase never generates medical advice, drug
-  suggestions or dosage logic. A plan may only *lay out* what the doctor wrote; it must never
-  compute a dose, merge lines, move a dose relative to food, or fill a gap the doctor left.
-- **The portal today.** P1's scope gives a linked record's current prescriptions; the patient
-  page already words frequency and timing in English and Hindi
-  (`domain/prescriptions/patient_view.py`). There are no patient notifications yet (P6), and
-  WhatsApp templates still wait for Meta (L-02).
+- **Today's frequency** is a closed list in four places: `domain/prescriptions/vocabulary.py`
+  (`Frequency`: `1-0-0` … `1-1-1-1`, `SOS`, `ONCE`, `CUSTOM`), a database CHECK built from it on
+  `prescription_items`, `rx_favourites` and `rx_templates`, the phrasebook's
+  `frequency.<code>` words (PDF and patient page), and the staff editor (`FREQUENCIES` and the
+  `BY_DIGITS` shortcuts in `features/prescriptions/vocabulary.ts`). Every stored value is already
+  a valid pattern under D1, so **no stored value has to change**; only the CHECKs and the code.
+- **Timing** (`BEFORE_FOOD`, `AFTER_FOOD`, `WITH_FOOD`, `EMPTY_STOMACH`, `BEDTIME`, `ANY`) and
+  **preparation** codes (`SHAKE_WELL`, `DILUTE_IN_WATER` + amount, `DISSOLVE`, `CHEW`,
+  `DO_NOT_CRUSH`, `CUSTOM` + text) are already separate from frequency; with-water, warm-water
+  and milk are missing.
+- **Duration** is `duration_days` (1–365) or null; null means "not stated". There is no start date:
+  everything assumes the issue day.
+- **Immutability.** Issued versions never change (a database trigger), and each version's PDF is
+  rendered once and stored (prescriptions R18). A new PDF layout therefore applies to versions
+  issued after it ships; stored PDFs stay as they were.
 
 | # | Question | A (rec) | Rejected |
 |---|---|---|---|
-| 1 | How a line becomes times | A fixed table from the **frequency code only**: `1-0-0` morning; `0-1-0` afternoon; `0-0-1` night; `1-0-1` morning and night; `1-1-1` morning, afternoon, night; `1-1-1-1` morning, afternoon, evening, night. `SOS`, `ONCE` and `CUSTOM` get **no times**: they are listed as "As the doctor wrote" with the doctor's words (`frequency_text`). **Timing is shown in words** beside the dose ("after food"), never turned into an offset; `BEDTIME` puts a once-a-night line at the night slot, nothing more | B: derive clock offsets from timing ("30 minutes before breakfast"): dosage logic the doctor did not write. C: parse `frequency_text` ("every 6 hours"): free text, guessing |
-| 2 | Which clock times the slots are | The patient's own **daily times**, one per slot, defaults morning 08:00, afternoon 14:00, evening 18:00, night 21:00, changed under *Account* (each 05:00–23:30, in order). Stored on the account (migration `0027`). Times are wall-clock times of the clinic's zone (all linked clinics are in India today); the plan says the zone | B: one fixed clock (a night-shift worker cannot use it). C: per prescription (four times to set for every visit) |
-| 3 | Which days | A course starts on the **issue day of the current version** (clinic calendar) and lasts `duration_days` days, that day counted as day 1. A revision starts its own course from its issue day; the superseded version's plan disappears with it. A line **without** a duration is "Until the doctor says", shown every day without an end and with no day count. Courses that ended more than 7 days ago are not shown | B: start the day after issue (the doctor may have given the first dose in the clinic, but the prescription does not say so either way). C: hide lines without a duration (the patient still takes them) |
-| 4 | Where the plan is computed | In the **API**: a pure function in `domain/prescriptions/plan.py` from the issued versions and the account's times, behind `GET /portal/medicine-plan?date=YYYY-MM-DD` (today by default, ±30 days). One rule, unit-tested, reused by P6's reminders; the web only lays it out | B: in the web (P6's server-side reminders would need a second copy). C: precomputed rows in a table (a revision or a time change would have to rewrite them) |
-| 5 | What the patient sees | A fifth tab, **Medicines**: *Today* (by slot: Morning, Afternoon, Evening, Night, then "As the doctor wrote"; each entry: medicine, dose, timing in words, clinic, "day 3 of 5") and *This course* (per prescription: medicines, start and end, days left). A line appears **once per slot it was prescribed for**; two prescriptions with the same medicine are shown as two entries, never merged. Every screen carries "This plan only lays out your prescription. If anything is unclear, ask your doctor." | B: a calendar grid (heavy at 360 px, against the budget). C: merge identical medicines (a clinical judgement) |
-| 6 | Marking doses taken | **Not in P3.** No adherence record is kept; the plan is a view | B: a "taken" tick per dose (new health data about the patient, with consent, retention and display questions the PRD does not answer yet; can follow in a later phase) |
-| 7 | The optional reminder (FR-REM-03) | Per prescription, **Remind me** on *This course* (off by default), stored as a tenant row of the linked record (`medicine_reminder_choices`: clinic, patient, account, prescription chain, on/off), cleared when the link ends. P3 stores and shows the choice; **P6 delivers** it as an in-app "medicine due" notice at each slot time until the course ends, with no medicine name in the notice (FR-NTF-06). No WhatsApp | B: browser push now (a service worker and keys, new infrastructure, before the notification centre exists). C: WhatsApp (templates wait for L-02; message bodies may not name medicines, so it would add little) |
-| 8 | Wording and languages | Slot names, "day 3 of 5", "Until the doctor says" and the safety line in English and Hindi (`lib/i18n/portal.ts`); **frequency and timing words come from the patient page's own vocabulary** in the API, so the plan and the prescription never word a line differently; medicine names and doses exactly as written | B: new words for the plan (two ways to say the same instruction) |
+| 1 | The engine | `domain/prescriptions/schedule.py`: `Slot` (`MORNING`, `AFTERNOON`, `EVENING`, `NIGHT`), **`SLOT_SETS = {3: (MORNING, AFTERNOON, NIGHT), 4: (MORNING, AFTERNOON, EVENING, NIGHT)}`**, `FrequencyPattern.parse()` (canonical `1-0-1`; the rules of D1), `Frequency` = a pattern or `SOS` / `ONCE` / `CUSTOM`, and `schedule_of(item)` → the line's slots (empty for the three non-patterns) and whether it may be reminded. `plan.py` builds a day or a course from it. The phrasebook words a pattern from its slots (*"Morning and night"*, *"सुबह और रात"*) instead of a phrase per code, so the PDF, the patient page and the plan say the same thing | B: keep the code list and add entries (the per-code table D1 rules out). C: a bit mask column (unreadable in data, logs and support) |
+| 2 | How the staff editor learns what a pattern means | The API publishes the slot sets and the instruction vocabulary once, **`GET /api/v1/rx-vocabulary`** (slot sets with their words, timing, preparation and storage codes, duration kinds), cached for the session; the editor validates and labels typed patterns from that data and every saved line comes back with the engine's `slots`. A web test fails if a slot table literal appears in `src/` | B: a preview call per keystroke (latency while typing). C: keep a copy of the sets in the web (the drift D8 forbids) |
+| 3 | Bedtime warning (D2) | The engine returns `warnings` on each draft line, shown under the line and in *Review and issue*, never blocking: **`BEDTIME_WITHOUT_NIGHT`** when timing is `BEDTIME` and the pattern has no night dose, **`BEDTIME_WITH_OTHER_SLOTS`** when it has night and other slots too, and `BEDTIME_UNTIMED` for `SOS`/`ONCE`/`CUSTOM` with bedtime. Wording: "Check: 'at bedtime' with this frequency — is that what you mean?" The issued document shows exactly what the doctor wrote | B: warn only when there is no night dose (misses `1-0-1` + bedtime, the commonest ambiguity). C: block issue (D2 says never) |
+| 4 | Duration (D3) | `duration_kind` per line: `DAYS` (with `duration_days` 1–365), `UNTIL_REVIEW`, `ONGOING`, or **null = not stated**. Existing rows: `DAYS` where `duration_days` is set, else null. Words: "5 days" / "Until your next review" / "Ongoing — as prescribed" / "Duration not stated — ask your clinic". `UNTIL_REVIEW` never reads the follow-up date to make an end (that would be inference). Favourites and templates gain the same field | B: keep null meaning "until the doctor says" (D3 rules out). C: a free-text duration (no course to plan) |
+| 5 | Start date (D3) | `prescriptions.starts_on` (date, clinic calendar). In a draft it is optional; at issue it is set to the issue day when empty; the doctor may choose from 30 days before to 30 days after the issue day. A **revision's draft starts empty**, and the editor shows the previous version's start beside it ("Previous version started 12 Oct — keep that date?") so continuing a course is the doctor's choice, never automatic. Existing issued rows are backfilled to their issue day in the clinic's zone by the migration | B: copy the previous start into the revision (silently continues a course the doctor may have restarted). C: a start per line (heavier to write; the PRD has no case for it yet) |
+| 6 | Instruction codes | Preparation gains `WITH_WATER`, `WITH_WARM_WATER`, `WITH_MILK` (the doctor picks them like the others; the system never adds one). "Mix in water", "shake well", "take at bedtime" and the doctor's own instruction already exist. The plan, PDF and page show **when** (slots, food timing) and **how** (preparation) as separate fields | B: let the system suggest instructions by medicine (D9 rules out). C: a free-text field only (loses the patient's Hindi wording) |
+| 7 | The plan API and the day | `GET /portal/medicine-plan?date=` (default today, ±30 days, else 422): per linked record's **current** versions, each line's entries for the day with slot, scheduled time, medicine, dose, food timing, preparation, duration words and "day N of M" (for `DAYS`), the prescription's doctor, clinic, issue date and start; untimed lines (`SOS`, `ONCE`, `CUSTOM`) in a separate "As the doctor wrote" list. A course is shown from its start; `DAYS` ends after M days; `UNTIL_REVIEW`, `ONGOING` and not-stated lines show while their version is current (any other end would be invented). `GET /portal/medicine-plan/courses`: the same per prescription, with ended `DAYS` courses for 7 days. **Scheduled times** come from the account's daily slot times (defaults 08:00, 14:00, 18:00, 21:00; each 05:00–23:30, increasing; migration `0027`), changed under *Account* | B: per-prescription times (four times to set per visit). C: hide open-ended lines after N days (an invented end) |
+| 8 | Reminder preferences (D6) | Table `medicine_reminder_prefs` (tenant data): clinic, patient, account, the **prescription version** and line, slot, `enabled`, `remind_at` (null = the slot's time). Created only for lines with slots; `PUT /portal/medicine-plan/reminders` takes `{prescription_id, item_id, slot, enabled, remind_at}`; refused (422) for an untimed line or a slot the line does not have. A **revision does not inherit** preferences (its lines may differ); the patient is told "This prescription was updated — set your reminders again". Cleared when the link ends. Stored only; P6 delivers | B: per prescription only (D6 asks per line and slot). C: inherit across revisions by medicine name (matching medicines is an inference) |
+| 9 | The *Medicines* tab | A fifth tab. *Today*: Morning, Afternoon, Evening, Night (each with its time), then "As the doctor wrote"; each entry: medicine and dose as written, food timing, how to give, "Day 3 of 5" or the duration words, clinic and doctor, and the reminder switch and time. *Courses*: per prescription. The same medicine on two prescriptions is two entries (D9). Every planner screen: "This plan only lays out your prescription. If anything is unclear, ask your doctor." with *Contact your clinic* (call) | B: a week grid (budget). C: merge or sort by medicine (implies equivalence) |
+| 10 | PDF and patient page | A **Medicine schedule** section (`layout_version` 2): one row per line — medicine, dose, a mark per slot of its set (or "As the doctor wrote: …"), food timing, how to give, duration — built from the engine and phrasebook only, under the existing medicine cards, in the prescription's language. The patient page shows the same table. Applies to versions issued after release; stored PDFs are not re-rendered | B: replace the medicine cards (loses warnings and notes laid out per line). C: re-render old PDFs (breaks render-once and their record value) |
 
 Fixed points:
 
-- **API.** Migration `0027`: `patient_accounts` gains `morning_time`, `afternoon_time`,
-  `evening_time`, `night_time` (`time`, with the defaults above and a CHECK that they increase);
-  table `medicine_reminder_choices` (tenant data, scoped repository, unique per account and
-  chain). `PATCH /portal/me` accepts the four times; `GET /portal/medicine-plan?date=`;
-  `PUT /portal/prescriptions/{rx_id}/reminder {on}` (the current version of a linked chain, else
-  404). Contract 0.31.0. Nothing here is audited (a patient's own view and preference); changes
-  are logged with IDs only.
-- **Code.** `domain/prescriptions/plan.py` (`plan_for_day`, `course_of`), use cases in
-  `application/portal/records.py`, the *Medicines* tab and screens in `features/portal/`.
-- **Unchanged:** prescriptions, the patient page, staff screens, every P1 and P2 rule.
+- **Migration `0027`:** frequency CHECKs → a pattern CHECK
+  (`^[01](-[01]){2,3}$`, not all zeros, or `SOS`/`ONCE`/`CUSTOM`) on `prescription_items`,
+  `rx_favourites`, `rx_templates`; `duration_kind` on the three (backfilled); preparation codes;
+  `prescriptions.starts_on` (backfilled for issued rows); the account's four slot times;
+  `medicine_reminder_prefs`. Expand-only; down reverses (refused while new values exist, like
+  earlier enum widenings).
+- **Contract 0.31.0:** `Frequency` becomes a pattern string (with the three words); items gain
+  `duration_kind`, `slots`, `warnings`; prescriptions `starts_on`; `GET /rx-vocabulary`;
+  `GET /portal/medicine-plan`, `/courses`, `PUT /portal/medicine-plan/reminders`; the account's
+  slot times on `PATCH /portal/me`.
+- **Audit:** prescription changes keep their existing audit; nothing new for the planner's reads
+  or the patient's preferences (logged with IDs, never medicine names).
+- **Unchanged:** issued prescriptions and their PDFs, the last-4 page flow, P1 and P2 rules.
 
 Planned verification:
 
-- **Unit:** every frequency code to its slots; `SOS`, `ONCE`, `CUSTOM` untimed with the doctor's
-  words; a duration's first and last day on the clinic's calendar; no duration; a revision
-  replacing its predecessor; two prescriptions of one medicine kept apart; the times' order.
-- **API:** the plan for a linked record only (another clinic's or record's never appears), a
-  date outside ±30 days is 422, the times' validation, the reminder choice (current version only,
-  cleared on unlink), migration `0027` up and down, contract; the portal tenancy suite gains the
-  new route with an ID.
-- **Web:** *Today* and *This course* in both languages, the safety line, a line under each of its
-  slots, untimed lines, the times form and the reminder switch.
-- **Playwright (360 px):** after linking the PRD sample (Syrup X, `1-0-1`, 5 days), *Medicines*
-  shows it under Morning and Night as "day 1 of 5", the course ends on day 5, changing the
-  morning time moves it, *Remind me* stays on after reload; under 200 KB and axe-clean in both
-  languages. Failure path: after unlinking, the plan is empty.
+- **Engine (unit, the core of the phase):** every 3- and 4-digit 0/1 pattern (generated, not
+  listed) maps to its slots in order; all-zero, 2- and 5-digit, `2-0-2`, `½-0-½`, spaces and
+  letters refused for a structured frequency; `SOS`/`ONCE`/`CUSTOM` have no slots and no
+  reminders; the three bedtime warnings and no warning otherwise; duration words for the four
+  kinds; a course's day count on the clinic's calendar from `starts_on`; a revision's plan
+  replaces its predecessor's and leaves it untouched.
+- **API:** the plan only for linked records (portal tenancy suite cases for the new routes),
+  untimed lines apart, the reminder preference rules, `starts_on` validation and backfill, the
+  pattern CHECKs, migration `0027` up and down, contract, staff draft responses with `slots` and
+  `warnings`.
+- **Web:** the editor accepts `110`, `1011` and refuses `000`, `20`; labels come from
+  `/rx-vocabulary`; the bedtime warning shows and does not block; duration kind and start in the
+  editor and review; *Medicines* in both languages; reminder switches only on timed lines.
+- **PDF:** the schedule section for a 3- and a 4-slot line, an untimed line and each duration
+  kind, in English and Hindi; a stored v1 PDF is byte-identical after release.
+- **Playwright (360 px):** the doctor writes `1-1-0` after food for 5 days and `SOS`, sees the
+  schedule in review, issues; the linked patient sees Morning and Afternoon "Day 1 of 5" and the
+  SOS line under "As the doctor wrote" with no switch; turns a reminder on at 07:30 and it stays
+  after reload; under 200 KB and axe-clean in both languages. Failure path: entering `0-0-0`
+  shows the editor's error and saves nothing.
 - **Gates:** `make lint typecheck contract-check test` and `make e2e`.
+
+---
+
+## M6b-P3b — Dose tracking and its data lifecycle
+
+Proposed 24 Oct 2026, **awaiting the developer's approval** (with P3; built after it). Covers
+FR-REM-03's patient side under decisions D4 and D5. Rules: `docs/specs/patient-portal.md`
+R45–R54 (Draft for P3b).
+
+| # | Question | A (rec) | Rejected |
+|---|---|---|---|
+| 1 | What is stored | Table `dose_records` (tenant data, its own scoped repository): clinic, patient, account, **prescription version** and line, `on_date`, `slot`, `state` (`TAKEN` \| `SKIPPED`), `marked_at`, `created_at`, `updated_at`; unique per account, version, line, date and slot. Nothing for a dose not marked: "Not recorded" is derived when the dose's time has passed. No reason field, no free text | B: store "missed" rows by a job (D4 forbids storing or inferring missed). C: a reason picker ("forgot", "side effect") (clinical inference and sensitive data the PRD does not need) |
+| 2 | What can be marked | Only scheduled entries of the plan (timed lines, inside the course), from the dose's day at 00:00 clinic time until **48 hours after its scheduled time**; never a future day, never untimed lines. Changing Taken ↔ Skipped or clearing a mark follows the same window; after it the record is read-only | B: any time (the record stops meaning "at the time"). C: until the scheduled time only (a late dose could never be recorded) |
+| 3 | Who sees it | **Only the patient account**, through `PortalScope` like every portal read. No staff route, no ops route, no clinic report; the tenancy suites gain cases proving staff and ops cannot reach it. Sharing with a clinic would be a later, explicit, per-clinic opt-in with its own design (and counsel, L-04) | B: visible to the clinic now (D4 says private by default) |
+| 4 | Privacy in code | No audit rows (D4); log events carry counts and IDs only (`dose.marked count=1`), never a state, medicine or time; the record is excluded from every log context by a test; no analytics exist and none may read it; not sent to any model. Classified as **C3 health data** in SECURITY_AND_COMPLIANCE.md | B: audit each mark (D4 rules out; also floods the table) |
+| 5 | Lifecycle | **Unlink:** hidden at once (the scope no longer reaches it); kept, so a relink of the same account and record shows it again. **Retention:** the purge job deletes records one year after the course end (`DAYS`), or one year after the dose date for open-ended courses — a product period, recorded as **subject to privacy and legal review**. **Account deletion and export:** FR-PRT-10 is not built yet; P3b adds the repository's `delete_for_account` and `export_for_account` and tests them, and the RUNBOOK says how support runs both on request until the portal's own data-rights screens exist (FR-PRT-10) | B: delete on unlink (a mis-tap would erase a patient's history). C: build the whole FR-PRT-10 now (outside M6b's scope) |
+| 6 | What the patient sees | On *Today*, each timed entry gets **Taken** / **Skipped** buttons (and *Change* within the window), its state in words with the time marked ("Taken at 08:12"). A *History* view per course: each day and slot as Taken, Skipped, Not recorded or Upcoming; counts per state for the course. For Not recorded and Skipped only: "If you are unsure what to do, contact your clinic" with the call button — no other advice, ever | B: a percentage "adherence score" (a judgement on the patient) |
+| 7 | Revisions | Records stay on the version and line they were made for; a revision starts a new plan with no records. History shows each version's course separately, newest first | B: carry records to the revision (lines may differ; would rewrite history) |
+
+Fixed points: migration `0028` (`dose_records`); contract 0.32.0 (`PUT`/`DELETE
+/portal/medicine-plan/doses`, `GET /portal/medicine-plan/history?prescription_id=`); the
+retention purge counts `dose_records`; DATA_MODEL, SECURITY_AND_COMPLIANCE (C3, retention under
+review) and RUNBOOK (export and deletion on request).
+
+Planned verification: the window (before the dose's day, after 48 hours, a future day refused;
+untimed refused), Not recorded derived and never stored, unlink hides and relink shows, the
+purge at one year, export and delete for an account, staff/ops cannot reach it (tenancy), no
+state in any log line (a log-capture test), Playwright: mark Taken, change to Skipped, see the
+history and the Contact your clinic action; axe and budget.
