@@ -312,7 +312,8 @@ export function RxBuilder({
         onAdd={(line) => setLines([...lines, line])}
         favourites={favourites}
         vocabulary={vocabulary}
-        disabled={stale || vocabulary === undefined || lines.length >= MAX_LINES}
+        // Not held for the vocabulary: until it loads a typed pattern only shows the field's hint.
+        disabled={stale || lines.length >= MAX_LINES}
       />
 
       <h3 className="font-bold">Advice and follow-up</h3>
