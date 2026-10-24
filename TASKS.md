@@ -11,9 +11,9 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M6a — Auth, staff workspaces and notification core** (issue #49, branch `m6/49-mvp-demo`, one PR for the milestone). PRD v1.2 (22 Oct 2026) split the former M6 into M6a–M6d; #49 became M6a, and M6b–M6d each get their own issue, branch and PR when they open (ADR-0011). M5 merged in PR #41 on 20 Oct 2026 |
-| Active phase | **M6a-P8 — Appointment reminders, bookings to move after leave, the owner's audit log:** built and verified (`docs/milestones/M6-mvp-demo.md` "M6a-P8 — as built"), awaiting the developer's confirmation. M6a-P1 to P7 confirmed and pushed (draft PR #50). P8 is the last M6a phase |
-| Design notes | `docs/milestones/M6-mvp-demo.md` (M6a); M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
+| Active milestone | **M6b — Patient identity, portal and booking requests** (issue #51, branch `m6b/51-patient-portal-booking`, one PR for the milestone). M6a merged in PR #50 on 24 Oct 2026 (#49 closed) |
+| Active phase | **M6b-P1 — Linking and the patient API:** designed with the milestone plan (`docs/milestones/M6b-patient-portal-booking.md`, 8 decisions; spec `docs/specs/patient-portal.md` Draft), awaiting the developer's approval |
+| Design notes | `docs/milestones/M6b-patient-portal-booking.md` (M6b); M6a in `docs/milestones/M6-mvp-demo.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M6a phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
@@ -135,7 +135,7 @@ flows back through the webhook, and opt-out stops further sends. Depends on L-01
 | M5-P6 | Web: reminder status on patient profile and visit; pending follow-ups page; ops monthly messaging costs (P5 decision 7A) | ✅ |
 | M5 pending | **Live WhatsApp test** through Meta's test number: a reminder scheduled in the app delivered, its statuses back through the webhook, a STOP stopping further sends (the exit criterion). Needs the developer's credentials (L-01, L-02); procedure RUNBOOK §9. Also the real SMS provider (L-03) | ⏳ pending credentials |
 
-## M6a — Auth, staff workspaces and notification core  `▶ ACTIVE`
+## M6a — Auth, staff workspaces and notification core  `✅ (merged 24 Oct 2026, PR #50)`
 
 **Covers:** FR-AUTH-05, 07, 08, FR-PRT-01 (account only), FR-ORG-03, FR-ORG-07, FR-UX-01..06,
 FR-NTF-02..06, FR-APT-08, 09, FR-AUD-03 (PRD v1.2). **Issue:** #49, one branch and one PR for all
@@ -155,17 +155,25 @@ notifications arrive; `make e2e` green. Deployment and hosting are out of scope 
 | M6a-P5 | Owner Team page: invite (emailed, or a link for phone-only), change role, deactivate, re-invite (FR-ORG-07, on the existing FR-ORG-04 API) | ✅ (confirmed 23 Oct 2026; PR #50) |
 | M6a-P6 | Role workspaces: Owner, Doctor and Front Desk navigation and home (FR-UX-01..05); the practising owner's Owner / Doctor switch with *My Patients* (FR-UX-06); the ops wizard marks the owner as Doctor 1 in the same step (FR-ORG-03) | ✅ (confirmed 23 Oct 2026; PR #50) |
 | M6a-P7 | Notification service with domain events and the in-app channel; notification centre per role (FR-NTF-02..06; replaces FR-NTF-01) | ✅ (confirmed 24 Oct 2026; PR #50) |
-| M6a-P8 | Appointment reminders (FR-APT-08), doctor-leave conflicts (FR-APT-09), owner audit view (FR-AUD-03) | ▶ (built 24 Oct 2026; awaiting confirmation) |
+| M6a-P8 | Appointment reminders (FR-APT-08), doctor-leave conflicts (FR-APT-09), owner audit view (FR-AUD-03) | ✅ (confirmed 24 Oct 2026; PR #50 merged) |
 
-## M6b — Patient identity, portal and booking requests  `☐`
+## M6b — Patient identity, portal and booking requests  `▶ ACTIVE`
 
 **Covers:** FR-PRT-02..07, FR-BKG-01..08, FR-PUB-01..04, FR-REM-03, FR-QUE-06, NFR-18 (PRD v1.2).
 Own issue, branch and PR. **Exit:** a patient links clinic records by invite, prescription link or
 an accepted request; sees My Appointments per clinic, prescriptions, reminders and a medicine plan;
 requests a slot on `/c/{slug}` and front desk accepts it from the inbox; cross-clinic isolation
-tests pass. Proposed phases (each designed at its start): linking and the patient API; portal web
-(fresh dashboard, My Appointments, English and Hindi); medicine planner; public page, booking
-requests with soft hold and the front-desk inbox; patient notifications and the live token link.
+tests pass. Issue #51, branch `m6b/51-patient-portal-booking`; design notes
+`docs/milestones/M6b-patient-portal-booking.md`.
+
+| Phase | Scope | Status |
+|---|---|---|
+| M6b-P1 | Linking (clinic invite, prescription link) and the read-only patient API; portal tenancy suite (FR-PRT-02, 03, 06 b-c, NFR-18) | ▶ (designed, awaiting approval) |
+| M6b-P2 | Portal web: fresh dashboard, My Appointments by clinic, prescriptions, reminders, English and Hindi (FR-PRT-03, 04, 05, 07) | ☐ |
+| M6b-P3 | Medicine planner (FR-REM-03) | ☐ |
+| M6b-P4 | Public page `/c/{slug}` and booking requests with a soft hold (FR-PUB-01..04, FR-BKG-01..03, 07) | ☐ |
+| M6b-P5 | Front-desk inbox: accept with linking, decline, propose, expiry (FR-BKG-04..06, 08, FR-PRT-06 a) | ☐ |
+| M6b-P6 | Patient notifications and the live token link (FR-NTF-04, 05 for patients, FR-QUE-06) | ☐ |
 
 ## M6c — SaaS clinic onboarding, verification and discovery  `☐`
 
