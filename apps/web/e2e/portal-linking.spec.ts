@@ -50,8 +50,11 @@ test("M6b-P1: staff invite a patient, a new account links, and a used invite is 
   await expect(phone.getByRole("heading", { name: "Linked" })).toBeVisible();
 
   // The account lists the clinic, through the portal API.
-  await phone.getByRole("link", { name: "Go to your account" }).click();
-  await expect(phone.getByRole("list", { name: "Linked clinics" })).toContainText(`Sample Clinic · ${firstName}`);
+  // M6b-P2: the linked clinics are under Account.
+  await phone.goto("/portal/account");
+  const clinics = phone.getByRole("list", { name: "Your clinics" });
+  await expect(clinics).toContainText("Sample Clinic");
+  await expect(clinics).toContainText(`${firstName} ·`);
 
   // Failure path: the invitation was used.
   await phone.goto(invitePath);

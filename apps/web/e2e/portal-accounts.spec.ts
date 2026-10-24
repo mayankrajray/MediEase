@@ -32,8 +32,10 @@ test("M6a-P3: a patient signs up by email at 360 px, sees their account and sign
 
   await expect(page).toHaveURL(/\/portal$/);
   await expect(page.getByRole("heading", { name: "Hello, Asha Patient" })).toBeVisible();
+  // M6b-P2: the fresh dashboard on Home; how the account signs in is under Account.
+  await expect(page.getByRole("region", { name: "No appointments yet" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Patient app" }).getByRole("link", { name: "Account" }).click();
   await expect(page.getByText("Email and password")).toBeVisible();
-  await expect(page.getByRole("region", { name: "No clinic linked yet" })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 
@@ -41,7 +43,7 @@ test("M6a-P3: a patient signs up by email at 360 px, sees their account and sign
   await page.goto("/today");
   await expect(page).toHaveURL(/\/sign-in\?next=%2Ftoday$/);
 
-  await page.goto("/portal");
+  await page.goto("/portal/account");
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/portal\/sign-in$/);
   await page.goto("/portal");
@@ -63,6 +65,7 @@ test("M6a-P3: a patient signs in with Google (fake provider) and gets a verified
 
   await expect(page).toHaveURL(/\/portal$/);
   await expect(page.getByRole("heading", { name: /^Hello, Ravi/ })).toBeVisible();
+  await page.getByRole("navigation", { name: "Patient app" }).getByRole("link", { name: "Account" }).click();
   await expect(page.getByText("Google", { exact: true })).toBeVisible();
   await expect(page.getByText("Verified", { exact: true })).toBeVisible();
 });

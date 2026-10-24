@@ -10,6 +10,7 @@ import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { GoogleButton } from "@/features/auth/GoogleButton";
 import { isRetryable } from "@/features/auth/messages";
 import { ApiError, apiPost } from "@/lib/api/client";
+import { type PortalLanguage, portalStrings } from "@/lib/i18n/portal";
 
 import { MIN_PASSWORD_LENGTH } from "./messages";
 
@@ -20,7 +21,8 @@ type FieldErrors = Partial<Record<"full_name" | "email" | "password", string>>;
  * then straight into the account. The email is not verified yet; that arrives with the email
  * provider (M6a-P4). Google is offered too.
  */
-export function PortalSignUpForm({ next }: { next: string }) {
+export function PortalSignUpForm({ next, language = "en" }: { next: string; language?: PortalLanguage }) {
+  const s = portalStrings(language);
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -38,7 +40,7 @@ export function PortalSignUpForm({ next }: { next: string }) {
   async function submit() {
     if (submittingRef.current) return;
     if (password.length < MIN_PASSWORD_LENGTH) {
-      setFields({ password: `Use at least ${MIN_PASSWORD_LENGTH} characters.` });
+      setFields({ password: s.signUp.passwordTooShort });
       return;
     }
     submittingRef.current = true;
@@ -50,6 +52,7 @@ export function PortalSignUpForm({ next }: { next: string }) {
         full_name: fullName.trim(),
         email: email.trim(),
         password,
+        language,
       });
       router.replace(next);
     } catch (failure) {
@@ -70,10 +73,10 @@ export function PortalSignUpForm({ next }: { next: string }) {
   return (
     <section aria-labelledby="portal-sign-up-heading" className="space-y-5 p-6 sm:p-8">
       <h1 id="portal-sign-up-heading" className="text-2xl font-bold tracking-tight">
-        Create your health account
+        {s.signUp.heading}
       </h1>
       <p className="text-slate-700">
-        One account for your appointments and prescriptions at every clinic that uses MediEase.
+        {s.signUp.intro}
       </p>
 
       {error !== null && (
@@ -88,7 +91,7 @@ export function PortalSignUpForm({ next }: { next: string }) {
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <TextField
           id="full_name"
-          label="Your name"
+          label={s.signUp.name}
           autoComplete="name"
           required
           maxLength={200}
@@ -98,7 +101,7 @@ export function PortalSignUpForm({ next }: { next: string }) {
         />
         <TextField
           id="email"
-          label="Email"
+          label={s.signIn.email}
           type="email"
           inputMode="email"
           autoComplete="email"
@@ -110,26 +113,26 @@ export function PortalSignUpForm({ next }: { next: string }) {
         />
         <TextField
           id="password"
-          label="Password"
+          label={s.signIn.password}
           type="password"
           autoComplete="new-password"
           required
-          hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
+          hint={s.signUp.passwordHelp}
           value={password}
           onChange={setPassword}
           error={fields.password}
         />
         <Button type="submit" variant="primary" className="w-full" disabled={submitting}>
-          {submitting ? "Creating your account…" : "Create account"}
+          {submitting ? s.signUp.submitting : s.signUp.submit}
         </Button>
       </form>
 
       <GoogleButton intent="patient" next={next} email={email} />
 
       <p className="text-sm text-slate-700">
-        Already have an account?{" "}
+        {s.signUp.haveAccount}{" "}
         <Link href={signInHref} className="font-medium text-brand-800 underline">
-          Sign in
+          {s.signUp.signIn}
         </Link>
       </p>
     </section>

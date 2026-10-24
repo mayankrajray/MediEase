@@ -2,10 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetRefreshState } from "@/lib/auth/refresh";
-import { apiError, json, mockApi, noContent } from "@/test/api";
+import { apiError, json, mockApi } from "@/test/api";
 import { replace, resetNavigation } from "@/test/navigation";
 
-import { PortalAccount } from "./PortalAccount";
 import { PortalSignInForm } from "./PortalSignInForm";
 import { PortalSignUpForm } from "./PortalSignUpForm";
 
@@ -17,6 +16,7 @@ const ACCOUNT = {
   email: "asha.patient@example.test",
   sign_in_method: "PASSWORD",
   email_verified: false,
+  language: "en",
 } as const;
 const SESSION = { account: ACCOUNT, session: { access_expires_at: "x", refresh_expires_at: "y" } };
 
@@ -45,6 +45,7 @@ describe("PortalSignUpForm (M6a-P3, FR-PRT-01)", () => {
       full_name: "Asha Patient",
       email: "asha.patient@example.test",
       password: "a-long-synthetic-pass",
+      language: "en",
     });
   });
 
@@ -115,114 +116,22 @@ describe("PortalSignInForm (M6a-P3)", () => {
   });
 });
 
-const NO_LINKS = { "GET /api/v1/portal/links": () => json(200, { items: [] }) };
-
-describe("PortalAccount (M6a-P3, decision 8)", () => {
-  it("M6b-P1 (FR-PRT-02): lists the linked clinics with the record's first name and code", async () => {
-    mockApi({
-      "GET /api/v1/portal/me": () => json(200, { account: ACCOUNT }),
-      "GET /api/v1/portal/links": () =>
-        json(200, {
-          items: [
-            {
-              id: "0192f0a0-0000-7000-8000-0000000000e1",
-              clinic: { id: "0192f0a0-0000-7000-8000-0000000000e2", name: "Sample Clinic", phone_e164: null, address_line: null, city: null },
-              patient_first_name: "Asha",
-              patient_code: "SC-0004",
-              method: "INVITE",
-              linked_at: "2026-10-24T05:30:00Z",
-            },
-          ],
-        }),
-    });
-    render(<PortalAccount />);
-    const clinics = await screen.findByRole("list", { name: "Linked clinics" });
-    expect(clinics).toHaveTextContent("Sample Clinic · Asha · SC-0004");
-    expect(screen.queryByRole("region", { name: "No clinic linked yet" })).not.toBeInTheDocument();
+describe("the sign-in pages in Hindi (M6b-P2, spec R21)", () => {
+  it("sign-up says it in Hindi and creates a Hindi account", async () => {
+    const api = mockApi({ "POST /api/v1/portal/auth/sign-up": () => json(201, { account: { ...ACCOUNT, language: "hi" } }) });
+    render(<PortalSignUpForm next="/portal" language="hi" />);
+    expect(screen.getByRole("heading", { name: "अपना हेल्थ खाता बनाएँ" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/आपका नाम/), { target: { value: "Asha Patient" } });
+    fireEvent.change(screen.getByLabelText(/ईमेल/), { target: { value: "asha.patient@example.test" } });
+    fireEvent.change(screen.getByLabelText(/^पासवर्ड/), { target: { value: "a-long-enough-pass" } });
+    fireEvent.click(screen.getByRole("button", { name: "खाता बनाएँ" }));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/portal"));
+    expect(api.calls[0]?.body).toMatchObject({ language: "hi" });
   });
 
-  it("FR-PRT-01: shows the account, how it signs in, and that no clinic is linked", async () => {
-    mockApi({ ...NO_LINKS, "GET /api/v1/portal/me": () => json(200, { account: ACCOUNT }) });
-    render(<PortalAccount />);
-
-    expect(await screen.findByRole("heading", { name: "Hello, Asha Patient" })).toBeInTheDocument();
-    expect(screen.getByText("Email and password")).toBeInTheDocument();
-    expect(screen.getByText("Not verified yet")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "No clinic linked yet" })).toBeInTheDocument();
-  });
-
-  it("FR-AUTH-08: an unverified password account sees the banner and can resend", async () => {
-    const api = mockApi({
-      ...NO_LINKS,
-      "GET /api/v1/portal/me": () => json(200, { account: ACCOUNT }),
-      "POST /api/v1/portal/auth/verify-email/resend": () => json(202, { accepted: true }),
-    });
-    render(<PortalAccount />);
-    const banner = await screen.findByRole("region", { name: "Confirm your email" });
-    expect(banner).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Resend the email" }));
-    expect(await screen.findByText(/A new link is on its way/)).toBeInTheDocument();
-    const call = api.calls.find((c) => c.path.endsWith("/resend"));
-    expect(call?.headers.get("X-CSRF-Token")).toBe("portal-csrf");
-  });
-
-  it("a verified or Google account sees no banner", async () => {
-    mockApi({
-      ...NO_LINKS,
-      "GET /api/v1/portal/me": () => json(200, { account: { ...ACCOUNT, email_verified: true } }),
-    });
-    render(<PortalAccount />);
-    expect(await screen.findByText("Verified")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Confirm your email" })).not.toBeInTheDocument();
-  });
-
-  it("ADR-0015: signs out with the portal's CSRF key, not the staff one", async () => {
-    const api = mockApi({
-      ...NO_LINKS,
-      "GET /api/v1/portal/me": () => json(200, { account: { ...ACCOUNT, sign_in_method: "GOOGLE" } }),
-      "POST /api/v1/portal/auth/sign-out": () => noContent(),
-    });
-    render(<PortalAccount />);
-    expect(await screen.findByText("Google")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
-
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/portal/sign-in"));
-    const signOut = api.calls.find((c) => c.path === "/api/v1/portal/auth/sign-out");
-    expect(signOut?.headers.get("X-CSRF-Token")).toBe("portal-csrf");
-  });
-
-  it("refreshes an expired portal session once, then shows the account", async () => {
-    const api = mockApi({
-      ...NO_LINKS,
-      "GET /api/v1/portal/me": [
-        () => apiError(401, "AUTH_SESSION_EXPIRED", "Your session has ended."),
-        () => apiError(401, "AUTH_SESSION_EXPIRED", "Your session has ended."),
-        () => json(200, { account: ACCOUNT }),
-      ],
-      "POST /api/v1/portal/auth/refresh": () => json(200, SESSION),
-    });
-    render(<PortalAccount />);
-
-    expect(await screen.findByRole("heading", { name: "Hello, Asha Patient" })).toBeInTheDocument();
-    expect(api.count("POST /api/v1/portal/auth/refresh")).toBe(1);
-    expect(api.calls.find((c) => c.path.endsWith("/refresh"))?.headers.get("X-CSRF-Token")).toBe("portal-csrf");
-  });
-
-  it("sends an ended session back to the portal sign-in with a reason", async () => {
-    mockApi({
-      ...NO_LINKS,
-      "GET /api/v1/portal/me": () => apiError(401, "AUTH_REFRESH_REUSED", "Ended for safety."),
-    });
-    render(<PortalAccount />);
-    await waitFor(() =>
-      expect(replace).toHaveBeenCalledWith("/portal/sign-in?reason=session_ended_for_safety"),
-    );
-  });
-
-  it("shows a failure with the Ref and Try again", async () => {
-    mockApi({ ...NO_LINKS, "GET /api/v1/portal/me": () => apiError(500, "SYS_UNEXPECTED", "An unexpected error occurred.") });
-    render(<PortalAccount />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Ref: test-ref");
-    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  it("sign-in is in Hindi", () => {
+    render(<PortalSignInForm next="/portal" language="hi" />);
+    expect(screen.getByRole("heading", { name: "अपने हेल्थ खाते में साइन इन करें" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "खाता बनाएँ" })).toHaveAttribute("href", "/portal/sign-up?next=%2Fportal");
   });
 });

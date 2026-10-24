@@ -10,6 +10,7 @@ import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { GoogleButton } from "@/features/auth/GoogleButton";
 import { AUTH_LOCKED, isRetryable } from "@/features/auth/messages";
 import { ApiError, apiPost } from "@/lib/api/client";
+import { type PortalLanguage, portalStrings } from "@/lib/i18n/portal";
 
 import { PORTAL_SIGN_IN_REASONS, PRT_INVALID_CREDENTIALS, type PortalSignInReason } from "./messages";
 
@@ -18,7 +19,16 @@ import { PORTAL_SIGN_IN_REASONS, PRT_INVALID_CREDENTIALS, type PortalSignInReaso
  * separate session from staff sign-in (ADR-0015 decisions 2, 8), so neither sees the other's
  * options. `next` has already passed `safePortalNextPath` on the server.
  */
-export function PortalSignInForm({ next, reason }: { next: string; reason?: PortalSignInReason }) {
+export function PortalSignInForm({
+  next,
+  reason,
+  language = "en",
+}: {
+  next: string;
+  reason?: PortalSignInReason;
+  language?: PortalLanguage;
+}) {
+  const s = portalStrings(language);
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -62,7 +72,7 @@ export function PortalSignInForm({ next, reason }: { next: string; reason?: Port
   return (
     <section aria-labelledby="portal-sign-in-heading" className="space-y-5 p-6 sm:p-8">
       <h1 id="portal-sign-in-heading" className="text-2xl font-bold tracking-tight">
-        Sign in to your health account
+        {s.signIn.heading}
       </h1>
 
       {reason !== undefined && error === null && (
@@ -83,7 +93,7 @@ export function PortalSignInForm({ next, reason }: { next: string; reason?: Port
       <form onSubmit={onSubmit} className="space-y-4">
         <TextField
           id="portal-email"
-          label="Email"
+          label={s.signIn.email}
           type="email"
           inputMode="email"
           autoComplete="email"
@@ -93,7 +103,7 @@ export function PortalSignInForm({ next, reason }: { next: string; reason?: Port
         />
         <TextField
           id="portal-password"
-          label="Password"
+          label={s.signIn.password}
           type="password"
           autoComplete="current-password"
           required
@@ -101,22 +111,22 @@ export function PortalSignInForm({ next, reason }: { next: string; reason?: Port
           onChange={setPassword}
         />
         <Button type="submit" variant="primary" className="w-full" disabled={submitting}>
-          {submitting ? "Signing in…" : "Sign in"}
+          {submitting ? s.signIn.submitting : s.signIn.submit}
         </Button>
       </form>
 
       <p className="text-sm text-slate-700">
         <Link href="/portal/forgot-password" className="font-medium text-brand-800 underline">
-          Forgot password?
+          {s.signIn.forgot}
         </Link>
       </p>
 
       <GoogleButton intent="patient" next={next} email={email} />
 
       <p className="text-sm text-slate-700">
-        New to MediEase?{" "}
+        {s.signIn.newHere}{" "}
         <Link href={signUpHref} className="font-medium text-brand-800 underline">
-          Create an account
+          {s.signIn.create}
         </Link>
       </p>
     </section>

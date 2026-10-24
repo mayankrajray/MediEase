@@ -7,11 +7,21 @@
  */
 
 import {
+  ApiError,
+  apiDelete,
   apiGet,
+  apiPatch,
   apiPost,
+  newRequestId,
+  REQUEST_ID_HEADER,
   type ApiResult,
+  type DeletePath,
+  type DeleteResponse,
   type GetPath,
   type GetResponse,
+  type PatchBody,
+  type PatchPath,
+  type PatchResponse,
   type PostBody,
   type PostPath,
   type PostResponse,
@@ -49,4 +59,67 @@ export function portalPost<P extends PostPath>(
     () => apiPost(path, body, { ...options, csrfCookie: PORTAL_CSRF_COOKIE }),
     PORTAL,
   );
+}
+
+/** `apiPatch` for a portal route (M6b-P2: the account's language). */
+export function portalPatch<P extends PatchPath>(
+  path: P,
+  body: PatchBody<P>,
+  options: RequestOptions = {},
+): Promise<ApiResult<PatchResponse<P>>> {
+  return withSessionRefresh(
+    () => apiPatch(path, body, { ...options, csrfCookie: PORTAL_CSRF_COOKIE }),
+    PORTAL,
+  );
+}
+
+/** `apiDelete` for a portal route (M6b-P2: unlinking a clinic). */
+export function portalDelete<P extends DeletePath>(
+  path: P,
+  options: RequestOptions = {},
+): Promise<ApiResult<DeleteResponse<P>>> {
+  return withSessionRefresh(
+    () => apiDelete(path, { ...options, csrfCookie: PORTAL_CSRF_COOKIE }),
+    PORTAL,
+  );
+}
+
+const PDF_TIMEOUT_MS = 30_000;
+
+/**
+ * A prescription's PDF through the portal session (M6b-P2, decision 6A): refreshed once like
+ * every portal call, never a bare link that an expired access token would turn into a 401.
+ */
+export function portalPdf(rxId: string, fetchImpl: typeof fetch = fetch): Promise<Blob> {
+  const once = async (): Promise<Blob> => {
+    const requestId = newRequestId();
+    let response: Response;
+    try {
+      response = await fetchImpl(`/api/v1/portal/prescriptions/${encodeURIComponent(rxId)}/pdf`, {
+        headers: { [REQUEST_ID_HEADER]: requestId },
+        credentials: "same-origin",
+        cache: "no-store",
+        signal: AbortSignal.timeout(PDF_TIMEOUT_MS),
+      });
+    } catch {
+      throw new ApiError("WEB_API_UNREACHABLE", "The API could not be reached.", 0, requestId, { reason: "network" });
+    }
+    if (response.ok) return response.blob();
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      body = undefined;
+    }
+    const error = (body as { error?: { code?: string; message?: string; details?: Record<string, unknown> } } | undefined)
+      ?.error;
+    throw new ApiError(
+      error?.code ?? "WEB_API_BAD_RESPONSE",
+      error?.message ?? "The API sent an unexpected response.",
+      response.status,
+      response.headers.get(REQUEST_ID_HEADER) ?? requestId,
+      error?.details ?? {},
+    );
+  };
+  return withSessionRefresh(once, PORTAL);
 }

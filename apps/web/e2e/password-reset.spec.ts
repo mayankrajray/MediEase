@@ -34,6 +34,10 @@ test("M6a-P4: a patient confirms their email from the link and the banner goes",
   await expect(page.getByRole("status")).toHaveText(/Your email is confirmed/);
 
   await page.getByRole("link", { name: "Go to your account" }).click();
+  await expect(page.getByRole("heading", { name: /^Hello, / })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Confirm your email" })).toHaveCount(0);
+  // M6b-P2: the account's details are under Account.
+  await page.getByRole("navigation", { name: "Patient app" }).getByRole("link", { name: "Account" }).click();
   await expect(page.getByText("Verified", { exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Confirm your email" })).toHaveCount(0);
   await context.close();

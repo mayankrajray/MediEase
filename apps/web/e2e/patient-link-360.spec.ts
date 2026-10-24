@@ -5,59 +5,9 @@
  * phone ends in 0101 (queue-support.ts).
  */
 
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-import { DESK, DOCTOR, newPatient, sessionRunningNow, signInApi } from "./queue-support";
-
-const SAMPLE = {
-  medicine_name: "Syrup X",
-  dose: "5 ml",
-  frequency: "1-0-1",
-  timing: "AFTER_FOOD",
-  duration_days: 5,
-  preparation: [{ code: "SHAKE_WELL" }, { code: "DILUTE_IN_WATER", text: "10 ml" }],
-  storage: [{ code: "DISCARD_AFTER_DAYS", days: 7 }],
-};
-
-async function issuedLink(request: APIRequestContext): Promise<string> {
-  const { sessionId } = await sessionRunningNow(request);
-  const patient = await newPatient(request, "Isha");
-  let csrf = await signInApi(request, DESK);
-  const booked = await request.post("/api/v1/appointments", {
-    headers: { "X-CSRF-Token": csrf },
-    data: { session_id: sessionId, patient_id: patient.id },
-  });
-  expect(booked.status(), await booked.text()).toBe(201);
-  const appointment = ((await booked.json()) as { id: string }).id;
-  for (const [from, to] of [["BOOKED", "ARRIVED"], ["ARRIVED", "IN_CONSULTATION"]]) {
-    const moved = await request.post(`/api/v1/appointments/${appointment}/transitions`, {
-      headers: { "X-CSRF-Token": csrf },
-      data: { from, to },
-    });
-    expect(moved.status(), await moved.text()).toBe(200);
-  }
-  const me = (await (await request.get("/api/v1/me")).json()) as { memberships: { clinic_id: string }[] };
-  const clinicId = me.memberships[0]?.clinic_id ?? "";
-  csrf = await signInApi(request, DOCTOR);
-  // The seeded doctor also works at Sample Clinic Two, so every call names the clinic.
-  const headers = { "X-CSRF-Token": csrf, "X-Clinic-ID": clinicId };
-  const started = await request.post("/api/v1/visits", { headers, data: { appointment_id: appointment } });
-  expect(started.status(), await started.text()).toBe(201);
-  const visit = (await started.json()) as { id: string };
-  const created = await request.post(`/api/v1/visits/${visit.id}/prescriptions`, { headers });
-  expect(created.status(), await created.text()).toBe(201);
-  const rx = (await created.json()) as { id: string };
-  const saved = await request.put(`/api/v1/prescriptions/${rx.id}`, {
-    headers,
-    data: { revision: 1, items: [SAMPLE], advice: { return_if: ["breathing is difficult"] } },
-  });
-  expect(saved.status(), await saved.text()).toBe(200);
-  const issued = await request.post(`/api/v1/prescriptions/${rx.id}/issue`, { headers, data: { revision: 2 } });
-  expect(issued.status(), await issued.text()).toBe(200);
-  await signInApi(request, DESK);
-  const link = (await (await request.get(`/api/v1/prescriptions/${rx.id}/link`)).json()) as { url: string };
-  return new URL(link.url).pathname; // the stack's PUBLIC_BASE_URL may differ from the e2e host
-}
+import { issuedLink } from "./portal-support";
 
 async function noHorizontalScroll(page: Page) {
   const widths = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
