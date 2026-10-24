@@ -370,9 +370,230 @@ export interface paths {
         /**
          * The signed-in patient account
          * @description @patient: only a portal session (audience mediease-portal); a staff session is 401.
-         *     The account holds no clinic data yet (linking is M6b). Cache-Control: no-store.
+         *     The account holds no clinic data; linked records are under /portal/links (M6b-P1).
+         *     Cache-Control: no-store.
          */
         readonly get: operations["getPortalMe"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/links": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The clinics whose records this account is linked to
+         * @description M6b-P1 (FR-PRT-02, spec R10). @patient. The account's active links, oldest first: the
+         *     clinic (name, phone, address, city), the record's first name and code, how it was linked
+         *     and since when. A suspended clinic is left out until it is active again. Not audited.
+         */
+        readonly get: operations["listPortalLinks"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/links/{link_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        /**
+         * End one of this account's links
+         * @description Spec R8. @patient. The record is unchanged; the clinic's data is hidden from the next
+         *     request on. Another account's link, or one already ended, is 404 REQ_NOT_FOUND. Records
+         *     patient.portal_unlinked (PATIENT). Needs X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly delete: operations["unlinkPortalLink"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/links/prescription": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Link the record a prescription link names, after the last-4 check
+         * @description FR-PRT-06 (c), spec R5, R6. @patient with a verified account (Google, or a verified
+         *     email), else 403 PRT_UNVERIFIED_ACCOUNT before any check. The same check as the
+         *     prescription page: the same counter and five-try lockout (a wrong answer here counts for
+         *     the page too). The link is RX_LINK. 409 PRT_ALREADY_LINKED when the record or this
+         *     account is already linked in that clinic. Records patient.portal_linked (PATIENT); a
+         *     wrong answer patient_link.challenge_failed. Needs X-CSRF-Token.
+         */
+        readonly post: operations["linkPortalByPrescription"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/invites/{token}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Who a clinic's invite is for, before accepting it
+         * @description Spec R2. @patient. The clinic's name and the record's first name and code. An unknown,
+         *     used, superseded or expired invite is 404 PRT_INVITE_INVALID, the same answer for each.
+         */
+        readonly get: operations["describePortalInvite"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/invites/{token}/accept": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Link the invited record to this account
+         * @description FR-PRT-06 (b), spec R3, R4. @patient; no email verification needed (the clinic handed
+         *     over the invite). One transaction under a lock on the invite: an INVITE link, the invite
+         *     used. A second accept is 404 PRT_INVITE_INVALID; 409 PRT_ALREADY_LINKED leaves the invite
+         *     usable. Records patient.portal_linked (PATIENT). Needs X-CSRF-Token.
+         */
+        readonly post: operations["acceptPortalInvite"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/appointments": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The linked records' appointments, grouped by clinic
+         * @description FR-PRT-03, spec R11. @patient. Per linked clinic, at most 50: every status, upcoming
+         *     first (soonest first), then past (newest first). The doctor, date, slot time or token and
+         *     status; never the reason or a staff note. Not audited.
+         */
+        readonly get: operations["listPortalAppointments"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/prescriptions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The linked records' current prescriptions
+         * @description Spec R12. @patient. Each chain's latest issued version (never a draft or a superseded
+         *     version), newest issue first: the doctor, the date and the version, no content.
+         */
+        readonly get: operations["listPortalPrescriptions"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/prescriptions/{rx_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A current prescription as the patient page shows it
+         * @description Spec R12. @patient. The prescription link's page (labels in the chosen language, the
+         *     doctor's text as written). A draft, a superseded version or another record's ID is 404
+         *     REQ_NOT_FOUND. Never visit notes, vitals, diagnosis or addenda. Not audited.
+         */
+        readonly get: operations["getPortalPrescription"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/prescriptions/{rx_id}/pdf": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A current prescription's PDF
+         * @description Spec R12. @patient. The same file the clinic prints, rendered once (prescriptions R18).
+         *     Not audited (decision 7A). Out of scope is 404 REQ_NOT_FOUND.
+         */
+        readonly get: operations["getPortalPrescriptionPdf"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/reminders": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The linked records' reminders
+         * @description FR-REM-05, spec R13. @patient. At most 50 per linked clinic, soonest due first: the
+         *     kind, date, due time and visible status (the message's once sent).
+         */
+        readonly get: operations["listPortalReminders"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -965,6 +1186,72 @@ export interface paths {
          */
         readonly post: operations["optOutPatient"];
         readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/patients/{patient_id}/portal-invite": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Invite the patient to link this record to the patient app
+         * @description M6b-P1 (FR-PRT-06 b, spec R1). Permission: PATIENTS_MANAGE. A single-use link valid for
+         *     seven days, returned once and never stored (only its digest is); a new invite supersedes
+         *     the pending one. 409 PRT_ALREADY_LINKED when the record is already linked. Records
+         *     patient.portal_invited. Needs X-CSRF-Token.
+         */
+        readonly post: operations["invitePatientToPortal"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/patients/{patient_id}/portal": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Whether the record is linked to a patient account
+         * @description Spec R14. Permission: PATIENTS_MANAGE. NOT_LINKED, INVITED (with the invite's expiry) or
+         *     LINKED (with the method and since when); never the account's email or name.
+         */
+        readonly get: operations["getPatientPortalStatus"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/patients/{patient_id}/portal-link": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        /**
+         * End the record's link to a patient account
+         * @description Spec R8. Permission: PATIENTS_MANAGE. The account sees nothing of this clinic from its
+         *     next request; the record is unchanged. 404 REQ_NOT_FOUND when it is not linked. Returns
+         *     the new status. Records patient.portal_unlinked. Needs X-CSRF-Token.
+         */
+        readonly delete: operations["unlinkPatientFromPortal"];
         readonly options?: never;
         readonly head?: never;
         readonly patch?: never;
@@ -2760,6 +3047,146 @@ export interface components {
             /** @description M6a-P8 appointment reminder this many hours before the visit; 0 is off */
             readonly reminder_hours_before: number;
         };
+        /**
+         * @description How a patient account was linked to a record (M6b-P1; BOOKING from P5)
+         * @enum {string}
+         */
+        readonly LinkMethod: "INVITE" | "RX_LINK";
+        readonly PortalClinic: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            readonly phone_e164: string | null;
+            readonly address_line: string | null;
+            readonly city: string | null;
+        };
+        /** @description One linked clinic (spec R10) */
+        readonly PortalLink: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly clinic: components["schemas"]["PortalClinic"];
+            readonly patient_first_name: string;
+            /** @example SC-0004 */
+            readonly patient_code: string;
+            readonly method: components["schemas"]["LinkMethod"];
+            /** Format: date-time */
+            readonly linked_at: string;
+        };
+        readonly PortalLinkList: {
+            readonly items: readonly components["schemas"]["PortalLink"][];
+        };
+        /** @description A link just made */
+        readonly PortalLinked: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly clinic_id: string;
+            readonly clinic_name: string;
+            readonly patient_first_name: string;
+            readonly patient_code: string;
+            readonly method: components["schemas"]["LinkMethod"];
+            /** Format: date-time */
+            readonly linked_at: string;
+        };
+        readonly PortalUnlinked: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date-time */
+            readonly revoked_at: string;
+        };
+        readonly PortalPrescriptionLinkRequest: {
+            /** @description The token of the prescription link (the part after /p/) */
+            readonly token: string;
+            readonly phone_last4: string;
+        };
+        /** @description Who an invite is for (spec R2) */
+        readonly PortalInvite: {
+            readonly clinic_name: string;
+            readonly patient_first_name: string;
+            readonly patient_code: string;
+        };
+        /** @description A new invite; the URL appears here once and is never stored (spec R1) */
+        readonly PortalInvitation: {
+            /** @description PUBLIC_BASE_URL/portal/link/{token} */
+            readonly url: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+        };
+        /** @enum {string} */
+        readonly PortalStatus: "NOT_LINKED" | "INVITED" | "LINKED";
+        /** @description A record's portal status for staff (spec R14); never the account's details */
+        readonly PatientPortalStatus: {
+            readonly status: components["schemas"]["PortalStatus"];
+            readonly method: components["schemas"]["LinkMethod"] | null;
+            /** Format: date-time */
+            readonly linked_at: string | null;
+            /** Format: date-time */
+            readonly invite_expires_at: string | null;
+        };
+        /** @description An appointment as the patient sees it (spec R11); no reason, no notes */
+        readonly PortalAppointment: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly doctor_name: string;
+            /** Format: date */
+            readonly on_date: string;
+            /**
+             * Format: date-time
+             * @description The slot's start, or the session's in token mode
+             */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly session_starts_at: string;
+            /** Format: date-time */
+            readonly session_ends_at: string;
+            readonly mode: components["schemas"]["BookingMode"];
+            /** Format: date-time */
+            readonly slot_start: string | null;
+            readonly token_number: number | null;
+            readonly status: components["schemas"]["AppointmentStatus"];
+        };
+        readonly PortalAppointmentGroup: {
+            /** Format: uuid */
+            readonly clinic_id: string;
+            readonly clinic_name: string;
+            readonly appointments: readonly components["schemas"]["PortalAppointment"][];
+        };
+        readonly PortalAppointmentGroupList: {
+            readonly items: readonly components["schemas"]["PortalAppointmentGroup"][];
+        };
+        /** @description A chain's latest issued version, without content (spec R12) */
+        readonly PortalPrescription: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly clinic_id: string;
+            readonly clinic_name: string;
+            readonly doctor_name: string;
+            readonly version: number;
+            /** Format: date-time */
+            readonly issued_at: string;
+        };
+        readonly PortalPrescriptionList: {
+            readonly items: readonly components["schemas"]["PortalPrescription"][];
+        };
+        /** @description A reminder with its visible status (spec R13, FR-REM-05) */
+        readonly PortalReminder: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly clinic_id: string;
+            readonly clinic_name: string;
+            /** @enum {string} */
+            readonly kind: "FOLLOW_UP" | "APPOINTMENT";
+            /** Format: date */
+            readonly follow_up_date: string;
+            /** Format: date-time */
+            readonly due_at: string;
+            readonly status: components["schemas"]["ReminderStatus"];
+        };
+        readonly PortalReminderList: {
+            readonly items: readonly components["schemas"]["PortalReminder"][];
+        };
         /** @description What the clinic sees about a patient link (M4-P5 decision 6A); no content. */
         readonly PatientLinkInfo: {
             /** Format: uuid */
@@ -3935,6 +4362,21 @@ export interface components {
                 readonly "application/json": components["schemas"]["ErrorEnvelope"];
             };
         };
+        /**
+         * @description M6b-P1. PRT_UNVERIFIED_ACCOUNT (403: verify the email first); REQ_NOT_FOUND (404: not
+         *     one of this account's records, never distinguishable); PRT_INVITE_INVALID (404: unknown,
+         *     used, superseded or expired); PRT_ALREADY_LINKED (409: the record has another account, or
+         *     this account already has a record in that clinic)
+         */
+        readonly PortalLinkingError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
         /** @description LINK_RATE_LIMITED (too many requests for this link this minute) */
         readonly LinkRateLimited: {
             headers: {
@@ -4119,6 +4561,9 @@ export interface components {
         readonly InviteToken: string;
         /** @description The patient link token (spec R9); never logged. */
         readonly LinkToken: string;
+        readonly PortalLinkPath: string;
+        /** @description The single-use secret of a clinic's patient-app invite (M6b-P1); never logged. */
+        readonly PortalInviteToken: string;
         readonly ReminderPath: string;
     };
     requestBodies: never;
@@ -4553,6 +4998,338 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": components["schemas"]["PatientMe"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly listPortalLinks: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The linked clinics */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalLinkList"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly unlinkPortalLink: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly link_id: components["parameters"]["PortalLinkPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The link ended */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalUnlinked"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalLinkingError"];
+        };
+    };
+    readonly linkPortalByPrescription: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PortalPrescriptionLinkRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Linked */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalLinked"];
+                };
+            };
+            readonly 401: components["responses"]["LinkError"];
+            readonly 403: components["responses"]["PortalLinkingError"];
+            readonly 404: components["responses"]["LinkError"];
+            readonly 409: components["responses"]["PortalLinkingError"];
+            readonly 410: components["responses"]["LinkError"];
+            readonly 422: components["responses"]["PortalError"];
+            readonly 423: components["responses"]["LinkError"];
+            readonly 429: components["responses"]["LinkRateLimited"];
+        };
+    };
+    readonly describePortalInvite: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                /** @description The single-use secret of a clinic's patient-app invite (M6b-P1); never logged. */
+                readonly token: components["parameters"]["PortalInviteToken"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The invite */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalInvite"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalLinkingError"];
+        };
+    };
+    readonly acceptPortalInvite: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description The single-use secret of a clinic's patient-app invite (M6b-P1); never logged. */
+                readonly token: components["parameters"]["PortalInviteToken"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Linked */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalLinked"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalLinkingError"];
+            readonly 409: components["responses"]["PortalLinkingError"];
+        };
+    };
+    readonly listPortalAppointments: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The appointments by clinic */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalAppointmentGroupList"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly listPortalPrescriptions: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The prescriptions */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalPrescriptionList"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly getPortalPrescription: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description en or hi; the record's language when absent */
+                readonly lang?: components["schemas"]["Language"];
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                /** @description A prescription version of the request's clinic. */
+                readonly rx_id: components["parameters"]["PrescriptionPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The page */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientPrescriptionPage"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalLinkingError"];
+            readonly 422: components["responses"]["PortalError"];
+        };
+    };
+    readonly getPortalPrescriptionPdf: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                /** @description A prescription version of the request's clinic. */
+                readonly rx_id: components["parameters"]["PrescriptionPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The PDF */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    /** @description inline; filename="prescription-<id>-v<version>.pdf" */
+                    readonly "Content-Disposition"?: string;
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/pdf": unknown;
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalLinkingError"];
+            /** @description RX_PDF_FAILED; nothing was stored, so the next download tries again */
+            readonly 500: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description RX_PDF_BUSY; another download is preparing it */
+            readonly 503: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    readonly listPortalReminders: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The reminders */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalReminderList"];
                 };
             };
             readonly 401: components["responses"]["PortalError"];
@@ -5743,6 +6520,125 @@ export interface operations {
         readonly requestBody?: never;
         readonly responses: {
             readonly 200: components["responses"]["PatientChanged"];
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly invitePatientToPortal: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A patient of the request's clinic. */
+                readonly patient_id: components["parameters"]["PatientPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The invite, shown once */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalInvitation"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["PortalLinkingError"];
+        };
+    };
+    readonly getPatientPortalStatus: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description A patient of the request's clinic. */
+                readonly patient_id: components["parameters"]["PatientPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The record's portal status */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientPortalStatus"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly unlinkPatientFromPortal: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A patient of the request's clinic. */
+                readonly patient_id: components["parameters"]["PatientPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The record's portal status after unlinking */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientPortalStatus"];
+                };
+            };
             readonly 400: components["responses"]["PermissionError"];
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];

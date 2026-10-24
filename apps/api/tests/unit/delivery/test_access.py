@@ -35,6 +35,20 @@ EXPECTED_POLICIES = {
     "portal.refresh": (Access.PUBLIC, None),
     "portal.sign_out": (Access.PUBLIC, None),
     "portal.me": (Access.PATIENT, None),
+    # M6b-P1: linking and the patient's own records.
+    "portal_records.list_links": (Access.PATIENT, None),
+    "portal_records.unlink": (Access.PATIENT, None),
+    "portal_records.link_by_prescription": (Access.PATIENT, None),
+    "portal_records.describe_invite": (Access.PATIENT, None),
+    "portal_records.accept_invite": (Access.PATIENT, None),
+    "portal_records.list_appointments": (Access.PATIENT, None),
+    "portal_records.list_prescriptions": (Access.PATIENT, None),
+    "portal_records.get_prescription": (Access.PATIENT, None),
+    "portal_records.prescription_pdf": (Access.PATIENT, None),
+    "portal_records.list_reminders": (Access.PATIENT, None),
+    "patient_portal.invite": (Access.CLINIC, Permission.PATIENTS_MANAGE),
+    "patient_portal.status": (Access.CLINIC, Permission.PATIENTS_MANAGE),
+    "patient_portal.unlink": (Access.CLINIC, Permission.PATIENTS_MANAGE),
     # M6a-P4: the emailed links' endpoints are public (the token is the authority); the resend
     # is the signed-in patient's.
     "auth.request_password_reset": (Access.PUBLIC, None),

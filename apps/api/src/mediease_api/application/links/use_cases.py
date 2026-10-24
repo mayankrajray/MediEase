@@ -23,6 +23,7 @@ issued before M4-P5), reset a locked link, replace a link. IDs only in audit and
 from __future__ import annotations
 
 import hmac
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -180,13 +181,14 @@ def _patient_audit(
     action: AuditAction,
     link: PatientLink,
     now: datetime,
+    actor_type: ActorType = ActorType.PATIENT_LINK,
     **metadata: str,
 ) -> None:
     uow.audit.record(
         AuditEvent.record(
             id=ids.new_id(),
             action=action,
-            actor_type=ActorType.PATIENT_LINK,
+            actor_type=actor_type,
             now=now,
             clinic_id=link.clinic_id,
             entity_type=ENTITY_TYPE,
@@ -196,6 +198,54 @@ def _patient_audit(
             metadata=metadata,
         )
     )
+
+
+def check_last4(
+    uow: UnitOfWork,
+    tenant: TenantRepositories,
+    link: PatientLink,
+    last4: str,
+    *,
+    ids: IdPort,
+    info: RequestInfo,
+    now: datetime,
+    actor_type: ActorType,
+) -> None:
+    """R10, AC3: the last-4 check, on a link locked for update by the caller.
+
+    A wrong answer counts (the fifth locks the link), is audited and **committed** here, then
+    raises ``LINK_CHALLENGE_FAILED`` or ``LINK_LOCKED``. A right answer returns with nothing
+    changed; the caller records it (an open on the page, a success in the portal, M6b-P1).
+    """
+    if link.is_locked:
+        logger.info("patient_link.locked_attempt", link_id=str(link.id))
+        raise LinkLocked()
+    patient = tenant.patients.get(link.patient_id)
+    assert patient is not None
+    expected = patient.phone.e164[-4:].encode()
+    if hmac.compare_digest(expected, last4.encode()):
+        return
+    left = link.record_failure(now)
+    tenant.patient_links.update(link)
+    attempt = str(link.failed_challenges)
+    _patient_audit(
+        uow,
+        ids,
+        info,
+        AuditAction.PATIENT_LINK_CHALLENGE_FAILED,
+        link,
+        now,
+        actor_type,
+        attempt=attempt,
+    )
+    if link.is_locked:
+        _patient_audit(uow, ids, info, AuditAction.PATIENT_LINK_LOCKED, link, now, actor_type)
+    uow.commit()
+    logger.info("patient_link.challenge_failed", link_id=str(link.id), attempt=attempt)
+    if link.is_locked:
+        logger.info("patient_link.locked", link_id=str(link.id))
+        raise LinkLocked()
+    raise ChallengeFailed(left)
 
 
 class _Public:
@@ -270,34 +320,17 @@ class VerifyChallenge(_Public):
         with self._uow as uow:
             tenant = uow.tenant(claims.cid)
             link = self._load(tenant, token, claims, for_update=True)
-            if link.is_locked:
-                logger.info("patient_link.locked_attempt", link_id=str(link.id))
-                raise LinkLocked()
-            patient = tenant.patients.get(link.patient_id)
-            assert patient is not None
             now = self._clock.now()
-            expected = patient.phone.e164[-4:].encode()
-            if not hmac.compare_digest(expected, last4.encode()):
-                left = link.record_failure(now)
-                tenant.patient_links.update(link)
-                attempt = str(link.failed_challenges)
-                _patient_audit(
-                    uow,
-                    self._ids,
-                    info,
-                    AuditAction.PATIENT_LINK_CHALLENGE_FAILED,
-                    link,
-                    now,
-                    attempt=attempt,
-                )
-                if link.is_locked:
-                    _patient_audit(uow, self._ids, info, AuditAction.PATIENT_LINK_LOCKED, link, now)
-                uow.commit()
-                logger.info("patient_link.challenge_failed", link_id=str(link.id), attempt=attempt)
-                if link.is_locked:
-                    logger.info("patient_link.locked", link_id=str(link.id))
-                    raise LinkLocked()
-                raise ChallengeFailed(left)
+            check_last4(
+                uow,
+                tenant,
+                link,
+                last4,
+                ids=self._ids,
+                info=info,
+                now=now,
+                actor_type=ActorType.PATIENT_LINK,
+            )
             link.record_open(now)
             tenant.patient_links.update(link)
             latest = latest_issued(_chain(tenant, _first(tenant, link)))
@@ -346,6 +379,44 @@ def _first(tenant: TenantRepositories, link: PatientLink) -> Prescription:
     rx = tenant.prescriptions.get(link.prescription_id)
     assert rx is not None  # the foreign key keeps it
     return rx
+
+
+class ProveWithLink(_Public):
+    """M6b-P1 (patient portal spec R6): the page's own last-4 check, for linking an account.
+
+    The same token checks, rate limits, row lock, counter and lockout as ``VerifyChallenge``; a
+    wrong answer is audited as the signed-in ``PATIENT``. A right answer clears the count (no
+    open is counted: the page was not shown) and runs ``then`` in the same transaction, which
+    commits only if ``then`` returns.
+    """
+
+    def execute[T](
+        self,
+        token: str,
+        last4: str,
+        info: RequestInfo,
+        then: Callable[[UnitOfWork, TenantRepositories, PatientLink], T],
+    ) -> T:
+        claims = self._claims(token, info)
+        with self._uow as uow:
+            tenant = uow.tenant(claims.cid)
+            link = self._load(tenant, token, claims, for_update=True)
+            now = self._clock.now()
+            check_last4(
+                uow,
+                tenant,
+                link,
+                last4,
+                ids=self._ids,
+                info=info,
+                now=now,
+                actor_type=ActorType.PATIENT,
+            )
+            link.record_success(now)
+            tenant.patient_links.update(link)
+            result = then(uow, tenant, link)
+            uow.commit()
+        return result
 
 
 # --- Staff (decision 6A) -------------------------------------------------------------------------

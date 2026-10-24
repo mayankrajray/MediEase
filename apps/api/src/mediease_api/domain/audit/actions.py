@@ -123,3 +123,10 @@ class AuditAction(StrEnum):
     # M6a-P8 (FR-AUD-01 "data exports", FR-AUD-03): an owner exported the clinic's audit log.
     # Metadata: the range and the row count.
     AUDIT_EXPORTED = "audit.exported"
+    # M6b-P1 (patient portal spec §7): linking a patient account to a clinic record, on the
+    # ``patient`` entity. Invited is STAFF; linked is PATIENT; unlinked is PATIENT or STAFF.
+    # Metadata: the link or invite ID, the method, who unlinked, the invite's expiry; never an
+    # email, a name or a digit. Reading the portal is not audited (decision 7A).
+    PATIENT_PORTAL_INVITED = "patient.portal_invited"
+    PATIENT_PORTAL_LINKED = "patient.portal_linked"
+    PATIENT_PORTAL_UNLINKED = "patient.portal_unlinked"

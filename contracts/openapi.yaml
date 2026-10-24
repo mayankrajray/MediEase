@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.28.0
+  version: 0.29.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -559,7 +559,8 @@ paths:
       summary: The signed-in patient account
       description: |
         @patient: only a portal session (audience mediease-portal); a staff session is 401.
-        The account holds no clinic data yet (linking is M6b). Cache-Control: no-store.
+        The account holds no clinic data; linked records are under /portal/links (M6b-P1).
+        Cache-Control: no-store.
       security:
         - patientSessionCookie: []
       parameters:
@@ -576,6 +577,365 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PatientMe'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/links:
+    get:
+      tags: [portal]
+      operationId: listPortalLinks
+      summary: The clinics whose records this account is linked to
+      description: |
+        M6b-P1 (FR-PRT-02, spec R10). @patient. The account's active links, oldest first: the
+        clinic (name, phone, address, city), the record's first name and code, how it was linked
+        and since when. A suspended clinic is left out until it is active again. Not audited.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The linked clinics
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalLinkList'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/links/{link_id}:
+    delete:
+      tags: [portal]
+      operationId: unlinkPortalLink
+      summary: End one of this account's links
+      description: |
+        Spec R8. @patient. The record is unchanged; the clinic's data is hidden from the next
+        request on. Another account's link, or one already ended, is 404 REQ_NOT_FOUND. Records
+        patient.portal_unlinked (PATIENT). Needs X-CSRF-Token equal to me_pt_csrf.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/PortalLinkPath'
+      responses:
+        '200':
+          description: The link ended
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalUnlinked'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/PortalLinkingError'
+  /api/v1/portal/links/prescription:
+    post:
+      tags: [portal]
+      operationId: linkPortalByPrescription
+      summary: Link the record a prescription link names, after the last-4 check
+      description: |
+        FR-PRT-06 (c), spec R5, R6. @patient with a verified account (Google, or a verified
+        email), else 403 PRT_UNVERIFIED_ACCOUNT before any check. The same check as the
+        prescription page: the same counter and five-try lockout (a wrong answer here counts for
+        the page too). The link is RX_LINK. 409 PRT_ALREADY_LINKED when the record or this
+        account is already linked in that clinic. Records patient.portal_linked (PATIENT); a
+        wrong answer patient_link.challenge_failed. Needs X-CSRF-Token.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortalPrescriptionLinkRequest'
+      responses:
+        '201':
+          description: Linked
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalLinked'
+        '401':
+          $ref: '#/components/responses/LinkError'
+        '403':
+          $ref: '#/components/responses/PortalLinkingError'
+        '404':
+          $ref: '#/components/responses/LinkError'
+        '409':
+          $ref: '#/components/responses/PortalLinkingError'
+        '410':
+          $ref: '#/components/responses/LinkError'
+        '422':
+          $ref: '#/components/responses/PortalError'
+        '423':
+          $ref: '#/components/responses/LinkError'
+        '429':
+          $ref: '#/components/responses/LinkRateLimited'
+  /api/v1/portal/invites/{token}:
+    get:
+      tags: [portal]
+      operationId: describePortalInvite
+      summary: Who a clinic's invite is for, before accepting it
+      description: |
+        Spec R2. @patient. The clinic's name and the record's first name and code. An unknown,
+        used, superseded or expired invite is 404 PRT_INVITE_INVALID, the same answer for each.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/PortalInviteToken'
+      responses:
+        '200':
+          description: The invite
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalInvite'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/PortalLinkingError'
+  /api/v1/portal/invites/{token}/accept:
+    post:
+      tags: [portal]
+      operationId: acceptPortalInvite
+      summary: Link the invited record to this account
+      description: |
+        FR-PRT-06 (b), spec R3, R4. @patient; no email verification needed (the clinic handed
+        over the invite). One transaction under a lock on the invite: an INVITE link, the invite
+        used. A second accept is 404 PRT_INVITE_INVALID; 409 PRT_ALREADY_LINKED leaves the invite
+        usable. Records patient.portal_linked (PATIENT). Needs X-CSRF-Token.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/PortalInviteToken'
+      responses:
+        '201':
+          description: Linked
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalLinked'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/PortalLinkingError'
+        '409':
+          $ref: '#/components/responses/PortalLinkingError'
+  /api/v1/portal/appointments:
+    get:
+      tags: [portal]
+      operationId: listPortalAppointments
+      summary: The linked records' appointments, grouped by clinic
+      description: |
+        FR-PRT-03, spec R11. @patient. Per linked clinic, at most 50: every status, upcoming
+        first (soonest first), then past (newest first). The doctor, date, slot time or token and
+        status; never the reason or a staff note. Not audited.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The appointments by clinic
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalAppointmentGroupList'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/prescriptions:
+    get:
+      tags: [portal]
+      operationId: listPortalPrescriptions
+      summary: The linked records' current prescriptions
+      description: |
+        Spec R12. @patient. Each chain's latest issued version (never a draft or a superseded
+        version), newest issue first: the doctor, the date and the version, no content.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The prescriptions
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalPrescriptionList'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/prescriptions/{rx_id}:
+    get:
+      tags: [portal]
+      operationId: getPortalPrescription
+      summary: A current prescription as the patient page shows it
+      description: |
+        Spec R12. @patient. The prescription link's page (labels in the chosen language, the
+        doctor's text as written). A draft, a superseded version or another record's ID is 404
+        REQ_NOT_FOUND. Never visit notes, vitals, diagnosis or addenda. Not audited.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/PrescriptionPath'
+        - name: lang
+          in: query
+          required: false
+          description: en or hi; the record's language when absent
+          schema:
+            $ref: '#/components/schemas/Language'
+      responses:
+        '200':
+          description: The page
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientPrescriptionPage'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/PortalLinkingError'
+        '422':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/prescriptions/{rx_id}/pdf:
+    get:
+      tags: [portal]
+      operationId: getPortalPrescriptionPdf
+      summary: A current prescription's PDF
+      description: |
+        Spec R12. @patient. The same file the clinic prints, rendered once (prescriptions R18).
+        Not audited (decision 7A). Out of scope is 404 REQ_NOT_FOUND.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/PrescriptionPath'
+      responses:
+        '200':
+          description: The PDF
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Content-Disposition:
+              description: inline; filename="prescription-<id>-v<version>.pdf"
+              schema:
+                type: string
+          content:
+            application/pdf:
+              schema:
+                description: The PDF bytes (OpenAPI 3.1 binary content)
+                contentMediaType: application/pdf
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/PortalLinkingError'
+        '500':
+          description: RX_PDF_FAILED; nothing was stored, so the next download tries again
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: RX_PDF_BUSY; another download is preparing it
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/portal/reminders:
+    get:
+      tags: [portal]
+      operationId: listPortalReminders
+      summary: The linked records' reminders
+      description: |
+        FR-REM-05, spec R13. @patient. At most 50 per linked clinic, soonest due first: the
+        kind, date, due time and visible status (the message's once sent).
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The reminders
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalReminderList'
         '401':
           $ref: '#/components/responses/PortalError'
         '403':
@@ -1852,6 +2212,115 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/PatientChanged'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/patients/{patient_id}/portal-invite:
+    post:
+      tags: [patients]
+      operationId: invitePatientToPortal
+      summary: Invite the patient to link this record to the patient app
+      description: |
+        M6b-P1 (FR-PRT-06 b, spec R1). Permission: PATIENTS_MANAGE. A single-use link valid for
+        seven days, returned once and never stored (only its digest is); a new invite supersedes
+        the pending one. 409 PRT_ALREADY_LINKED when the record is already linked. Records
+        patient.portal_invited. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '201':
+          description: The invite, shown once
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalInvitation'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/PortalLinkingError'
+  /api/v1/patients/{patient_id}/portal:
+    get:
+      tags: [patients]
+      operationId: getPatientPortalStatus
+      summary: Whether the record is linked to a patient account
+      description: |
+        Spec R14. Permission: PATIENTS_MANAGE. NOT_LINKED, INVITED (with the invite's expiry) or
+        LINKED (with the method and since when); never the account's email or name.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+      responses:
+        '200':
+          description: The record's portal status
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientPortalStatus'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/patients/{patient_id}/portal-link:
+    delete:
+      tags: [patients]
+      operationId: unlinkPatientFromPortal
+      summary: End the record's link to a patient account
+      description: |
+        Spec R8. Permission: PATIENTS_MANAGE. The account sees nothing of this clinic from its
+        next request; the record is unchanged. 404 REQ_NOT_FOUND when it is not linked. Returns
+        the new status. Records patient.portal_unlinked. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/PatientPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: The record's portal status after unlinking
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientPortalStatus'
         '400':
           $ref: '#/components/responses/PermissionError'
         '401':
@@ -4403,6 +4872,19 @@ components:
       schema:
         type: string
         maxLength: 200
+    PortalLinkPath:
+      name: link_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    PortalInviteToken:
+      name: token
+      in: path
+      required: true
+      description: The single-use secret of a clinic's patient-app invite (M6b-P1); never logged.
+      schema:
+        type: string
+        maxLength: 128
     ReminderPath:
       name: reminder_id
       in: path
@@ -4598,6 +5080,19 @@ components:
         clinic for a new link); LINK_CHALLENGE_FAILED (401, details.attempts_left);
         LINK_CHALLENGE_REQUIRED (401: verify first, or the view ended); LINK_LOCKED (423: five
         wrong answers; the clinic can reset it)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    PortalLinkingError:
+      description: |
+        M6b-P1. PRT_UNVERIFIED_ACCOUNT (403: verify the email first); REQ_NOT_FOUND (404: not
+        one of this account's records, never distinguishable); PRT_INVITE_INVALID (404: unknown,
+        used, superseded or expired); PRT_ALREADY_LINKED (409: the record has another account, or
+        this account already has a record in that clinic)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -5773,6 +6268,193 @@ components:
           minimum: 0
           maximum: 6
           description: M6a-P8 appointment reminder this many hours before the visit; 0 is off
+    LinkMethod:
+      type: string
+      enum: [INVITE, RX_LINK]
+      description: How a patient account was linked to a record (M6b-P1; BOOKING from P5)
+    PortalClinic:
+      type: object
+      required: [id, name, phone_e164, address_line, city]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        phone_e164: {type: [string, 'null']}
+        address_line: {type: [string, 'null']}
+        city: {type: [string, 'null']}
+    PortalLink:
+      type: object
+      description: One linked clinic (spec R10)
+      required: [id, clinic, patient_first_name, patient_code, method, linked_at]
+      properties:
+        id: {type: string, format: uuid}
+        clinic:
+          $ref: '#/components/schemas/PortalClinic'
+        patient_first_name: {type: string}
+        patient_code: {type: string, examples: [SC-0004]}
+        method:
+          $ref: '#/components/schemas/LinkMethod'
+        linked_at: {type: string, format: date-time}
+    PortalLinkList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortalLink'
+    PortalLinked:
+      type: object
+      description: A link just made
+      required: [id, clinic_id, clinic_name, patient_first_name, patient_code, method, linked_at]
+      properties:
+        id: {type: string, format: uuid}
+        clinic_id: {type: string, format: uuid}
+        clinic_name: {type: string}
+        patient_first_name: {type: string}
+        patient_code: {type: string}
+        method:
+          $ref: '#/components/schemas/LinkMethod'
+        linked_at: {type: string, format: date-time}
+    PortalUnlinked:
+      type: object
+      required: [id, revoked_at]
+      properties:
+        id: {type: string, format: uuid}
+        revoked_at: {type: string, format: date-time}
+    PortalPrescriptionLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [token, phone_last4]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 512
+          description: The token of the prescription link (the part after /p/)
+        phone_last4:
+          type: string
+          pattern: '^[0-9]{4}$'
+    PortalInvite:
+      type: object
+      description: Who an invite is for (spec R2)
+      required: [clinic_name, patient_first_name, patient_code]
+      properties:
+        clinic_name: {type: string}
+        patient_first_name: {type: string}
+        patient_code: {type: string}
+    PortalInvitation:
+      type: object
+      description: A new invite; the URL appears here once and is never stored (spec R1)
+      required: [url, expires_at]
+      properties:
+        url:
+          type: string
+          description: PUBLIC_BASE_URL/portal/link/{token}
+        expires_at: {type: string, format: date-time}
+    PortalStatus:
+      type: string
+      enum: [NOT_LINKED, INVITED, LINKED]
+    PatientPortalStatus:
+      type: object
+      description: A record's portal status for staff (spec R14); never the account's details
+      required: [status, method, linked_at, invite_expires_at]
+      properties:
+        status:
+          $ref: '#/components/schemas/PortalStatus'
+        method:
+          oneOf:
+            - $ref: '#/components/schemas/LinkMethod'
+            - type: 'null'
+        linked_at: {type: [string, 'null'], format: date-time}
+        invite_expires_at: {type: [string, 'null'], format: date-time}
+    PortalAppointment:
+      type: object
+      description: An appointment as the patient sees it (spec R11); no reason, no notes
+      required:
+        - id
+        - doctor_name
+        - on_date
+        - starts_at
+        - session_starts_at
+        - session_ends_at
+        - mode
+        - slot_start
+        - token_number
+        - status
+      properties:
+        id: {type: string, format: uuid}
+        doctor_name: {type: string}
+        on_date: {type: string, format: date}
+        starts_at:
+          type: string
+          format: date-time
+          description: The slot's start, or the session's in token mode
+        session_starts_at: {type: string, format: date-time}
+        session_ends_at: {type: string, format: date-time}
+        mode:
+          $ref: '#/components/schemas/BookingMode'
+        slot_start: {type: [string, 'null'], format: date-time}
+        token_number: {type: [integer, 'null']}
+        status:
+          $ref: '#/components/schemas/AppointmentStatus'
+    PortalAppointmentGroup:
+      type: object
+      required: [clinic_id, clinic_name, appointments]
+      properties:
+        clinic_id: {type: string, format: uuid}
+        clinic_name: {type: string}
+        appointments:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortalAppointment'
+    PortalAppointmentGroupList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortalAppointmentGroup'
+    PortalPrescription:
+      type: object
+      description: A chain's latest issued version, without content (spec R12)
+      required: [id, clinic_id, clinic_name, doctor_name, version, issued_at]
+      properties:
+        id: {type: string, format: uuid}
+        clinic_id: {type: string, format: uuid}
+        clinic_name: {type: string}
+        doctor_name: {type: string}
+        version: {type: integer, minimum: 1}
+        issued_at: {type: string, format: date-time}
+    PortalPrescriptionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortalPrescription'
+    PortalReminder:
+      type: object
+      description: A reminder with its visible status (spec R13, FR-REM-05)
+      required: [id, clinic_id, clinic_name, kind, follow_up_date, due_at, status]
+      properties:
+        id: {type: string, format: uuid}
+        clinic_id: {type: string, format: uuid}
+        clinic_name: {type: string}
+        kind: {type: string, enum: [FOLLOW_UP, APPOINTMENT]}
+        follow_up_date: {type: string, format: date}
+        due_at: {type: string, format: date-time}
+        status:
+          $ref: '#/components/schemas/ReminderStatus'
+    PortalReminderList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortalReminder'
     PatientLinkInfo:
       type: object
       additionalProperties: false

@@ -72,6 +72,10 @@ DOMAIN_ERROR_STATUS = {
     "AUTH_GOOGLE_NO_STAFF_ACCOUNT": 403,
     "PRT_INVALID_CREDENTIALS": 401,
     "PRT_EMAIL_TAKEN": 409,
+    # M6b-P1: linking a patient account to a clinic record.
+    "PRT_INVITE_INVALID": 404,
+    "PRT_ALREADY_LINKED": 409,
+    "PRT_UNVERIFIED_ACCOUNT": 403,
     # M6a-P4: emailed verification and reset links.
     "AUTH_TOKEN_INVALID": 404,
     "AUTH_TOKEN_EXPIRED": 410,

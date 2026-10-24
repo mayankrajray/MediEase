@@ -20,6 +20,10 @@ from mediease_api.adapters.db.models.portal import (
     PatientAccountRow,
     PatientRefreshTokenRow,
 )
+from mediease_api.adapters.db.models.portal_links import (
+    PatientAccountLinkRow,
+    PatientPortalInviteRow,
+)
 from mediease_api.adapters.db.models.prescriptions import PrescriptionItemRow, PrescriptionRow
 from mediease_api.adapters.db.models.reminders import ReminderRow
 from mediease_api.adapters.db.models.rx_library import RxFavouriteRow, RxTemplateRow
@@ -46,8 +50,10 @@ __all__ = [
     "NotificationPreferenceRow",
     "NotificationRow",
     "OnboardingChecklistRow",
+    "PatientAccountLinkRow",
     "PatientAccountRow",
     "PatientLinkRow",
+    "PatientPortalInviteRow",
     "PatientRefreshTokenRow",
     "PatientRow",
     "PrescriptionItemRow",

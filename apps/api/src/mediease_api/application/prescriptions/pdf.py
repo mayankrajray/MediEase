@@ -120,18 +120,7 @@ class DownloadPrescriptionPdf:
             tenant = uow.tenant(ctx.clinic_id)
             rx = _load(tenant, ctx.clinic_id, rx_id)
             _check_printable(tenant, ctx, rx)
-            data = self._stored(rx)
-            rendered = False
-            if data is None:
-                locked = tenant.prescriptions.lock_for_render(
-                    rx_id, wait_seconds=self._wait_seconds
-                )
-                assert locked is not None  # it was there a moment ago and issued rows stay
-                rx = locked
-                data = self._stored(rx)
-                if data is None:
-                    data = self._render(uow, tenant, ctx, rx)
-                    rendered = True
+            rx, data, rendered = self.file_for(uow, tenant, rx)
             record_event(
                 uow,
                 event_id=self._ids.new_id(),
@@ -151,6 +140,22 @@ class DownloadPrescriptionPdf:
             uow.commit()
         return PdfDownload(rx.id, rx.version, data, rendered)
 
+    def file_for(
+        self, uow: UnitOfWork, tenant: TenantRepositories, rx: Prescription
+    ) -> tuple[Prescription, bytes, bool]:
+        """An issued version's PDF, rendered once (R18): the version, the bytes, whether it
+        rendered now. In the caller's transaction, which must commit; shared with the patient
+        portal (M6b-P1), which has already checked the version is the patient's to see."""
+        data = self._stored(rx)
+        if data is not None:
+            return rx, data, False
+        locked = tenant.prescriptions.lock_for_render(rx.id, wait_seconds=self._wait_seconds)
+        assert locked is not None  # it was there a moment ago and issued rows stay
+        data = self._stored(locked)
+        if data is not None:
+            return locked, data, False
+        return locked, self._render(uow, tenant, locked), True
+
     def _stored(self, rx: Prescription) -> bytes | None:
         if rx.pdf_object_key is None:
             return None
@@ -159,10 +164,8 @@ class DownloadPrescriptionPdf:
             logger.error("rx.pdf_missing", prescription_id=str(rx.id), version=rx.version)
         return data
 
-    def _render(
-        self, uow: UnitOfWork, tenant: TenantRepositories, ctx: RequestContext, rx: Prescription
-    ) -> bytes:
-        clinic = load_clinic(uow, ctx.clinic_id)
+    def _render(self, uow: UnitOfWork, tenant: TenantRepositories, rx: Prescription) -> bytes:
+        clinic = load_clinic(uow, rx.clinic_id)
         patient = tenant.patients.get(rx.patient_id)
         assert patient is not None  # the foreign key keeps it
         document = build_document(
