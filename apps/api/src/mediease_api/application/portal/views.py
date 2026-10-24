@@ -8,6 +8,7 @@ from uuid import UUID
 from mediease_api.application.auth.views import SessionTokens
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.portal.account import PatientAccount, SignInMethod
+from mediease_api.domain.portal.medicines import SlotTimes
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +19,8 @@ class PatientAccountView:
     sign_in_method: SignInMethod
     email_verified: bool
     language: Language
+    # M6b-P3 (R34): the person's times of day for the medicine plan.
+    slot_times: SlotTimes
 
     @classmethod
     def of(cls, account: PatientAccount) -> PatientAccountView:
@@ -28,6 +31,7 @@ class PatientAccountView:
             sign_in_method=account.sign_in_method,
             email_verified=account.is_email_verified,
             language=account.language,
+            slot_times=account.slot_times,
         )
 
 

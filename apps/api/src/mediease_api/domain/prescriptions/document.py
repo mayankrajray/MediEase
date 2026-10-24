@@ -25,8 +25,8 @@ from mediease_api.domain.prescriptions.prescription import (
     PrescriptionItem,
     PrescriptionStatus,
 )
+from mediease_api.domain.prescriptions.schedule import DAY_ORDER, DurationKind, Frequency, Slot
 from mediease_api.domain.prescriptions.vocabulary import (
-    Frequency,
     PreparationCode,
     StorageCode,
 )
@@ -80,6 +80,13 @@ class RxDocument:
     footer: str
     # "Page {page} of {pages}" split around the two numbers, for the print stylesheet.
     page_label: tuple[str, str, str]
+    # Layout 2 (M6b-P3): the Medicine schedule section; layout 1 templates ignore it.
+    schedule_heading: str = ""
+    schedule_columns: tuple[str, ...] = ()
+    schedule: tuple[RxScheduleRow, ...] = ()
+    schedule_start: str | None = None
+    schedule_medicine: str = ""
+    schedule_as_written: str = ""
 
 
 def pdf_object_key(clinic_id: UUID, prescription_id: UUID, version: int) -> str:
@@ -102,13 +109,38 @@ def _sentence(text: str, language: Language) -> str:
     return text[:1].upper() + text[1:] if language is Language.EN else text
 
 
+def sentence(text: str, language: Language) -> str:
+    """A phrase standing on its own: capitalised in English (Hindi has no case)."""
+    return _sentence(text, language)
+
+
+def _and_list(words: list[str], language: Language) -> str:
+    if len(words) == 1:
+        return words[0]
+    return f"{', '.join(words[:-1])} {phrase('list.and', language)} {words[-1]}"
+
+
+def frequency_words(frequency: Frequency, custom: str | None, language: Language) -> str:
+    """M6b-P3: a pattern worded from its slots (`schedule.SLOT_SETS`), never per code; SOS and
+    ONCE from the phrasebook; CUSTOM exactly as the doctor wrote it."""
+    if frequency.is_custom:
+        assert custom is not None
+        return custom
+    slots = frequency.slots
+    if not slots:
+        return phrase(f"frequency.{frequency.value}", language)
+    times = phrase(f"frequency.times.{len(slots)}", language)
+    if len(slots) == 1:
+        return f"{times}, {phrase(f'slot.in.{slots[0].value}', language)}"
+    return (
+        f"{times}, {_and_list([phrase(f'slot.word.{s.value}', language) for s in slots], language)}"
+    )
+
+
 def when_text(item: PrescriptionItem, language: Language) -> str | None:
     parts: list[str] = []
-    if item.frequency is Frequency.CUSTOM:
-        assert item.frequency_text is not None
-        parts.append(item.frequency_text)
-    elif item.frequency is not None:
-        parts.append(phrase(f"frequency.{item.frequency.value}", language))
+    if item.frequency is not None:
+        parts.append(frequency_words(item.frequency, item.frequency_text, language))
     if item.timing is not None:
         parts.append(phrase(f"timing.{item.timing.value}", language))
     return _sentence(", ".join(parts), language) if parts else None
@@ -120,6 +152,73 @@ def duration_text(days: int, language: Language) -> str:
         if days == 1
         else phrase("duration.days", language, days=days)
     )
+
+
+def duration_words(item: PrescriptionItem, language: Language) -> str:
+    """Prescriptions R23: the doctor's duration in words; none stated is said so, never guessed."""
+    if item.duration_kind is DurationKind.DAYS:
+        assert item.duration_days is not None
+        return duration_text(item.duration_days, language)
+    if item.duration_kind is None:
+        return phrase("duration.not_stated", language)
+    return phrase(f"duration.{item.duration_kind.value}", language)
+
+
+# Layout 2 (M6b-P3) adds the schedule section and says when a duration was not stated; a
+# version issued on layout 1 keeps its words as issued (prescriptions R25).
+SCHEDULE_LAYOUT = 2
+
+
+def duration_field(item: PrescriptionItem, language: Language, layout: int) -> str | None:
+    if layout < SCHEDULE_LAYOUT and item.duration_kind is None:
+        return None
+    return duration_words(item, language)
+
+
+@dataclass(frozen=True, slots=True)
+class RxScheduleRow:
+    """One line of the Medicine schedule (R25): what the doctor wrote, laid out by time of day."""
+
+    number: int
+    name: str
+    dose: str | None
+    marks: tuple[bool, ...]  # one per `DAY_ORDER` slot: the doctor's pattern marks it
+    # SOS, ONCE, CUSTOM: the words instead of marks; no frequency: "Times not stated".
+    as_written: str | None
+    timing: str | None
+    how: str | None
+    duration: str
+
+
+def schedule_columns(language: Language) -> tuple[str, ...]:
+    return tuple(phrase(f"slot.{s.value}", language) for s in DAY_ORDER)
+
+
+def schedule_rows(rx: Prescription, language: Language) -> tuple[RxScheduleRow, ...]:
+    """The schedule section of the PDF (layout 2) and the patient page, from the one engine."""
+    rows = []
+    for item in rx.items:
+        slots: tuple[Slot, ...] = item.frequency.slots if item.frequency else ()
+        as_written: str | None = None
+        if not slots:
+            as_written = (
+                frequency_words(item.frequency, item.frequency_text, language)
+                if item.frequency
+                else phrase("schedule.not_stated", language)
+            )
+        rows.append(
+            RxScheduleRow(
+                number=item.position,
+                name=item.medicine_name,
+                dose=item.dose,
+                marks=tuple(s in slots for s in DAY_ORDER),
+                as_written=as_written,
+                timing=phrase(f"timing.{item.timing.value}", language) if item.timing else None,
+                how=preparation_text(item, language),
+                duration=duration_words(item, language),
+            )
+        )
+    return tuple(rows)
 
 
 def preparation_text(item: PrescriptionItem, language: Language) -> str | None:
@@ -145,14 +244,11 @@ def storage_text(item: PrescriptionItem, language: Language) -> str | None:
     return "; ".join(lines) or None
 
 
-def _medicine(item: PrescriptionItem, language: Language) -> RxMedicine:
+def _medicine(item: PrescriptionItem, language: Language, layout: int) -> RxMedicine:
     values = [
         ("item.dose", item.dose),
         ("item.when", when_text(item, language)),
-        (
-            "item.duration",
-            duration_text(item.duration_days, language) if item.duration_days else None,
-        ),
+        ("item.duration", duration_field(item, language, layout)),
         ("item.quantity", item.quantity),
         ("item.preparation", preparation_text(item, language)),
         ("item.storage", storage_text(item, language)),
@@ -235,7 +331,7 @@ def build_document(
         patient=tuple(people),
         issued_on=RxField(phrase("date", lang), format_date(issued_on, lang)),
         medicines_heading=phrase("medicines", lang),
-        medicines=tuple(_medicine(item, lang) for item in rx.items),
+        medicines=tuple(_medicine(item, lang, rx.layout_version) for item in rx.items),
         advice_heading=phrase("advice", lang),
         advice=advice,
         advice_notes=(
@@ -248,4 +344,12 @@ def build_document(
         ),
         footer=phrase("footer", lang),
         page_label=(page[0], page[1], page[2]),
+        schedule_heading=phrase("schedule", lang),
+        schedule_columns=schedule_columns(lang),
+        schedule=schedule_rows(rx, lang) if rx.layout_version >= SCHEDULE_LAYOUT else (),
+        schedule_start=phrase(
+            "schedule.from", lang, date=format_date(rx.starts_on or issued_on, lang)
+        ),
+        schedule_medicine=phrase("schedule.medicine", lang),
+        schedule_as_written=phrase("schedule.as_written", lang),
     )

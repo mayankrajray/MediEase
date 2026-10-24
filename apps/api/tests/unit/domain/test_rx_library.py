@@ -14,6 +14,7 @@ from mediease_api.domain.prescriptions.prescription import (
     item_from_json,
     item_json,
 )
+from mediease_api.domain.prescriptions.schedule import Frequency
 from mediease_api.domain.prescriptions.suggestions import (
     HistoryName,
     SuggestionSource,
@@ -21,7 +22,6 @@ from mediease_api.domain.prescriptions.suggestions import (
     rank,
 )
 from mediease_api.domain.prescriptions.vocabulary import (
-    Frequency,
     Preparation,
     PreparationCode,
     Timing,
@@ -38,7 +38,7 @@ def line(name: str = "Syrup X") -> PrescriptionItem:
         position=1,
         medicine_name=name,
         dose="5 ml",
-        frequency=Frequency.MORNING_NIGHT,
+        frequency=Frequency.parse("1-0-1"),
         timing=Timing.AFTER_FOOD,
         preparation=[Preparation.of(PreparationCode.DILUTE_IN_WATER, "10 ml", "p")],
     )

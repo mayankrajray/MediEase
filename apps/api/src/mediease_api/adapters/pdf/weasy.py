@@ -88,6 +88,8 @@ class Layout:
 # newest; every version a prescription may have been issued with must stay here.
 LAYOUTS: dict[int, Layout] = {
     1: Layout(html="prescription.html.j2", css="prescription.css", page_css="page.css.j2"),
+    # M6b-P3 (prescriptions R25): layout 1 plus the Medicine schedule section.
+    2: Layout(html="prescription-2.html.j2", css="prescription-2.css", page_css="page.css.j2"),
 }
 
 

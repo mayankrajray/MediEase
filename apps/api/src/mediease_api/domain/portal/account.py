@@ -29,6 +29,7 @@ from uuid import UUID
 
 from mediease_api.domain.identity.user import LOCKOUT_DURATION, MAX_FAILED_SIGN_INS
 from mediease_api.domain.patients.patient import Language
+from mediease_api.domain.portal.medicines import SlotTimes
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.errors import DomainError, InvalidValue
 from mediease_api.domain.shared.text import required_text
@@ -78,6 +79,8 @@ class PatientAccount:
     last_signed_in_at: datetime | None = None
     # M6b-P2 (FR-PRT-04, NFR-11): the portal's language, chosen by the person (decision 2A).
     language: Language = Language.EN
+    # M6b-P3 (R31): this person's times of day for the medicine plan.
+    slot_times: SlotTimes = field(default_factory=SlotTimes)
 
     @classmethod
     def with_password(
@@ -180,6 +183,14 @@ class PatientAccount:
         if self.language is language:
             return False
         self.language = language
+        self.updated_at = require_utc(now, "now")
+        return True
+
+    def set_slot_times(self, slot_times: SlotTimes, *, now: datetime) -> bool:
+        """Change this person's times of day. Returns False when they already were these."""
+        if self.slot_times == slot_times:
+            return False
+        self.slot_times = slot_times
         self.updated_at = require_utc(now, "now")
         return True
 

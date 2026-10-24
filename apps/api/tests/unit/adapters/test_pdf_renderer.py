@@ -233,3 +233,29 @@ def test_m4_p5_every_issued_layout_has_its_template_and_unknown_ones_fail(
     assert doc.layout_version == CURRENT_LAYOUT
     with pytest.raises(ValueError, match="no printed layout 99"):
         renderer.render(replace(doc, layout_version=99))
+
+
+# Layout 1's files as released (M4-P5). A version issued on it must print as it was issued, so
+# they are never edited: a change goes into the next layout (M6b-P3 added layout 2).
+LAYOUT_1_SHA256 = {
+    "prescription.html.j2": "f0ac1841ffa6a3b64f1d480eef0d161ba107d8ec2d6b6ceec9c3bfb7b5e4684e",
+    "prescription.css": "e69d98e26fda30e24a0e84944ef01f0620017e814f8c5fc761a3b4e9a23ac767",
+    "page.css.j2": "fee9e443941cb1faf800b5cddd2bde9d7a031fe3ad73fe0f17af883407928fad",
+}
+
+
+def test_m6b_p3_layout_1_files_are_unchanged() -> None:
+    for name, digest in LAYOUT_1_SHA256.items():
+        assert hashlib.sha256((ASSETS / name).read_bytes()).hexdigest() == digest, name
+
+
+def test_r25_layout_2_prints_the_medicine_schedule_and_layout_1_does_not(
+    renderer: WeasyPrintRenderer,
+) -> None:
+    rx = issued()
+    new = "\n".join(pages_text(renderer.render(doc_of(rx))))
+    assert "Medicine schedule" in new and "Morning" in new and "Night" in new
+    old = "\n".join(pages_text(renderer.render(doc_of(replace(rx, layout_version=1)))))
+    assert "Medicine schedule" not in old
+    # The rest of the prescription reads the same on both layouts.
+    assert "Syrup X" in old and "Syrup X" in new

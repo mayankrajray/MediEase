@@ -30,6 +30,7 @@ from mediease_api.domain.portal.account import (
     PatientAccount,
     SignInMethod,
 )
+from mediease_api.domain.portal.medicines import SlotTimes
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.errors import NotFound
 
@@ -62,6 +63,9 @@ def _account_from_row(row: PatientAccountRow) -> PatientAccount:
         locked_until=_utc_or_none(row.locked_until),
         last_signed_in_at=_utc_or_none(row.last_login_at),
         language=Language(row.language),
+        slot_times=SlotTimes(
+            row.morning_time, row.afternoon_time, row.evening_time, row.night_time
+        ),
     )
 
 
@@ -76,6 +80,10 @@ def _write_account(row: PatientAccountRow, account: PatientAccount) -> None:
     row.locked_until = account.locked_until
     row.last_login_at = account.last_signed_in_at
     row.language = account.language.value
+    row.morning_time = account.slot_times.morning
+    row.afternoon_time = account.slot_times.afternoon
+    row.evening_time = account.slot_times.evening
+    row.night_time = account.slot_times.night
     row.updated_at = account.updated_at
 
 

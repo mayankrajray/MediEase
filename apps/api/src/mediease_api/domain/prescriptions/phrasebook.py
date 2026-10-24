@@ -22,8 +22,8 @@ import string
 from collections.abc import Mapping
 
 from mediease_api.domain.patients.patient import Language, Sex
+from mediease_api.domain.prescriptions.schedule import SLOT_SETS, DurationKind, Slot
 from mediease_api.domain.prescriptions.vocabulary import (
-    Frequency,
     PreparationCode,
     StorageCode,
     Timing,
@@ -68,13 +68,34 @@ ENGLISH: Mapping[str, str] = {
     "item.notes": "Notes",
     "duration.days": "{days} days",
     "duration.day": "1 day",
-    # Frequency (vocabulary.Frequency; CUSTOM prints the doctor's text)
-    "frequency.1-0-0": "Once a day, in the morning",
-    "frequency.0-1-0": "Once a day, in the afternoon",
-    "frequency.0-0-1": "Once a day, at night",
-    "frequency.1-0-1": "Twice a day, morning and night",
-    "frequency.1-1-1": "Three times a day",
-    "frequency.1-1-1-1": "Four times a day",
+    "duration.UNTIL_REVIEW": "Until your next review",
+    "duration.ONGOING": "Ongoing — as prescribed",
+    "duration.not_stated": "Duration not stated — ask your clinic",
+    # Frequency (M6b-P3): a pattern is worded from its slots (schedule.SLOT_SETS), never per
+    # code; CUSTOM prints the doctor's text.
+    "frequency.times.1": "Once a day",
+    "frequency.times.2": "Twice a day",
+    "frequency.times.3": "Three times a day",
+    "frequency.times.4": "Four times a day",
+    "slot.MORNING": "Morning",
+    "slot.AFTERNOON": "Afternoon",
+    "slot.EVENING": "Evening",
+    "slot.NIGHT": "Night",
+    "slot.word.MORNING": "morning",
+    "slot.word.AFTERNOON": "afternoon",
+    "slot.word.EVENING": "evening",
+    "slot.word.NIGHT": "night",
+    "slot.in.MORNING": "in the morning",
+    "slot.in.AFTERNOON": "in the afternoon",
+    "slot.in.EVENING": "in the evening",
+    "slot.in.NIGHT": "at night",
+    "list.and": "and",
+    # The Medicine schedule section (layout 2, prescriptions R25)
+    "schedule": "Medicine schedule",
+    "schedule.medicine": "Medicine",
+    "schedule.as_written": "As the doctor wrote",
+    "schedule.not_stated": "Times not stated — ask your clinic",
+    "schedule.from": "From {date}",
     "frequency.SOS": "Only when needed",
     "frequency.ONCE": "Once only",
     # Timing (vocabulary.Timing)
@@ -90,6 +111,9 @@ ENGLISH: Mapping[str, str] = {
     "preparation.DISSOLVE": "Dissolve in water",
     "preparation.CHEW": "Chew before swallowing",
     "preparation.DO_NOT_CRUSH": "Swallow whole; do not crush or chew",
+    "preparation.WITH_WATER": "Take with water",
+    "preparation.WITH_WARM_WATER": "Take with warm water",
+    "preparation.WITH_MILK": "Take with milk",
     # Storage (vocabulary.StorageCode)
     "storage.ROOM_TEMP": "Store at room temperature",
     "storage.REFRIGERATE": "Keep in the fridge",
@@ -151,12 +175,31 @@ HINDI: Mapping[str, str] = {
     "item.notes": "टिप्पणी",
     "duration.days": "{days} दिन",
     "duration.day": "1 दिन",
-    "frequency.1-0-0": "दिन में एक बार, सुबह",
-    "frequency.0-1-0": "दिन में एक बार, दोपहर",
-    "frequency.0-0-1": "दिन में एक बार, रात को",
-    "frequency.1-0-1": "दिन में दो बार, सुबह और रात",
-    "frequency.1-1-1": "दिन में तीन बार",
-    "frequency.1-1-1-1": "दिन में चार बार",
+    "duration.UNTIL_REVIEW": "अगली जाँच तक",
+    "duration.ONGOING": "जारी रखें — जैसा लिखा है",
+    "duration.not_stated": "कितने दिन, यह नहीं लिखा — क्लिनिक से पूछें",
+    "frequency.times.1": "दिन में एक बार",
+    "frequency.times.2": "दिन में दो बार",
+    "frequency.times.3": "दिन में तीन बार",
+    "frequency.times.4": "दिन में चार बार",
+    "slot.MORNING": "सुबह",
+    "slot.AFTERNOON": "दोपहर",
+    "slot.EVENING": "शाम",
+    "slot.NIGHT": "रात",
+    "slot.word.MORNING": "सुबह",
+    "slot.word.AFTERNOON": "दोपहर",
+    "slot.word.EVENING": "शाम",
+    "slot.word.NIGHT": "रात",
+    "slot.in.MORNING": "सुबह",
+    "slot.in.AFTERNOON": "दोपहर",
+    "slot.in.EVENING": "शाम को",
+    "slot.in.NIGHT": "रात को",
+    "list.and": "और",
+    "schedule": "दवा लेने का समय",
+    "schedule.medicine": "दवा",
+    "schedule.as_written": "जैसा डॉक्टर ने लिखा",
+    "schedule.not_stated": "समय नहीं लिखा — क्लिनिक से पूछें",
+    "schedule.from": "{date} से",
     "frequency.SOS": "केवल ज़रूरत होने पर",
     "frequency.ONCE": "केवल एक बार",
     "timing.BEFORE_FOOD": "खाने से पहले",
@@ -170,6 +213,9 @@ HINDI: Mapping[str, str] = {
     "preparation.DISSOLVE": "पानी में घोलें",
     "preparation.CHEW": "चबाकर निगलें",
     "preparation.DO_NOT_CRUSH": "पूरा निगलें; तोड़ें या चबाएँ नहीं",
+    "preparation.WITH_WATER": "पानी के साथ लें",
+    "preparation.WITH_WARM_WATER": "गुनगुने पानी के साथ लें",
+    "preparation.WITH_MILK": "दूध के साथ लें",
     "storage.ROOM_TEMP": "कमरे के तापमान पर रखें",
     "storage.REFRIGERATE": "फ़्रिज में रखें",
     "storage.AWAY_FROM_LIGHT": "रोशनी से दूर रखें",
@@ -200,7 +246,10 @@ BOOKS: Mapping[Language, Mapping[str, str]] = {Language.EN: ENGLISH, Language.HI
 def required_keys() -> frozenset[str]:
     """Every key the documents use: the labels plus one per vocabulary code."""
     codes = (
-        {f"frequency.{f.value}" for f in Frequency if f is not Frequency.CUSTOM}
+        {"frequency.SOS", "frequency.ONCE"}
+        | {f"frequency.times.{n}" for n in range(1, max(SLOT_SETS) + 1)}
+        | {f"slot.{kind}{s.value}" for s in Slot for kind in ("", "word.", "in.")}
+        | {f"duration.{k.value}" for k in DurationKind if k is not DurationKind.DAYS}
         | {f"timing.{t.value}" for t in Timing}
         | {f"preparation.{p.value}" for p in PreparationCode if p is not PreparationCode.CUSTOM}
         | {f"storage.{s.value}" for s in StorageCode}

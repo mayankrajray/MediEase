@@ -154,3 +154,27 @@ def test_ac4_ac5_lists_hold_only_the_accounts_own_records(world: World) -> None:
     bina = scene.bina.get(f"{PORTAL}/prescriptions").get_json()["items"]
     assert [p["id"] for p in bina] == [scene.rx_id]
     assert len(scene.bina.get(f"{PORTAL}/appointments").get_json()["items"][0]["appointments"]) == 1
+
+
+def test_m6b_p3_the_plan_and_reminder_choices_hold_only_the_accounts_own_records(
+    world: World,
+) -> None:
+    """R35, R38: Bina's medicine is never in Asha's plan, and Asha cannot set its reminder."""
+    scene = _scene(world)
+    plan = scene.asha.get(f"{PORTAL}/medicine-plan").get_json()
+    assert (plan["has_prescriptions"], plan["slots"], plan["as_written"]) == (False, [], [])
+    assert scene.asha.get(f"{PORTAL}/medicine-plan/courses").get_json()["items"] == []
+
+    [course] = scene.bina.get(f"{PORTAL}/medicine-plan/courses").get_json()["items"]
+    assert course["prescription_id"] == scene.rx_id
+    line = course["lines"][0]
+    choice = {
+        "prescription_id": scene.rx_id,
+        "item_id": line["item_id"],
+        "slot": line["slots"][0]["slot"],
+        "enabled": True,
+    }
+    url = f"{PORTAL}/medicine-plan/reminders"
+    refused = scene.asha.put(url, json=choice, headers=portal_csrf(scene.asha))
+    assert (refused.status_code, refused.get_json()["error"]["code"]) == (404, "REQ_NOT_FOUND")
+    assert scene.bina.put(url, json=choice, headers=portal_csrf(scene.bina)).status_code == 200

@@ -7,10 +7,14 @@
 | ``GET /api/v1/rx-templates`` · ``POST`` | ``CLINICAL_WRITE`` |
 | ``GET /api/v1/rx-templates/{id}`` · ``PUT`` · ``DELETE`` | ``CLINICAL_WRITE`` (its doctor) |
 | ``GET /api/v1/medicine-suggestions?q=`` | ``CLINICAL_WRITE`` |
+| ``GET /api/v1/rx-vocabulary`` | ``CLINICAL_VIEW`` (M6b-P3) |
 
 Only prescribing doctors need these, so front desk and owners who are not doctors get 403;
 another doctor's favourite or template is a 404. Suggestions come from this clinic's issued
 prescriptions and the caller's favourites only (FR-RX-10, AC5). Never cached.
+
+``rx-vocabulary`` (M6b-P3, prescriptions R21-R23, D8) publishes the engine's slot sets and codes
+so the editor reads a pattern exactly as the API will; it holds no clinic data.
 """
 
 from __future__ import annotations
@@ -40,7 +44,14 @@ from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.prescriptions import prescription as limits
 from mediease_api.domain.prescriptions.library import NAME_MAX, Favourite, Template
-from mediease_api.domain.prescriptions.prescription import Advice
+from mediease_api.domain.prescriptions.plan import LineWarning
+from mediease_api.domain.prescriptions.prescription import (
+    DURATION_MAX_DAYS,
+    START_WINDOW_DAYS,
+    Advice,
+)
+from mediease_api.domain.prescriptions.schedule import SLOT_SETS, DurationKind, FrequencyKind
+from mediease_api.domain.prescriptions.vocabulary import PreparationCode, StorageCode, Timing
 
 
 class LibraryUseCases(Protocol):
@@ -128,6 +139,24 @@ def template_body(template: Template) -> dict[str, Any]:
     }
 
 
+def vocabulary_body() -> dict[str, Any]:
+    """D8: the one definition of the slot sets and codes, as the editor needs them."""
+    return {
+        "slot_sets": [
+            {"length": length, "slots": [s.value for s in slots]}
+            for length, slots in sorted(SLOT_SETS.items())
+        ],
+        "special_frequencies": [k.value for k in FrequencyKind if k is not FrequencyKind.PATTERN],
+        "timings": [t.value for t in Timing],
+        "preparations": [p.value for p in PreparationCode],
+        "storage": [s.value for s in StorageCode],
+        "duration_kinds": [k.value for k in DurationKind],
+        "line_warnings": [w.value for w in LineWarning],
+        "duration_max_days": DURATION_MAX_DAYS,
+        "start_window_days": START_WINDOW_DAYS,
+    }
+
+
 def create_rx_library_blueprint(use_cases: LibraryUseCases) -> Blueprint:
     bp = Blueprint("rx_library", __name__, url_prefix="/api/v1")
     fav_one = "/rx-favourites/<uuid:favourite_id>"
@@ -199,6 +228,11 @@ def create_rx_library_blueprint(use_cases: LibraryUseCases) -> Blueprint:
     def delete_template(template_id: UUID) -> tuple[str, int]:
         use_cases.delete_template().execute(current_context(), template_id=template_id)
         return "", 204
+
+    @bp.get("/rx-vocabulary")
+    @clinic(Permission.CLINICAL_VIEW)
+    def rx_vocabulary() -> Response:
+        return jsonify(vocabulary_body())
 
     @bp.get("/medicine-suggestions")
     @clinic(Permission.CLINICAL_WRITE)

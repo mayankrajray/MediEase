@@ -192,7 +192,7 @@ class ListPortalPrescriptions(_Reads):
         return sorted(items, key=lambda p: p.issued_at, reverse=True)
 
 
-def _issued_in_scope(scope: PortalScope, rx_id: UUID) -> tuple[ScopeEntry, Prescription]:
+def issued_in_scope(scope: PortalScope, rx_id: UUID) -> tuple[ScopeEntry, Prescription]:
     """R9, R12: a current (``ISSUED``) version of a linked record; anything else is not found."""
     for entry in scope:
         rx = entry.tenant.prescriptions.get(rx_id)
@@ -212,7 +212,7 @@ class GetPortalPrescription(_Reads):
         self, principal: PatientPrincipal, rx_id: UUID, language: Language | None
     ) -> PatientPage:
         with self._uow as uow:
-            entry, rx = _issued_in_scope(PortalScope.read(uow, principal.account_id), rx_id)
+            entry, rx = issued_in_scope(PortalScope.read(uow, principal.account_id), rx_id)
             chain = list(entry.tenant.prescriptions.list_for_visit(rx.visit_id))
         page = build_patient_view(
             chain, language=language or principal.account.language, timezone=entry.clinic.timezone
@@ -230,7 +230,7 @@ class PortalPrescriptionPdf:
 
     def execute(self, principal: PatientPrincipal, rx_id: UUID) -> PdfDownload:
         with self._uow as uow:
-            entry, rx = _issued_in_scope(PortalScope.read(uow, principal.account_id), rx_id)
+            entry, rx = issued_in_scope(PortalScope.read(uow, principal.account_id), rx_id)
             rx, data, rendered = self._pdf.file_for(uow, entry.tenant, rx)
             uow.commit()
         return PdfDownload(rx.id, rx.version, data, rendered)

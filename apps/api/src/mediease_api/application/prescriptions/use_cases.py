@@ -35,6 +35,7 @@ from mediease_api.domain.notifications.events import PrescriptionIssued
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.prescriptions.errors import AlreadyExists, DraftExists, NotLatest
 from mediease_api.domain.prescriptions.patient_view import PatientPage, build_preview
+from mediease_api.domain.prescriptions.plan import course_start
 from mediease_api.domain.prescriptions.prescription import (
     Advice,
     Prescription,
@@ -42,7 +43,8 @@ from mediease_api.domain.prescriptions.prescription import (
     PrescriptionStatus,
     latest_issued,
 )
-from mediease_api.domain.prescriptions.vocabulary import Frequency, Preparation, Storage, Timing
+from mediease_api.domain.prescriptions.schedule import DurationKind, Frequency
+from mediease_api.domain.prescriptions.vocabulary import Preparation, Storage, Timing
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.domain.shared.time import local_date
 from mediease_api.domain.visits.errors import VisitLocked, VisitNotYours
@@ -62,6 +64,15 @@ class PrescriptionView:
 
     prescription: Prescription
     chain: tuple[Prescription, ...] = ()
+    # M6b-P3 (R24): the first day of the version this draft revises, shown as a hint.
+    previous_start: date | None = None
+
+
+def _previous_start(rx: Prescription, chain: Sequence[Prescription], tz: str) -> date | None:
+    if rx.status is not PrescriptionStatus.DRAFT or rx.supersedes_id is None:
+        return None
+    older = next((p for p in chain if p.id == rx.supersedes_id), None)
+    return course_start(older, tz) if older is not None and older.issued_at else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +87,7 @@ class ItemInput:
     frequency_text: str | None = None
     timing: Timing | None = None
     duration_days: int | None = None
+    duration_kind: DurationKind | None = None
     quantity: str | None = None
     preparation: tuple[Preparation, ...] = ()
     storage: tuple[Storage, ...] = ()
@@ -97,6 +109,7 @@ def build_item(i: ItemInput, *, id: UUID, position: int, at: str | None = None) 
         frequency_text=i.frequency_text,
         timing=i.timing,
         duration_days=i.duration_days,
+        duration_kind=i.duration_kind,
         quantity=i.quantity,
         preparation=i.preparation,
         storage=i.storage,
@@ -114,6 +127,7 @@ class DraftBody:
     advice: Advice = field(default_factory=Advice)
     follow_up_date: date | None = None
     template_id: UUID | None = None  # M4-P3 provenance, counted at issue
+    starts_on: date | None = None  # M6b-P3: None = the issue day
 
 
 def _load(
@@ -234,9 +248,11 @@ class ReplaceDraft(_UseCase):
                 today=local_date(now, clinic.timezone),
                 now=now,
                 template_id=body.template_id,
+                starts_on=body.starts_on,
             )
             tenant.prescriptions.update(rx)
             tenant.prescriptions.replace_items(rx)
+            chain = tenant.prescriptions.list_for_visit(rx.visit_id)
             self._audit(
                 uow,
                 ctx,
@@ -247,7 +263,7 @@ class ReplaceDraft(_UseCase):
             )
             uow.commit()
         logger.info("prescription.updated", prescription_id=str(rx_id), items=len(rx.items))
-        return PrescriptionView(rx)
+        return PrescriptionView(rx, (), _previous_start(rx, chain, clinic.timezone))
 
 
 class DiscardDraft(_UseCase):
@@ -376,6 +392,7 @@ class RevisePrescription(_UseCase):
 
     def execute(self, ctx: RequestContext, *, rx_id: UUID) -> PrescriptionView:
         with self._uow as uow:
+            clinic = load_clinic(uow, ctx.clinic_id)
             tenant = uow.tenant(ctx.clinic_id)
             issued = _load(tenant, ctx.clinic_id, rx_id, for_update=True)
             _check_writer(tenant, ctx, issued)
@@ -399,7 +416,7 @@ class RevisePrescription(_UseCase):
             self._audit(uow, ctx, AuditAction.PRESCRIPTION_REVISED, rx, from_id=str(issued.id))
             uow.commit()
         logger.info("prescription.revised", prescription_id=str(rx.id), version=rx.version)
-        return PrescriptionView(rx, (*chain, rx))
+        return PrescriptionView(rx, (*chain, rx), _previous_start(rx, chain, clinic.timezone))
 
 
 class GetPrescription(_UseCase):
@@ -407,12 +424,13 @@ class GetPrescription(_UseCase):
 
     def execute(self, ctx: RequestContext, *, rx_id: UUID) -> PrescriptionView:
         with self._uow as uow:
+            clinic = load_clinic(uow, ctx.clinic_id)
             tenant = uow.tenant(ctx.clinic_id)
             rx = _load(tenant, ctx.clinic_id, rx_id)
             chain = tuple(tenant.prescriptions.list_for_visit(rx.visit_id))
             self._audit(uow, ctx, AuditAction.PRESCRIPTION_VIEWED, rx)
             uow.commit()
-        return PrescriptionView(rx, chain)
+        return PrescriptionView(rx, chain, _previous_start(rx, chain, clinic.timezone))
 
 
 class PreviewPrescription(_UseCase):

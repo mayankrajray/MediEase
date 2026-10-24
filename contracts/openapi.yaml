@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.30.0
+  version: 0.31.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -584,11 +584,12 @@ paths:
     patch:
       tags: [portal]
       operationId: updatePortalMe
-      summary: Change the account's portal language
+      summary: Change the account's portal language or slot times
       description: |
         M6b-P2 (spec R21, decision 2A). @patient. The language every portal screen uses, kept
-        across devices; the prescription page in the portal opens in it. Logged, not audited.
-        Needs X-CSRF-Token equal to me_pt_csrf.
+        across devices; the prescription page in the portal opens in it. M6b-P3 (R34): the
+        medicine plan's times of day. Logged, not audited. Needs X-CSRF-Token equal to
+        me_pt_csrf.
       security:
         - patientSessionCookie: []
       parameters:
@@ -976,6 +977,117 @@ paths:
         '401':
           $ref: '#/components/responses/PortalError'
         '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/medicine-plan:
+    get:
+      tags: [portal]
+      operationId: getMedicinePlan
+      summary: One day's medicine plan across the linked records
+      description: |
+        M6b-P3 (FR-REM-03, spec R28-R37, R42, R44). @patient. Laid out by the one engine from
+        each linked record's current versions: timed entries by slot (with the account's time
+        for it), then "As the doctor wrote" (SOS, ONCE, CUSTOM, no frequency). Words in the
+        account's language; medicine names, doses and the doctor's text as written. Never a
+        merged, inferred or changed instruction. Not audited.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: date
+          in: query
+          required: false
+          description: Default today on the clinic's calendar; within 30 days of it (else 422)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The day's plan
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicinePlan'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '422':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/medicine-plan/courses:
+    get:
+      tags: [portal]
+      operationId: listMedicineCourses
+      summary: Each current prescription's course
+      description: |
+        M6b-P3 (spec R32, R35, R36, R39). @patient. Newest start first; a course whose lines all
+        have a number of days and that ended more than 7 days ago is left out. Each line's slots
+        carry the person's reminder choice. Not audited.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The courses
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicineCourseList'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/medicine-plan/reminders:
+    put:
+      tags: [portal]
+      operationId: setMedicineReminder
+      summary: Turn a reminder on or off for one medicine at one time of day
+      description: |
+        M6b-P3 (spec R38-R41). @patient. For a line of a current version in one of the slots its
+        frequency marks. 422 for an untimed line (item_id) or a slot the line does not have
+        (slot); a version outside the account's records, or no longer current, is 404. Stored
+        only (delivery is M6b-P6); never changes the prescription; not audited. Needs
+        X-CSRF-Token equal to me_pt_csrf.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicineReminderInput'
+      responses:
+        '200':
+          description: The saved choice
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicineReminder'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/PortalError'
+        '422':
           $ref: '#/components/responses/PortalError'
   /api/v1/clinic:
     get:
@@ -4104,6 +4216,40 @@ paths:
           $ref: '#/components/responses/VisitPermissionError'
         '404':
           $ref: '#/components/responses/PermissionError'
+  /api/v1/rx-vocabulary:
+    get:
+      tags: [rx-library]
+      operationId: getRxVocabulary
+      summary: The medicine-schedule engine's slot sets and codes
+      description: |
+        M6b-P3 (prescriptions R21-R23, D8). Permission CLINICAL_VIEW. The one definition of the
+        slot set for each pattern length and every code the editor offers, so it reads a pattern
+        exactly as the API will. No clinic data; not audited.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+      responses:
+        '200':
+          description: The vocabulary
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RxVocabulary'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
   /api/v1/medicine-suggestions:
     get:
       tags: [rx-library]
@@ -5515,8 +5661,32 @@ components:
               favourite_id: {type: [string, 'null'], format: uuid}
     Frequency:
       type: string
-      enum: ['1-0-0', '0-1-0', '0-0-1', '1-0-1', '1-1-1', '1-1-1-1', SOS, ONCE, CUSTOM]
-      description: Morning-afternoon-night (and bedtime) pattern; CUSTOM needs frequency_text
+      pattern: '^([01](-[01]){2,3}|SOS|ONCE|CUSTOM)$'
+      description: |
+        M6b-P3 (prescriptions R21): a 0/1 pattern read against the slot set for its length
+        (GET /rx-vocabulary): 3 = morning-afternoon-night, 4 = morning-afternoon-evening-night,
+        with at least one 1; or SOS, ONCE, CUSTOM (CUSTOM needs frequency_text). Saved in the
+        canonical dashed form.
+    FrequencyInput:
+      type: string
+      maxLength: 100
+      description: |
+        As Frequency; the digits may also be sent without dashes or with spaces (101, 1 0 1).
+        Anything else (all zeros, 2-0-2, other lengths) is 422 REQ_VALIDATION_FAILED on
+        items.N.frequency: write it as CUSTOM with the doctor's words.
+    Slot:
+      type: string
+      enum: [MORNING, AFTERNOON, EVENING, NIGHT]
+    DurationKind:
+      type: string
+      enum: [DAYS, UNTIL_REVIEW, ONGOING]
+      description: |
+        M6b-P3 (prescriptions R23): DAYS needs duration_days; null = not stated ("Duration not
+        stated - ask your clinic"). A line saved with duration_days alone is DAYS.
+    LineWarning:
+      type: string
+      enum: [BEDTIME_WITHOUT_NIGHT, BEDTIME_WITH_OTHER_SLOTS, BEDTIME_UNTIMED]
+      description: Non-blocking notes for the doctor (prescriptions R22); issuing is never refused
     Timing:
       type: string
       enum: [BEFORE_FOOD, AFTER_FOOD, WITH_FOOD, EMPTY_STOMACH, BEDTIME, ANY]
@@ -5527,7 +5697,7 @@ components:
       properties:
         code:
           type: string
-          enum: [SHAKE_WELL, DILUTE_IN_WATER, DISSOLVE, CHEW, DO_NOT_CRUSH, CUSTOM]
+          enum: [SHAKE_WELL, DILUTE_IN_WATER, DISSOLVE, CHEW, DO_NOT_CRUSH, WITH_WATER, WITH_WARM_WATER, WITH_MILK, CUSTOM]
         text:
           type: [string, 'null']
           maxLength: 100
@@ -5556,7 +5726,7 @@ components:
         dose: {type: [string, 'null'], maxLength: 100}
         frequency:
           oneOf:
-            - $ref: '#/components/schemas/Frequency'
+            - $ref: '#/components/schemas/FrequencyInput'
             - type: 'null'
         frequency_text: {type: [string, 'null'], maxLength: 100}
         timing:
@@ -5564,6 +5734,10 @@ components:
             - $ref: '#/components/schemas/Timing'
             - type: 'null'
         duration_days: {type: [integer, 'null'], minimum: 1, maximum: 365}
+        duration_kind:
+          oneOf:
+            - $ref: '#/components/schemas/DurationKind'
+            - type: 'null'
         quantity: {type: [string, 'null'], maxLength: 100}
         preparation:
           type: array
@@ -5594,6 +5768,9 @@ components:
         - frequency_text
         - timing
         - duration_days
+        - duration_kind
+        - slots
+        - line_warnings
         - quantity
         - preparation
         - storage
@@ -5616,6 +5793,19 @@ components:
             - $ref: '#/components/schemas/Timing'
             - type: 'null'
         duration_days: {type: [integer, 'null']}
+        duration_kind:
+          oneOf:
+            - $ref: '#/components/schemas/DurationKind'
+            - type: 'null'
+        slots:
+          type: array
+          description: The slots the frequency marks, from the engine (empty for SOS, ONCE, CUSTOM)
+          items:
+            $ref: '#/components/schemas/Slot'
+        line_warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineWarning'
         quantity: {type: [string, 'null']}
         preparation:
           type: array
@@ -5681,6 +5871,12 @@ components:
           type: [string, 'null']
           format: uuid
           description: The template the body came from (M4-P3, counted at issue)
+        starts_on:
+          type: [string, 'null']
+          format: date
+          description: |
+            M6b-P3 (prescriptions R24): the first day of the course, within 30 days of today
+            (and of the issue day); null = the issue day
     PrescriptionIssue:
       type: object
       additionalProperties: false
@@ -5766,6 +5962,14 @@ components:
         advice:
           $ref: '#/components/schemas/Advice'
         follow_up_date: {type: [string, 'null'], format: date}
+        starts_on:
+          type: [string, 'null']
+          format: date
+          description: M6b-P3 (R24) the first day of the course; null = the issue day
+        previous_starts_on:
+          type: [string, 'null']
+          format: date
+          description: A revision's draft only - the first day of the version it revises (a hint)
         language:
           type: [string, 'null']
           enum: [en, hi, null]
@@ -5816,6 +6020,10 @@ components:
                   - $ref: '#/components/schemas/Timing'
                   - type: 'null'
               duration_days: {type: [integer, 'null']}
+              duration_kind:
+                oneOf:
+                  - $ref: '#/components/schemas/DurationKind'
+                  - type: 'null'
     NewVisit:
       type: object
       additionalProperties: false
@@ -6068,7 +6276,7 @@ components:
     PatientAccount:
       type: object
       additionalProperties: false
-      required: [id, full_name, email, sign_in_method, email_verified, language]
+      required: [id, full_name, email, sign_in_method, email_verified, language, slot_times]
       properties:
         id:
           type: string
@@ -6085,13 +6293,34 @@ components:
         language:
           description: The portal's language (M6b-P2), en or hi
           $ref: '#/components/schemas/Language'
+        slot_times:
+          $ref: '#/components/schemas/SlotTimes'
+    ClockTime:
+      type: string
+      pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+      description: HH:MM on the clinic's clock, 05:00-23:30
+    SlotTimes:
+      type: object
+      additionalProperties: false
+      required: [morning, afternoon, evening, night]
+      description: |
+        M6b-P3 (patient portal R34): the person's times of day for the medicine plan (defaults
+        08:00, 14:00, 18:00, 21:00); each 05:00-23:30 and later than the one before (else 422 on
+        slot_times). They place the plan on a clock and never change a prescription.
+      properties:
+        morning: {$ref: '#/components/schemas/ClockTime'}
+        afternoon: {$ref: '#/components/schemas/ClockTime'}
+        evening: {$ref: '#/components/schemas/ClockTime'}
+        night: {$ref: '#/components/schemas/ClockTime'}
     PortalAccountUpdate:
       type: object
       additionalProperties: false
-      required: [language]
+      description: At least one of language and slot_times (else 422)
       properties:
         language:
           $ref: '#/components/schemas/Language'
+        slot_times:
+          $ref: '#/components/schemas/SlotTimes'
     PatientSession:
       type: object
       required: [account, session]
@@ -6512,6 +6741,201 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PortalReminder'
+    MedicineReminder:
+      type: object
+      additionalProperties: false
+      required: [enabled, remind_at]
+      description: R38 - off by default; remind_at null = the slot's own time
+      properties:
+        enabled: {type: boolean}
+        remind_at:
+          oneOf:
+            - $ref: '#/components/schemas/ClockTime'
+            - type: 'null'
+    MedicineReminderInput:
+      type: object
+      additionalProperties: false
+      required: [prescription_id, item_id, slot, enabled]
+      properties:
+        prescription_id: {type: string, format: uuid}
+        item_id: {type: string, format: uuid}
+        slot:
+          $ref: '#/components/schemas/Slot'
+        enabled: {type: boolean}
+        remind_at:
+          oneOf:
+            - $ref: '#/components/schemas/ClockTime'
+            - type: 'null'
+    MedicineLine:
+      type: object
+      description: |
+        One prescribed line and where it comes from (R36). Words in the account's language;
+        medicine_name, form_strength and dose as the doctor wrote them.
+      required: [prescription_id, version, clinic_id, clinic_name, clinic_phone_e164, doctor_name,
+        starts_on, item_id, medicine_name, form_strength, dose, as_written, timing, how, duration]
+      properties:
+        prescription_id: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        clinic_id: {type: string, format: uuid}
+        clinic_name: {type: string}
+        clinic_phone_e164: {type: [string, 'null']}
+        doctor_name: {type: string}
+        starts_on: {type: string, format: date}
+        item_id: {type: string, format: uuid}
+        medicine_name: {type: string}
+        form_strength: {type: [string, 'null']}
+        dose: {type: [string, 'null']}
+        as_written:
+          type: [string, 'null']
+          description: SOS, ONCE, CUSTOM or no frequency - the words, instead of a slot
+        timing: {type: [string, 'null'], description: Food timing words}
+        how: {type: [string, 'null'], description: How to give (preparation) words}
+        duration: {type: string, description: Duration words (never an invented end)}
+    MedicinePlanEntry:
+      allOf:
+        - $ref: '#/components/schemas/MedicineLine'
+        - type: object
+          required: [day, days_total, reminder]
+          properties:
+            day: {type: integer, minimum: 1, description: Day N of the course}
+            days_total: {type: [integer, 'null'], description: M for a number of days; else null}
+            reminder:
+              description: Timed entries only
+              oneOf:
+                - $ref: '#/components/schemas/MedicineReminder'
+                - type: 'null'
+    MedicinePlan:
+      type: object
+      additionalProperties: false
+      required: [date, today, language, has_prescriptions, slots, as_written]
+      properties:
+        date: {type: string, format: date}
+        today: {type: string, format: date}
+        language:
+          $ref: '#/components/schemas/Language'
+        has_prescriptions:
+          type: boolean
+          description: R44 - false when no linked record has a current version
+        slots:
+          type: array
+          description: Only the slots with an entry, morning to night
+          items:
+            type: object
+            additionalProperties: false
+            required: [slot, label, time, entries]
+            properties:
+              slot:
+                $ref: '#/components/schemas/Slot'
+              label: {type: string}
+              time:
+                $ref: '#/components/schemas/ClockTime'
+              entries:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicinePlanEntry'
+        as_written:
+          type: array
+          items:
+            $ref: '#/components/schemas/MedicinePlanEntry'
+    MedicineCourse:
+      type: object
+      required: [prescription_id, version, clinic_id, clinic_name, clinic_phone_e164, doctor_name,
+        starts_on, revised, reminders_set, ends_on, lines]
+      properties:
+        prescription_id: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        clinic_id: {type: string, format: uuid}
+        clinic_name: {type: string}
+        clinic_phone_e164: {type: [string, 'null']}
+        doctor_name: {type: string}
+        starts_on: {type: string, format: date}
+        revised:
+          type: boolean
+          description: R39 - a version after the first (reminders are set again)
+        reminders_set: {type: boolean}
+        ends_on:
+          type: [string, 'null']
+          format: date
+          description: When every line has a number of days; else null
+        lines:
+          type: array
+          items:
+            type: object
+            required: [item_id, medicine_name, form_strength, dose, as_written, timing, how,
+              duration, ends_on, slots]
+            properties:
+              item_id: {type: string, format: uuid}
+              medicine_name: {type: string}
+              form_strength: {type: [string, 'null']}
+              dose: {type: [string, 'null']}
+              as_written: {type: [string, 'null']}
+              timing: {type: [string, 'null']}
+              how: {type: [string, 'null']}
+              duration: {type: string}
+              ends_on: {type: [string, 'null'], format: date}
+              slots:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [slot, label, time, reminder]
+                  properties:
+                    slot:
+                      $ref: '#/components/schemas/Slot'
+                    label: {type: string}
+                    time:
+                      $ref: '#/components/schemas/ClockTime'
+                    reminder:
+                      $ref: '#/components/schemas/MedicineReminder'
+    MedicineCourseList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MedicineCourse'
+    RxVocabulary:
+      type: object
+      additionalProperties: false
+      required: [slot_sets, special_frequencies, timings, preparations, storage, duration_kinds,
+        line_warnings, duration_max_days, start_window_days]
+      properties:
+        slot_sets:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [length, slots]
+            properties:
+              length: {type: integer}
+              slots:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Slot'
+        special_frequencies:
+          type: array
+          items: {type: string, enum: [SOS, ONCE, CUSTOM]}
+        timings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Timing'
+        preparations:
+          type: array
+          items: {type: string}
+        storage:
+          type: array
+          items: {type: string}
+        duration_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/DurationKind'
+        line_warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineWarning'
+        duration_max_days: {type: integer}
+        start_window_days: {type: integer}
     PatientLinkInfo:
       type: object
       additionalProperties: false
@@ -6584,7 +7008,8 @@ components:
         the doctor's text as written. No patient details.
       required: [language, version, clinic_name, clinic_phone_e164, call_label, doctor_name,
         doctor_lines, issued_on, updated_note, medicines_heading, medicines, advice_heading,
-        advice, advice_notes, follow_up]
+        advice, advice_notes, follow_up, schedule_heading, schedule_columns, schedule_as_written,
+        schedule]
       properties:
         language:
           $ref: '#/components/schemas/Language'
@@ -6649,6 +7074,41 @@ components:
           oneOf:
             - $ref: '#/components/schemas/PageField'
             - type: 'null'
+        schedule_heading:
+          type: string
+        schedule_columns:
+          type: array
+          description: The four times of day, in the page's language (morning to night)
+          items:
+            type: string
+        schedule_as_written:
+          type: string
+        schedule:
+          type: array
+          description: |
+            M6b-P3 (prescriptions R25): the Medicine schedule from the one engine; empty for a
+            version issued before layout 2. marks has one entry per schedule column.
+          items:
+            $ref: '#/components/schemas/ScheduleRow'
+    ScheduleRow:
+      type: object
+      additionalProperties: false
+      required: [number, name, dose, marks, as_written, timing, how, duration]
+      properties:
+        number: {type: integer}
+        name: {type: string}
+        dose: {type: [string, 'null']}
+        marks:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: {type: boolean}
+        as_written:
+          type: [string, 'null']
+          description: SOS, ONCE, CUSTOM or no frequency - the words instead of marks
+        timing: {type: [string, 'null']}
+        how: {type: [string, 'null']}
+        duration: {type: string}
     PaperSize:
       type: string
       enum: [A5, A4]

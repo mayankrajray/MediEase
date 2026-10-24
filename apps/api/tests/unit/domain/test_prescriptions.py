@@ -17,8 +17,8 @@ from mediease_api.domain.prescriptions.prescription import (
     PrescriptionStatus,
     latest_issued,
 )
+from mediease_api.domain.prescriptions.schedule import Frequency
 from mediease_api.domain.prescriptions.vocabulary import (
-    Frequency,
     Preparation,
     PreparationCode,
     Storage,
@@ -65,7 +65,7 @@ def syrup(position: int = 1) -> PrescriptionItem:
         position=position,
         medicine_name=" Syrup X ",
         dose="5 ml",
-        frequency=Frequency.MORNING_NIGHT,
+        frequency=Frequency.parse("1-0-1"),
         timing=Timing.AFTER_FOOD,
         duration_days=5,
         preparation=[
@@ -114,7 +114,7 @@ def test_fr_rx_01_02_an_item_keeps_the_doctors_words_and_structured_phrases() ->
     assert (item.medicine_name, item.dose, item.frequency, item.timing, item.duration_days) == (
         "Syrup X",
         "5 ml",
-        Frequency.MORNING_NIGHT,
+        Frequency.parse("1-0-1"),
         Timing.AFTER_FOOD,
         5,
     )

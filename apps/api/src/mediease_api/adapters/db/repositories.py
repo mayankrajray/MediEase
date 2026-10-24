@@ -73,9 +73,9 @@ from mediease_api.domain.prescriptions.prescription import (
     item_from_json,
     item_json,
 )
+from mediease_api.domain.prescriptions.schedule import DurationKind, Frequency
 from mediease_api.domain.prescriptions.suggestions import HistoryName
 from mediease_api.domain.prescriptions.vocabulary import (
-    Frequency,
     Preparation,
     PreparationCode,
     Storage,
@@ -1447,6 +1447,11 @@ def _item_from_row(row: PrescriptionItemRow) -> PrescriptionItem:
         frequency_text=row.frequency_text,
         timing=Timing(row.timing) if row.timing else None,
         duration_days=row.duration_days,
+        duration_kind=(
+            DurationKind(row.duration_kind)
+            if row.duration_kind
+            else (DurationKind.DAYS if row.duration_days is not None else None)
+        ),
         quantity=row.quantity,
         preparation=tuple(
             Preparation(PreparationCode(p["code"]), p.get("text")) for p in row.preparation
@@ -1474,6 +1479,7 @@ def _item_row(
         frequency_text=item.frequency_text,
         timing=item.timing.value if item.timing else None,
         duration_days=item.duration_days,
+        duration_kind=item.duration_kind.value if item.duration_kind else None,
         quantity=item.quantity,
         preparation=[p.as_json() for p in item.preparation],
         storage=[s.as_json() for s in item.storage],
@@ -1528,6 +1534,7 @@ def _prescription_from_row(row: PrescriptionRow, items: Sequence[PrescriptionIte
         updated_at=_utc(row.updated_at),
         template_id=row.template_id,
         layout_version=row.layout_version,
+        starts_on=row.starts_on,
     )
 
 
@@ -1546,6 +1553,7 @@ def _write_prescription(row: PrescriptionRow, rx: Prescription) -> None:
     row.link_delivery_requested_at = rx.link_delivery_requested_at
     row.template_id = rx.template_id
     row.layout_version = rx.layout_version
+    row.starts_on = rx.starts_on
     row.updated_at = rx.updated_at
 
 

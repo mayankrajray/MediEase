@@ -9,6 +9,7 @@ The account holds no clinic data yet; linking it to a clinic's patient record is
 
 from __future__ import annotations
 
+from datetime import time
 from typing import Any, Protocol
 
 from flask import Blueprint, Response, jsonify, request
@@ -50,6 +51,8 @@ from mediease_api.delivery.http.session_cookies import (
 )
 from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.patients.patient import Language
+from mediease_api.domain.portal.medicines import SlotTimes
+from mediease_api.domain.shared.errors import InvalidValue
 
 # M6b-P2 (decision 2A): the signed-out portal pages' language, set by the web app. Not a secret;
 # it only chooses a new account's language at sign-up (email or Google).
@@ -92,10 +95,26 @@ class SignUpRequest(BaseModel):
     language: Language | None = None
 
 
+class SlotTimesRequest(BaseModel):
+    """M6b-P3 (R34): HH:MM, each 05:00-23:30 and later than the one before."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    morning: time
+    afternoon: time
+    evening: time
+    night: time
+
+
 class PortalAccountUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    language: Language
+    language: Language | None = None
+    slot_times: SlotTimesRequest | None = None
+
+
+def _hhmm(value: time) -> str:
+    return value.strftime("%H:%M")
 
 
 class PortalSignInRequest(BaseModel):
@@ -113,6 +132,12 @@ def account_body(account: PatientAccountView) -> dict[str, Any]:
         "sign_in_method": account.sign_in_method.value,
         "email_verified": account.email_verified,
         "language": account.language.value,
+        "slot_times": {
+            "morning": _hhmm(account.slot_times.morning),
+            "afternoon": _hhmm(account.slot_times.afternoon),
+            "evening": _hhmm(account.slot_times.evening),
+            "night": _hhmm(account.slot_times.night),
+        },
     }
 
 
@@ -200,7 +225,16 @@ def create_portal_blueprint(use_cases: PortalUseCases, *, cookie_secure: bool) -
     @patient
     def update_me() -> Response:
         body = parse_json(PortalAccountUpdate)
-        view = use_cases.set_portal_language().execute(current_patient(), body.language)
+        if body.language is None and body.slot_times is None:
+            raise InvalidValue("language", "send language, slot_times or both")
+        times = body.slot_times
+        view = use_cases.set_portal_language().execute(
+            current_patient(),
+            body.language,
+            SlotTimes(times.morning, times.afternoon, times.evening, times.night)
+            if times
+            else None,
+        )
         return jsonify({"account": account_body(view)})
 
     @bp.post("/auth/password-reset")

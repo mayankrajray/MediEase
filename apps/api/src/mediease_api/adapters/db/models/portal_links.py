@@ -7,14 +7,25 @@ which clinic an invite digest belongs to) is ``SqlAlchemyPortalLookup``, a revie
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Text,
+    Time,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
-from mediease_api.adapters.db.models.base import Base, TenantOwned, enum_check
+from mediease_api.adapters.db.models.base import Base, TenantOwned, Timestamps, enum_check
 from mediease_api.domain.portal.link import LinkMethod, RevokedBy
+from mediease_api.domain.prescriptions.schedule import Slot
 
 
 class PatientAccountLinkRow(TenantOwned, Base):
@@ -80,3 +91,37 @@ class PatientPortalInviteRow(TenantOwned, Base):
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class MedicineReminderPrefRow(TenantOwned, Timestamps, Base):
+    """M6b-P3 (migration 0027, R37-R40): one account's reminder choice for one line and slot.
+
+    Stored only (delivery is M6b-P6). Never a change to the prescription; removed on unlink.
+    """
+
+    __tablename__ = "medicine_reminder_prefs"
+    __table_args__ = (
+        # The column-named default would pass 63 characters.
+        UniqueConstraint(
+            "account_id",
+            "prescription_id",
+            "item_id",
+            "slot",
+            name="uq_medicine_reminder_prefs_line_slot",
+        ),
+        Index("ix_medicine_reminder_prefs_clinic_id_patient_id", "clinic_id", "patient_id"),
+        enum_check("slot", Slot),
+        CheckConstraint(
+            "remind_at IS NULL OR remind_at BETWEEN '05:00' AND '23:30'", name="remind_at_range"
+        ),
+    )
+
+    patient_id: Mapped[UUID] = mapped_column(ForeignKey("patients.id"))
+    account_id: Mapped[UUID] = mapped_column(ForeignKey("patient_accounts.id"))
+    prescription_id: Mapped[UUID] = mapped_column(ForeignKey("prescriptions.id"))
+    # No foreign key: an issued version's items cannot be deleted (trigger, migration 0010), and
+    # a key would stand in front of that trigger (prescriptions AC1). Checked by the use case.
+    item_id: Mapped[UUID] = mapped_column()
+    slot: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean)
+    remind_at: Mapped[time | None] = mapped_column(Time)

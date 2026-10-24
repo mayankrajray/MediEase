@@ -6,10 +6,10 @@ until a clinic links it (M6b). Kept apart from ``users`` and ``refresh_tokens`` 
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, Time, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mediease_api.adapters.db.models.base import Base, Keyed, Timestamps, enum_check
@@ -27,6 +27,13 @@ class PatientAccountRow(Keyed, Timestamps, Base):
         enum_check("language", Language),
         CheckConstraint("email = lower(email)", name="email_lower_case"),
         CheckConstraint("failed_login_count >= 0", name="failed_login_count_non_negative"),
+        # M6b-P3 (R31): the person's times of day, 05:00-23:30, in the order of the day.
+        CheckConstraint(
+            "morning_time >= '05:00' AND morning_time < afternoon_time"
+            " AND afternoon_time < evening_time AND evening_time < night_time"
+            " AND night_time <= '23:30'",
+            name="slot_times_in_order",
+        ),
         # A password account has a hash and a Google account never does.
         CheckConstraint(
             "(sign_in_method = 'PASSWORD') = (password_hash IS NOT NULL)",
@@ -53,6 +60,11 @@ class PatientAccountRow(Keyed, Timestamps, Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # M6b-P2 (migration 0026): the portal's language.
     language: Mapped[str] = mapped_column(Text, server_default=text("'en'"))
+    # M6b-P3 (migration 0027): the medicine plan's times of day.
+    morning_time: Mapped[time] = mapped_column(Time, server_default=text("'08:00'"))
+    afternoon_time: Mapped[time] = mapped_column(Time, server_default=text("'14:00'"))
+    evening_time: Mapped[time] = mapped_column(Time, server_default=text("'18:00'"))
+    night_time: Mapped[time] = mapped_column(Time, server_default=text("'21:00'"))
 
 
 class PatientRefreshTokenRow(Keyed, Timestamps, Base):

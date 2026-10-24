@@ -11,11 +11,12 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from mediease_api.adapters.db.models.portal_links import (
+    MedicineReminderPrefRow,
     PatientAccountLinkRow,
     PatientPortalInviteRow,
 )
@@ -27,6 +28,8 @@ from mediease_api.domain.portal.link import (
     PatientPortalInvite,
     RevokedBy,
 )
+from mediease_api.domain.portal.medicines import MedicineReminderPref
+from mediease_api.domain.prescriptions.schedule import Slot
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -181,6 +184,90 @@ class SqlAlchemyPortalInviteRepository(TenantScopedRepository[PatientPortalInvit
             PatientPortalInviteRow.superseded_at.is_(None),
         )
         return self._one(query, for_update)
+
+
+def _pref(row: MedicineReminderPrefRow) -> MedicineReminderPref:
+    return MedicineReminderPref(
+        id=row.id,
+        clinic_id=row.clinic_id,
+        patient_id=row.patient_id,
+        account_id=row.account_id,
+        prescription_id=row.prescription_id,
+        item_id=row.item_id,
+        slot=Slot(row.slot),
+        enabled=row.enabled,
+        remind_at=row.remind_at,
+        created_at=row.created_at.astimezone(UTC),
+        updated_at=row.updated_at.astimezone(UTC),
+    )
+
+
+class SqlAlchemyReminderPrefRepository(TenantScopedRepository[MedicineReminderPrefRow]):
+    """M6b-P3 (R37-R40): one account's medicine-reminder choices in this clinic."""
+
+    model = MedicineReminderPrefRow
+    entity_name = "reminder preference"
+
+    def for_account(
+        self, account_id: UUID, prescription_ids: Sequence[UUID]
+    ) -> Sequence[MedicineReminderPref]:
+        if not prescription_ids:
+            return []
+        query = self._scoped_select().where(
+            MedicineReminderPrefRow.account_id == account_id,
+            MedicineReminderPrefRow.prescription_id.in_(sorted(prescription_ids)),
+        )
+        return [_pref(row) for row in self._session.scalars(query)]
+
+    def get(
+        self, account_id: UUID, prescription_id: UUID, item_id: UUID, slot: Slot
+    ) -> MedicineReminderPref | None:
+        query = self._scoped_select().where(
+            MedicineReminderPrefRow.account_id == account_id,
+            MedicineReminderPrefRow.prescription_id == prescription_id,
+            MedicineReminderPrefRow.item_id == item_id,
+            MedicineReminderPrefRow.slot == slot.value,
+        )
+        row = self._session.scalars(query).one_or_none()
+        return _pref(row) if row else None
+
+    def add(self, pref: MedicineReminderPref) -> None:
+        self._check_owned(pref.clinic_id)
+        self._session.add(
+            MedicineReminderPrefRow(
+                id=pref.id,
+                clinic_id=self.clinic_id,
+                patient_id=pref.patient_id,
+                account_id=pref.account_id,
+                prescription_id=pref.prescription_id,
+                item_id=pref.item_id,
+                slot=pref.slot.value,
+                enabled=pref.enabled,
+                remind_at=pref.remind_at,
+                created_at=pref.created_at,
+                updated_at=pref.updated_at,
+            )
+        )
+        self._session.flush()
+
+    def update(self, pref: MedicineReminderPref) -> None:
+        self._check_owned(pref.clinic_id)
+        row = self._require_row(pref.id)
+        row.enabled = pref.enabled
+        row.remind_at = pref.remind_at
+        row.updated_at = pref.updated_at
+        self._session.flush()
+
+    def delete_for_link(self, account_id: UUID, patient_id: UUID) -> int:
+        result = self._session.execute(
+            delete(MedicineReminderPrefRow).where(
+                MedicineReminderPrefRow.clinic_id == self.clinic_id,
+                MedicineReminderPrefRow.account_id == account_id,
+                MedicineReminderPrefRow.patient_id == patient_id,
+            )
+        )
+        self._session.flush()
+        return int(result.rowcount)  # type: ignore[attr-defined]
 
 
 class SqlAlchemyPortalLookup:
