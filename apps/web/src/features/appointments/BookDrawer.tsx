@@ -18,7 +18,8 @@ export type BookingTarget =
   | { readonly kind: "book"; readonly patient?: Pick<Patient, "id" | "full_name" | "code"> }
   | {
       readonly kind: "reschedule";
-      readonly appointment: Appointment;
+      // Only the ID is read: the bookings-to-move list (M6a-P8) reschedules from its own rows too.
+      readonly appointment: Pick<Appointment, "id">;
       readonly patientName: string;
     };
 

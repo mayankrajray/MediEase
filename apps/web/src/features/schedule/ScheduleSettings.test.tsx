@@ -116,3 +116,35 @@ describe("schedule settings (D31, FR-APT-01)", () => {
     expect(blockProblem(new Error("x"), [draft])).toBeUndefined();
   });
 });
+
+describe("appointment reminders (M6a-P8, FR-APT-08, decision 3A)", () => {
+  it("the owner turns the evening reminder off and moves the other to three hours before", async () => {
+    const api = mockApi({
+      ...routes,
+      "PATCH /api/v1/clinic": () => json(200, {}),
+    });
+    renderInWorkspace(<ScheduleSettings />);
+    const card = await screen.findByRole("region", { name: "Appointment reminders" }, { timeout: 5000 });
+    const evening = within(card).getByRole("checkbox", { name: "The evening before, at 19:00" });
+    expect(evening).toBeChecked();
+    expect(within(card).getByLabelText("Before the visit")).toHaveValue("2");
+
+    fireEvent.click(evening);
+    fireEvent.change(within(card).getByLabelText("Before the visit"), { target: { value: "3" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Save reminders" }));
+
+    expect(await screen.findByText("Appointment reminders saved: no evening reminder, 3 hours before.")).toBeInTheDocument();
+    expect(api.calls.find((c) => c.method === "PATCH")?.body).toEqual({
+      reminder_evening_before: false,
+      reminder_hours_before: 3,
+    });
+  });
+
+  it("is not offered to a member who cannot change clinic settings", async () => {
+    const desk = membership(CLINIC_A, "Alpha Clinic", "FRONT_DESK", { permissions: ["CLINIC_VIEW", "DOCTORS_VIEW"] });
+    mockApi({ ...routes, "GET /api/v1/me": () => json(200, person([desk])) });
+    renderInWorkspace(<ScheduleSettings />);
+    await screen.findByRole("region", { name: /Weekly hours/ }, { timeout: 5000 });
+    expect(screen.queryByRole("region", { name: "Appointment reminders" })).not.toBeInTheDocument();
+  });
+});

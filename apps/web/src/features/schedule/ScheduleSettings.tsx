@@ -9,6 +9,7 @@ import {
   type BookingMode,
   type Doctor,
   type DoctorSession,
+  type ReminderSettings,
   type Schedule,
   type ScheduleBlockInput,
 } from "@/features/appointments/api";
@@ -320,6 +321,18 @@ export function ScheduleSettings() {
               })
             }
           />
+
+          {canSetMode && (
+            <RemindersSection
+              saving={saving}
+              onSave={(change, text) =>
+                void run(async () => {
+                  await api.setReminders(change);
+                  return { kept: [], text };
+                })
+              }
+            />
+          )}
         </>
       )}
     </section>
@@ -469,6 +482,81 @@ function BookingModeSection({
         </button>
       )}
       <p className="text-sm text-slate-700">Every block needs a slot length for time slots and a number of tokens for tokens; give both to switch freely.</p>
+    </section>
+  );
+}
+
+const HOURS = [0, 1, 2, 3, 4, 5, 6] as const;
+
+/**
+ * M6a-P8 (FR-APT-08, decision 3A): the clinic's appointment reminders, the evening before at 19:00
+ * and some hours before the visit. Owners only (CLINIC_MANAGE). Applies to bookings made or moved
+ * after the change; nothing is sent between 21:00 and 08:00.
+ */
+function RemindersSection({
+  saving,
+  onSave,
+}: {
+  saving: boolean;
+  onSave: (change: ReminderSettings, text: string) => void;
+}) {
+  const clinic = useClinic();
+  const [evening, setEvening] = useState(clinic.reminder_evening_before);
+  const [hours, setHours] = useState(clinic.reminder_hours_before);
+  const ids = { evening: useId(), hours: useId() };
+  const before = hours === 0 ? "no reminder before the visit" : `${hours} hour${hours === 1 ? "" : "s"} before`;
+
+  return (
+    <section aria-labelledby="reminders-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4">
+      <h2 id="reminders-heading" className="text-lg font-bold">
+        Appointment reminders
+      </h2>
+      <p className="text-slate-700">
+        Patients who agreed to WhatsApp get a reminder of their visit. Changes apply to bookings made or moved from now on.
+        Nothing is sent between 21:00 and 08:00.
+      </p>
+      <div className="flex min-h-10 items-center gap-3">
+        <input
+          id={ids.evening}
+          type="checkbox"
+          checked={evening}
+          onChange={(event) => setEvening(event.target.checked)}
+          className="size-5 rounded border-slate-400 accent-brand-700"
+        />
+        <label htmlFor={ids.evening} className="font-medium">
+          The evening before, at 19:00
+        </label>
+      </div>
+      <div>
+        <label htmlFor={ids.hours} className="block font-medium">
+          Before the visit
+        </label>
+        <select
+          id={ids.hours}
+          value={hours}
+          onChange={(event) => setHours(Number(event.target.value))}
+          className="rounded-lg border border-slate-400 px-2 py-2"
+        >
+          {HOURS.map((h) => (
+            <option key={h} value={h}>
+              {h === 0 ? "Off" : `${h} hour${h === 1 ? "" : "s"} before`}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() =>
+          onSave(
+            { reminder_evening_before: evening, reminder_hours_before: hours },
+            `Appointment reminders saved: ${evening ? "the evening before" : "no evening reminder"}, ${before}.`,
+          )
+        }
+        className="rounded-lg bg-brand-700 px-4 py-1.5 font-semibold text-white disabled:bg-slate-400"
+      >
+        Save reminders
+      </button>
     </section>
   );
 }

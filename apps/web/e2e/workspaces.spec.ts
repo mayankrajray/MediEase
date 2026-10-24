@@ -43,7 +43,7 @@ test("FR-UX-05: the owner, the doctor and the front desk each get their own home
   }
 
   expect(seen["owner"]).toEqual({
-    nav: ["Today", "Queue", "Patients", "Follow-ups", "Team", "Schedule", "Notifications"],
+    nav: ["Today", "Queue", "Patients", "Follow-ups", "Team", "Schedule", "Audit log", "Notifications"],
     actions: ["Invite someone", "Schedule settings", "See the queue"],
   });
   expect(seen["doctor"]).toEqual({

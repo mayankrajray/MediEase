@@ -41,6 +41,16 @@ export interface AppointmentApi {
   readonly addException: (doctorId: string, body: NewScheduleException) => Promise<ScheduleExceptionChange>;
   readonly removeException: (doctorId: string, exceptionId: string) => Promise<ScheduleExceptionChange>;
   readonly setBookingMode: (mode: BookingMode) => Promise<unknown>;
+  /** M6a-P8 (FR-APT-09): live bookings in sessions a schedule change closed. */
+  readonly toMove: (doctorId?: string) => Promise<readonly BookingToMove[]>;
+  /** M6a-P8 (FR-APT-08): the clinic's appointment reminders (owners). */
+  readonly setReminders: (change: ReminderSettings) => Promise<unknown>;
+}
+
+export type BookingToMove = S["BookingToMove"];
+export interface ReminderSettings {
+  readonly reminder_evening_before?: boolean;
+  readonly reminder_hours_before?: number;
 }
 
 export function useAppointmentApi(): AppointmentApi {
@@ -99,6 +109,14 @@ export function useAppointmentApi(): AppointmentApi {
           })
         ).data,
       setBookingMode: async (mode) => (await sessionPatch("/api/v1/clinic", { booking_mode: mode }, base)).data,
+      toMove: async (doctorId) =>
+        (
+          await sessionGet("/api/v1/appointments/to-move", {
+            ...base,
+            ...(doctorId === undefined ? {} : { query: { doctor_id: doctorId } }),
+          })
+        ).data.items,
+      setReminders: async (change) => (await sessionPatch("/api/v1/clinic", change, base)).data,
     };
   }, [clinicId]);
 }

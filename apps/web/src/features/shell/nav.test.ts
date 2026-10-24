@@ -9,7 +9,7 @@ const items: readonly NavItem[] = [
   { href: "/settings", label: "Settings", requires: "CLINIC_MANAGE" },
 ];
 
-const OWNER = ["CLINIC_VIEW", "PATIENTS_MANAGE", "REMINDERS_SCHEDULE", "STAFF_MANAGE", "SCHEDULES_MANAGE", "CLINICAL_VIEW", "DOCTORS_VIEW"] as const;
+const OWNER = ["CLINIC_VIEW", "PATIENTS_MANAGE", "REMINDERS_SCHEDULE", "STAFF_MANAGE", "SCHEDULES_MANAGE", "CLINICAL_VIEW", "DOCTORS_VIEW", "AUDIT_VIEW"] as const;
 const DOCTOR = ["CLINIC_VIEW", "PATIENTS_MANAGE", "REMINDERS_SCHEDULE", "CLINICAL_VIEW", "CLINICAL_WRITE", "DOCTORS_VIEW"] as const;
 const DESK = ["CLINIC_VIEW", "PATIENTS_MANAGE", "REMINDERS_SCHEDULE", "DOCTORS_VIEW"] as const;
 
@@ -37,6 +37,7 @@ describe("each workspace's navigation (M6a-P6, decision 3A; FR-UX-04)", () => {
       "Follow-ups",
       "Team",
       "Schedule",
+      "Audit log",
       "Notifications",
     ]);
   });

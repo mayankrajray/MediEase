@@ -19,6 +19,7 @@ import { ReminderChip } from "./ReminderChip";
 const SOURCE_LABELS: Record<Reminder["source"], string> = {
   PRESCRIPTION: "From a prescription",
   MANUAL: "Added by staff",
+  APPOINTMENT: "Before a booked visit",
 };
 
 /**
@@ -151,12 +152,14 @@ function ReminderRow({
   const [date, setDate] = useState(reminder.follow_up_date);
   const id = useId();
   const scheduled = reminder.status === "SCHEDULED";
+  // M6a-P8: an appointment reminder follows its appointment: move the appointment, not this.
+  const visit = reminder.kind === "APPOINTMENT";
 
   return (
     <m.li {...LIST_ITEM} className="space-y-2 rounded-card border border-slate-200 bg-white p-3">
       <ReminderChip reminder={reminder} timeZone={timeZone} />
       <p className="text-slate-800">
-        Follow-up on {formatDay(reminder.follow_up_date)}
+        {visit ? "Visit on" : "Follow-up on"} {formatDay(reminder.follow_up_date)}
         {doctorName !== undefined && ` with ${doctorName}`} · {SOURCE_LABELS[reminder.source]}
       </p>
       {shouldCall(reminder.status) && (
@@ -168,9 +171,11 @@ function ReminderRow({
       )}
       {scheduled && !moving && (
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setMoving(true)} className="rounded-lg border border-slate-400 px-3 py-1 hover:bg-slate-100">
-            Move
-          </button>
+          {!visit && (
+            <button type="button" onClick={() => setMoving(true)} className="rounded-lg border border-slate-400 px-3 py-1 hover:bg-slate-100">
+              Move
+            </button>
+          )}
           <button type="button" onClick={onCancel} className="inline-flex min-h-8 items-center rounded-lg border border-red-700 bg-white px-3 py-1 text-sm font-medium text-red-900 hover:bg-red-50">
             Cancel reminder
           </button>

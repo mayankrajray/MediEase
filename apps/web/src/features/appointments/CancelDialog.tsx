@@ -14,17 +14,20 @@ const REASONS = Object.keys(CANCEL_REASON_LABELS) as CancelReason[];
 export function CancelDialog({
   appointmentId,
   patientName,
+  initialReason,
   onDone,
   onClose,
 }: {
   appointmentId: string;
   patientName: string;
+  /** M6a-P8: the bookings-to-move list preselects "Doctor unavailable" (decision 6A). */
+  initialReason?: CancelReason;
   onDone: (appointment: Appointment, message: string) => void;
   onClose: () => void;
 }) {
   const api = useAppointmentApi();
   const { endSession } = useSession();
-  const [reason, setReason] = useState<CancelReason | undefined>(undefined);
+  const [reason, setReason] = useState<CancelReason | undefined>(initialReason);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(undefined);

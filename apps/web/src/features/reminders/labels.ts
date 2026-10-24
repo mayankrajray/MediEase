@@ -36,6 +36,9 @@ const TEMPLATE_LABELS: Record<string, string> = {
   rx_updated: "Updated prescription link",
   follow_up_due: "Follow-up reminder",
   opt_out_confirmed: "Reply to their STOP",
+  // M6a-P8: before a booked visit, and a visit the clinic cancelled.
+  appointment_reminder: "Appointment reminder",
+  appointment_cancelled: "Cancellation notice",
 };
 
 export function templateLabel(key: string): string {
@@ -54,11 +57,16 @@ const EXPLANATIONS: Record<string, string> = {
   MSG_TEMPLATE_PARAMS: "This message could not be prepared. Tell MediEase support.",
   MSG_NOT_APPLICABLE: "Not sent: it no longer applied.",
   REM_CLINIC_PHONE_MISSING: "Not sent: the clinic has no phone number in its settings.",
+  // M6a-P8: an appointment reminder the system cancelled when it was due.
+  REM_APPOINTMENT_CHANGED: "Not sent: the appointment changed (cancelled, moved, arrived or closed by leave).",
+  REM_TOO_LATE: "Not sent: it was too close to the visit.",
 };
 
 /** The sentence for a failed or skipped message or reminder; null when nothing went wrong. */
 export function explainFailure(status: string, code: string | null): string | null {
   if (status === "SKIPPED_NO_CONSENT") return EXPLANATIONS.MSG_NO_CONSENT ?? null;
+  // M6a-P8: the system cancelled an appointment reminder when it was due; say why.
+  if (status === "CANCELLED") return code !== null ? (EXPLANATIONS[code] ?? null) : null;
   if (status !== "FAILED") return null;
   return (code !== null ? EXPLANATIONS[code] : undefined) ?? "The message could not be delivered.";
 }

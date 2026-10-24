@@ -23,6 +23,7 @@ const OWNER_PERMS = [
   "SCHEDULES_MANAGE",
   "CLINICAL_VIEW",
   "USAGE_METRICS_VIEW",
+  "AUDIT_VIEW",
 ] as const;
 const owner = membership(CLINIC_A, "Alpha Clinic", "OWNER", { permissions: [...OWNER_PERMS] });
 const practising = membership(CLINIC_A, "Alpha Clinic", "OWNER", {
@@ -85,7 +86,7 @@ describe("each workspace's shell and home (FR-UX-04, FR-UX-05)", () => {
     render(owner);
     await screen.findByRole("navigation", { name: "Quick actions" }, { timeout: 5000 });
 
-    expect(labels()).toEqual(["Today", "Queue", "Patients", "Follow-ups", "Team", "Schedule", "Notifications"]);
+    expect(labels()).toEqual(["Today", "Queue", "Patients", "Follow-ups", "Team", "Schedule", "Audit log", "Notifications"]);
     expect(actions()).toEqual(["Invite someone", "Schedule settings", "See the queue"]);
     expect(await screen.findByRole("list", { name: "Team" })).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "View" })).not.toBeInTheDocument();

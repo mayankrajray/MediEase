@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -336,6 +337,15 @@ export function QueueBoard({
                 {session.status === "CLOSED" && " · closed to new bookings"}
               </span>
             </h2>
+            {session.status === "CLOSED" && rows.some((r) => r.status === "BOOKED" || r.status === "ARRIVED") && (
+              // M6a-P8 (FR-APT-09): leave or a schedule change closed it with people still booked.
+              <p className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-amber-950">
+                This session was closed by leave or a schedule change.{" "}
+                <Link href="/bookings-to-move" className="font-medium underline">
+                  Move these bookings
+                </Link>
+              </p>
+            )}
             {rows.length === 0 ? (
               <p className="px-4 py-4 text-slate-700">Nobody booked yet.</p>
             ) : (
