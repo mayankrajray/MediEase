@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight); P1 built and confirmed (draft PR #52); P2 designed, awaiting approval |
+| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight); P1 built and confirmed (draft PR #52); P2 approved (A on all eight) and built |
 | PRD | v1.2 §0 (C7, C9), §8.9, §8.13, §8.14, §13; NFR-02, NFR-10, NFR-11, NFR-18, NFR-19 |
 | Specs | `docs/specs/patient-portal.md` (Draft, P1–P3, P6), `docs/specs/booking-requests.md` (written at P4) |
 | ADR | ADR-0015 (patient accounts), ADR-0017 (notification service); ADR-0018 at P4 if the soft hold changes how a session's places are counted |
@@ -142,7 +142,7 @@ Built 24 Oct 2026 to the approved design, with these details settled in the buil
 
 ## M6b-P2 — Portal web
 
-Proposed 24 Oct 2026, **awaiting the developer's approval.** Covers FR-PRT-03, FR-PRT-04,
+Proposed 24 Oct 2026; **approved by the developer 24 Oct 2026: A on all eight.** Covers FR-PRT-03, FR-PRT-04,
 FR-PRT-05, FR-PRT-07, NFR-02, NFR-10 and NFR-11. Rules are in `docs/specs/patient-portal.md`
 R15–R27 (Draft for P2). The medicine plan (FR-REM-03) is P3; booking requests in My Appointments
 (`Requested`, `Declined`, `Expired`) arrive with P4 and P5; patient notifications with P6.
@@ -210,3 +210,35 @@ Planned verification:
   < 200 KB and no horizontal overflow; axe passes in both languages. Failure path: an unlinked
   clinic's prescription URL shows "not found".
 - **Gates:** `make lint typecheck contract-check test` and `make e2e`.
+
+### As built (M6b-P2)
+
+Built 24 Oct 2026 to the approved design. Details settled in the build:
+
+- **Routes.** `src/app/(patient)/portal/(auth)/…` (sign-in, sign-up, forgot, reset, verify; the
+  card frame with a language switch reading `me_pt_lang` on the server) and `(app)/…` (`/portal`,
+  `/appointments`, `/prescriptions`, `/prescriptions/[id]`, `/account`, `/find` and P1's two link
+  pages). URLs did not change. The M6a-P3 account page (`PortalAccount`) is gone: *Home* and
+  *Account* replace it.
+- **Code.** `features/portal/PortalShell.tsx` (the account, the words and the switch for every
+  screen; an ended session returns to sign-in with `next` = the current screen, R25),
+  `data.ts` (one loader per screen, the portal's error words), `Rows.tsx`, `Home.tsx`,
+  `MyAppointments.tsx`, `PortalPrescriptions.tsx`, `PortalAccountPage.tsx`, `FindADoctor.tsx`;
+  `lib/i18n/portal.ts`; `portalPatch`, `portalDelete` and `portalPdf` in
+  `lib/auth/portal-session.ts`. `PrescriptionView` gained `embedded` (an `article` inside the
+  portal's `main`, so the page has one main landmark).
+- **API.** Migration `0026`; `SetPortalLanguage`; sign-up's optional `language`, else the
+  cookie (Google's first sign-in reads it too); `timezone` on links and groups, `phone_e164` on
+  groups for the call button; the page's default language is the account's.
+- **Verify banner.** Also on *Home* for an unverified password account (it gates *Save to my
+  MediEase*), as well as on *Account*.
+- **Measured.** First loads at 360 px: `/portal` 171 KB, `/portal/find` 169 KB,
+  `/portal/appointments` 172 KB, `/portal/prescriptions` 175 KB, `/portal/account` 173 KB (all
+  under 200 KB). axe (WCAG 2.1 A/AA, serious or critical) found nothing on any screen in either
+  language.
+- **Older journeys.** `portal-accounts`, `password-reset` and `portal-linking` now look for the
+  account details under *Account* and the fresh dashboard on *Home*; what they prove is
+  unchanged.
+- **Not done (open).** The forgot-password, reset-password and verify-email pages are still
+  English only; R21 asks for every portal word in both languages. The sign-in and sign-up pages
+  and every signed-in screen are bilingual.

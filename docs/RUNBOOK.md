@@ -522,3 +522,9 @@ A patient account sees a clinic's records only through an active row in `patient
 `UPDATE patient_account_links SET revoked_at = now(), revoked_by = 'STAFF' WHERE id = '<link>';`
 (record it in the incident notes; the app path also writes `patient.portal_unlinked`). The account
 sees nothing of that clinic from its next request.
+
+**The portal's language (M6b-P2).** Each patient account has a language (`en` or `hi`), chosen
+from the switch at the top of every portal screen and kept across devices
+(`SELECT language FROM patient_accounts WHERE id = '<account>';`). The signed-out pages follow a
+`me_pt_lang` cookie in that browser. A patient who sees the wrong language: the switch fixes it;
+nothing for support to change.

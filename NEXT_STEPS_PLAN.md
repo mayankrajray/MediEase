@@ -61,7 +61,7 @@ Milestone issue #51 → branch m6b/51-patient-portal-booking (from origin/main a
 ## 4. Phase breakdown
 
 Details, file lists and test plans per phase are in the design notes; each phase is designed at
-its start. P1 is done (draft PR #52); P2 is designed and awaits approval.
+its start. P1 is done (draft PR #52); P2 is built and awaits confirmation.
 
 | Phase | Objective | Requirements | Verify |
 |---|---|---|---|
@@ -180,3 +180,4 @@ its start. P1 is done (draft PR #52); P2 is designed and awaits approval.
 | 24 Oct 2026 | M6a merged to `main` by the developer (PR #50, `4aac81f`; #49 closed). M6b opened: issue #51, branch `m6b/51-patient-portal-booking`. Plan (six phases) and the P1 design (linking by clinic invite and prescription link, the read-only patient API, the portal tenancy suite; 8 decisions) with `docs/specs/patient-portal.md` Draft | #51 | Proposed; awaiting approval |
 | 24 Oct 2026 | M6b-P1 approved (A on all eight) and built: patient accounts linked to clinic records by a clinic invite (single-use, shown once with a QR code, 7 days) or a prescription link's last-4 check (verified accounts, the page's own lockout); unlink from either side; the read-only portal API (links, appointments by clinic, current prescriptions with page and PDF, reminders) through one `PortalScope`; migration `0025`, contract 0.29.0; the *Patient app* card, the two link pages and *Save to my MediEase*. New portal tenancy suite with a route guard. Gates in the phase summary. |
 | 24 Oct 2026 | M6b-P1 confirmed by the developer and pushed (`m6b/51-patient-portal-booking`, upstream set); draft PR #52 opened for M6b. M6b-P2 designed (8 decisions): a portal shell with bottom tabs, the language on the account (migration `0026`, `PATCH /portal/me`) with a `me_pt_lang` cookie before sign-in, client screens held to the 200 KB patient-page budget (the access cookie's path rules out server rendering), the fresh dashboard with an interim *Find a doctor* page until M6c, My Appointments by clinic on the clinic's clock with patient-facing statuses, the shared prescription page with a session-safe PDF, clinics and unlinking under *Account*, and axe checks in Playwright (`@axe-core/playwright`, dev-only). Contract 0.30.0. Awaiting approval. |
+| 24 Oct 2026 | M6b-P2 approved (A on all eight) and built: the portal shell and tabs, Home with the fresh dashboard, My Appointments by clinic on the clinic's clock, prescriptions with the shared page and a session-safe PDF, Account with clinics and unlinking, English and Hindi with the language on the account (migration `0026`, contract 0.30.0). Screens 169–175 KB; axe clean in both languages; full Playwright suite 34/34. The forgot, reset and verify pages are still English only (open question for the developer). |

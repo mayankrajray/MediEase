@@ -21,6 +21,16 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6b-P2 (#51): the patient portal's screens (FR-PRT-03, 04, 05, 07; NFR-02, 10, 11; decisions
+  1A–8A). A signed-in shell with bottom tabs at 360 px (*Home*, *Appointments*, *Prescriptions*,
+  *Account*); a fresh dashboard with *Find a doctor* (an interim page until directory search,
+  M6c); My Appointments grouped by clinic, on each clinic's clock, with statuses in words; the
+  prescription page and its PDF inside the portal; linked clinics and unlinking under *Account*.
+  English and Hindi (`src/lib/i18n/portal.ts`): the language is kept on the account (migration
+  `0026`, `PATCH /portal/me`), and a `me_pt_lang` cookie sets the signed-out pages' language and a
+  new account's. Contract 0.30.0 (the clinic's `timezone` on links and appointment groups). Each
+  portal screen measured at 169–175 KB on first load; Playwright runs axe (`@axe-core/playwright`
+  4.14.0, dev-only) on every portal screen in both languages.
 - M6b-P1 (#51): linking a patient account to a clinic's record, and the read-only patient API
   (FR-PRT-02, FR-PRT-03, FR-PRT-06 b and c, NFR-18; decisions 1A–8A). Staff invite a patient from
   the profile's new *Patient app* card (a single-use link and QR code, shown once, 7 days); the
