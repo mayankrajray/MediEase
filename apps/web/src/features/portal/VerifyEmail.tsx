@@ -7,13 +7,15 @@ import { Button } from "@/components/ui/Button";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { isRetryable } from "@/features/auth/messages";
 import { apiPost } from "@/lib/api/client";
+import { type PortalLanguage, verifyWords } from "@/lib/i18n/portal";
 
 /**
  * The page the verification email opens (M6a-P4, FR-AUTH-08, ADR-0016 decision 6). Opening it
  * changes nothing: the person presses the button, which POSTs the token, so a mail scanner that
  * pre-fetches the link cannot verify an address nobody read.
  */
-export function VerifyEmail({ token }: { token: string }) {
+export function VerifyEmail({ token, language = "en" }: { token: string; language?: PortalLanguage }) {
+  const words = verifyWords(language);
   const [state, setState] = useState<"ready" | "sending" | "done">("ready");
   const [error, setError] = useState<unknown>(null);
   const alertRef = useRef<HTMLDivElement>(null);
@@ -41,15 +43,15 @@ export function VerifyEmail({ token }: { token: string }) {
   return (
     <section aria-labelledby="verify-heading" className="space-y-5 p-6 sm:p-8">
       <h1 id="verify-heading" className="text-2xl font-bold tracking-tight">
-        Confirm your email
+        {words.heading}
       </h1>
       {state === "done" ? (
         <p ref={doneRef} tabIndex={-1} role="status" className="rounded-lg border border-slate-300 bg-slate-50 p-3">
-          Your email is confirmed. Thank you.
+          {words.done}
         </p>
       ) : (
         <>
-          <p className="text-slate-700">Press the button to confirm this is your email address.</p>
+          <p className="text-slate-700">{words.help}</p>
           {error !== null && (
             <ErrorNotice
               id="verify-error"
@@ -59,13 +61,13 @@ export function VerifyEmail({ token }: { token: string }) {
             />
           )}
           <Button variant="primary" className="w-full" onClick={() => void verify()} disabled={state === "sending"}>
-            {state === "sending" ? "Confirming…" : "Confirm my email"}
+            {state === "sending" ? words.confirming : words.confirm}
           </Button>
         </>
       )}
       <p className="text-sm text-slate-700">
         <Link href="/portal" className="font-medium text-brand-800 underline">
-          Go to your account
+          {words.goAccount}
         </Link>
       </p>
     </section>

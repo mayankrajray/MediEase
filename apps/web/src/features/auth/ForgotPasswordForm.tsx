@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
 import { apiPost } from "@/lib/api/client";
+import { FORGOT_EN, type ForgotWords } from "@/lib/i18n/portal";
 
 import { ErrorNotice } from "./ErrorNotice";
 import { isRetryable } from "./messages";
@@ -21,7 +22,16 @@ const REQUEST_PATH = {
  * "Forgot password?" (M6a-P4, FR-AUTH-05, ADR-0016 decision 7). The API answers the same way
  * whether or not the address has an account, so this page says the same thing either way.
  */
-export function ForgotPasswordForm({ kind, signInHref }: { kind: AccountKind; signInHref: string }) {
+export function ForgotPasswordForm({
+  kind,
+  signInHref,
+  words = FORGOT_EN,
+}: {
+  kind: AccountKind;
+  signInHref: string;
+  /** The patient pages pass Hindi when the portal's language is Hindi (M6b-P2); staff keep English. */
+  words?: ForgotWords;
+}) {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
@@ -58,16 +68,15 @@ export function ForgotPasswordForm({ kind, signInHref }: { kind: AccountKind; si
   return (
     <section aria-labelledby="forgot-heading" className="space-y-5 p-6 sm:p-8">
       <h1 id="forgot-heading" className="text-2xl font-bold tracking-tight">
-        Reset your password
+        {words.heading}
       </h1>
       {sent ? (
         <p ref={doneRef} tabIndex={-1} role="status" className="rounded-lg border border-slate-300 bg-slate-50 p-3">
-          If an account uses that email, we have sent it a link to choose a new password. The link
-          works once and lasts 30 minutes. Check your spam folder if it does not arrive.
+          {words.sent}
         </p>
       ) : (
         <>
-          <p className="text-slate-700">Enter the email you sign in with and we will send you a link.</p>
+          <p className="text-slate-700">{words.help}</p>
           {error !== null && (
             <ErrorNotice
               id="forgot-error"
@@ -79,7 +88,7 @@ export function ForgotPasswordForm({ kind, signInHref }: { kind: AccountKind; si
           <form onSubmit={onSubmit} className="space-y-4">
             <TextField
               id="forgot-email"
-              label="Email"
+              label={words.email}
               type="email"
               inputMode="email"
               autoComplete="email"
@@ -88,14 +97,14 @@ export function ForgotPasswordForm({ kind, signInHref }: { kind: AccountKind; si
               onChange={setEmail}
             />
             <Button type="submit" variant="primary" className="w-full" disabled={submitting}>
-              {submitting ? "Sending…" : "Send the link"}
+              {submitting ? words.sending : words.send}
             </Button>
           </form>
         </>
       )}
       <p className="text-sm text-slate-700">
         <Link href={signInHref} className="font-medium text-brand-800 underline">
-          Back to sign in
+          {words.back}
         </Link>
       </p>
     </section>

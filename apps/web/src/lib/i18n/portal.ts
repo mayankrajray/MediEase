@@ -507,3 +507,109 @@ export function portalDate(iso: string, timeZone: string, s: PortalStrings): str
 export function portalCalendarDate(isoDate: string, s: PortalStrings): string {
   return zoned(`${isoDate}T12:00:00Z`, "UTC", s.locale, { day: "numeric", month: "short", year: "numeric" });
 }
+
+/** The emailed-link pages (M6a-P4), shared with staff, who keep the English (M6b-P2 follow-up). */
+export interface ForgotWords {
+  readonly heading: string;
+  readonly help: string;
+  readonly sent: string;
+  readonly email: string;
+  readonly send: string;
+  readonly sending: string;
+  readonly back: string;
+}
+
+export interface ResetWords {
+  readonly heading: string;
+  readonly newPassword: string;
+  readonly hint: string;
+  readonly again: string;
+  readonly tooShort: string;
+  readonly different: string;
+  readonly save: string;
+  readonly saving: string;
+  readonly newLink: string;
+}
+
+export interface VerifyWords {
+  readonly heading: string;
+  readonly help: string;
+  readonly confirm: string;
+  readonly confirming: string;
+  readonly done: string;
+  readonly goAccount: string;
+}
+
+export const FORGOT_EN: ForgotWords = {
+  heading: "Reset your password",
+  help: "Enter the email you sign in with and we will send you a link.",
+  sent: "If an account uses that email, we have sent it a link to choose a new password. The link works once and lasts 30 minutes. Check your spam folder if it does not arrive.",
+  email: "Email",
+  send: "Send the link",
+  sending: "Sending…",
+  back: "Back to sign in",
+};
+
+export const RESET_EN: ResetWords = {
+  heading: "Choose a new password",
+  newPassword: "New password",
+  hint: "At least 12 characters. Signing in elsewhere ends when you save.",
+  again: "Type it again",
+  tooShort: "Use at least 12 characters.",
+  different: "The two passwords are not the same.",
+  save: "Save the new password",
+  saving: "Saving…",
+  newLink: "Ask for a new link",
+};
+
+const VERIFY_EN: VerifyWords = {
+  heading: "Confirm your email",
+  help: "Press the button to confirm this is your email address.",
+  confirm: "Confirm my email",
+  confirming: "Confirming…",
+  done: "Your email is confirmed. Thank you.",
+  goAccount: "Go to your account",
+};
+
+const FORGOT_HI: ForgotWords = {
+  heading: "अपना पासवर्ड बदलें",
+  help: "जिस ईमेल से आप साइन इन करते हैं वह लिखें, हम आपको एक लिंक भेजेंगे।",
+  sent: "अगर किसी खाते में यह ईमेल है, तो हमने उस पर नया पासवर्ड चुनने का लिंक भेज दिया है। लिंक एक बार और 30 मिनट तक काम करेगा। न मिले तो स्पैम फ़ोल्डर देखें।",
+  email: "ईमेल",
+  send: "लिंक भेजें",
+  sending: "भेज रहे हैं…",
+  back: "साइन इन पर वापस जाएँ",
+};
+
+const RESET_HI: ResetWords = {
+  heading: "नया पासवर्ड चुनें",
+  newPassword: "नया पासवर्ड",
+  hint: "कम से कम 12 अक्षर। सहेजते ही दूसरी जगहों का साइन इन ख़त्म हो जाएगा।",
+  again: "फिर से लिखें",
+  tooShort: "कम से कम 12 अक्षर लिखें।",
+  different: "दोनों पासवर्ड एक जैसे नहीं हैं।",
+  save: "नया पासवर्ड सहेजें",
+  saving: "सहेज रहे हैं…",
+  newLink: "नया लिंक माँगें",
+};
+
+const VERIFY_HI: VerifyWords = {
+  heading: "अपने ईमेल की पुष्टि करें",
+  help: "यह आपका ईमेल पता है, इसकी पुष्टि के लिए बटन दबाएँ।",
+  confirm: "मेरे ईमेल की पुष्टि करें",
+  confirming: "पुष्टि हो रही है…",
+  done: "आपके ईमेल की पुष्टि हो गई। धन्यवाद।",
+  goAccount: "अपने खाते पर जाएँ",
+};
+
+export function forgotWords(language: PortalLanguage): ForgotWords {
+  return language === "hi" ? FORGOT_HI : FORGOT_EN;
+}
+
+export function resetWords(language: PortalLanguage): ResetWords {
+  return language === "hi" ? RESET_HI : RESET_EN;
+}
+
+export function verifyWords(language: PortalLanguage): VerifyWords {
+  return language === "hi" ? VERIFY_HI : VERIFY_EN;
+}

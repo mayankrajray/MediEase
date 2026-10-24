@@ -239,6 +239,8 @@ Built 24 Oct 2026 to the approved design. Details settled in the build:
 - **Older journeys.** `portal-accounts`, `password-reset` and `portal-linking` now look for the
   account details under *Account* and the fresh dashboard on *Home*; what they prove is
   unchanged.
-- **Not done (open).** The forgot-password, reset-password and verify-email pages are still
-  English only; R21 asks for every portal word in both languages. The sign-in and sign-up pages
-  and every signed-in screen are bilingual.
+- **Emailed-link pages (follow-up commit, developer's request).** The forgot-password,
+  reset-password and verify-email pages follow `me_pt_lang` too. The first two are shared with
+  staff (`features/auth`): they take optional `words` (`forgotWords`, `resetWords` in
+  `lib/i18n/portal.ts`), default English, so staff pages are unchanged. Every portal page is now
+  bilingual. The sign-in page's `?reason=` notices and the API's own error messages stay English.

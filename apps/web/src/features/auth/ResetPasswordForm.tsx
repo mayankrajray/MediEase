@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
 import { ApiError, apiPost } from "@/lib/api/client";
+import { RESET_EN, type ResetWords } from "@/lib/i18n/portal";
 
 import { ErrorNotice } from "./ErrorNotice";
 import type { AccountKind } from "./ForgotPasswordForm";
@@ -31,11 +32,14 @@ export function ResetPasswordForm({
   token,
   signInPath,
   forgotPath,
+  words = RESET_EN,
 }: {
   kind: AccountKind;
   token: string;
   signInPath: string;
   forgotPath: string;
+  /** The patient pages pass Hindi when the portal's language is Hindi (M6b-P2); staff keep English. */
+  words?: ResetWords;
 }) {
   const router = useRouter();
   const [password, setPassword] = useState("");
@@ -52,11 +56,11 @@ export function ResetPasswordForm({
   async function submit() {
     if (submitting) return;
     if (password.length < MIN_LENGTH) {
-      setFieldError(`Use at least ${MIN_LENGTH} characters.`);
+      setFieldError(words.tooShort);
       return;
     }
     if (password !== confirm) {
-      setFieldError("The two passwords are not the same.");
+      setFieldError(words.different);
       return;
     }
     setFieldError(undefined);
@@ -82,7 +86,7 @@ export function ResetPasswordForm({
   return (
     <section aria-labelledby="reset-heading" className="space-y-5 p-6 sm:p-8">
       <h1 id="reset-heading" className="text-2xl font-bold tracking-tight">
-        Choose a new password
+        {words.heading}
       </h1>
       {error !== null && (
         <ErrorNotice
@@ -95,25 +99,25 @@ export function ResetPasswordForm({
       {linkGone ? (
         <p>
           <Link href={forgotPath} className="font-medium text-brand-800 underline">
-            Ask for a new link
+            {words.newLink}
           </Link>
         </p>
       ) : (
         <form onSubmit={onSubmit} className="space-y-4" noValidate>
           <TextField
             id="new-password"
-            label="New password"
+            label={words.newPassword}
             type="password"
             autoComplete="new-password"
             required
-            hint={`At least ${MIN_LENGTH} characters. Signing in elsewhere ends when you save.`}
+            hint={words.hint}
             value={password}
             onChange={setPassword}
             error={fieldError}
           />
           <TextField
             id="confirm-password"
-            label="Type it again"
+            label={words.again}
             type="password"
             autoComplete="new-password"
             required
@@ -121,7 +125,7 @@ export function ResetPasswordForm({
             onChange={setConfirm}
           />
           <Button type="submit" variant="primary" className="w-full" disabled={submitting}>
-            {submitting ? "Saving…" : "Save the new password"}
+            {submitting ? words.saving : words.save}
           </Button>
         </form>
       )}
