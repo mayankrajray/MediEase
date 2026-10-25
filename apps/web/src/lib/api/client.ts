@@ -210,6 +210,18 @@ export async function apiPost<P extends PostPath>(
   return (await send("POST", path, body, options)) as ApiResult<PostResponse<P>>;
 }
 
+/**
+ * M6c-P1: a `multipart/form-data` POST (the clinic application with its certificates). The
+ * browser sets the boundary, so no Content-Type is sent from here; errors are read as for JSON.
+ */
+export async function apiPostForm<P extends PostPath>(
+  path: P,
+  form: FormData,
+  options: RequestOptions = {},
+): Promise<ApiResult<PostResponse<P>>> {
+  return (await send("POST", path, form, options)) as ApiResult<PostResponse<P>>;
+}
+
 export async function apiPut<P extends PutPath>(
   path: P,
   body: PutBody<P>,
@@ -264,8 +276,10 @@ async function send(
       headers[CSRF_HEADER] = csrf;
     }
   }
-  let payload: string | undefined;
-  if (body !== undefined) {
+  let payload: string | FormData | undefined;
+  if (body instanceof FormData) {
+    payload = body;
+  } else if (body !== undefined) {
     headers["Content-Type"] = "application/json";
     payload = JSON.stringify(body);
   }
