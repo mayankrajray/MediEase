@@ -1,10 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { ROLE_LABELS } from "@/features/auth/labels";
 import type { Membership } from "@/features/auth/landing";
+import { useAppointmentApi } from "@/features/appointments/api";
 import { useSession } from "@/features/auth/SessionProvider";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { PatientSearch } from "@/features/patients/PatientSearch";
@@ -34,12 +36,16 @@ export function AppShell({ membership, children }: { membership: Membership; chi
   const managesPatients = membership.permissions.includes("PATIENTS_MANAGE");
   const view = useWorkspace();
   const workspace = view?.workspace ?? membership.role;
+  const openRequests = useOpenRequests(clinicReady && membership.permissions.includes("APPOINTMENTS_MANAGE"));
+  const links = visibleNav(membership.permissions, WORKSPACE_NAV[workspace]).map((item) =>
+    item.href === "/booking-requests" && openRequests > 0 ? { ...item, badge: openRequests } : item,
+  );
 
   return (
     <RegisterPatientProvider enabled={managesPatients}>
       <Shell
         navLabel="Main"
-        links={visibleNav(membership.permissions, WORKSPACE_NAV[workspace])}
+        links={links}
         person={identity.user.full_name}
         identity={
           <>
@@ -71,6 +77,30 @@ export function AppShell({ membership, children }: { membership: Membership; chi
       </Shell>
     </RegisterPatientProvider>
   );
+}
+
+/**
+ * M6b-P5 (R45): the open booking requests, for the nav's count. Read when the page changes, so
+ * answering one and moving on updates it; a failure just shows no count.
+ */
+function useOpenRequests(enabled: boolean): number {
+  const api = useAppointmentApi();
+  const pathname = usePathname();
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    api.bookingRequests("open").then(
+      (inbox) => {
+        if (!cancelled) setCount(inbox.open_count);
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [api, enabled, pathname]);
+  return enabled ? count : 0;
 }
 
 /** The header's patient tools: search and Register patient (FR-PAT-01, FR-PAT-04). */

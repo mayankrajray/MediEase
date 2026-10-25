@@ -1,7 +1,9 @@
-import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
+
+import { DOCTOR_NAME, googleSignInThenReturn, lonelySession, phone, SLUG } from "./booking-support";
 
 import { expectAccessible, firstLoadBytes, noHorizontalScroll } from "./portal-support";
-import { DESK, OWNER, newPatient, openQueue, signInApi, signInAs } from "./queue-support";
+import { DESK, newPatient, openQueue, signInAs } from "./queue-support";
 
 /**
  * M6b-P4 (FR-PUB-01..04, FR-BKG-01, 02, 07, NFR-02, 10, 11, 17; spec booking-requests AC1-AC7):
@@ -17,49 +19,7 @@ import { DESK, OWNER, newPatient, openQueue, signInApi, signInAs } from "./queue
  * Each request uses a new phone number (5 a day per number).
  */
 
-const SLUG = "sample-clinic";
 const BUDGET = 200 * 1024;
-const DOCTOR_NAME = "Dr. Sample Doctor";
-
-/** A fresh synthetic mobile number each time: the API allows 5 requests a day per number (R15). */
-const phone = () => `9${String(Math.floor(Math.random() * 1e9)).padStart(9, "0")}`;
-
-interface Extra {
-  readonly doctorId: string;
-  readonly startsAt: string;
-  readonly onDate: string;
-}
-
-/** One 2-hour session with one place, a few days ahead, at an hour no other run has used. */
-async function lonelySession(request: APIRequestContext): Promise<Extra> {
-  const token = await signInApi(request, OWNER);
-  const doctors = (await (await request.get("/api/v1/clinic/doctors")).json()) as { items: { id: string; display_name: string }[] };
-  const doctorId = doctors.items.find((d) => d.display_name === DOCTOR_NAME)?.id ?? "";
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const day = new Date(Date.now() + (3 + Math.floor(Math.random() * 9)) * 86_400_000);
-    const onDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(day);
-    const hour = 14 + Math.floor(Math.random() * 8); // 14:00-21:00 start, ends by 23:00
-    const start = `${String(hour).padStart(2, "0")}:00`;
-    const end = `${String(hour + 2).padStart(2, "0")}:00`;
-    const added = await request.post(`/api/v1/clinic/doctors/${doctorId}/schedule-exceptions`, {
-      headers: { "X-CSRF-Token": token },
-      data: { kind: "EXTRA", on_date: onDate, start_time: start, end_time: end, slot_minutes: 120, capacity: 1, note: "e2e" },
-    });
-    if (added.status() !== 201) continue; // overlaps an earlier run: try another
-    const listed = (await (await request.get(`/api/v1/sessions?date=${onDate}&doctor_id=${doctorId}`)).json()) as {
-      items: { starts_at: string; ends_at: string; capacity: number }[];
-    };
-    const mine = listed.items.find((s) => s.capacity === 1 && new Date(s.starts_at).getUTCHours() * 60 + new Date(s.starts_at).getUTCMinutes() === ((hour * 60 - 330 + 1440) % 1440));
-    if (mine !== undefined) return { doctorId, startsAt: mine.starts_at, onDate };
-  }
-  throw new Error("no free evening for the lonely session");
-}
-
-async function googleSignInThenReturn(page: Page, email: string, expected: RegExp) {
-  await page.locator("#portal-email").fill(email);
-  await page.getByRole("link", { name: /Continue with Google/ }).click();
-  await expect(page).toHaveURL(expected);
-}
 
 async function checkScreen(page: Page, browser: Browser, heading: string | RegExp, level: 1 | 2 = 1) {
   await expect(page.getByRole("heading", { level, name: heading })).toBeVisible();

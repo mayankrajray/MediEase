@@ -553,6 +553,49 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/portal/booking-requests/{request_id}/accept-proposal": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Take the time the clinic proposed
+         * @description M6b-P5, R42. @patient, the account's own PROPOSED request (else 404). Books and
+         *     links as a staff accept, actor PATIENT. 409 BKG_ALREADY_ANSWERED when it is no
+         *     longer a live proposal. Needs X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly post: operations["acceptBookingProposal"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/booking-requests/{request_id}/decline-proposal": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * No thanks to the time the clinic proposed
+         * @description M6b-P5, R43. PROPOSED -> DECLINED (PATIENT_DECLINED), the proposed hold ended at
+         *     once. Needs X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly post: operations["declineBookingProposal"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/portal/prescriptions": {
         readonly parameters: {
             readonly query?: never;
@@ -812,14 +855,110 @@ export interface paths {
             readonly cookie?: never;
         };
         /**
-         * The clinic's open online booking requests
-         * @description M6b-P4, spec R22. Permission: APPOINTMENTS_MANAGE. Oldest first, at most 100. Read only
-         *     here; answering a request is M6b-P5. The reason is clinical text for this clinic's staff
-         *     only. Not audited.
+         * The clinic's inbox of online booking requests
+         * @description M6b-P4, P5 (spec R22, R44, R45). Permission: APPOINTMENTS_MANAGE. `state=open` (default):
+         *     pending and proposed requests not past their deadline, oldest first; `state=answered`:
+         *     requests made final in the last 7 days and open ones past their deadline (expired), newest
+         *     first; at most 100. With the open count and the requests expired unanswered in 7 days.
+         *     The reason and the staff note are for this clinic's staff only. Not audited.
          */
         readonly get: operations["listBookingRequests"];
         readonly put?: never;
         readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/booking-requests/{request_id}/candidates": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The clinic's records that may be this request's patient
+         * @description M6b-P5, R36, R47. Permission: APPOINTMENTS_MANAGE. The records with the request's
+         *     phone (at most 10) with their no-show count, or only the record the account is
+         *     already linked to. Phone only suggests; staff choose. Not audited.
+         */
+        readonly get: operations["listRequestCandidates"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/booking-requests/{request_id}/accept": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Accept a pending request: book it and link the account
+         * @description M6b-P5, R34-R38. Permission: APPOINTMENTS_MANAGE (and PATIENTS_MANAGE for a new
+         *     record). One transaction under the session and request locks: books the request's
+         *     time (source PUBLIC_PAGE; its own hold excluded, other holds counted), links the
+         *     account (method BOOKING), records booking_request.accepted. 409 when answered
+         *     already or expired (BKG_ALREADY_ANSWERED), when the time has gone (APT_SLOT_TAKEN,
+         *     APT_SESSION_FULL, APT_SLOT_HELD) or the record is linked elsewhere
+         *     (PRT_ALREADY_LINKED). Needs X-CSRF-Token.
+         */
+        readonly post: operations["acceptBookingRequest"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/booking-requests/{request_id}/decline": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Decline an open request with a reason the patient sees
+         * @description M6b-P5, R39. Permission: APPOINTMENTS_MANAGE. Ends the hold at once and records
+         *     booking_request.declined with the reason code (never the note). 409
+         *     BKG_ALREADY_ANSWERED when answered already or expired. Needs X-CSRF-Token.
+         */
+        readonly post: operations["declineBookingRequest"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/booking-requests/{request_id}/propose": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Offer the patient another time with the same doctor
+         * @description M6b-P5, R40, R41. Permission: APPOINTMENTS_MANAGE (and PATIENTS_MANAGE for a new
+         *     record). Once, for a pending request: the status becomes PROPOSED and the hold
+         *     moves to the new time in one transaction (the clinic's hold time, never past an
+         *     hour before it). The record is chosen now and linked when the patient accepts.
+         *     Records booking_request.proposed. Needs X-CSRF-Token.
+         */
+        readonly post: operations["proposeBookingTime"];
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -3445,8 +3584,11 @@ export interface components {
         readonly PortalBookingRequest: {
             /** Format: uuid */
             readonly id: string;
-            /** @enum {string} */
-            readonly status: "REQUESTED";
+            /**
+             * @description M6b-P5 (R48); PROPOSED shows the clinic's suggested time as starts_at
+             * @enum {string}
+             */
+            readonly status: "REQUESTED" | "PROPOSED" | "DECLINED" | "EXPIRED";
             /** Format: uuid */
             readonly clinic_id: string;
             readonly clinic_name: string;
@@ -3462,11 +3604,47 @@ export interface components {
             readonly starts_at: string;
             /** Format: date-time */
             readonly created_at: string;
+            /**
+             * Format: date-time
+             * @description The time first asked for, when the clinic proposed another
+             */
+            readonly original_starts_at: string | null;
+            readonly decline_reason: components["schemas"]["DeclineReason"] | null;
+            /**
+             * Format: date-time
+             * @description While open, when the request (or proposal) ends unanswered
+             */
+            readonly respond_by: string | null;
         };
         readonly PortalBookingRequestList: {
             readonly items: readonly components["schemas"]["PortalBookingRequest"][];
         };
         readonly StaffBookingRequest: {
+            readonly status: components["schemas"]["BookingRequestStatus"];
+            /** Format: uuid */
+            readonly doctor_id: string | null;
+            /** Format: uuid */
+            readonly session_id: string | null;
+            /**
+             * Format: date-time
+             * @description A proposal's original time (R40)
+             */
+            readonly original_starts_at: string | null;
+            /** Format: uuid */
+            readonly patient_id: string | null;
+            readonly patient_code: string | null;
+            /** Format: uuid */
+            readonly appointment_id: string | null;
+            /** Format: date-time */
+            readonly answered_at: string | null;
+            readonly answered_by_name: string | null;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            /** @enum {string|null} */
+            readonly decided_by: "STAFF" | "PATIENT" | "SYSTEM" | null;
+            readonly decline_reason: components["schemas"]["DeclineReason"] | null;
+            /** @description Staff only */
+            readonly decline_note: string | null;
             /** Format: uuid */
             readonly id: string;
             readonly full_name: string;
@@ -3494,6 +3672,86 @@ export interface components {
         };
         readonly StaffBookingRequestList: {
             readonly items: readonly components["schemas"]["StaffBookingRequest"][];
+            /** @description Open requests now (R45) */
+            readonly open_count: number;
+            /** @description Requests that expired unanswered in the last 7 days */
+            readonly expired_7d: number;
+        };
+        /**
+         * @description M6b-P5 (R31). PENDING and PROPOSED are open; an open request past its deadline reads EXPIRED
+         * @enum {string}
+         */
+        readonly BookingRequestStatus: "PENDING" | "PROPOSED" | "ACCEPTED" | "DECLINED" | "EXPIRED";
+        /**
+         * @description R39; PATIENT_DECLINED is the patient's No thanks to a proposal, never a staff choice
+         * @enum {string}
+         */
+        readonly DeclineReason: "TIME_UNAVAILABLE" | "DOCTOR_UNAVAILABLE" | "PLEASE_CALL" | "NOT_ONLINE" | "DUPLICATE" | "OTHER" | "PATIENT_DECLINED";
+        /**
+         * @description R37: a new clinic record from the request. The name defaults to the account's; sex is
+         *     required when the patient gave none; an age (default the request's) or a date of birth.
+         */
+        readonly NewRequestRecord: {
+            readonly sex?: components["schemas"]["Sex"] | null;
+            readonly age_years?: number | null;
+            /** Format: date */
+            readonly date_of_birth?: string | null;
+            readonly full_name?: string | null;
+        };
+        /** @description Exactly one of patient_id (this clinic's record) and new_patient (R36-R38) */
+        readonly RequestRecordChoice: {
+            /** Format: uuid */
+            readonly patient_id?: string | null;
+            readonly new_patient?: components["schemas"]["NewRequestRecord"] | null;
+        };
+        readonly RequestDecline: {
+            /** @enum {string} */
+            readonly reason: "TIME_UNAVAILABLE" | "DOCTOR_UNAVAILABLE" | "PLEASE_CALL" | "NOT_ONLINE" | "DUPLICATE" | "OTHER";
+            /** @description For staff only; never shown to the patient, logged or notified */
+            readonly note?: string | null;
+        };
+        /** @description R40. Another session (and slot, in slot mode) of the same doctor, plus the record */
+        readonly RequestProposal: {
+            /** Format: uuid */
+            readonly session_id: string;
+            /** Format: date-time */
+            readonly slot_start?: string | null;
+            /** Format: uuid */
+            readonly patient_id?: string | null;
+            readonly new_patient?: components["schemas"]["NewRequestRecord"] | null;
+        };
+        readonly RequestAnswer: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["BookingRequestStatus"];
+            /** Format: uuid */
+            readonly patient_id: string | null;
+            /** Format: uuid */
+            readonly appointment_id: string | null;
+        };
+        readonly RequestCandidate: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly code: string;
+            readonly full_name: string;
+            readonly age_years: number;
+            /** @description NO_SHOW appointments in the last 12 months (R47); staff only, decides nothing */
+            readonly no_shows: number;
+        };
+        readonly RequestCandidateList: {
+            /** @description The account already has this clinic's record (the only item); accept must use it */
+            readonly linked: boolean;
+            readonly items: readonly components["schemas"]["RequestCandidate"][];
+            readonly suggested: {
+                readonly full_name: string;
+                readonly age_years: number | null;
+                readonly sex: components["schemas"]["Sex"] | null;
+            };
+        };
+        readonly PortalProposalAnswer: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["BookingRequestStatus"];
         };
         /** @description A slot (or, in token mode, a place) held by an online request (ADR-0018) */
         readonly HeldPlace: {
@@ -4815,6 +5073,12 @@ export interface components {
             readonly bookings_to_move: number | null;
             /** @description Messages that failed today; null in scope DOCTOR */
             readonly messages_failed: number | null;
+            /** @description M6b-P5 (R45) open online booking requests; null in scope DOCTOR */
+            readonly booking_requests_open: number | null;
+            /** @description R46 requests answered by staff in 30 days; scope CLINIC with USAGE_METRICS_VIEW */
+            readonly requests_answered_30d: number | null;
+            /** @description R46 requests that expired unanswered in 30 days; as requests_answered_30d */
+            readonly requests_expired_30d: number | null;
             /** @description The last 7 days ending today; null without USAGE_METRICS_VIEW */
             readonly week: readonly components["schemas"]["DashboardDay"][] | null;
         };
@@ -5082,6 +5346,7 @@ export interface components {
          * @description The public page and booking requests (M6b-P4): REQ_NOT_FOUND (404: an unknown slug, a
          *     clinic that is not active, or a session that cannot be requested); APT_SLOT_TAKEN,
          *     APT_SESSION_FULL, APT_SLOT_HELD, APT_SESSION_CLOSED, PRT_REQUEST_EXISTS,
+         *     BKG_ALREADY_ANSWERED (M6b-P5: answered, or past its deadline), PRT_ALREADY_LINKED,
          *     PRT_TOO_MANY_REQUESTS (409); APT_OUTSIDE_SCHEDULE, REQ_VALIDATION_FAILED (422);
          *     PRT_RATE_LIMITED (429, with Retry-After)
          */
@@ -5999,6 +6264,72 @@ export interface operations {
             readonly 429: components["responses"]["BookingRequestError"];
         };
     };
+    readonly acceptBookingProposal: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly request_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Accepted; the appointment now shows under the clinic */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalProposalAnswer"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["BookingRequestError"];
+            readonly 409: components["responses"]["BookingRequestError"];
+        };
+    };
+    readonly declineBookingProposal: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly request_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Declined */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalProposalAnswer"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["BookingRequestError"];
+            readonly 409: components["responses"]["BookingRequestError"];
+        };
+    };
     readonly listPortalPrescriptions: {
         readonly parameters: {
             readonly query?: never;
@@ -6402,7 +6733,9 @@ export interface operations {
     };
     readonly listBookingRequests: {
         readonly parameters: {
-            readonly query?: never;
+            readonly query?: {
+                readonly state?: "open" | "answered";
+            };
             readonly header?: {
                 /** @description Correlation ID. Generated by the API when absent and always echoed back. */
                 readonly "X-Request-ID"?: components["parameters"]["RequestId"];
@@ -6433,6 +6766,181 @@ export interface operations {
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly listRequestCandidates: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                readonly request_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The candidates */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["RequestCandidateList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly acceptBookingRequest: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly request_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["RequestRecordChoice"];
+            };
+        };
+        readonly responses: {
+            /** @description Accepted and booked */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["RequestAnswer"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["BookingRequestError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["BookingRequestError"];
+        };
+    };
+    readonly declineBookingRequest: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly request_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["RequestDecline"];
+            };
+        };
+        readonly responses: {
+            /** @description Declined */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["RequestAnswer"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["BookingRequestError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["BookingRequestError"];
+        };
+    };
+    readonly proposeBookingTime: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly request_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["RequestProposal"];
+            };
+        };
+        readonly responses: {
+            /** @description Proposed */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["RequestAnswer"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["BookingRequestError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["BookingRequestError"];
         };
     };
     readonly getClinic: {

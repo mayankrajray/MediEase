@@ -16,6 +16,8 @@ export interface ShellLink {
   readonly label: string;
   /** Current only on this exact path (a section whose pages are its siblings' parent, like /ops). */
   readonly exact?: boolean;
+  /** M6b-P5 (R45): a count waiting there, shown beside the label and read as words. */
+  readonly badge?: number;
 }
 
 /**
@@ -148,7 +150,7 @@ function NavLinks({
         {links.map((item) => {
           const current = pathname === item.href || (item.exact !== true && pathname.startsWith(`${item.href}/`));
           return (
-            <li key={item.href}>
+            <li key={item.href} className="relative">
               <Link
                 href={item.href}
                 {...(onNavigate === undefined ? {} : { onClick: onNavigate })}
@@ -159,7 +161,17 @@ function NavLinks({
                 )}
               >
                 {item.label}
+                {item.badge !== undefined && item.badge > 0 && <span className="sr-only">{`, ${item.badge} waiting`}</span>}
               </Link>
+              {item.badge !== undefined && item.badge > 0 && (
+                // Visible count beside the link; the link's own name says it in words.
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-amber-100 px-2 text-sm font-semibold text-amber-950 ring-1 ring-inset ring-amber-300"
+                >
+                  {item.badge > 99 ? "99+" : item.badge}
+                </span>
+              )}
             </li>
           );
         })}
