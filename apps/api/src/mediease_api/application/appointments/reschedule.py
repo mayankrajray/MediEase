@@ -24,10 +24,11 @@ from mediease_api.application.appointments.common import (
 )
 from mediease_api.application.appointments.views import AppointmentView
 from mediease_api.application.audit import record_event
+from mediease_api.application.booking.holds import held_error, record_override, resolve_holds
 from mediease_api.application.context import Actor
 from mediease_api.application.notifications.service import publish
 from mediease_api.domain.appointments.appointment import Appointment
-from mediease_api.domain.appointments.errors import NotModifiable, SessionClosed
+from mediease_api.domain.appointments.errors import NotModifiable, SessionClosed, SlotHeld
 from mediease_api.domain.appointments.status import AppointmentStatus, CancelReason
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.notifications.events import AppointmentRescheduled
@@ -43,6 +44,8 @@ logger = structlog.get_logger(__name__)
 class RescheduleCommand:
     session_id: UUID
     slot_start: datetime | None = None
+    # M6b-P4 (R18a): move onto a held slot through the confirmed "Book anyway" action.
+    override_hold: bool = False
 
 
 class RescheduleAppointment:
@@ -70,18 +73,30 @@ class RescheduleAppointment:
             now = self._clock.now()
             old.cancel(source, reason=CancelReason.RESCHEDULED, now=now)
             tenant.appointments.update(old)
-            new = Appointment.book(
+            resolution = resolve_holds(
+                tenant,
                 target,
-                id=self._ids.new_id(),
-                patient_id=old.patient_id,
-                active=tenant.appointments.list_active_for_sessions([target.id]),
-                now=now,
                 slot_start=cmd.slot_start,
-                source=old.source,
-                reason=old.reason,
-                created_by=actor.user_id,
-                rescheduled_from_id=old.id,
+                override=cmd.override_hold,
+                actor=actor,
+                now=now,
             )
+            try:
+                new = Appointment.book(
+                    target,
+                    id=self._ids.new_id(),
+                    patient_id=old.patient_id,
+                    active=tenant.appointments.list_active_for_sessions([target.id]),
+                    now=now,
+                    slot_start=cmd.slot_start,
+                    source=old.source,
+                    reason=old.reason,
+                    created_by=actor.user_id,
+                    rescheduled_from_id=old.id,
+                    holds=resolution.holds,
+                )
+            except SlotHeld:
+                raise held_error(uow, tenant, target, cmd.slot_start, now) from None
             tenant.sessions.update(source)
             if target is not source:
                 tenant.sessions.update(target)
@@ -104,6 +119,16 @@ class RescheduleAppointment:
                     "rescheduled_from_id": str(old.id),
                     "from_session_id": str(source.id),
                 },
+            )
+            record_override(
+                uow,
+                ids_new_id=self._ids.new_id(),
+                actor=actor,
+                now=now,
+                clinic_id=clinic_id,
+                appointment_id=new.id,
+                session_id=target.id,
+                released=resolution.released,
             )
             # FR-APT-06 (M5-P2, decision 6A): the new time is confirmed; the old job, if still
             # queued, finds its appointment cancelled and sends nothing. Through the notification

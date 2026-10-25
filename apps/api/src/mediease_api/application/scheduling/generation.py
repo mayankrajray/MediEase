@@ -85,11 +85,14 @@ def reconcile_doctor(
 ) -> tuple[Session, ...]:
     """D4, D10, D11: apply the new rules to existing sessions; return the booked ones closed."""
     sessions = tenant.sessions.list_for_doctor(doctor.id, first=first, last=last)
+    # ADR-0018: a session an online request points at is closed, never deleted or retired.
+    protected = tenant.booking_requests.session_ids_with_pending([s.id for s in sessions])
     kept: list[Session] = []
     for on_date in sorted({s.on_date for s in sessions}):
         outcome = reconcile(
             [s for s in sessions if s.on_date == on_date],
             plan_for(tenant, clinic, doctor.id, on_date),
+            protected,
         )
         for stale in outcome.to_delete:
             if tenant.appointments.exists_for_session(stale.id):

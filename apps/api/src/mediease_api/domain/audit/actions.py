@@ -127,6 +127,9 @@ class AuditAction(StrEnum):
     # ``patient`` entity. Invited is STAFF; linked is PATIENT; unlinked is PATIENT or STAFF.
     # Metadata: the link or invite ID, the method, who unlinked, the invite's expiry; never an
     # email, a name or a digit. Reading the portal is not audited (decision 7A).
+    # M6b-P4: a patient's booking request (PATIENT), and staff booking over its hold (STAFF).
+    BOOKING_REQUEST_CREATED = "booking_request.created"
+    APPOINTMENT_HOLD_OVERRIDDEN = "appointment.hold_overridden"
     PATIENT_PORTAL_INVITED = "patient.portal_invited"
     PATIENT_PORTAL_LINKED = "patient.portal_linked"
     PATIENT_PORTAL_UNLINKED = "patient.portal_unlinked"

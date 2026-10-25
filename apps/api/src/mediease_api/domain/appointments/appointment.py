@@ -12,7 +12,7 @@ The domain never reads a clock: ``now`` is passed in, in UTC.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -24,6 +24,7 @@ from mediease_api.domain.appointments.errors import (
     OutsideSchedule,
     SessionClosed,
     SessionFull,
+    SlotHeld,
     SlotTaken,
 )
 from mediease_api.domain.appointments.status import (
@@ -32,6 +33,7 @@ from mediease_api.domain.appointments.status import (
     AppointmentStatus,
     CancelReason,
 )
+from mediease_api.domain.booking.request import BookingRequest
 from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.scheduling.sessions import Session
 from mediease_api.domain.shared.errors import InvalidValue
@@ -97,12 +99,15 @@ class Appointment:
         reason: str | None = None,
         created_by: UUID | None = None,
         rescheduled_from_id: UUID | None = None,
+        holds: Sequence[BookingRequest] = (),
     ) -> Appointment:
         """R5, R6: a place in ``session`` for the patient, taken on the session in place.
 
         ``active`` are the session's active appointments, read under the session's row lock.
-        Checks, in order: open session; the slot or token rule of the session's mode; not over
-        (D12); the patient not already booked (D13); the slot free (R3); a place left (R5).
+        ``holds`` are its live holds (ADR-0018), read under the same lock; the caller removes the
+        ones staff chose to override. Checks, in order: open session; the slot or token rule of
+        the session's mode; not over (D12); the patient not already booked (D13); the slot free
+        (R3); a place left (R5); the slot or last place not held for an online request.
         """
         now = require_utc(now, "now")
         if not session.is_open:
@@ -131,6 +136,13 @@ class Appointment:
             raise SlotTaken()
         if session.available <= 0:
             raise SessionFull()
+        held = next(
+            (h for h in holds if slot_start is not None and h.slot_start == slot_start), None
+        )
+        if held is not None:
+            raise SlotHeld(held.hold_expires_at)
+        if holds and session.available - len(holds) <= 0:
+            raise SlotHeld(min(h.hold_expires_at for h in holds))
 
         token = session.take_place(now)
         return cls(

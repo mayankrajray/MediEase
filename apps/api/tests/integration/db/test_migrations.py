@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0028"
+HEAD = "0029"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -46,6 +46,7 @@ M6A_P7_TABLES = sorted([*M6A_P4_TABLES, "notification_preferences", "notificatio
 M6B_P1_TABLES = sorted([*M6A_P7_TABLES, "patient_account_links", "patient_portal_invites"])
 M6B_P3_TABLES = sorted([*M6B_P1_TABLES, "medicine_reminder_prefs"])
 M6B_P3B_TABLES = sorted([*M6B_P3_TABLES, "dose_records"])
+M6B_P4_TABLES = sorted([*M6B_P3B_TABLES, "booking_requests"])
 
 
 @pytest.fixture
@@ -653,7 +654,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6B_P3B_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6B_P4_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -828,5 +829,33 @@ def test_0028_adds_dose_records(alembic_config: Config, scratch_database_url: st
             assert conn.execute(text(index), {"name": "ix_dose_records_keep_until"}).scalar_one()
         command.downgrade(alembic_config, "0027")
         assert _tables(scratch_database_url) == M6B_P3_TABLES
+    finally:
+        engine.dispose()
+
+
+def test_0029_adds_booking_requests_and_the_clinic_settings(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    """M6b-P4: one tenant table; one open request per account and session, none per slot."""
+    command.upgrade(alembic_config, "0029")
+    assert _tables(scratch_database_url) == M6B_P4_TABLES
+    engine = create_engine(scratch_database_url)
+    index = "SELECT indexdef FROM pg_indexes WHERE indexname = :name"
+    try:
+        with engine.connect() as conn:
+            definition = conn.execute(
+                text(index), {"name": "uq_booking_requests_account_session_pending"}
+            ).scalar_one()
+            assert "UNIQUE" in definition and "PENDING" in definition
+            slot_indexes = conn.execute(
+                text("SELECT indexdef FROM pg_indexes WHERE tablename = 'booking_requests'")
+            ).scalars()
+            assert not [d for d in slot_indexes if "UNIQUE" in d and "slot_start" in d]
+            assert "booking.requested" in _check(conn, "ck_notifications_kind")
+            assert "480" in _check(conn, "ck_clinics_request_hold_minutes_range")
+        command.downgrade(alembic_config, "0028")
+        assert _tables(scratch_database_url) == M6B_P3B_TABLES
+        with engine.connect() as conn:
+            assert "booking.requested" not in _check(conn, "ck_notifications_kind")
     finally:
         engine.dispose()

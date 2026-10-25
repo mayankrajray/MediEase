@@ -95,6 +95,9 @@ class UpdateClinicCommand:
     # M6a-P8 (decision 3A): appointment reminders.
     reminder_evening_before: bool | None = None
     reminder_hours_before: int | None = None
+    # M6b-P4: the online-request hold (minutes) and whether the form must ask age and sex.
+    request_hold_minutes: int | None = None
+    request_requires_age_sex: bool | None = None
 
 
 class CreateClinic:
@@ -277,6 +280,11 @@ class UpdateClinic:
                 now=now,
                 evening_before=cmd.reminder_evening_before,
                 hours_before=cmd.reminder_hours_before,
+            )
+            clinic.change_booking_requests(
+                now=now,
+                hold_minutes=cmd.request_hold_minutes,
+                requires_age_sex=cmd.request_requires_age_sex,
             )
             if cmd.booking_mode is not None and cmd.booking_mode is not clinic.booking_mode:
                 # R19: refused unless every current block supports the new mode.

@@ -38,6 +38,7 @@ from mediease_api.domain.notifications.events import (
     AppointmentBooked,
     AppointmentCancelled,
     AppointmentRescheduled,
+    BookingRequested,
     BookingsToMove,
     Event,
     MessageFailed,
@@ -46,6 +47,7 @@ from mediease_api.domain.notifications.events import (
     StaffJoined,
 )
 from mediease_api.domain.notifications.notification import (
+    BOOKING_REQUESTS_LINK,
     BOOKINGS_TO_MOVE_LINK,
     Channel,
     Notification,
@@ -56,6 +58,7 @@ from mediease_api.domain.notifications.notification import (
     RoleLabel,
     arrived_title,
     booked_title,
+    booking_requested_title,
     bookings_to_move_title,
     cancelled_title,
     message_failed_title,
@@ -184,6 +187,8 @@ class NotificationService:
                     now=now,
                     actor=actor_user_id,
                 )
+            case BookingRequested(request_id=booking_request_id):
+                return self._booking_requested(uow, tenant, booking_request_id, now=now)
             case BookingsToMove(doctor_id=doctor_id, change_id=change_id, on_date=on_date):
                 return self._bookings_to_move(
                     uow, tenant, doctor_id, change_id, on_date, now=now, actor=actor_user_id
@@ -309,6 +314,40 @@ class NotificationService:
                 request_id=request_id,
                 now=now,
             )
+
+    def _booking_requested(
+        self, uow: UnitOfWork, tenant: TenantRepositories, request_id: UUID, *, now: datetime
+    ) -> int:
+        """M6b-P4 (FR-BKG-03, R21): front desk and owners hear of a request. The title holds the
+        requester's first name, the place and the doctor; never the reason, phone, age or sex."""
+        request = tenant.booking_requests.get(request_id)
+        clinic = uow.clinics.get(tenant.clinic_id)
+        if request is None or clinic is None:  # pragma: no cover - published with the request
+            return 0
+        session = tenant.sessions.get(request.session_id)
+        doctor = tenant.doctors.get(request.doctor_id)
+        account = uow.patient_accounts.get(request.account_id)
+        if session is None or doctor is None or account is None:  # pragma: no cover - foreign keys
+            return 0
+        first = (account.full_name.split() or ["Patient"])[0]
+        place = Place.of(
+            starts_at=request.slot_start or session.starts_at,
+            token_number=None,
+            timezone=clinic.timezone,
+        )
+        return self._in_app(
+            tenant,
+            NotificationKind.BOOKING_REQUESTED,
+            self._members(tenant, {Role.OWNER, Role.FRONT_DESK}),
+            event_key=f"{NotificationKind.BOOKING_REQUESTED.value}:{request.id}",
+            title=booking_requested_title(
+                PersonName(first), place, PersonName(doctor.display_name)
+            ),
+            link=BOOKING_REQUESTS_LINK,
+            entity=("booking_request", request.id),
+            now=now,
+            actor=None,
+        )
 
     def _bookings_to_move(
         self,

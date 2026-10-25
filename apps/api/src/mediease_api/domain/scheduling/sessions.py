@@ -14,7 +14,7 @@ point at it, and invisible to listing and generation (M3-P2).
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
@@ -53,6 +53,21 @@ class PlannedSession:
     @property
     def key(self) -> tuple[UUID, datetime]:
         return (self.doctor_id, self.starts_at)
+
+    def slots(self) -> list[tuple[datetime, datetime]]:
+        """Slot mode: the grid of the planned session (M6b-P4: availability reads it unwritten)."""
+        return slot_grid(self.starts_at, self.ends_at, self.slot_minutes, self.mode)
+
+
+def slot_grid(
+    starts_at: datetime, ends_at: datetime, slot_minutes: int | None, mode: BookingMode
+) -> list[tuple[datetime, datetime]]:
+    """``[start, end)`` by the slot length (R3); empty in token mode."""
+    if mode is not BookingMode.SLOTS or slot_minutes is None:
+        return []
+    step = timedelta(minutes=slot_minutes)
+    count = int((ends_at - starts_at) / step)
+    return [(starts_at + step * i, starts_at + step * (i + 1)) for i in range(count)]
 
 
 @dataclass(slots=True)
@@ -190,11 +205,7 @@ class Session:
 
     def slots(self) -> list[tuple[datetime, datetime]]:
         """Slot mode: ``[starts_at, ends_at)`` by the slot length (R3); empty in token mode."""
-        if self.mode is not BookingMode.SLOTS or self.slot_minutes is None:
-            return []
-        step = timedelta(minutes=self.slot_minutes)
-        count = int((self.ends_at - self.starts_at) / step)
-        return [(self.starts_at + step * i, self.starts_at + step * (i + 1)) for i in range(count)]
+        return slot_grid(self.starts_at, self.ends_at, self.slot_minutes, self.mode)
 
 
 def session_bounds(on_date: date, shape: BlockShape, timezone: str) -> tuple[datetime, datetime]:
@@ -264,8 +275,17 @@ class Reconciliation:
     to_resize: tuple[tuple[Session, int], ...] = ()
 
 
-def reconcile(existing: Sequence[Session], planned: Sequence[PlannedSession]) -> Reconciliation:
-    """Compare a date's sessions with its new plan. Missing ones are left for generation (R1)."""
+def reconcile(
+    existing: Sequence[Session],
+    planned: Sequence[PlannedSession],
+    protected: Collection[UUID] = (),
+) -> Reconciliation:
+    """Compare a date's sessions with its new plan. Missing ones are left for generation (R1).
+
+    ``protected`` are sessions with a pending booking request (ADR-0018): they are kept like a
+    booked one, because the request points at the row, but they are not among the bookings to
+    move (``kept``), as nobody is booked yet.
+    """
     plan_by_key = {p.key: p for p in planned}
     to_delete: list[Session] = []
     kept: list[Session] = []
@@ -279,14 +299,15 @@ def reconcile(existing: Sequence[Session], planned: Sequence[PlannedSession]) ->
         if plan is not None and session.matches(plan):
             if session.status is SessionStatus.CLOSED:
                 to_reopen.append(session)
-        elif session.booked_count == 0:
+        elif session.booked_count == 0 and session.id not in protected:
             to_delete.append(session)
         elif plan is not None and session.only_capacity_differs(plan):
             to_resize.append((session, plan.capacity))
         else:
             if session.status is SessionStatus.OPEN:
                 to_close.append(session)
-            kept.append(session)
+            if session.booked_count > 0:
+                kept.append(session)
     return Reconciliation(
         to_delete=tuple(to_delete),
         kept=tuple(kept),

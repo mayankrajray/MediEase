@@ -27,6 +27,7 @@ from mediease_api.application.patients.errors import ImportInvalid, PhoneExists
 from mediease_api.delivery.http.bodies import candidate_body
 from mediease_api.delivery.http.validation import RequestValidationFailed
 from mediease_api.delivery.middleware import get_request_id
+from mediease_api.domain.booking.request import BookingRateLimited
 from mediease_api.domain.links.errors import LinkRateLimited
 from mediease_api.domain.messaging.errors import WebhookRateLimited
 from mediease_api.domain.prescriptions.errors import PdfBusy
@@ -76,6 +77,11 @@ DOMAIN_ERROR_STATUS = {
     "PRT_INVITE_INVALID": 404,
     "PRT_ALREADY_LINKED": 409,
     "PRT_UNVERIFIED_ACCOUNT": 403,
+    # M6b-P4: online booking requests and their soft hold.
+    "PRT_TOO_MANY_REQUESTS": 409,
+    "PRT_REQUEST_EXISTS": 409,
+    "PRT_RATE_LIMITED": 429,
+    "APT_SLOT_HELD": 409,
     # M6b-P3b (R46): a dose outside its marking window.
     "PRT_DOSE_NOT_MARKABLE": 409,
     # M6a-P4: emailed verification and reset links.
@@ -177,7 +183,8 @@ def domain_error_response(exc: DomainError) -> tuple[Response, int]:
         | PdfBusy
         | LinkRateLimited
         | WebhookRateLimited
-        | InvitesRateLimited,
+        | InvitesRateLimited
+        | BookingRateLimited,
     ):
         response.headers["Retry-After"] = str(exc.retry_after_seconds)
     return response, status

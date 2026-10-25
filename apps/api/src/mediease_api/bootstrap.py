@@ -74,6 +74,12 @@ from mediease_api.application.auth.password_reset import (
 from mediease_api.application.auth.refresh_session import RefreshSession
 from mediease_api.application.auth.sign_in import SignIn
 from mediease_api.application.auth.sign_out import SignOut
+from mediease_api.application.booking.public import GetAvailability, GetPublicClinic
+from mediease_api.application.booking.requests import (
+    CreateBookingRequest,
+    ListBookingRequests,
+    ListMyBookingRequests,
+)
 from mediease_api.application.clinics.change_staff_role import ChangeStaffRole
 from mediease_api.application.clinics.deactivate_staff import DeactivateStaff
 from mediease_api.application.clinics.invite_email import SendStaffInvite
@@ -205,6 +211,7 @@ from mediease_api.delivery.http.access import check_every_route_has_policy, regi
 from mediease_api.delivery.http.appointments import create_appointments_blueprint
 from mediease_api.delivery.http.audit_log import create_audit_log_blueprint
 from mediease_api.delivery.http.auth import create_auth_blueprint
+from mediease_api.delivery.http.booking_requests import create_booking_requests_blueprint
 from mediease_api.delivery.http.clinic import create_clinic_blueprint
 from mediease_api.delivery.http.csrf import register_csrf_protection
 from mediease_api.delivery.http.dashboard import create_dashboard_blueprint
@@ -224,6 +231,7 @@ from mediease_api.delivery.http.patients import (
 from mediease_api.delivery.http.platform import create_platform_blueprint
 from mediease_api.delivery.http.portal import create_portal_blueprint
 from mediease_api.delivery.http.prescriptions import create_prescriptions_blueprint
+from mediease_api.delivery.http.public_clinics import create_public_clinics_blueprint
 from mediease_api.delivery.http.public_links import create_public_links_blueprint
 from mediease_api.delivery.http.reminders import create_reminders_blueprint
 from mediease_api.delivery.http.request_info import register_request_info
@@ -730,6 +738,22 @@ class _UseCases:
     def portal_prescription_pdf(self) -> PortalPrescriptionPdf:
         return PortalPrescriptionPdf(uow=self._uow(), pdf=self.download_prescription_pdf())
 
+    # M6b-P4: the public page, booking requests and the staff list.
+    def get_public_clinic(self) -> GetPublicClinic:
+        return GetPublicClinic(uow=self._uow(), clock=self.clock)
+
+    def get_availability(self) -> GetAvailability:
+        return GetAvailability(uow=self._uow(), clock=self.clock)
+
+    def create_booking_request(self) -> CreateBookingRequest:
+        return CreateBookingRequest(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def list_my_booking_requests(self) -> ListMyBookingRequests:
+        return ListMyBookingRequests(uow=self._uow(), clock=self.clock)
+
+    def list_booking_requests(self) -> ListBookingRequests:
+        return ListBookingRequests(uow=self._uow(), clock=self.clock)
+
     def list_portal_reminders(self) -> ListPortalReminders:
         return ListPortalReminders(uow=self._uow())
 
@@ -1138,6 +1162,8 @@ def create_app(
         create_prescriptions_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
     )
     app.register_blueprint(create_public_links_blueprint(use_cases))
+    app.register_blueprint(create_public_clinics_blueprint(use_cases))
+    app.register_blueprint(create_booking_requests_blueprint(use_cases))
     app.register_blueprint(create_rx_library_blueprint(use_cases))
     app.register_blueprint(create_whatsapp_webhook_blueprint(use_cases))
     app.register_blueprint(create_reminders_blueprint(use_cases))

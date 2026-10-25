@@ -129,6 +129,12 @@ EXPECTED_POLICIES = {
     "prescriptions.get_patient_link": (Access.CLINIC, Permission.RX_PRINT),
     "prescriptions.reset_patient_link": (Access.CLINIC, Permission.RX_PRINT),
     "prescriptions.replace_patient_link": (Access.CLINIC, Permission.RX_PRINT),
+    # M6b-P4: the public clinic page and its availability; a clinic that is not public is a 404.
+    "public_clinics.get_clinic": (Access.PUBLIC, None),
+    "public_clinics.availability": (Access.PUBLIC, None),
+    "booking_requests.list_booking_requests": (Access.CLINIC, Permission.APPOINTMENTS_MANAGE),
+    "portal_records.create_booking_request": (Access.PATIENT, None),
+    "portal_records.list_booking_requests": (Access.PATIENT, None),
     "public_links.describe_link": (Access.PUBLIC, None),
     "public_links.verify_link": (Access.PUBLIC, None),
     "public_links.view_link_prescription": (Access.PUBLIC, None),

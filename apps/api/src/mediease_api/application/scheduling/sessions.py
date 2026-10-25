@@ -15,7 +15,7 @@ from uuid import UUID
 
 import structlog
 
-from mediease_api.application.appointments.views import SessionView
+from mediease_api.application.appointments.views import HeldPlace, SessionView
 from mediease_api.application.context import RequestContext
 from mediease_api.application.scheduling.generation import generate
 from mediease_api.application.scheduling.schedules import load_clinic, load_doctor
@@ -53,11 +53,19 @@ class ListSessions:
             ):
                 if appointment.slot_start is not None:
                     taken.setdefault(appointment.session_id, set()).add(appointment.slot_start)
+            held: dict[UUID, list[HeldPlace]] = {}
+            for hold in tenant.booking_requests.live_holds([s.id for s in sessions], now):
+                held.setdefault(hold.session_id, []).append(
+                    HeldPlace(hold.slot_start, hold.hold_expires_at)
+                )
             uow.commit()
 
         if created:
             logger.info("session.generated", clinic_id=str(ctx.clinic_id), count=created)
-        return [SessionView(s, frozenset(taken.get(s.id, ()))) for s in sessions]
+        return [
+            SessionView(s, frozenset(taken.get(s.id, ())), tuple(held.get(s.id, ())))
+            for s in sessions
+        ]
 
 
 def sessions_for_date(

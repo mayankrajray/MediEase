@@ -160,6 +160,9 @@ class UpdateClinicRequest(BaseModel):
     # M6a-P8 (decision 3A): appointment reminders, for bookings made or moved from now on.
     reminder_evening_before: bool | None = None
     reminder_hours_before: int | None = Field(default=None, ge=0, le=6)
+    # M6b-P4 (booking-requests R27, R12): the online-request hold and whether age and sex are asked.
+    request_hold_minutes: int | None = Field(default=None, ge=30, le=480)
+    request_requires_age_sex: bool | None = None
 
     @model_validator(mode="after")
     def _at_least_one_change(self) -> UpdateClinicRequest:
@@ -203,6 +206,8 @@ def create_clinic_blueprint(queries: ClinicUseCases, *, public_base_url: str) ->
                 rx_paper_size=body.rx_paper_size,
                 reminder_evening_before=body.reminder_evening_before,
                 reminder_hours_before=body.reminder_hours_before,
+                request_hold_minutes=body.request_hold_minutes,
+                request_requires_age_sex=body.request_requires_age_sex,
             ),
         )
         return jsonify(clinic_body(clinic_row))
