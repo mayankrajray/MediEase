@@ -202,3 +202,105 @@ indexing (M6c); WhatsApp to staff or patients about requests (P6, L-02).
 
 ## 12. Open questions
 - Q12 (PRD §14.3): which response window clinics keep; P5 decides the default with the pilot.
+
+## 13. M6b-P5 - Answering requests (Draft, 26 Oct 2026)
+
+Design: `docs/milestones/M6b-patient-portal-booking.md`, "M6b-P5" (10 decisions).
+
+### States
+
+- **R31** A request is `PENDING`, `PROPOSED`, `ACCEPTED`, `DECLINED` or `EXPIRED`. `PENDING` and
+  `PROPOSED` are **open**. Only an open request can change, under its row lock; anything else is
+  409 `BKG_ALREADY_ANSWERED`.
+- **R32** An open request whose deadline has passed is treated as `EXPIRED` everywhere at once:
+  `PENDING` after `respond_by`, `PROPOSED` after its `hold_expires_at`. A sweep every 5 minutes
+  writes `EXPIRED` and records `booking_request.expired` (SYSTEM).
+- **R33** Live holds are open requests with `hold_expires_at > now`, counted on their current
+  session and slot. One open request per account and session (the unique index covers both open
+  states).
+
+### Accept (staff)
+
+- **R34** `POST /booking-requests/{id}/accept {patient_id | new_patient}` (`APPOINTMENTS_MANAGE`
+  and, to create, `PATIENTS_MANAGE`). In one transaction: lock the session and the request; book
+  the request's time with source `PUBLIC_PAGE`, its own hold excluded and every other live hold
+  counted; link the account to the record (method `BOOKING`, actor STAFF); set `ACCEPTED`,
+  `patient_id`, `appointment_id`, `decided_at`, `decided_by`; record `booking_request.accepted`
+  (IDs only). The usual booking confirmation and staff notification follow.
+- **R35** The time may have gone after the hold lapsed: then 409 `APT_SLOT_TAKEN`,
+  `APT_SESSION_FULL` or `APT_SLOT_HELD`, nothing changes, and the desk may propose.
+- **R36** `GET /booking-requests/{id}/candidates`: the clinic's records with the request's phone
+  (at most 10: name, code, age, no-show count). If the account is already linked in this clinic,
+  only that record, flagged, and accept must use it.
+- **R37** A new record is created from the request: the account's name, the contact phone, the
+  age as recorded age (or a date of birth staff enter), the sex given or chosen by staff
+  (required), the clinic's language default. Phone matching never links or books by itself.
+- **R38** A record actively linked to another account is refused `PRT_ALREADY_LINKED`.
+
+### Decline (staff or patient)
+
+- **R39** `POST /booking-requests/{id}/decline {reason, note?}`; `reason` is one of
+  `TIME_UNAVAILABLE`, `DOCTOR_UNAVAILABLE`, `PLEASE_CALL`, `NOT_ONLINE`, `DUPLICATE`, `OTHER`. The
+  `note` (up to 200 characters) is for staff only and never reaches the patient, a log or a
+  notification. The hold ends at once. `booking_request.declined` records the reason code.
+
+### Propose (staff), then the patient answers
+
+- **R40** `POST /booking-requests/{id}/propose {session_id, slot_start?, patient_id | new_patient}`
+  for a `PENDING` request: another session or slot of the same doctor, at least 2 hours ahead,
+  free of bookings and other live holds. The record is matched now (R36-R38) but nothing is linked
+  yet. The request becomes `PROPOSED`. Its hold moves to the new time (the original is kept) for
+  the clinic's hold time, never past 1 hour before the new time. `booking_request.proposed`.
+- **R41** One proposal per request; a `PROPOSED` request cannot be proposed again.
+- **R42** `POST /portal/booking-requests/{id}/accept-proposal` (the account's own request): books,
+  links and sets `ACCEPTED` as R34, with actor PATIENT. If the time has gone meanwhile (it cannot
+  while the hold is live; only by a staff override), 409 as R35 and the request stays `PROPOSED`.
+- **R43** `POST /portal/booking-requests/{id}/decline-proposal`: `DECLINED`, reason
+  `PATIENT_DECLINED`, hold ended.
+
+### The inbox and counts
+
+- **R44** `GET /booking-requests?state=open` (oldest first) and `state=answered` (decided in the
+  last 7 days, newest first, with outcome, who and when).
+- **R45** Today (clinic scope) shows the number of open requests; the nav item shows the same
+  number.
+- **R46** Owners' Today shows, for the last 30 days, the share of requests answered (accepted,
+  declined or proposed) before their deadline, and the number that expired.
+- **R47** The no-show count is per record: `NO_SHOW` appointments in the last 12 months. It is
+  shown to staff only and changes nothing by itself (FR-BKG-07).
+
+### The patient
+
+- **R48** `GET /portal/booking-requests` returns open requests and those answered in the last 7
+  days, except accepted ones (their appointment shows under the clinic). Each carries `status`,
+  the proposed time when `PROPOSED`, and the decline reason code when `DECLINED`.
+- **R49** *My appointments* shows *Requested*, *Suggested another time* (with *Accept this time*
+  and *No thanks*), *Declined* with the reason's words and the call button, and *Expired* with the
+  call button. English and Hindi.
+- **R50** No reason, staff note, phone or age appears in an audit row, a log or a notification.
+
+### Storage
+
+- **R51** Migration `0030`: the statuses; `patient_id`, `appointment_id`, `decided_at`,
+  `decided_by`, `decided_by_type`, `decline_reason`, `decline_note`, `original_session_id`,
+  `original_slot_start`; the unique open-request index over both open states;
+  `LinkMethod.BOOKING`; the two sweep job kinds.
+- **R52** Contract 0.34.0. New errors: `BKG_ALREADY_ANSWERED` (409).
+
+### Acceptance criteria (P5)
+
+- **AC9 (R34)** Accepting a request with a new record books the time, links the account, and the
+  patient then sees the appointment under the clinic.
+- **AC10 (R34, R33)** Accepting a request whose session's other place is held by another request
+  still works, and the other hold remains.
+- **AC11 (R31)** Two staff accepting the same request at once: one 201, one 409
+  `BKG_ALREADY_ANSWERED`, one appointment.
+- **AC12 (R38)** Accepting with a record linked to another account is refused; nothing changes.
+- **AC13 (R39, R50)** A declined request releases its slot at once; the patient sees the reason's
+  words; the staff note is in no patient response, log or audit row.
+- **AC14 (R40, R42)** Propose, then the patient accepts: one appointment at the proposed time, the
+  original time free again, the account linked.
+- **AC15 (R32)** A request past `respond_by` cannot be accepted (409) and shows as Expired before
+  the sweep runs; after the sweep the row is `EXPIRED` with one audit event.
+- **AC16 (R46, R47)** The response rate and the no-show count match a seeded set of requests and
+  appointments.
