@@ -103,6 +103,10 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/booking-requests/<uuid:request_id>/accept": lambda w: f"{_request_url(w)}/accept",
     "/api/v1/booking-requests/<uuid:request_id>/decline": lambda w: f"{_request_url(w)}/decline",
     "/api/v1/booking-requests/<uuid:request_id>/propose": lambda w: _proposable_url(w),
+    # M6b-P6: clinic B's appointment's live token link.
+    "/api/v1/appointments/<uuid:appointment_id>/live-link": lambda w: (
+        f"{_appointment_url(w)}/live-link"
+    ),
 }
 
 # Clinical writes need CLINICAL_WRITE and the visit's doctor (prescriptions spec §2), so these

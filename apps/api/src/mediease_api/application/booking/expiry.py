@@ -16,6 +16,7 @@ from uuid import UUID
 import structlog
 
 from mediease_api.application.booking.answers import ENTITY_TYPE
+from mediease_api.application.notifications.service import publish
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.audit.event import ActorType, AuditEvent
 from mediease_api.domain.jobs.job import (
@@ -25,6 +26,7 @@ from mediease_api.domain.jobs.job import (
     NewJob,
 )
 from mediease_api.domain.jobs.schedule import RECURRING, dedupe_key
+from mediease_api.domain.notifications.events import BookingRequestExpired
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.unit_of_work import UnitOfWork
@@ -93,6 +95,15 @@ class ExpireBookingRequests:
                         request_id=job.request_id,
                         metadata={"account_id": str(request.account_id)},
                     )
+                )
+                # M6b-P6 (portal R57): the requester is told it expired.
+                publish(
+                    uow,
+                    BookingRequestExpired(request.id),
+                    clinic_id=clinic_id,
+                    ids=self._ids,
+                    now=now,
+                    request_id=job.request_id,
                 )
                 expired += 1
             uow.commit()

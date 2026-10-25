@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.34.0
+  version: 0.35.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -978,6 +978,231 @@ paths:
           $ref: '#/components/responses/BookingRequestError'
         '409':
           $ref: '#/components/responses/BookingRequestError'
+  /api/v1/portal/notifications:
+    get:
+      tags: [portal]
+      operationId: listPortalNotifications
+      summary: The account's notifications, newest first
+      description: |
+        M6b-P6, R55, R60, R68. @patient. The newest 50 of the linked clinics (and the account's
+        own booking answers), never a suspended clinic's; titles in the account's language,
+        with no diagnosis, medicine, reason text, note or phone (R59). Not audited.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The notifications
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalNotificationList'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/notifications/summary:
+    get:
+      tags: [portal]
+      operationId: getPortalNotificationSummary
+      summary: The bell's unread count
+      description: |
+        M6b-P6, R67. @patient. Strong ETag; If-None-Match answers 304 with no body while it
+        is unchanged. The portal polls it every 30 seconds while the tab is visible.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: If-None-Match
+          in: header
+          required: false
+          schema: {type: string}
+      responses:
+        '200':
+          description: The count
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalNotificationSummary'
+        '304':
+          description: Unchanged since the ETag sent
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/notifications/{notification_id}/read:
+    post:
+      tags: [portal]
+      operationId: readPortalNotification
+      summary: Mark one notification read
+      description: |
+        M6b-P6, R68. @patient. Another account's (or a hidden) ID is 404 REQ_NOT_FOUND.
+        Needs X-CSRF-Token equal to me_pt_csrf.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: notification_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '204':
+          description: Read
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '404':
+          $ref: '#/components/responses/PortalLinkingError'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/notifications/read-all:
+    post:
+      tags: [portal]
+      operationId: readAllPortalNotifications
+      summary: Mark every visible notification read
+      description: |
+        M6b-P6, R68. @patient. Needs X-CSRF-Token equal to me_pt_csrf.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: How many were marked
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalNotificationsMarked'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/notification-preferences:
+    get:
+      tags: [portal]
+      operationId: listPortalNotificationPreferences
+      summary: The account's notification switches
+      description: |
+        M6b-P6, R62, R63. @patient. Every kind with its in-app switch (on by default) and,
+        for the four booking answers only, its email switch (null where email is not offered).
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The switches
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalNotificationPreferenceList'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+    put:
+      tags: [portal]
+      operationId: setPortalNotificationPreference
+      summary: Turn one switch on or off
+      description: |
+        M6b-P6, R62, R63. @patient. EMAIL for a kind other than the booking answers is 422.
+        Returns every switch. Logged, not audited. Needs X-CSRF-Token equal to me_pt_csrf.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortalNotificationPreferenceChange'
+      responses:
+        '200':
+          description: The switches
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalNotificationPreferenceList'
+        '422':
+          $ref: '#/components/responses/PortalLinkingError'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/appointments/{appointment_id}/live-link:
+    get:
+      tags: [portal]
+      operationId: getPortalLiveLink
+      summary: The live token link of the account's own appointment
+      description: |
+        M6b-P6, R69, ADR-0019. @patient. Only for an appointment of a record linked to the
+        account (else 404). Valid from the start of the session's day until 2 hours after it
+        ends; 422 when the appointment is cancelled or has ended.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: appointment_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The link
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveLink'
+        '404':
+          $ref: '#/components/responses/PortalLinkingError'
+        '422':
+          $ref: '#/components/responses/PortalLinkingError'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
   /api/v1/portal/prescriptions:
     get:
       tags: [portal]
@@ -1692,6 +1917,85 @@ paths:
           $ref: '#/components/responses/AuthError'
         '422':
           $ref: '#/components/responses/BookingRequestError'
+  /api/v1/appointments/{appointment_id}/live-link:
+    get:
+      tags: [appointments]
+      operationId: getStaffLiveLink
+      summary: The patient's live token link, to send by hand
+      description: |
+        M6b-P6, R69, ADR-0019. Permission: APPOINTMENTS_MANAGE. Another clinic's appointment is
+        404; a cancelled or ended one is 422. Not audited.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/AppointmentPath'
+      responses:
+        '200':
+          description: The link
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveLink'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/AppointmentError'
+  /api/v1/public/queue/{token}:
+    get:
+      tags: [public]
+      operationId: getLiveQueue
+      summary: Where an appointment is in the queue (no sign-in)
+      description: |
+        M6b-P6, R70, R71, ADR-0019. The clinic, the doctor, the patient's own token or slot, how
+        many BOOKED or ARRIVED entries are ahead, what is being seen and a state; never a name,
+        phone, reason or age, nor anything about other patients. Strong ETag (304 while
+        unchanged), never cached, noindex. 404 LINK_INVALID, 410 LINK_EXPIRED (outside the
+        session's day until 2 hours after it), 429 LINK_RATE_LIMITED with Retry-After.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: token
+          in: path
+          required: true
+          schema: {type: string, maxLength: 200}
+        - name: If-None-Match
+          in: header
+          required: false
+          schema: {type: string}
+      responses:
+        '200':
+          description: The live view
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveQueue'
+        '304':
+          description: Unchanged since the ETag sent
+        '404':
+          $ref: '#/components/responses/LinkError'
+        '410':
+          $ref: '#/components/responses/LinkError'
+        '429':
+          $ref: '#/components/responses/LinkRateLimited'
   /api/v1/clinic:
     get:
       tags: [clinic]
@@ -7568,6 +7872,111 @@ components:
       properties:
         slot_start: {type: [string, 'null'], format: date-time}
         until: {type: string, format: date-time}
+    PatientNotificationKind:
+      type: string
+      enum: [booking.accepted, booking.declined, booking.proposed, booking.expired,
+             appointment.confirmed, appointment.moved, appointment.cancelled,
+             prescription.ready, medicine.due]
+      description: M6b-P6 (R57)
+    PortalNotification:
+      type: object
+      required: [id, kind, title, link, created_at, read_at]
+      properties:
+        id: {type: string, format: uuid}
+        kind:
+          $ref: '#/components/schemas/PatientNotificationKind'
+        title:
+          type: string
+          description: In the account's language; no diagnosis, medicine, reason text, note or phone
+        link: {type: string, description: A portal path}
+        created_at: {type: string, format: date-time}
+        read_at: {type: [string, 'null'], format: date-time}
+    PortalNotificationList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortalNotification'
+    PortalNotificationSummary:
+      type: object
+      required: [unread, latest_id]
+      properties:
+        unread: {type: integer, minimum: 0}
+        latest_id: {type: [string, 'null'], format: uuid}
+    PortalNotificationsMarked:
+      type: object
+      required: [marked]
+      properties:
+        marked: {type: integer, minimum: 0}
+    PortalNotificationPreference:
+      type: object
+      required: [kind, in_app, email]
+      properties:
+        kind:
+          $ref: '#/components/schemas/PatientNotificationKind'
+        in_app: {type: boolean}
+        email:
+          type: [boolean, 'null']
+          description: Null where email is not offered (only the four booking answers)
+    PortalNotificationPreferenceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortalNotificationPreference'
+    PortalNotificationPreferenceChange:
+      type: object
+      additionalProperties: false
+      required: [kind, channel, enabled]
+      properties:
+        kind:
+          $ref: '#/components/schemas/PatientNotificationKind'
+        channel: {type: string, enum: [IN_APP, EMAIL]}
+        enabled: {type: boolean}
+    LiveLink:
+      type: object
+      required: [url, expires_at]
+      properties:
+        url: {type: string, description: 'PUBLIC_BASE_URL/q/<token>'}
+        expires_at: {type: string, format: date-time}
+    LiveQueue:
+      type: object
+      additionalProperties: false
+      description: R70; the only fields the public page may carry (a test fails on any other)
+      required:
+        - clinic_name
+        - doctor_name
+        - timezone
+        - mode
+        - state
+        - token_number
+        - slot_start
+        - ahead
+        - now_seeing_token
+        - now_seeing_slot
+        - session_starts_at
+      properties:
+        clinic_name: {type: string}
+        doctor_name: {type: string}
+        timezone: {type: string}
+        mode:
+          $ref: '#/components/schemas/BookingMode'
+        state:
+          type: string
+          enum: [NOT_STARTED, WAITING, YOUR_TURN, DONE, CANCELLED]
+        token_number: {type: [integer, 'null']}
+        slot_start: {type: [string, 'null'], format: date-time}
+        ahead:
+          type: integer
+          minimum: 0
+          description: Only BOOKED or ARRIVED entries before this one in queue order
+        now_seeing_token: {type: [integer, 'null']}
+        now_seeing_slot: {type: [string, 'null'], format: date-time}
+        session_starts_at: {type: string, format: date-time}
     LinkMethod:
       type: string
       enum: [INVITE, RX_LINK]

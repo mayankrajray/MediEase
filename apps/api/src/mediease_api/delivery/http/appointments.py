@@ -24,6 +24,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 
 from mediease_api.application.appointments.book import BookAppointment, BookCommand
 from mediease_api.application.appointments.cancel import CancelAppointment, CancelCommand
+from mediease_api.application.appointments.live import IssueStaffLiveLink
 from mediease_api.application.appointments.queries import GetAppointment, ListPatientAppointments
 from mediease_api.application.appointments.queue import (
     AddWalkIn,
@@ -64,6 +65,7 @@ class AppointmentUseCases(Protocol):
 
     def book_appointment(self) -> BookAppointment: ...
     def get_appointment(self) -> GetAppointment: ...
+    def issue_staff_live_link(self) -> IssueStaffLiveLink: ...
     def cancel_appointment(self) -> CancelAppointment: ...
     def reschedule_appointment(self) -> RescheduleAppointment: ...
     def list_patient_appointments(self) -> ListPatientAppointments: ...
@@ -206,6 +208,13 @@ def create_appointments_blueprint(use_cases: AppointmentUseCases) -> Blueprint:
     def get_appointment(appointment_id: UUID) -> Response:
         detail = use_cases.get_appointment().execute(current_context(), appointment_id)
         return jsonify(appointment_detail_body(detail))
+
+    @bp.get(f"{one}/live-link")
+    @clinic(Permission.APPOINTMENTS_MANAGE)
+    def live_link(appointment_id: UUID) -> Response:
+        """M6b-P6 (R69): the patient's live token link, for staff to send by hand."""
+        link = use_cases.issue_staff_live_link().execute(current_context(), appointment_id)
+        return jsonify({"url": link.url, "expires_at": link.expires_at.isoformat()})
 
     @bp.post(f"{one}/cancel")
     @clinic(Permission.APPOINTMENTS_MANAGE)

@@ -71,6 +71,20 @@ class BookingRequested:
     request_id: UUID
 
 
+@dataclass(frozen=True, slots=True)
+class BookingRequestAnswered:
+    """M6b-P5, P6 (portal R57): staff accepted, declined or proposed; the requester is told."""
+
+    request_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class BookingRequestExpired:
+    """M6b-P6 (portal R57): the expiry job wrote EXPIRED; the requester is told."""
+
+    request_id: UUID
+
+
 Event = (
     AppointmentBooked
     | AppointmentRescheduled
@@ -81,4 +95,6 @@ Event = (
     | StaffJoined
     | BookingsToMove
     | BookingRequested
+    | BookingRequestAnswered
+    | BookingRequestExpired
 )

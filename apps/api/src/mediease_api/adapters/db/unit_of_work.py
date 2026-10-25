@@ -35,6 +35,11 @@ from mediease_api.adapters.db.notifications import (
     SqlAlchemyNotificationRepository,
     SqlAlchemyPreferenceRepository,
 )
+from mediease_api.adapters.db.patient_notifications import (
+    SqlAlchemyPatientNotificationLookup,
+    SqlAlchemyPatientNotificationRepository,
+    SqlAlchemyPatientPreferenceRepository,
+)
 from mediease_api.adapters.db.portal import (
     SqlAlchemyEmailTokenRepository,
     SqlAlchemyExternalIdentityRepository,
@@ -110,6 +115,7 @@ class SqlAlchemyTenantRepositories:
         self._reminder_prefs = SqlAlchemyReminderPrefRepository(session, clinic_id)
         self._dose_records = SqlAlchemyDoseRecordRepository(session, clinic_id)
         self._booking_requests = SqlAlchemyBookingRequestRepository(session, clinic_id)
+        self._patient_notifications = SqlAlchemyPatientNotificationRepository(session, clinic_id)
         self._messages = SqlAlchemyMessageRepository(session, clinic_id)
         self._reminders = SqlAlchemyReminderRepository(session, clinic_id)
         self._notifications = SqlAlchemyNotificationRepository(session, clinic_id)
@@ -210,6 +216,10 @@ class SqlAlchemyTenantRepositories:
         return self._reminders
 
     @property
+    def patient_notifications(self) -> SqlAlchemyPatientNotificationRepository:
+        return self._patient_notifications
+
+    @property
     def notifications(self) -> SqlAlchemyNotificationRepository:
         return self._notifications
 
@@ -248,6 +258,9 @@ class _OpenUnit:
         self.dose_lifecycle = SqlAlchemyDoseLifecycle(session)
         # M6b-P4: a patient's own requests in every clinic (selected by account alone).
         self.booking_request_lookup = SqlAlchemyBookingRequestLookup(session)
+        # M6b-P6: one account's notices in every clinic, and its notification preferences.
+        self.patient_notification_lookup = SqlAlchemyPatientNotificationLookup(session)
+        self.patient_preferences = SqlAlchemyPatientPreferenceRepository(session)
         self.rate_limits = SqlAlchemyRateLimitRepository(session)
         # Shares the session, so an audit row commits with the change (R11).
         self.audit = SqlAlchemyAuditWriter(session)
@@ -334,6 +347,14 @@ class SqlAlchemyUnitOfWork:
     @property
     def booking_request_lookup(self) -> SqlAlchemyBookingRequestLookup:
         return self._require_open().booking_request_lookup
+
+    @property
+    def patient_notification_lookup(self) -> SqlAlchemyPatientNotificationLookup:
+        return self._require_open().patient_notification_lookup
+
+    @property
+    def patient_preferences(self) -> SqlAlchemyPatientPreferenceRepository:
+        return self._require_open().patient_preferences
 
     @property
     def dose_lifecycle(self) -> SqlAlchemyDoseLifecycle:

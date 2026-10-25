@@ -27,18 +27,28 @@ import structlog
 from mediease_api.application.messaging.booking import enqueue_booking_confirmation
 from mediease_api.application.messaging.cancellation import enqueue_cancellation_notice
 from mediease_api.application.messaging.rx_link import enqueue_rx_link
+from mediease_api.application.portal.patient_notifications import (
+    APPOINTMENTS_LINK,
+    linked_account,
+    notify_patient,
+    prescription_link,
+)
 from mediease_api.application.reminders.appointment import (
     cancel_appointment_reminders,
     schedule_appointment_reminders,
 )
 from mediease_api.domain.appointments.appointment import Appointment
+from mediease_api.domain.appointments.status import AppointmentSource
+from mediease_api.domain.booking.request import DecidedBy, RequestStatus
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.identity.membership import MembershipStatus, Role
 from mediease_api.domain.notifications.events import (
     AppointmentBooked,
     AppointmentCancelled,
     AppointmentRescheduled,
+    BookingRequestAnswered,
     BookingRequested,
+    BookingRequestExpired,
     BookingsToMove,
     Event,
     MessageFailed,
@@ -67,6 +77,7 @@ from mediease_api.domain.notifications.notification import (
     staff_joined_title,
 )
 from mediease_api.domain.patients.patient import Patient
+from mediease_api.domain.portal.notifications import PatientNotificationKind
 from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.scheduling.sessions import Session
 from mediease_api.domain.shared.time import local_date
@@ -152,6 +163,22 @@ class NotificationService:
                 rx = tenant.prescriptions.get(prescription_id)
                 if rx is not None:
                     enqueue_rx_link(uow, ids=self._ids, rx=rx, request_id=request_id, now=now)
+                    # M6b-P6 (R57): the linked account is told, without the medicines (R59).
+                    account = linked_account(tenant, rx.patient_id)
+                    if account is not None:
+                        notify_patient(
+                            uow,
+                            tenant,
+                            ids=self._ids,
+                            account_id=account,
+                            kind=PatientNotificationKind.PRESCRIPTION_READY,
+                            event_key=f"prescription.ready:{rx.id}",
+                            entity=("prescription", rx.id),
+                            link=prescription_link(rx.id),
+                            params={"doctor_id": str(rx.doctor_id)},
+                            now=now,
+                            request_id=request_id,
+                        )
                 return 0
             case MessageFailed(message_id=message_id, patient_id=patient_id):
                 patient = tenant.patients.get(patient_id)
@@ -189,6 +216,11 @@ class NotificationService:
                 )
             case BookingRequested(request_id=booking_request_id):
                 return self._booking_requested(uow, tenant, booking_request_id, now=now)
+            case (
+                BookingRequestAnswered(request_id=answered)
+                | BookingRequestExpired(request_id=answered)
+            ):
+                return self._booking_answered(uow, tenant, answered, now=now, request_id=request_id)
             case BookingsToMove(doctor_id=doctor_id, change_id=change_id, on_date=on_date):
                 return self._bookings_to_move(
                     uow, tenant, doctor_id, change_id, on_date, now=now, actor=actor_user_id
@@ -245,6 +277,15 @@ class NotificationService:
             starts_at=appointment.slot_start or session.starts_at,
             token_number=appointment.token_number if session.mode is BookingMode.TOKENS else None,
             timezone=clinic.timezone,
+        )
+        self._patient_appointment(
+            uow,
+            tenant,
+            event,
+            appointment=appointment,
+            session=session,
+            now=now,
+            request_id=request_id,
         )
         return self._in_app(
             tenant,
@@ -314,6 +355,97 @@ class NotificationService:
                 request_id=request_id,
                 now=now,
             )
+
+    # --- the patient's side (M6b-P6, portal R56, R57) ------------------------------------------
+
+    def _patient_appointment(
+        self,
+        uow: UnitOfWork,
+        tenant: TenantRepositories,
+        event: AppointmentEvent,
+        *,
+        appointment: Appointment,
+        session: Session,
+        now: datetime,
+        request_id: str | None,
+    ) -> None:
+        """Confirmed, moved or cancelled, to the account linked to the record. An appointment
+        made by accepting a request is told once, as the booking answer."""
+        kind = {
+            AppointmentBooked: PatientNotificationKind.APPOINTMENT_CONFIRMED,
+            AppointmentRescheduled: PatientNotificationKind.APPOINTMENT_MOVED,
+            AppointmentCancelled: PatientNotificationKind.APPOINTMENT_CANCELLED,
+        }.get(type(event))
+        if kind is None:
+            return
+        if kind is PatientNotificationKind.APPOINTMENT_CONFIRMED and (
+            appointment.source is AppointmentSource.PUBLIC_PAGE
+        ):
+            return
+        account = linked_account(tenant, appointment.patient_id)
+        if account is None:
+            return
+        notify_patient(
+            uow,
+            tenant,
+            ids=self._ids,
+            account_id=account,
+            kind=kind,
+            event_key=f"{kind.value}:{appointment.id}",
+            entity=("appointment", appointment.id),
+            link=APPOINTMENTS_LINK,
+            params=_place_params(appointment, session),
+            now=now,
+            request_id=request_id,
+        )
+
+    def _booking_answered(
+        self,
+        uow: UnitOfWork,
+        tenant: TenantRepositories,
+        booking_request_id: UUID,
+        *,
+        now: datetime,
+        request_id: str | None,
+    ) -> int:
+        """Accepted, declined, another time suggested, or expired, to the requester. A choice the
+        patient made themselves (taking or refusing a proposal) is not told back to them."""
+        request = tenant.booking_requests.get(booking_request_id)
+        if request is None or request.decided_by_type is DecidedBy.PATIENT:
+            return 0
+        kinds = {
+            RequestStatus.ACCEPTED: PatientNotificationKind.BOOKING_ACCEPTED,
+            RequestStatus.DECLINED: PatientNotificationKind.BOOKING_DECLINED,
+            RequestStatus.PROPOSED: PatientNotificationKind.BOOKING_PROPOSED,
+            RequestStatus.EXPIRED: PatientNotificationKind.BOOKING_EXPIRED,
+        }
+        kind = kinds.get(request.status)
+        session = tenant.sessions.get(request.session_id)
+        if kind is None or session is None:
+            return 0
+        params: dict[str, str] = {"doctor_id": str(request.doctor_id)}
+        appointment = (
+            tenant.appointments.get(request.appointment_id) if request.appointment_id else None
+        )
+        if appointment is not None:
+            params |= _place_params(appointment, session)
+        else:
+            params["at"] = (request.slot_start or session.starts_at).isoformat()
+        if request.decline_reason is not None:
+            params["reason"] = request.decline_reason.value
+        return notify_patient(
+            uow,
+            tenant,
+            ids=self._ids,
+            account_id=request.account_id,
+            kind=kind,
+            event_key=f"{kind.value}:{request.id}",
+            entity=("booking_request", request.id),
+            link=APPOINTMENTS_LINK,
+            params=params,
+            now=now,
+            request_id=request_id,
+        )
 
     def _booking_requested(
         self, uow: UnitOfWork, tenant: TenantRepositories, request_id: UUID, *, now: datetime
@@ -443,6 +575,17 @@ class NotificationService:
             muted=len(off),
         )
         return written
+
+
+def _place_params(appointment: Appointment, session: Session) -> dict[str, str]:
+    """When, as IDs and a time: the slot (or session start) and the token (R55, R59)."""
+    params = {
+        "at": (appointment.slot_start or session.starts_at).isoformat(),
+        "doctor_id": str(appointment.doctor_id),
+    }
+    if appointment.token_number is not None and session.mode is BookingMode.TOKENS:
+        params["token"] = str(appointment.token_number)
+    return params
 
 
 def _appointment_key(kind: NotificationKind, appointment: Appointment) -> str:

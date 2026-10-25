@@ -261,6 +261,15 @@ class SqlAlchemyReminderPrefRepository(TenantScopedRepository[MedicineReminderPr
         row.updated_at = pref.updated_at
         self._session.flush()
 
+    def list_enabled(self, *, limit: int) -> Sequence[MedicineReminderPref]:
+        query = (
+            self._scoped_select()
+            .where(MedicineReminderPrefRow.enabled.is_(True))
+            .order_by(MedicineReminderPrefRow.account_id, MedicineReminderPrefRow.id)
+            .limit(limit)
+        )
+        return [_pref(row) for row in self._session.scalars(query)]
+
     def delete_for_link(self, account_id: UUID, patient_id: UUID) -> int:
         result = self._session.execute(
             delete(MedicineReminderPrefRow).where(

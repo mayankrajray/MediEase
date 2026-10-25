@@ -42,6 +42,12 @@ STAFF_INVITE_KIND = "send_staff_invite"
 # deadline (IDs only) and enqueue one EXPIRE_REQUESTS_KIND job per clinic.
 REQUEST_EXPIRY_SWEEP_KIND = "schedule_request_expiry"
 EXPIRE_REQUESTS_KIND = "expire_booking_requests"
+# M6b-P6 (portal R65, R66): every 5 minutes, find the clinics with medicine reminders turned on
+# (IDs only) and enqueue one NOTIFY_MEDICINE_DUE_KIND job per clinic; and the email of a booking
+# answer (R63), one per notification, a clinic kind.
+MEDICINE_DUE_SWEEP_KIND = "schedule_medicine_due"
+NOTIFY_MEDICINE_DUE_KIND = "notify_medicine_due"
+PATIENT_EMAIL_KIND = "send_patient_email"
 # R9d: the only kinds allowed to have no clinic. The database CHECK ``ck_jobs_system_kind`` lists
 # the same kinds; a test keeps the two in step, and adding a kind is a migration.
 SYSTEM_KINDS: frozenset[str] = frozenset(
@@ -52,6 +58,7 @@ SYSTEM_KINDS: frozenset[str] = frozenset(
         NO_SHOW_SWEEP_KIND,
         AUTH_EMAIL_KIND,
         REQUEST_EXPIRY_SWEEP_KIND,
+        MEDICINE_DUE_SWEEP_KIND,
     }
 )
 

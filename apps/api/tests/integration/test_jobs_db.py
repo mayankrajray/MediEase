@@ -578,6 +578,7 @@ def test_retention_writes_one_system_audit_event_with_counts_only(
         "notifications": "0",
         # M6b-P3b: a count of dose records, never their content.
         "dose_records": "0",
+        "patient_notifications": "0",
     }
 
 
