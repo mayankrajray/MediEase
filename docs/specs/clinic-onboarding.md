@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-ONB-01, 02, 07 (P1); FR-ONB-03, 05 (P2); FR-ONB-04, 06, 08 (P3); FR-ONB-05, 09, 10 (P4); NFR-19 |
 | Milestone / phases | M6c / P1–P4 |
-| Status | P1 (R1–R23, AC1–AC9) **Approved** 26 Oct 2026 (developer decisions D1–D3); P2–P4 written at their start |
+| Status | P1 (R1–R23, AC1–AC9) **Approved** 26 Oct 2026 (developer decisions D1–D3) and built (as-built notes in the M6c design note); P2–P4 written at their start |
 | Owner | Developer |
 | Last updated | 2026-10-26 |
 
@@ -59,7 +59,7 @@ stateDiagram-v2
   spaces removed).
 - **R5** Two doctors of one application may not share a council and registration number (422 on
   the second).
-- **R6** A field error is 422 `REQ_VALIDATION` naming the field (`doctors.1.registration_number`);
+- **R6** A field error is 422 `REQ_VALIDATION_FAILED` naming the field (`doctors.1.registration_number`);
   nothing is stored.
 - **R7** Each doctor must have exactly one certificate: a PDF, JPEG or PNG recognised by its first
   bytes (`%PDF-`, `FF D8 FF`, `89 50 4E 47 0D 0A 1A 0A`), 1 byte to 5 MB. Otherwise 422
@@ -74,17 +74,19 @@ stateDiagram-v2
   with its SHA-256, and in the same transaction enqueues one `send_application_email` job
   (confirm). Answer 202 `{reference, email_masked}`; the reference is `MA-{year}-{4+ digits}`,
   unique.
-- **R10** If a stored file cannot be written, the request fails with 503 and leaves no rows; files
-  already written are deleted.
+- **R10** If a stored file cannot be written, the request fails with 503 `ONB_UPLOAD_FAILED` and
+  leaves no rows; files already written are deleted.
 - **R11** The confirmation link is `PUBLIC_BASE_URL/apply/confirm/{token}`: a 256-bit secret whose
   SHA-256 digest is stored; it expires 48 hours after submission and works once.
 - **R12** `POST /api/v1/public/applications/confirm {token}` sets `email_verified_at`, clears the
-  secret, and enqueues the "received" email. An unknown, used or expired token is 404
+  secret, and enqueues the "received" email. Opening the emailed link only shows a *Confirm my
+  application* button; pressing it sends this request, so a mail scanner that fetches the link
+  confirms nothing (as the patient verify page, M6a-P4). An unknown, used or expired token is 404
   `ONB_CONFIRM_INVALID`, one answer for all three.
 - **R13** A new submission with the same owner email while an earlier one is still unverified
   deletes the earlier one (rows and files) in the same transaction.
 - **R14** An application unverified 72 hours after submission is deleted with its files by the
-  daily purge.
+  hourly `purge_applications` job.
 - **R15** P1 writes no other status than `PENDING`. Nothing in P1 creates or changes a clinic,
   user, membership or doctor.
 
@@ -94,7 +96,8 @@ stateDiagram-v2
   table (a phone or email never appears in a bucket name). Over a limit: 429 `ONB_RATE_LIMITED`
   with `Retry-After`. Confirming is limited to 20 attempts a minute per address.
 - **R17** On submission, each doctor's (council, registration number) is compared with other
-  applications that are confirmed and not rejected, and with existing doctors. A match marks the
+  applications that are confirmed and not rejected, and with existing doctors (by the normalised
+  number alone, because ops-created doctors carry a council typed by hand). A match marks the
   application `possible_duplicate` and records the matching references (or clinic IDs) for the
   reviewer. The submission still succeeds and its answer is identical.
 
@@ -123,8 +126,8 @@ stateDiagram-v2
 ## 5. API surface (P1)
 | Method | Path | Request | Success | Errors |
 |---|---|---|---|---|
-| POST | `/api/v1/public/applications` | multipart: `application` (JSON), `certificate_{n}` | 202 `ApplicationReceipt {reference, email_masked}` | 413, 422 `REQ_VALIDATION`, 422 `ONB_FILE_REJECTED`, 429 `ONB_RATE_LIMITED`, 503 |
-| POST | `/api/v1/public/applications/confirm` | `{token}` | 200 `{reference}` | 404 `ONB_CONFIRM_INVALID`, 429 |
+| POST | `/api/v1/public/applications` | multipart: `application` (JSON), `certificate_{n}` | 202 `ApplicationReceipt {reference, email_masked}` | 413, 415, 422 `REQ_VALIDATION_FAILED`, 422 `ONB_FILE_REJECTED`, 429 `ONB_RATE_LIMITED`, 503 `ONB_UPLOAD_FAILED` |
+| POST | `/api/v1/public/applications/confirm` | `{token}` | 200 `{reference}` | 404 `ONB_CONFIRM_INVALID`, 429 `ONB_RATE_LIMITED` |
 | GET | `/api/v1/ops/applications` | — | 200 `{items: OpsApplicationSummary[]}` | 401, 403 |
 
 All three answer `Cache-Control: no-store`; the public two also `X-Robots-Tag: noindex`.
@@ -188,7 +191,8 @@ All three answer `Cache-Control: no-store`; the public two also `X-Robots-Tag: n
 Log events: `application.submitted` (id, reference, kind, doctors), `application.rejected_input`
 (field or reason only), `application.rate_limited` (bucket kind), `application.email_verified`,
 `application.duplicate_flagged` (id, count), `application.purged` (count). Error codes:
-`ONB_RATE_LIMITED`, `ONB_FILE_REJECTED`, `ONB_CONFIRM_INVALID`, `REQ_VALIDATION`.
+`ONB_RATE_LIMITED`, `ONB_FILE_REJECTED`, `ONB_CONFIRM_INVALID`, `ONB_UPLOAD_FAILED`,
+`REQ_VALIDATION_FAILED`.
 
 ## 11. Out of scope
 Reviewing and deciding (P2); creating the clinic (P3); listing (P4); automatic council-register

@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M6c — SaaS clinic onboarding, verification and discovery** (issue #53, branch `m6c/53-onboarding-discovery` from `main` at `9df830b`, one PR for the milestone). M6b merged in PR #52 on 26 Oct 2026 (#51 closed) |
-| Active phase | **M6c-P1 — The application (`/apply`): designed and approved 26 Oct 2026 with D1–D4; next to build.** Spec `docs/specs/clinic-onboarding.md` R1–R23, AC1–AC9 (Approved); ADR-0020 Accepted |
+| Active phase | **M6c-P1 — The application (`/apply`): built 26 Oct 2026, changed-code tests green; awaiting confirmation and push.** Spec `docs/specs/clinic-onboarding.md` R1–R23, AC1–AC9 (Approved, built); ADR-0020 Accepted. Next: M6c-P2 (the reviewer's workflow), designed at its start |
 | Design notes | `docs/milestones/M6c-onboarding-verification-discovery.md` (M6c); M6b in `docs/milestones/M6b-patient-portal-booking.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M6c phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -192,7 +192,7 @@ will reply within 2 working days; **D4** issue #53, branch from the latest `main
 
 | Phase | Scope | Status |
 |---|---|---|
-| M6c-P1 | The application: `/apply` for a clinic or a solo doctor, certificates, the verified email, lifecycle states, limits, the duplicate flag (FR-ONB-01, 02, 07) | ▶ (designed and approved 26 Oct 2026; next to build) |
+| M6c-P1 | The application: `/apply` for a clinic or a solo doctor, certificates, the verified email, lifecycle states, limits, the duplicate flag (FR-ONB-01, 02, 07) | ▶ (built 26 Oct 2026; awaiting confirmation and push) |
 | M6c-P2 | Reviewer workflow: ops roles, queue, per-doctor checks, decision with a reason, applicant emails and status page (FR-ONB-03, 05) | ☐ |
 | M6c-P3 | Approval into the pre-filled ops wizard; clinic and doctor verification; `has_public_page` = `ACTIVE` ∧ verified (FR-ONB-04, 06, 08) | ☐ |
 | M6c-P4 | Suspension and listing; the one discoverability rule (FR-ONB-05, 09, 10) | ☐ |
