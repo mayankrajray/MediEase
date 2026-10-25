@@ -21,6 +21,16 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6c-P2, P3 (#53): MediEase reviews applications and approved clinics are created through the one
+  creation path (FR-ONB-03..06, 08; spec clinic-onboarding R24-R49). Ops roles `OPS_ADMIN` and
+  `OPS_REVIEWER` (every existing ops user holds both). Reviewers work a queue at
+  `/ops/applications`: take an application, open each certificate (audited, never a public link),
+  record a check per doctor, then reject with a reason the applicant is emailed, or approve. Approving
+  creates the clinic, its verified doctors and the owner's emailed invitation in one transaction;
+  the clinic goes live when the owner accepts. A clinic's public page now needs it to be `ACTIVE`
+  **and verified**; ops-created clinics are verified doctor by doctor. Rejected applications are
+  deleted 180 days after the decision. Migrations `0033`, `0034`; contract 0.37.0, 0.38.0; errors
+  `ONB_ALREADY_TAKEN`, `ONB_NOT_UNDER_REVIEW`.
 - M6c-P1 (#53): clinics and doctors with their own practice can apply to join MediEase at
   `/apply` (FR-ONB-01, 02, 07; spec clinic-onboarding R1-R23; ADR-0020). Five short steps at 360 px
   (158 KB): the clinic, the owner, and each doctor's registration details with the certificate

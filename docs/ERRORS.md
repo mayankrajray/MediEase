@@ -212,6 +212,18 @@ A form field is `REQ_VALIDATION_FAILED` (422) with `details.fields[].field` nami
 counted from 1 (`doctors.2.council`); a request that is not `multipart/form-data` is
 `REQ_UNSUPPORTED_MEDIA_TYPE` (415) and one over 30 MB `REQ_REQUEST_ENTITY_TOO_LARGE` (413).
 
+The review (M6c-P2, P3; spec R27-R45):
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `ONB_ALREADY_TAKEN` | 409 | Another reviewer has already taken this application | Two reviewers pressed *Take* on the same application; the first won | Open it: any reviewer may continue an application under review |
+| `ONB_NOT_UNDER_REVIEW` | 409 | This application is not under review | A check, rejection or approval on an application still waiting or already decided | Its status on `/ops/applications/{id}` |
+
+Approving with a doctor not `VERIFIED`, a verification with an answer "no", or verifying a clinic
+with no verified active doctor is `REQ_VALIDATION_FAILED` (422) naming the field; a slug in use is
+the existing `CLN_SLUG_TAKEN` (409), and nothing is created. An ops user without the route's role
+gets `PERM_DENIED` (403).
+
 ## Patient links (M4)
 
 | Code | HTTP | Meaning | Likely cause | Where to look |

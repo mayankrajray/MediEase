@@ -38,6 +38,8 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0012` | `clinics.rx_paper_size` (`A5` for existing clinics; `A5` \| `A4`) | M4-P4 |
 | `0013` | `patient_links`, `public_rate_limits`; `prescriptions.layout_version` (1 for existing rows) | M4-P5 |
 | `0032` | `clinic_applications`, `clinic_application_doctors`, the reference sequence; actor `APPLICANT`; two system job kinds | M6c-P1 |
+| `0033` | `users.ops_roles`; the review columns on `clinic_applications`; `clinic_application_checks` | M6c-P2 |
+| `0034` | Verification on `clinics` and `doctors`; `clinics.listed`, `listed_at`, `search_indexing`; `doctors.visible`, `languages`, `fee_paise`; decline reason `CLINIC_UNAVAILABLE` | M6c-P3..P5 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -950,6 +952,27 @@ Index `(registration_council, registration_number)` for the duplicate check.
 `audit_events.actor_type` gains `APPLICANT`; `jobs` gains the system kinds
 `send_application_email` and `purge_applications`.
 
+### The review (migration `0033`, M6c-P2)
+`users.ops_roles text[]` (`OPS_ADMIN`, `OPS_REVIEWER`; empty for clinic staff; every ops user
+before 0033 backfilled with both). `clinic_applications` gains `taken_by`, `taken_at`,
+`decided_by`, `decided_at`, `decision_reason` (the reject reason, CHECK; set exactly when
+`REJECTED`), `decision_message` and `created_clinic_id` (FK clinics: the clinic an approval created;
+deliberately not named `clinic_id`, so the table stays outside the tenant-table guard). CHECK:
+`decided_at` is set exactly when `APPROVED` or `REJECTED`.
+
+`clinic_application_checks`: one row per application doctor (unique `doctor_id`; cascade from the
+application and the doctor): `checked_by`, `checked_at`, `register_checked`,
+`certificate_matches`, `result` (`VERIFIED` \| `NOT_VERIFIED`; `VERIFIED` needs both answers,
+CHECK) and `note` (the reviewer's, up to 500, never sent).
+
+### Verification, listing and profiles (migration `0034`, M6c-P3..P5)
+`clinics` and `doctors` gain `verified_at`, `verified_by` (FK users) and `verification_source`
+(`APPLICATION` \| `OPS_CHECK`, CHECK); `clinics.application_id` (FK clinic_applications). Existing
+rows stay unverified. Also (used from P4 and P5): `clinics.listed` (default false; CHECK `NOT
+listed OR verified_at IS NOT NULL`), `listed_at`, `search_indexing` (default true);
+`doctors.visible` (default false), `languages text[]`, `fee_paise` (0 to 1 000 000, CHECK).
+`booking_requests.decline_reason` gains `CLINIC_UNAVAILABLE` (P4).
+
 ---
 
 ## Retention and erasure
@@ -964,7 +987,7 @@ Index `(registration_council, registration_number)` for the duplicate check.
 | Email tokens | 30 days after expiry | Purge job (M6a-P4) |
 | Patient notifications (M6b-P6) | 90 days, as staff notifications | The daily purge (`PurgeExpired`, count in its audit row) |
 | Clinic applications, unconfirmed (M6c-P1) | 72 hours after submission, with their certificates | The hourly `purge_applications` job |
-| Clinic applications, rejected or approved (M6c-P2) | Rejected 180 days; approved while the clinic exists (the verification evidence) | Designed with P2 |
+| Clinic applications, rejected or approved (M6c-P2) | Rejected 180 days after the decision, with their certificates; approved while the clinic exists (the verification evidence) | The hourly `purge_applications` job |
 | Patient links | 30 days after expiry | Purge job |
 | Notifications | 90 days after creation | Purge job (M6a-P7) |
 

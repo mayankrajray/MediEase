@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-ONB-01, 02, 07 (P1); FR-ONB-03, 05 (P2); FR-ONB-04, 06, 08 (P3); FR-ONB-05, 09, 10 (P4); NFR-19 |
 | Milestone / phases | M6c / P1–P4 |
-| Status | P1 (R1–R23, AC1–AC9) **Approved** 26 Oct 2026 (developer decisions D1–D3) and built (as-built notes in the M6c design note); P2–P4 written at their start |
+| Status | P1 (R1–R23, AC1–AC9) **Approved** 26 Oct 2026 (developer decisions D1–D3) and built (as-built notes in the M6c design note); P2 (R24–R40, AC10, AC14) and P3 (R41–R49, AC11–AC13) approved in advance by the developer 26 Oct 2026 and built; P4 written at its start |
 | Owner | Developer |
 | Last updated | 2026-10-26 |
 
@@ -123,12 +123,105 @@ stateDiagram-v2
   MediEase checks every doctor's registration by hand and **will reply by email within 2 working
   days** (D3).
 
-## 5. API surface (P1)
+## 4b. Behaviour (P2: the reviewer's workflow)
+
+### Roles and the queue
+- **R24** `users.ops_roles` holds `OPS_ADMIN` and/or `OPS_REVIEWER`. Every ops user from before
+  M6c holds both. The review routes need `OPS_REVIEWER` (`@reviewer`); the existing `@ops` routes
+  (clinics, imports, messaging costs) need `OPS_ADMIN`. Without the role: 403 `PERM_DENIED`.
+- **R25** `GET /api/v1/ops/applications?queue=waiting|review|decided` lists confirmed applications
+  (`PENDING`, `UNDER_REVIEW`, or `APPROVED`/`REJECTED`), oldest first, with the summary fields of
+  R18 plus status, `taken_at` and `decided_at`. Without `queue`, every confirmed application.
+  Another value is 422.
+- **R26** `GET /api/v1/ops/applications/{id}` returns the whole application with each doctor's
+  registration and latest check; `GET .../doctors/{doctor_id}/certificate` streams the file with its
+  stored type, `inline`, `nosniff` and `sandbox` CSP. Both are audited (`application.viewed`,
+  `application.certificate_viewed`). An unconfirmed or unknown application is 404.
+
+### Taking and checking
+- **R27** `POST .../take` moves `PENDING` to `UNDER_REVIEW` with the reviewer and time, under a row
+  lock. Taking one already under review is 409 `ONB_ALREADY_TAKEN`.
+- **R28** Any reviewer may continue an application under review; `taken_by` keeps who took it.
+- **R29** `PUT .../doctors/{doctor_id}/check {register_checked, certificate_matches, result, note}`
+  is allowed only `UNDER_REVIEW` (409 `ONB_NOT_UNDER_REVIEW`).
+- **R30** `VERIFIED` needs both answers true (422); `NOT_VERIFIED` may have either. The note is at
+  most 500 characters and is never sent to the applicant.
+- **R31** A new check replaces the doctor's earlier one. `all_verified` is true when every doctor's
+  check is `VERIFIED`.
+- **R32** Every check is audited (`application.doctor_checked`: the doctor's position and result).
+
+### Rejecting
+- **R33** `POST .../reject {reason, message}` from `UNDER_REVIEW` (else 409 `ONB_NOT_UNDER_REVIEW`):
+  reason one of `REGISTRATION_NOT_FOUND`, `CERTIFICATE_UNCLEAR`, `DETAILS_DO_NOT_MATCH`,
+  `NOT_ELIGIBLE`, `DUPLICATE`, `OTHER`; message up to 500 characters, required for `OTHER`. The
+  application becomes `REJECTED` with the reviewer, time, reason and message; audited
+  (`application.rejected`, the reason code only).
+- **R34** The applicant is emailed the reason's fixed words, the reviewer's message, and that they
+  may apply again at `/apply`.
+- **R35** A rejected application is deleted with its certificates 180 days after the decision by
+  the hourly purge.
+- **R36** Re-applying is a new application; the earlier rejected one does not block it and is not
+  a duplicate match.
+- **R37** There is no status page: the applicant is told by email at each step (received,
+  rejected, approved with the invitation).
+
+### Privacy and screens
+- **R38** Logs carry IDs, references, statuses and reason codes only; audit metadata never holds
+  the message, a note, a name or a registration number.
+- **R39** `/ops/applications` (the queue by state) and `/ops/applications/{id}` (details, *Open
+  certificate* through the session as a blob, the check form, *Take for review*, *Reject…*,
+  *Approve and create the clinic*). The ops navigation shows each screen only to the role that can
+  open it.
+- **R40** Responses are `no-store`. A certificate is never reachable by a public or pre-signed URL.
+
+## 4c. Behaviour (P3: approval and verification)
+
+- **R41** `POST .../approve` needs `UNDER_REVIEW` (409 `ONB_NOT_UNDER_REVIEW`) and every doctor's
+  check `VERIFIED` (422 otherwise).
+- **R42** The body is the reviewer's choices: `slug` (3-63), `booking_mode` (default `TOKENS`),
+  `timezone` (default Asia/Kolkata), and optional corrections of the clinic's name, address, city,
+  state and PIN (null keeps the application's). The clinic, its doctors, the owner's invitation,
+  the verification records and `APPROVED` are written in **one transaction** through the same rule
+  sets as the ops wizard (FR-ONB-08). Any failure (a slug taken: 409 `CLN_SLUG_TAKEN`) leaves
+  nothing and the application stays `UNDER_REVIEW`.
+- **R43** The owner is invited as `OWNER` by email to the application's confirmed address (the
+  `send_staff_invite` job mints the link); when the owner practises, the invitation links them to
+  their doctor profile. The answer is 201 `{application, clinic, invitation_delivery}`.
+- **R44** The clinic starts `ONBOARDING` and becomes `ACTIVE` when the owner accepts (D1). It has no
+  public page until then.
+- **R45** An ops-created clinic starts unverified. A reviewer verifies a doctor with
+  `POST /api/v1/ops/clinics/{id}/doctors/{doctor_id}/verify {register_checked, certificate_matches}`
+  (both true, else 422) and then the clinic with `POST /api/v1/ops/clinics/{id}/verify` (422 until
+  at least one active doctor is verified). Source `OPS_CHECK`. Both are idempotent.
+- **R46** Changing a verified doctor's registration number or council clears that doctor's
+  verification. Nothing else clears it.
+- **R47** `has_public_page` is `ACTIVE` and verified. The public page, its availability, new booking
+  requests, answers to proposals and the live token link all use it; anything else is the same 404
+  as an unknown slug.
+- **R48** Audit: `application.approved`, `clinic.verified` and `doctor.verified` (source, IDs only).
+- **R49** Existing clinics are not verified by the migration; `make seed` verifies, lists and
+  completes the demo clinics.
+
+## 5. API surface (P1-P3)
 | Method | Path | Request | Success | Errors |
 |---|---|---|---|---|
 | POST | `/api/v1/public/applications` | multipart: `application` (JSON), `certificate_{n}` | 202 `ApplicationReceipt {reference, email_masked}` | 413, 415, 422 `REQ_VALIDATION_FAILED`, 422 `ONB_FILE_REJECTED`, 429 `ONB_RATE_LIMITED`, 503 `ONB_UPLOAD_FAILED` |
 | POST | `/api/v1/public/applications/confirm` | `{token}` | 200 `{reference}` | 404 `ONB_CONFIRM_INVALID`, 429 `ONB_RATE_LIMITED` |
 | GET | `/api/v1/ops/applications` | — | 200 `{items: OpsApplicationSummary[]}` | 401, 403 |
+
+P2 and P3 (contract 0.37.0, 0.38.0):
+
+| Method | Path | Rule | Access | Success | Errors |
+|---|---|---|---|---|---|
+| GET | `/api/v1/ops/applications?queue=` | The reviewer queue (R25) | `OPS_REVIEWER` | 200 `{items}` | 401, 403, 422 |
+| GET | `/api/v1/ops/applications/{id}` | Detail, audited (R26) | `OPS_REVIEWER` | 200 `OpsApplicationDetail` | 401, 403, 404 |
+| GET | `/api/v1/ops/applications/{id}/doctors/{doctor_id}/certificate` | The file, audited | `OPS_REVIEWER` | 200 the file | 401, 403, 404 |
+| POST | `/api/v1/ops/applications/{id}/take` | R27 | `OPS_REVIEWER` | 200 detail | 404, 409 `ONB_ALREADY_TAKEN` |
+| PUT | `/api/v1/ops/applications/{id}/doctors/{doctor_id}/check` | R29-R31 | `OPS_REVIEWER` | 200 detail | 404, 409 `ONB_NOT_UNDER_REVIEW`, 422 |
+| POST | `/api/v1/ops/applications/{id}/reject` | R33 | `OPS_REVIEWER` | 200 detail | 404, 409, 422 |
+| POST | `/api/v1/ops/applications/{id}/approve` | R41-R43 | `OPS_REVIEWER` | 201 `{application, clinic, invitation_delivery}` | 404, 409 `ONB_NOT_UNDER_REVIEW` / `CLN_SLUG_TAKEN`, 422 |
+| POST | `/api/v1/ops/clinics/{id}/doctors/{doctor_id}/verify` | R45 | `OPS_REVIEWER` | 200 `{verified, changed}` | 404, 422 |
+| POST | `/api/v1/ops/clinics/{id}/verify` | R45 | `OPS_REVIEWER` | 200 `Clinic` | 404, 422 |
 
 All three answer `Cache-Control: no-store`; the public two also `X-Robots-Tag: noindex`.
 
@@ -187,6 +280,23 @@ All three answer `Cache-Control: no-store`; the public two also `X-Robots-Tag: n
 - **AC9 (R23)** — Given the form, the "Check your email" page and the "received" email, then each
   says MediEase will reply within 2 working days, in English.
 
+## 9b. Acceptance criteria (P2, P3)
+- **AC10 (FR-ONB-03, 05)** — Given a confirmed application, when a reviewer takes it, checks both
+  doctors and rejects it with `REGISTRATION_NOT_FOUND` and a message, then a second take is 409
+  `ONB_ALREADY_TAKEN`, the application is `REJECTED`, the applicant is emailed the reason's words
+  and the message, and the audit holds viewed, certificate viewed, taken, checked and rejected
+  with no message text.
+- **AC11 (FR-ONB-04, 08)** — Given every doctor `VERIFIED`, when the reviewer approves with a slug,
+  then one clinic (`ONBOARDING`, verified from the application) with its verified doctors and one
+  emailed owner invitation exist, the application is `APPROVED` with the clinic, and the public
+  page is 404 until the owner accepts.
+- **AC12 (R42)** — Given a slug already used, when approving, then 409 and no clinic, doctor or
+  invitation is created; the application stays `UNDER_REVIEW`.
+- **AC13 (FR-ONB-06)** — Given an unverified ACTIVE clinic, then its public page is 404; when a
+  reviewer verifies a doctor (both answers yes) and then the clinic, then the page is 200.
+- **AC14 (R24)** — Given an `OPS_ADMIN`-only user, the review routes are 403; given an
+  `OPS_REVIEWER`-only user, the clinic list is 403.
+
 ## 10. Observability
 Log events: `application.submitted` (id, reference, kind, doctors), `application.rejected_input`
 (field or reason only), `application.rate_limited` (bucket kind), `application.email_verified`,
@@ -195,8 +305,8 @@ Log events: `application.submitted` (id, reference, kind, doctors), `application
 `REQ_VALIDATION_FAILED`.
 
 ## 11. Out of scope
-Reviewing and deciding (P2); creating the clinic (P3); listing (P4); automatic council-register
-lookups; payments; the applicant's status page (P2); Hindi on the clinic side (not in M6c, D2).
+Listing (P4); automatic council-register lookups; payments; an applicant status page (not
+built, R37); Hindi on the clinic side (not in M6c, D2).
 
 ## 12. Open questions
 None. Resolved 26 Oct 2026: activation when the owner accepts the invitation (D1); English only
