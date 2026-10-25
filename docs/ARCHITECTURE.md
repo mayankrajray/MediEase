@@ -169,7 +169,7 @@ apps/web/src/
 │   │   └── settings/      clinic, doctors, schedules, staff
 │   ├── (patient)/
 │   │   ├── p/[token]/     prescription view (mobile-first, bilingual)
-│   │   └── c/[slug]/      public booking page (M7)
+│   │   └── c/[slug]/      public clinic page and booking request (M6b-P4)
 │   ├── (ops)/ops/         clinic onboarding, import, health
 │   └── (auth)/sign-in/
 ├── features/              appointments/ queue/ patients/ prescriptions/ reminders/

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Proposed (M6b-P4 design, 25 Oct 2026) |
+| Status | Accepted (approved 25 Oct 2026; built in M6b-P4, 26 Oct 2026) |
 | Date | 2026-10-25 |
 | Related | PRD FR-BKG-02, FR-APT-04, FR-DIS-05; spec `booking-requests.md` R10, R17–R19; appointments D10 (closing booked sessions); ADR-0005 (job queue) |
 
@@ -24,14 +24,18 @@ hold anywhere.
 2. **Counted under the same lock.** Every write that takes a place — a staff booking, a request,
    and P5's accept — locks the session as booking does (`lock_sessions`), then counts live holds
    for that session: free places = `capacity − booked_count − live holds`; a slot is unavailable
-   when it is booked or under a live hold. A partial unique index on live `PENDING` rows per
-   `(session_id, slot_start)` backs this in slot mode.
+   when it is booked or under a live hold. There is no unique index on the slot: a lapsed
+   `PENDING` request must not stop the next request, so the session lock is the guard.
 3. **Time ends a hold.** Nothing runs when a hold lapses; every reader applies the `now`
    predicate. The request itself stays `PENDING` until P5's expiry changes its status.
-4. **Staff respect holds.** A staff booking into a held slot is refused with `APT_SLOT_HELD` and
-   the hold's end; the way to free it early is to answer the request (P5).
-5. **Schedule changes keep held sessions.** `reconcile` treats a session with live holds as
-   booked: it is closed (kept), never retired, so a pending request always points at a row.
+4. **Staff respect holds, and may override them explicitly.** A staff booking into a held slot is
+   refused with `APT_SLOT_HELD` and the hold's end. Staff may book anyway with `override_hold`
+   (a confirmed UI action): the blocking hold ends in the same transaction and
+   `appointment.hold_overridden` is audited, so a patient can never block the clinic. A hold is
+   also capped at the request's response deadline.
+5. **Schedule changes keep sessions with pending requests.** `reconcile` treats a session with
+   any `PENDING` request (live hold or not) as booked: it is closed, never deleted or retired,
+   because the request points at the row. It is not counted among the bookings to move.
 6. **Accept converts in one transaction (P5).** Under the lock, the request becomes `ACCEPTED`
    and the appointment is booked with `booked_count` + 1; the hold disappears because the
    request is no longer `PENDING`.

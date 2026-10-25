@@ -800,6 +800,47 @@ Kept on unlink (hidden by the scope; a relink of the same record shows them agai
 
 ---
 
+## M6b - Booking requests (migration `0029`, M6b-P4, ADR-0018)
+
+Spec `docs/specs/booking-requests.md`. **Tenant data**; the `reason` is clinical text (C3) and is
+never logged, audited or put in a notification (`SqlAlchemyBookingRequestRepository`,
+`tenant.booking_requests`; the cross-clinic reads for one account's own requests and the per-phone
+count go through `uow.booking_request_lookup`, a reviewed exception like `dose_lifecycle`).
+
+### `booking_requests`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | |
+| doctor_id | uuid FK doctors not null | |
+| session_id | uuid FK sessions not null | The session row is created (and locked) by the request if it did not exist |
+| slot_start | timestamptz null | Slot mode only |
+| account_id | uuid FK patient_accounts not null | Who asked; a verified account |
+| contact_phone | text not null | E.164; masked in logs; the clinic's only way to reach them until accepted |
+| age_years | smallint null | 0-120 (CHECK); required only if the clinic asks |
+| sex | text null | `FEMALE` \| `MALE` \| `OTHER` \| `UNDISCLOSED` (CHECK) |
+| reason | text null | 1-200 characters (CHECK); clinical text |
+| status | text not null | `PENDING` (CHECK; P5 adds the outcomes) |
+| hold_expires_at | timestamptz not null | The soft hold: `min(now + request_hold_minutes, respond_by)`; <= `respond_by` (CHECK) |
+| respond_by | timestamptz not null | `min(now + 4 h, slot - 1 h)` |
+| hold_overridden_at, hold_overridden_by | timestamptz, uuid FK users null | Set together (CHECK) when staff book over the hold |
+| created_at, updated_at | timestamptz | |
+
+Unique partial index `uq_booking_requests_account_session_pending (account_id, session_id) WHERE
+status = 'PENDING'`; indexes on `session_id`, `(clinic_id, status, created_at)` and `account_id`.
+There is **no unique index per slot**: the hold is counted under the session's row lock (ADR-0018).
+A session with a `PENDING` request is never deleted or retired by a schedule change.
+
+### `clinics` (additions)
+| Column | Type | Notes |
+|---|---|---|
+| request_hold_minutes | smallint not null default 120 | 30-480 (CHECK `request_hold_minutes_range`) |
+| request_requires_age_sex | boolean not null default false | Whether the public form must ask age and sex |
+
+`notifications.kind` and `notification_preferences.kind` CHECKs now include `booking.requested`.
+
+---
+
 ## Retention and erasure
 
 | Data | Retention | Mechanism |

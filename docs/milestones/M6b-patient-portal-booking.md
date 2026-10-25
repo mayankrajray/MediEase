@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight); P1 built and confirmed (draft PR #52); P2 approved (A on all eight) and built; P3 and P3b approved and built (pushed 25 Oct 2026); P4 designed 25 Oct 2026, awaiting approval |
+| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight); P1 built and confirmed (draft PR #52); P2 approved (A on all eight) and built; P3 and P3b approved and built (pushed 25 Oct 2026); P4 designed 25 Oct 2026, approved with two changes (hold override, optional age and sex) and being built |
 | PRD | v1.2 §0 (C7, C9), §8.9, §8.13, §8.14, §13; NFR-02, NFR-10, NFR-11, NFR-18, NFR-19 |
 | Specs | `docs/specs/patient-portal.md` (Draft, P1–P3, P6), `docs/specs/booking-requests.md` (Draft, P4) |
 | ADR | ADR-0015 (patient accounts), ADR-0017 (notification service); ADR-0018 (Proposed at P4: the soft hold is the pending request, counted under the session lock) |
@@ -461,7 +461,13 @@ Built 25 Oct 2026 to the approved design. Details settled in the build:
 
 ## M6b-P4 — The public page and booking requests with a soft hold
 
-Proposed 25 Oct 2026, **awaiting the developer's approval.** Covers FR-PUB-01..04, FR-BKG-01..03
+Proposed 25 Oct 2026; **approved by the developer 25 Oct 2026 with two changes:** (1) staff may
+override a hold, only through an explicit, confirmed, audited action (spec R18a); (2) phone stays
+required, age and sex stay but are optional unless the clinic requires them (R12). The developer
+also fixed the two clocks: a **2-hour hold** (30 minutes to 8 hours) protects the slot; the
+**request** may stay open up to **4 hours** (or until 1 hour before the slot), and once the hold
+ends the slot is bookable again while the request stays pending until its deadline. Where point 4
+below says staff are refused, read R18 and R18a. Covers FR-PUB-01..04, FR-BKG-01..03
 and 07, FR-DIS-05 (the slots a patient sees) and NFR-17, NFR-19. Rules:
 `docs/specs/booking-requests.md` R1–R30 (Draft). The hold model is ADR-0018 (Proposed). P5
 (accept, decline, propose, expiry, linking) is not designed here; P4 leaves room for it.
@@ -537,3 +543,67 @@ Planned verification:
   cannot request that slot. Failure path: an unknown slug shows the same "not found" as a
   suspended clinic. Budget and axe on the page and the form.
 - **Gates:** `make lint typecheck contract-check test` and `make e2e`.
+
+### As built (M6b-P4)
+
+Built 26 Oct 2026 to the approved design (with the developer's two changes). Details settled in
+the build, and the places where it differs from the spec:
+
+- **Storage.** Migration `0029`: `booking_requests` (tenant) and two clinic settings,
+  `request_hold_minutes` (30-480, default 120) and `request_requires_age_sex` (default false). The
+  partial unique index `uq_booking_requests_account_session_pending` allows one open request per
+  account and session; there is **no unique index per slot** (ADR-0018). The notification kind
+  CHECKs gain `booking.requested`.
+- **Page rule.** `Clinic.has_public_page` (today: `ACTIVE`). An unknown slug and a clinic without
+  a page are the same 404 `REQ_NOT_FOUND`; the body is an allow-list (`CLINIC_FIELDS`,
+  `DOCTOR_FIELDS`) and a test fails on any other key.
+- **Availability** (`GET /public/clinics/{slug}/availability`) is computed without writing: the
+  plan minus booked slots and live holds, from now + 2 hours, 14 days. A session or day with
+  nothing left to ask for is **left out**, not shown as 0 left.
+- **The hold** is a `PENDING` request with `hold_expires_at > now`, counted under the session's
+  `FOR UPDATE` lock by requests, staff booking, reschedule and walk-ins. It lapses by time alone;
+  no job. `hold_expires_at = min(now + request_hold_minutes, respond_by)` and
+  `respond_by = min(now + 4h, slot - 1h)`. `reconcile` keeps a session that has a pending request
+  (closed, never deleted).
+- **Override (R18a).** `override_hold: true` on `POST /appointments` and `/reschedule`. Without
+  it a held time is 409 `APT_SLOT_HELD` (`held_until`, `first_name`). With it the blocking hold
+  ends in the same transaction (`hold_overridden_at/by`) and `appointment.hold_overridden` is
+  audited (STAFF; IDs only); the request stays `PENDING`. In token mode, if places are free but
+  all held, the newest hold ends. The drawer asks first ("Book anyway (override the patient's
+  request)") and also handles a hold that appeared while it was open.
+- **Request.** `POST /portal/booking-requests` needs a verified account (`PRT_UNVERIFIED_ACCOUNT`).
+  Phone is required; age and sex are optional unless the clinic requires them; the reason is
+  optional, up to 200 characters, and is never logged, audited or notified. The staff
+  notification (`booking.requested`, owners and front desk) names the first name and the place
+  only. Limits: 5 an hour per account, 20 an hour per address, 5 a day per phone, 5 open across
+  clinics, one per account and session; 429 `PRT_RATE_LIMITED` with `Retry-After`.
+- **Web.** `/c/{slug}` (server-rendered, English and Hindi, `noindex`, Open Graph with name and
+  place only, call, directions, share and copy); choosing a time goes to
+  `/portal/request?clinic=&doctor=&session=&slot=`, so signing in returns to the same time. The
+  portal's session-ended redirect now keeps the query string. *My appointments* lists requests as
+  "Requested" (also for unlinked clinics). Staff: *Booking requests* list (owner and front desk
+  nav; doctors reach it by URL), *Held* in the booking drawer, and *Online booking requests* in
+  schedule settings (page link with Copy, hold time, ask age and sex).
+- **Measured at 360 px** (first load, fresh browser): `/c/sample-clinic` 173 KB,
+  `/portal/request` 183 KB, `/portal/appointments` 180 KB; axe found nothing serious.
+
+Differences from the spec (all deliberate):
+
+- Hours are per doctor only (weekly blocks); the spec's clinic-level hours do not exist.
+- No `SqlAlchemyPublicClinicReader`: the use case reads `uow.clinics.get_by_slug` and builds the
+  allow-listed body.
+- The 4-hour response window is a constant (`RESPONSE_WINDOW`), not a setting; P5 may add one.
+- The session is named by its start (`session_start`), not an ID, because availability writes
+  nothing and the session may not exist yet.
+- The per-phone limit counts real requests (`count_for_phone`) rather than a rate-limit bucket,
+  because that table keeps windows for an hour and a phone number never belongs in a bucket name.
+- Doctors are not notified of requests in P4 (owners and front desk only), and doctors see every
+  pending request through the API, as for the rest of the schedule.
+
+Known limits to carry forward:
+
+- **The caller's address is the web server's** until a reverse proxy we control sets
+  `X-Forwarded-For` (ARCHITECTURE A11, M6-P1 of deployment). The page-read limit (60 a minute) and
+  the per-address request limit (20 an hour) therefore apply to *all* patients together in the
+  pilot. RUNBOOK 24 says what to do if they trip.
+- A suspended-clinic page is covered by the API test (identical 404), not by a browser journey.

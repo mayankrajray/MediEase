@@ -549,3 +549,33 @@ from the switch at the top of every portal screen and kept across devices
 (`SELECT language FROM patient_accounts WHERE id = '<account>';`). The signed-out pages follow a
 `me_pt_lang` cookie in that browser. A patient who sees the wrong language: the switch fixes it;
 nothing for support to change.
+
+### 24. The public clinic page and booking requests (M6b-P4)
+
+**What it is.** `/c/<slug>` shows an `ACTIVE` clinic's published details and free times; a
+patient with a verified account asks for a time at `/portal/request`; the request **holds** the
+time for the clinic's hold setting (default 2 hours, *Settings → Schedule → Online booking
+requests*, 30 minutes to 8 hours) and stays open for up to 4 hours. The hold ends by time alone: no
+job lifts it. Front desk see requests under *Booking requests* and as *Held* in the booking drawer;
+until P5 they reply by phone, and can book the time themselves with *Book anyway*, which is
+audited (`appointment.hold_overridden`).
+
+**A clinic says its page is "not found".** An unknown slug and a clinic that is not `ACTIVE`
+(onboarding or suspended) are deliberately the same 404. Check `SELECT status FROM clinics WHERE
+slug = '<slug>';`. The slug cannot be changed.
+
+**A patient says the time they wanted is gone.** Normal: someone else's request holds it, or it
+was booked. Staff can see holds in the booking drawer (*Held*) and under *Booking requests*;
+`SELECT status, hold_expires_at, respond_by FROM booking_requests WHERE session_id = '<id>';`.
+Never quote the `reason` or phone into a ticket.
+
+**"Too many attempts" (`PRT_RATE_LIMITED`).** Limits: 60 page reads a minute per address; 5
+requests an hour per account, 20 an hour per address, 5 a day per phone number; 5 open requests
+per account. **Until a reverse proxy we control sets the client address (ARCHITECTURE A11) every
+patient shares the web server's address**, so the per-address limits apply to all patients
+together in the pilot. If the clinic page answers 429 for everyone, wait for the minute to pass
+(`Retry-After`), and raise the proxy work before onboarding more clinics. Logs carry
+`booking.rate_limited` with the bucket kind only.
+
+**A request nobody answers.** In P4 a request is only read and held. After its `respond_by` it no
+longer holds anything; nothing changes its status until P5 (accept, decline, propose, expiry).
