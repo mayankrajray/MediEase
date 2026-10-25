@@ -13,7 +13,12 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from mediease_api.domain.onboarding.application import ApplicationKind, ClinicApplication
+from mediease_api.domain.onboarding.application import (
+    ApplicationKind,
+    ApplicationStatus,
+    ClinicApplication,
+    DoctorCheck,
+)
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.phone import PhoneNumber
 
@@ -31,6 +36,10 @@ class ApplicationSummary:
     submitted_at: datetime
     email_verified_at: datetime
     possible_duplicate: bool
+    # M6c-P2: the queue shows every state.
+    status: ApplicationStatus = ApplicationStatus.PENDING
+    taken_at: datetime | None = None
+    decided_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +88,20 @@ class ApplicationRepository(Protocol):
         clinics with a doctor, holding any of these (council, number) pairs."""
         ...
 
-    def list_confirmed(self) -> list[ApplicationSummary]:
-        """R18: confirmed applications, oldest first."""
+    def list_confirmed(
+        self, statuses: frozenset[ApplicationStatus] | None = None
+    ) -> list[ApplicationSummary]:
+        """R18, R25: confirmed applications, oldest first, optionally of these states."""
+        ...
+
+    def checks(self, application_id: UUID) -> dict[UUID, DoctorCheck]:
+        """R29: the latest check per application doctor."""
+        ...
+
+    def put_check(self, application_id: UUID, check: DoctorCheck) -> None:
+        """R29: record a check, replacing the doctor's earlier one."""
+        ...
+
+    def remove_rejected_before(self, cutoff: datetime) -> list[Removed]:
+        """R35: delete applications rejected before ``cutoff``."""
         ...

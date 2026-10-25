@@ -89,6 +89,9 @@ DOMAIN_ERROR_STATUS = {
     "ONB_FILE_REJECTED": 422,
     "ONB_CONFIRM_INVALID": 404,
     "ONB_UPLOAD_FAILED": 503,
+    # M6c-P2 (R27, R29, R33): the review.
+    "ONB_ALREADY_TAKEN": 409,
+    "ONB_NOT_UNDER_REVIEW": 409,
     # M6b-P3b (R46): a dose outside its marking window.
     "PRT_DOSE_NOT_MARKABLE": 409,
     # M6a-P4: emailed verification and reset links.

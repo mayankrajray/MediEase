@@ -45,6 +45,7 @@ from mediease_api.domain.appointments.queue import transition
 from mediease_api.domain.appointments.status import AppointmentStatus
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
+from mediease_api.domain.clinics.verification import VerificationSource
 from mediease_api.domain.identity.membership import ClinicMembership, Role
 from mediease_api.domain.identity.user import User
 from mediease_api.domain.patients.patient import Language, Patient, Sex
@@ -183,6 +184,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 continue
             _create_clinic(deps, uow, users, spec, password_hash)
             created.append(spec)
+        verified = _verify_and_list_demo_clinics(deps, uow, users[_OPS.email])
         patients_added = _seed_patients(deps, uow, users)
         schedules_added = _seed_schedules(deps, uow)
         overdue_added = _seed_overdue_follow_up(deps, uow)
@@ -191,6 +193,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     for spec in created:
         emails = ", ".join(person.email for person in spec.members)
         print(f"seed: created '{spec.slug}' with users: {emails}")
+    if verified:
+        print(f"seed: verified and listed {verified} demo clinics (M6c: public page, directory)")
     if patients_added:
         print(f"seed: added {patients_added} synthetic patients to '{DEMO_SLUG}'")
     if schedules_added:
@@ -274,6 +278,32 @@ def _create_clinic(
 
     clinic.activate(active_owner_count=staff.memberships.count_active_owners(), now=now)
     uow.clinics.update(clinic)
+
+
+def _verify_and_list_demo_clinics(deps: SeedDependencies, uow: UnitOfWork, ops: User) -> int:
+    """M6c-P3, P4: the demo clinics are verified by the seeded ops user (as a reviewer's check of
+    an ops-created clinic, FR-ONB-06), their doctors verified and visible, and the clinics given
+    an address and listed, so the public page and the directory have something to show. Runs on
+    every seed, for clinics seeded before M6c too."""
+    now = deps.clock.now()
+    count = 0
+    for spec in _CLINICS:
+        clinic = uow.clinics.get_by_slug(spec.slug)
+        if clinic is None or clinic.is_verified:
+            continue
+        doctors = uow.tenant(clinic.id).doctors
+        for doctor in doctors.list():
+            doctor.verify(by=ops.id, source=VerificationSource.OPS_CHECK, now=now)
+            doctor.set_visible(True, now=now)
+            doctor.set_profile(languages=("English", "Hindi"), fee_paise=50000, now=now)
+            doctors.update(doctor)
+        if clinic.address_line is None:
+            clinic.update_details(now=now, address_line="12 MG Road", state="Karnataka")
+        clinic.verify(by=ops.id, source=VerificationSource.OPS_CHECK, now=now)
+        clinic.set_listed(True, now=now)
+        uow.clinics.update(clinic)
+        count += 1
+    return count
 
 
 @dataclass(frozen=True)

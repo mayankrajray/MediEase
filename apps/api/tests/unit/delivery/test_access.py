@@ -186,7 +186,17 @@ EXPECTED_POLICIES = {
     # M5-P5 (R18): counts and money per clinic, platform staff only.
     "ops.messaging_costs": (Access.OPS, None),
     # M6c-P1 (clinic-onboarding R1, R12, R18): applying, confirming, and the ops list.
-    "ops.list_applications": (Access.OPS, None),
+    # M6c-P2 (R24): the reviewer's routes (OPS policy with the OPS_REVIEWER role).
+    "ops_applications.list_applications": (Access.OPS, None),
+    "ops_applications.get_application": (Access.OPS, None),
+    "ops_applications.certificate": (Access.OPS, None),
+    "ops_applications.take": (Access.OPS, None),
+    "ops_applications.check": (Access.OPS, None),
+    "ops_applications.reject": (Access.OPS, None),
+    # M6c-P3 (R41, R45): approval and the verification of ops-created clinics.
+    "ops_applications.approve": (Access.OPS, None),
+    "ops_verification.verify_doctor": (Access.OPS, None),
+    "ops_verification.verify_clinic": (Access.OPS, None),
     "public_applications.submit": (Access.PUBLIC, None),
     "public_applications.confirm": (Access.PUBLIC, None),
     # Ops imports patients but cannot browse them (spec patients §2, M2-P4).

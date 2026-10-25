@@ -133,6 +133,22 @@ class AuditAction(StrEnum):
     # clinic). Metadata: the application ID, kind and doctor count only.
     APPLICATION_SUBMITTED = "application.submitted"
     APPLICATION_EMAIL_VERIFIED = "application.email_verified"
+    # M6c-P2 (R26-R34): the review, by an OPS_REVIEWER (OPS actor, no clinic). Metadata: IDs, the
+    # check's result and the rejection reason code; never the note or the message.
+    APPLICATION_VIEWED = "application.viewed"
+    APPLICATION_CERTIFICATE_VIEWED = "application.certificate_viewed"
+    APPLICATION_TAKEN = "application.taken"
+    APPLICATION_DOCTOR_CHECKED = "application.doctor_checked"
+    APPLICATION_REJECTED = "application.rejected"
+    # M6c-P3 (R41): approval creates the clinic; verification of clinics and doctors.
+    APPLICATION_APPROVED = "application.approved"
+    CLINIC_VERIFIED = "clinic.verified"
+    DOCTOR_VERIFIED = "doctor.verified"
+    # M6c-P4 (R50-R58): suspension and listing.
+    CLINIC_SUSPENDED = "clinic.suspended"
+    CLINIC_REACTIVATED = "clinic.reactivated"
+    CLINIC_LISTING_CHANGED = "clinic.listing_changed"
+    DOCTOR_VISIBILITY_CHANGED = "doctor.visibility_changed"
     # M6b-P5 (R34-R43, R32): the answers. IDs and the decline reason code only, never the note.
     BOOKING_REQUEST_ACCEPTED = "booking_request.accepted"
     BOOKING_REQUEST_DECLINED = "booking_request.declined"

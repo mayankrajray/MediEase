@@ -63,6 +63,13 @@ def clinic_body(clinic: Clinic) -> dict[str, Any]:
         "reminder_hours_before": clinic.reminder_hours_before,
         "request_hold_minutes": clinic.request_hold_minutes,
         "request_requires_age_sex": clinic.request_requires_age_sex,
+        # M6c-P3, P4, P5: MediEase's verification, the directory listing and indexing.
+        "verified_at": clinic.verified_at.isoformat() if clinic.verified_at else None,
+        "verification_source": (
+            clinic.verification_source.value if clinic.verification_source else None
+        ),
+        "listed": clinic.listed,
+        "search_indexing": clinic.search_indexing,
     }
 
 
@@ -76,6 +83,14 @@ def doctor_body(doctor: Doctor) -> dict[str, Any]:
         "registration_council": doctor.registration_council,
         "specialty": doctor.specialty,
         "is_active": doctor.is_active,
+        # M6c-P3, P4, P5: verification, directory visibility and the public profile.
+        "verified_at": doctor.verified_at.isoformat() if doctor.verified_at else None,
+        "verification_source": (
+            doctor.verification_source.value if doctor.verification_source else None
+        ),
+        "visible": doctor.visible,
+        "languages": list(doctor.languages),
+        "fee_paise": doctor.fee_paise,
     }
 
 

@@ -27,6 +27,7 @@ def user_body(user: UserView) -> dict[str, Any]:
         "email": user.email,
         "phone_e164": user.phone_e164,
         "is_platform_ops": user.is_platform_ops,
+        "ops_roles": list(user.ops_roles),
     }
 
 

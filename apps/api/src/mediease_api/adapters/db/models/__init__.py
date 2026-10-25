@@ -5,6 +5,7 @@ entities, so nothing outside ``adapters/db`` ever sees a row object.
 """
 
 from mediease_api.adapters.db.models.applications import (
+    ClinicApplicationCheckRow,
     ClinicApplicationDoctorRow,
     ClinicApplicationRow,
 )
@@ -51,6 +52,7 @@ __all__ = [
     "AuditEventRow",
     "Base",
     "BookingRequestRow",
+    "ClinicApplicationCheckRow",
     "ClinicApplicationDoctorRow",
     "ClinicApplicationRow",
     "ClinicMembershipRow",

@@ -15,6 +15,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from mediease_api.domain.booking.request import DEFAULT_HOLD_MINUTES, HOLD_MINUTES_RANGE
+from mediease_api.domain.clinics.verification import VerificationSource
 from mediease_api.domain.patients.code import derive_code_prefix, format_code, validate_code_prefix
 from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.shared.errors import DomainError, InvalidTransition, InvalidValue
@@ -91,11 +92,59 @@ class Clinic:
     # slot, and whether the request form must ask age and sex (phone is always asked).
     request_hold_minutes: int = DEFAULT_HOLD_MINUTES
     request_requires_age_sex: bool = False
+    # M6c-P3 (FR-ONB-04, 06): verified by a MediEase reviewer, never inferred from the status.
+    verified_at: datetime | None = None
+    verified_by: UUID | None = None
+    verification_source: VerificationSource | None = None
+    application_id: UUID | None = None
+    # M6c-P4 (FR-ONB-09, 10): the owner's directory listing; P5 (FR-DIS-06): search engines may
+    # index the public profiles unless the clinic opts out.
+    listed: bool = False
+    listed_at: datetime | None = None
+    search_indexing: bool = True
+
+    @property
+    def is_verified(self) -> bool:
+        return self.verified_at is not None
 
     @property
     def has_public_page(self) -> bool:
-        """R1, NFR-19: the one rule for ``/c/{slug}``. M6c adds "and verified" here only."""
-        return self.status is ClinicStatus.ACTIVE
+        """R1, NFR-19, FR-PUB-01: the one rule for ``/c/{slug}`` and its booking requests:
+        ``ACTIVE`` and verified by MediEase (M6c-P3). Listing is not needed (FR-DIS-07)."""
+        return self.status is ClinicStatus.ACTIVE and self.is_verified
+
+    def verify(
+        self,
+        *,
+        by: UUID,
+        source: VerificationSource,
+        now: datetime,
+        application_id: UUID | None = None,
+    ) -> bool:
+        """Record MediEase's verification (R43, R45); False if it was already verified."""
+        if self.is_verified:
+            return False
+        now = require_utc(now, "now")
+        self.verified_at = now
+        self.verified_by = by
+        self.verification_source = source
+        self.application_id = application_id
+        self.updated_at = now
+        return True
+
+    def set_listed(self, listed: bool, *, now: datetime) -> bool:
+        """The owner's switch (FR-ONB-10); the caller checks the requirements first."""
+        if self.listed == listed:
+            return False
+        now = require_utc(now, "now")
+        self.listed = listed
+        self.listed_at = now if listed else None
+        self.updated_at = now
+        return True
+
+    def set_search_indexing(self, allowed: bool, *, now: datetime) -> None:
+        self.search_indexing = allowed
+        self.updated_at = require_utc(now, "now")
 
     @classmethod
     def create(

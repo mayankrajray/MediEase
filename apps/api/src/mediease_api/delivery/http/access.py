@@ -46,6 +46,7 @@ from mediease_api.application.portal.views import PatientPrincipal
 from mediease_api.delivery.http.request_info import request_info
 from mediease_api.delivery.http.session_cookies import ACCESS_COOKIE, PORTAL_ACCESS_COOKIE
 from mediease_api.domain.identity.permissions import Permission
+from mediease_api.domain.identity.user import OpsRole
 
 logger = structlog.get_logger(__name__)
 
@@ -71,6 +72,8 @@ class AccessPolicy:
     access: Access
     # Set for CLINIC policies only: the permission the endpoint needs.
     permission: Permission | None = None
+    # Set for OPS policies (M6c-P2): the ops role the endpoint needs.
+    ops_role: OpsRole | None = None
 
 
 class MissingAccessPolicy(RuntimeError):
@@ -105,8 +108,13 @@ def authenticated[ViewT: Callable[..., object]](view: ViewT) -> ViewT:
 
 
 def ops[ViewT: Callable[..., object]](view: ViewT) -> ViewT:
-    """Platform ops only (R10); clinic staff are refused even as owners."""
-    return _tagged(view, AccessPolicy(Access.OPS))
+    """Platform ops with ``OPS_ADMIN`` (R10; M6c-P2); clinic staff are refused even as owners."""
+    return _tagged(view, AccessPolicy(Access.OPS, ops_role=OpsRole.ADMIN))
+
+
+def reviewer[ViewT: Callable[..., object]](view: ViewT) -> ViewT:
+    """Platform ops with ``OPS_REVIEWER`` (M6c-P2, FR-ONB-03): clinic applications."""
+    return _tagged(view, AccessPolicy(Access.OPS, ops_role=OpsRole.REVIEWER))
 
 
 def patient[ViewT: Callable[..., object]](view: ViewT) -> ViewT:
@@ -194,6 +202,9 @@ def register_access_control(app: Flask, authenticator: Authenticator) -> None:
         if policy.access is Access.OPS:
             if not principal.is_platform_ops:
                 logger.info("perm.denied", reason="not_platform_ops", route=request.endpoint)
+                raise PermissionDenied()
+            if policy.ops_role is not None and not principal.user.has_ops_role(policy.ops_role):
+                logger.info("perm.denied", reason="no_ops_role", route=request.endpoint)
                 raise PermissionDenied()
             return
 

@@ -53,10 +53,11 @@ from mediease_api.domain.appointments.status import (
 from mediease_api.domain.clinics.clinic import Clinic, ClinicStatus, PaperSize
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
+from mediease_api.domain.clinics.verification import VerificationSource
 from mediease_api.domain.identity.access import ClinicAccess, StaffMember
 from mediease_api.domain.identity.membership import ClinicMembership, MembershipStatus, Role
 from mediease_api.domain.identity.session import RefreshToken
-from mediease_api.domain.identity.user import User, UserStatus
+from mediease_api.domain.identity.user import OpsRole, User, UserStatus
 from mediease_api.domain.links.link import LinkPurpose, PatientLink
 from mediease_api.domain.patients.patient import Language, Patient, Sex
 from mediease_api.domain.prescriptions.errors import PdfBusy
@@ -130,6 +131,15 @@ def _clinic_from_row(row: ClinicRow) -> Clinic:
         reminder_hours_before=row.reminder_hours_before,
         request_hold_minutes=row.request_hold_minutes,
         request_requires_age_sex=row.request_requires_age_sex,
+        verified_at=_utc_or_none(row.verified_at),
+        verified_by=row.verified_by,
+        verification_source=(
+            VerificationSource(row.verification_source) if row.verification_source else None
+        ),
+        application_id=row.application_id,
+        listed=row.listed,
+        listed_at=_utc_or_none(row.listed_at),
+        search_indexing=row.search_indexing,
     )
 
 
@@ -152,6 +162,15 @@ def _write_clinic(row: ClinicRow, clinic: Clinic) -> None:
     row.reminder_hours_before = clinic.reminder_hours_before
     row.request_hold_minutes = clinic.request_hold_minutes
     row.request_requires_age_sex = clinic.request_requires_age_sex
+    row.verified_at = clinic.verified_at
+    row.verified_by = clinic.verified_by
+    row.verification_source = (
+        clinic.verification_source.value if clinic.verification_source else None
+    )
+    row.application_id = clinic.application_id
+    row.listed = clinic.listed
+    row.listed_at = clinic.listed_at
+    row.search_indexing = clinic.search_indexing
     row.updated_at = clinic.updated_at
 
 
@@ -217,6 +236,7 @@ def _user_from_row(row: UserRow) -> User:
         failed_sign_in_count=row.failed_login_count,
         locked_until=_utc_or_none(row.locked_until),
         last_signed_in_at=_utc_or_none(row.last_login_at),
+        ops_roles=frozenset(OpsRole(r) for r in (row.ops_roles or ())),
     )
 
 
@@ -225,6 +245,7 @@ def _write_user(row: UserRow, user: User) -> None:
     row.email = user.email.value if user.email else None
     row.phone_e164 = user.phone.e164 if user.phone else None
     row.is_platform_ops = user.is_platform_ops
+    row.ops_roles = sorted(r.value for r in user.ops_roles)
     row.status = user.status.value
     row.password_hash = user.password_hash
     row.failed_login_count = user.failed_sign_in_count
@@ -413,6 +434,14 @@ def _doctor_from_row(row: DoctorRow) -> Doctor:
         is_active=row.is_active,
         created_at=_utc(row.created_at),
         updated_at=_utc(row.updated_at),
+        verified_at=_utc_or_none(row.verified_at),
+        verified_by=row.verified_by,
+        verification_source=(
+            VerificationSource(row.verification_source) if row.verification_source else None
+        ),
+        visible=row.visible,
+        languages=tuple(row.languages or ()),
+        fee_paise=row.fee_paise,
     )
 
 
@@ -424,6 +453,14 @@ def _write_doctor(row: DoctorRow, doctor: Doctor) -> None:
     row.registration_council = doctor.registration_council
     row.specialty = doctor.specialty
     row.is_active = doctor.is_active
+    row.verified_at = doctor.verified_at
+    row.verified_by = doctor.verified_by
+    row.verification_source = (
+        doctor.verification_source.value if doctor.verification_source else None
+    )
+    row.visible = doctor.visible
+    row.languages = list(doctor.languages)
+    row.fee_paise = doctor.fee_paise
     row.updated_at = doctor.updated_at
 
 

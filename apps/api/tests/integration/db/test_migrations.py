@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0032"
+HEAD = "0034"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -51,6 +51,7 @@ M6B_P6_TABLES = sorted(
     [*M6B_P4_TABLES, "patient_notifications", "patient_notification_preferences"]
 )
 M6C_P1_TABLES = sorted([*M6B_P6_TABLES, "clinic_application_doctors", "clinic_applications"])
+M6C_P2_TABLES = sorted([*M6C_P1_TABLES, "clinic_application_checks"])
 
 
 @pytest.fixture
@@ -658,7 +659,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6C_P1_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6C_P2_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -976,3 +977,68 @@ def test_0032_adds_clinic_applications_and_downgrades(
         engine.dispose()
     command.downgrade(alembic_config, "0031")
     assert _tables(scratch_database_url) == M6B_P6_TABLES
+
+
+def test_0033_adds_ops_roles_and_review_and_downgrades(
+    scratch_database_url: str, alembic_config: Config
+) -> None:
+    """M6c-P2 (clinic-onboarding R24-R40): ops users created before 0033 get both ops roles,
+    applications gain the review columns and the checks table. Downgrade restores 0032."""
+    command.upgrade(alembic_config, "0032")
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO users (id, email, full_name, is_platform_ops, status, created_at,"
+                    " updated_at) VALUES (gen_random_uuid(), 'ops@example.test', 'Ops', true,"
+                    " 'ACTIVE', now(), now())"
+                )
+            )
+        command.upgrade(alembic_config, "0033")
+        assert _tables(scratch_database_url) == M6C_P2_TABLES
+        with engine.connect() as conn:
+            roles = conn.execute(text("SELECT ops_roles FROM users")).scalar_one()
+            columns = {c["name"] for c in inspect(conn).get_columns("clinic_applications")}
+        assert sorted(roles) == ["OPS_ADMIN", "OPS_REVIEWER"]
+        assert {"taken_by", "decided_by", "decision_reason"} <= columns
+    finally:
+        engine.dispose()
+    command.downgrade(alembic_config, "0032")
+    assert _tables(scratch_database_url) == M6C_P1_TABLES
+
+
+def test_0034_adds_verification_listing_and_profiles_and_downgrades(
+    scratch_database_url: str, alembic_config: Config
+) -> None:
+    """M6c-P3-P5 (clinic-onboarding R41-R58): verification on clinics and doctors, the listing
+    (only when verified), doctor visibility and profile fields, and the CLINIC_UNAVAILABLE decline
+    reason. Downgrade restores 0033."""
+    command.upgrade(alembic_config, "0034")
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            clinic = {c["name"] for c in inspect(conn).get_columns("clinics")}
+            doctor = {c["name"] for c in inspect(conn).get_columns("doctors")}
+            listed = conn.execute(
+                text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :n"),
+                {"n": "ck_clinics_listed_verified"},
+            ).scalar_one()
+            reasons = conn.execute(
+                text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :n"),
+                {"n": "ck_booking_requests_decline_reason"},
+            ).scalar_one()
+        assert {"verified_at", "verification_source", "listed", "search_indexing"} <= clinic
+        assert {"verified_at", "visible", "languages", "fee_paise"} <= doctor
+        assert "verified_at IS NOT NULL" in listed
+        assert "CLINIC_UNAVAILABLE" in reasons
+    finally:
+        engine.dispose()
+    command.downgrade(alembic_config, "0033")
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            clinic = {c["name"] for c in inspect(conn).get_columns("clinics")}
+        assert "listed" not in clinic
+    finally:
+        engine.dispose()

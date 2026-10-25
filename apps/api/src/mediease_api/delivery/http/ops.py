@@ -47,7 +47,6 @@ from mediease_api.application.clinics.onboard_clinic import (
     DoctorCommand,
 )
 from mediease_api.application.context import Actor
-from mediease_api.application.onboarding.jobs import ListApplications
 from mediease_api.application.ops.queries import (
     ClinicMessagingCost,
     GetClinicOnboarding,
@@ -92,7 +91,6 @@ class OpsUseCases(Protocol):
     def import_patients(self) -> ImportPatients: ...
     def replace_schedule(self) -> ReplaceSchedule: ...
     def messaging_costs(self) -> MessagingCosts: ...
-    def list_applications(self) -> ListApplications: ...
 
 
 class NewClinicRequest(BaseModel):
@@ -241,27 +239,6 @@ def create_ops_blueprint(use_cases: OpsUseCases, *, public_base_url: str) -> Blu
             cmd=ImportPatientsCommand(data=_csv_body(), dry_run=dry_run),
         )
         return jsonify(import_report_body(report))
-
-    @bp.get("/applications")
-    @ops
-    def list_applications() -> Response:
-        # M6c-P1 (clinic-onboarding R18): confirmed applications, summary only.
-        return jsonify(
-            items_body(
-                {
-                    "id": str(a.id),
-                    "reference": a.reference,
-                    "kind": a.kind.value,
-                    "clinic_name": a.clinic_name,
-                    "city": a.city,
-                    "doctors": a.doctors,
-                    "submitted_at": a.submitted_at.isoformat(),
-                    "email_verified_at": a.email_verified_at.isoformat(),
-                    "possible_duplicate": a.possible_duplicate,
-                }
-                for a in use_cases.list_applications().execute()
-            )
-        )
 
     @bp.get("/messaging-costs")
     @ops

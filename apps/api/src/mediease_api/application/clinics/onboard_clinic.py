@@ -107,48 +107,52 @@ class CreateClinic:
         self._ids = ids
 
     def execute(self, actor: Actor, cmd: CreateClinicCommand) -> Clinic:
-        phone = PhoneNumber.parse(cmd.phone, field="phone") if cmd.phone else None
         with self._uow as uow:
-            now = self._clock.now()
-            if uow.clinics.get_by_slug(cmd.slug) is not None:
-                raise SlugTaken()
-
-            clinic = Clinic.create(
-                id=self._ids.new_id(),
-                name=cmd.name,
-                slug=cmd.slug,
-                now=now,
-                timezone=cmd.timezone or "Asia/Kolkata",
-                phone=phone,
-                address_line=cmd.address_line,
-                city=cmd.city,
-                state=cmd.state,
-                pincode=cmd.pincode,
-                specialties=cmd.specialties,
-                patient_code_prefix=cmd.patient_code_prefix,
-                booking_mode=cmd.booking_mode,
-                rx_paper_size=cmd.rx_paper_size,
-            )
-            uow.clinics.add(clinic)
-
-            checklist = OnboardingChecklist.start(
-                id=self._ids.new_id(), clinic_id=clinic.id, now=now
-            )
-            checklist.record(OnboardingStep.CLINIC_CREATED, now=now)
-            uow.tenant(clinic.id).checklist.add(checklist)
-
-            record_event(
-                uow,
-                event_id=self._ids.new_id(),
-                action=AuditAction.CLINIC_CREATED,
-                actor=actor,
-                now=now,
-                clinic_id=clinic.id,
-                entity_type=CLINIC_ENTITY,
-                entity_id=clinic.id,
-                metadata={"slug": clinic.slug},
-            )
+            clinic = self.in_transaction(uow, actor=actor, cmd=cmd, now=self._clock.now())
             uow.commit()
+        return clinic
+
+    def in_transaction(
+        self, uow: UnitOfWork, *, actor: Actor, cmd: CreateClinicCommand, now: datetime
+    ) -> Clinic:
+        """The clinic, its checklist and audit row in the caller's transaction (M6c-P3)."""
+        phone = PhoneNumber.parse(cmd.phone, field="phone") if cmd.phone else None
+        if uow.clinics.get_by_slug(cmd.slug) is not None:
+            raise SlugTaken()
+
+        clinic = Clinic.create(
+            id=self._ids.new_id(),
+            name=cmd.name,
+            slug=cmd.slug,
+            now=now,
+            timezone=cmd.timezone or "Asia/Kolkata",
+            phone=phone,
+            address_line=cmd.address_line,
+            city=cmd.city,
+            state=cmd.state,
+            pincode=cmd.pincode,
+            specialties=cmd.specialties,
+            patient_code_prefix=cmd.patient_code_prefix,
+            booking_mode=cmd.booking_mode,
+            rx_paper_size=cmd.rx_paper_size,
+        )
+        uow.clinics.add(clinic)
+
+        checklist = OnboardingChecklist.start(id=self._ids.new_id(), clinic_id=clinic.id, now=now)
+        checklist.record(OnboardingStep.CLINIC_CREATED, now=now)
+        uow.tenant(clinic.id).checklist.add(checklist)
+
+        record_event(
+            uow,
+            event_id=self._ids.new_id(),
+            action=AuditAction.CLINIC_CREATED,
+            actor=actor,
+            now=now,
+            clinic_id=clinic.id,
+            entity_type=CLINIC_ENTITY,
+            entity_id=clinic.id,
+            metadata={"slug": clinic.slug},
+        )
 
         logger.info("clinic.created", clinic_id=str(clinic.id), slug=clinic.slug)
         return clinic
@@ -161,36 +165,50 @@ class AddDoctor:
         self._ids = ids
 
     def execute(self, *, clinic_id: UUID, actor: Actor, cmd: DoctorCommand) -> Doctor:
-        required = _require_doctor_details(cmd)
         with self._uow as uow:
-            now = self._clock.now()
-            if uow.clinics.get(clinic_id) is None:
-                raise NotFound("clinic")
-            if cmd.user_id is not None:
-                _require_linkable_member(uow, clinic_id, cmd.user_id)
-
-            doctor = Doctor.create(
-                id=self._ids.new_id(),
-                clinic_id=clinic_id,
-                now=now,
-                user_id=cmd.user_id,
-                specialty=cmd.specialty,
-                **required,
-            )
-            uow.tenant(clinic_id).doctors.add(doctor)
-            _record_first_doctor(uow, self._ids, clinic_id, now)
-            record_event(
-                uow,
-                event_id=self._ids.new_id(),
-                action=AuditAction.DOCTOR_ADDED,
-                actor=actor,
-                now=now,
-                clinic_id=clinic_id,
-                entity_type=DOCTOR_ENTITY,
-                entity_id=doctor.id,
-                metadata={"registration_number": doctor.registration_number},
+            doctor = self.in_transaction(
+                uow, clinic_id=clinic_id, actor=actor, cmd=cmd, now=self._clock.now()
             )
             uow.commit()
+        return doctor
+
+    def in_transaction(
+        self,
+        uow: UnitOfWork,
+        *,
+        clinic_id: UUID,
+        actor: Actor,
+        cmd: DoctorCommand,
+        now: datetime,
+    ) -> Doctor:
+        """The doctor and its audit row in the caller's transaction (M6c-P3)."""
+        required = _require_doctor_details(cmd)
+        if uow.clinics.get(clinic_id) is None:
+            raise NotFound("clinic")
+        if cmd.user_id is not None:
+            _require_linkable_member(uow, clinic_id, cmd.user_id)
+
+        doctor = Doctor.create(
+            id=self._ids.new_id(),
+            clinic_id=clinic_id,
+            now=now,
+            user_id=cmd.user_id,
+            specialty=cmd.specialty,
+            **required,
+        )
+        uow.tenant(clinic_id).doctors.add(doctor)
+        _record_first_doctor(uow, self._ids, clinic_id, now)
+        record_event(
+            uow,
+            event_id=self._ids.new_id(),
+            action=AuditAction.DOCTOR_ADDED,
+            actor=actor,
+            now=now,
+            clinic_id=clinic_id,
+            entity_type=DOCTOR_ENTITY,
+            entity_id=doctor.id,
+            metadata={"registration_number": doctor.registration_number},
+        )
 
         logger.info("doctor.added", clinic_id=str(clinic_id), doctor_id=str(doctor.id))
         return doctor

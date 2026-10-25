@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.36.0
+  version: 0.38.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -3913,13 +3913,18 @@ paths:
       operationId: listOpsApplications
       summary: Confirmed clinic applications, oldest first
       description: |
-        M6c-P1, spec clinic-onboarding R18. Ops only. A summary per application: no phone,
-        email, registration number or certificate (the reviewer's detail view is M6c-P2).
-        Unconfirmed applications are never listed.
+        M6c-P1, P2, spec clinic-onboarding R18, R25. OPS_REVIEWER only. A summary per
+        application: no phone, email, registration number or certificate. `queue` waiting
+        (PENDING), review (UNDER_REVIEW) or decided; all when absent. Unconfirmed applications
+        are never listed.
       security:
         - sessionCookie: []
       parameters:
         - $ref: '#/components/parameters/RequestId'
+        - name: queue
+          in: query
+          required: false
+          schema: {type: string, enum: [waiting, review, decided]}
       responses:
         '200':
           description: The applications
@@ -3942,6 +3947,306 @@ paths:
           $ref: '#/components/responses/AuthError'
         '403':
           $ref: '#/components/responses/PermissionError'
+  /api/v1/ops/applications/{application_id}:
+    get:
+      tags: [ops]
+      operationId: getOpsApplication
+      summary: One clinic application for a reviewer (audited)
+      description: |
+        M6c-P2, spec clinic-onboarding R26. OPS_REVIEWER only. The whole application, each
+        doctor's registration and latest check. Opening it is audited (application.viewed).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ApplicationId'
+      responses:
+        '200':
+          $ref: '#/components/responses/ApplicationDetail'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+  /api/v1/ops/applications/{application_id}/doctors/{doctor_id}/certificate:
+    get:
+      tags: [ops]
+      operationId: getOpsApplicationCertificate
+      summary: A doctor's registration certificate (audited)
+      description: |
+        M6c-P2, spec R26. OPS_REVIEWER only. The stored file with its stored type, inline,
+        nosniff and a sandboxing CSP; never a public link. Each download is audited.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ApplicationId'
+        - name: doctor_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The certificate
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/pdf:
+              schema: {type: string, format: binary}
+            image/jpeg:
+              schema: {type: string, format: binary}
+            image/png:
+              schema: {type: string, format: binary}
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+  /api/v1/ops/applications/{application_id}/take:
+    post:
+      tags: [ops]
+      operationId: takeOpsApplication
+      summary: Start reviewing a confirmed application
+      description: |
+        M6c-P2, spec R27. PENDING -> UNDER_REVIEW with the reviewer and time; 409
+        ONB_ALREADY_TAKEN when another reviewer took it first.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ApplicationId'
+      responses:
+        '200':
+          $ref: '#/components/responses/ApplicationDetail'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+        '409':
+          $ref: '#/components/responses/ApplicationError'
+  /api/v1/ops/applications/{application_id}/doctors/{doctor_id}/check:
+    put:
+      tags: [ops]
+      operationId: checkOpsApplicationDoctor
+      summary: Record a doctor's registration check
+      description: |
+        M6c-P2, spec R29, R30. Only UNDER_REVIEW (409 ONB_NOT_UNDER_REVIEW); VERIFIED needs both
+        the register and the certificate checked (422). A new check replaces the earlier one.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ApplicationId'
+        - name: doctor_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [register_checked, certificate_matches, result]
+              properties:
+                register_checked: {type: boolean}
+                certificate_matches: {type: boolean}
+                result: {type: string, enum: [VERIFIED, NOT_VERIFIED]}
+                note: {type: [string, 'null'], maxLength: 500}
+      responses:
+        '200':
+          $ref: '#/components/responses/ApplicationDetail'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+        '409':
+          $ref: '#/components/responses/ApplicationError'
+        '422':
+          $ref: '#/components/responses/ApplicationError'
+  /api/v1/ops/applications/{application_id}/reject:
+    post:
+      tags: [ops]
+      operationId: rejectOpsApplication
+      summary: Reject an application with a reason the applicant reads
+      description: |
+        M6c-P2, spec R33, R34. UNDER_REVIEW -> REJECTED; OTHER needs a message (1-500). The
+        applicant is emailed the reason's words and the message, and may apply again.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason:
+                  $ref: '#/components/schemas/ApplicationRejectReason'
+                message: {type: [string, 'null'], maxLength: 500}
+      responses:
+        '200':
+          $ref: '#/components/responses/ApplicationDetail'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+        '409':
+          $ref: '#/components/responses/ApplicationError'
+        '422':
+          $ref: '#/components/responses/ApplicationError'
+  /api/v1/ops/applications/{application_id}/approve:
+    post:
+      tags: [ops]
+      operationId: approveOpsApplication
+      summary: Approve an application, creating its clinic, doctors and owner invitation
+      description: |
+        M6c-P3, spec clinic-onboarding R41-R44 (FR-ONB-04, FR-ONB-08). UNDER_REVIEW with every
+        doctor's check VERIFIED (else 422). In one transaction: the clinic (ONBOARDING, verified
+        with source APPLICATION), every doctor (verified), the owner's invitation sent by email
+        (the owner linked to their doctor when they practise) and the application APPROVED. The
+        reviewer chooses the slug, booking mode and time zone and may correct the clinic's
+        details. A slug already used is 409 and nothing is created. The clinic becomes ACTIVE
+        when the owner accepts the invitation.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [slug]
+              properties:
+                slug: {type: string, minLength: 3, maxLength: 63}
+                booking_mode:
+                  $ref: '#/components/schemas/BookingMode'
+                timezone: {type: string, maxLength: 64, default: Asia/Kolkata}
+                clinic_name: {type: [string, 'null'], maxLength: 200}
+                address_line: {type: [string, 'null'], maxLength: 300}
+                city: {type: [string, 'null'], maxLength: 100}
+                state: {type: [string, 'null'], maxLength: 100}
+                pincode: {type: [string, 'null'], maxLength: 6}
+      responses:
+        '201':
+          description: Approved; the clinic exists and its owner is invited
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [application, clinic, invitation_delivery]
+                properties:
+                  application:
+                    $ref: '#/components/schemas/OpsApplicationDetail'
+                  clinic:
+                    $ref: '#/components/schemas/Clinic'
+                  invitation_delivery: {type: string, enum: [email, link]}
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+        '409':
+          $ref: '#/components/responses/ApplicationError'
+        '422':
+          $ref: '#/components/responses/ApplicationError'
+  /api/v1/ops/clinics/{clinic_id}/doctors/{doctor_id}/verify:
+    post:
+      tags: [ops]
+      operationId: verifyOpsClinicDoctor
+      summary: Verify an ops-created clinic's doctor
+      description: |
+        M6c-P3, spec R45 (FR-ONB-06). OPS_REVIEWER only. Both checks must be true (else 422).
+        Records the doctor as verified with source OPS_CHECK; idempotent.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicPath'
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: doctor_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [register_checked, certificate_matches]
+              properties:
+                register_checked: {type: boolean}
+                certificate_matches: {type: boolean}
+      responses:
+        '200':
+          description: Verified
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [verified, changed]
+                properties:
+                  verified: {type: boolean, const: true}
+                  changed: {type: boolean}
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+        '422':
+          $ref: '#/components/responses/ApplicationError'
+  /api/v1/ops/clinics/{clinic_id}/verify:
+    post:
+      tags: [ops]
+      operationId: verifyOpsClinic
+      summary: Verify an ops-created clinic
+      description: |
+        M6c-P3, spec R45 (FR-ONB-06). OPS_REVIEWER only. Needs at least one active verified
+        doctor (else 422). A verified ACTIVE clinic has a public page.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: The clinic, verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Clinic'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+        '422':
+          $ref: '#/components/responses/ApplicationError'
   /api/v1/ops/messaging-costs:
     get:
       tags: [ops]
@@ -5994,6 +6299,11 @@ components:
         Portal access token (M6a-P3, ADR-0015), HttpOnly, path /api/v1/portal, audience
         mediease-portal. Refused on every staff route, as the staff token is on portal routes.
   parameters:
+    ApplicationId:
+      name: application_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
     RequestId:
       name: X-Request-ID
       in: header
@@ -6219,13 +6529,25 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    ApplicationDetail:
+      description: The application as the reviewer sees it
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OpsApplicationDetail'
     ApplicationError:
       description: |
         M6c-P1. ONB_CONFIRM_INVALID (404: unknown, used or expired link); REQ_REQUEST_ENTITY_TOO_LARGE
         (413: over 30 MB); REQ_UNSUPPORTED_MEDIA_TYPE (415); REQ_VALIDATION_FAILED (422, the field
         named with doctor positions from 1); ONB_FILE_REJECTED (422: details.position and
         details.reason type, size or missing); ONB_RATE_LIMITED (429, with Retry-After);
-        ONB_UPLOAD_FAILED (503: nothing was kept)
+        ONB_UPLOAD_FAILED (503: nothing was kept); ONB_ALREADY_TAKEN, ONB_NOT_UNDER_REVIEW
+        (409, the review); REQ_NOT_FOUND (404, an unknown or unconfirmed application)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -7502,7 +7824,7 @@ components:
             $ref: '#/components/schemas/Membership'
     SessionUser:
       type: object
-      required: [id, full_name, email, phone_e164, is_platform_ops]
+      required: [id, full_name, email, phone_e164, is_platform_ops, ops_roles]
       properties:
         id:
           type: string
@@ -7515,6 +7837,12 @@ components:
           type: [string, 'null']
         is_platform_ops:
           type: boolean
+        ops_roles:
+          type: array
+          description: M6c-P2. OPS_ADMIN (clinics, imports, costs), OPS_REVIEWER (applications); empty for clinic staff
+          items:
+            type: string
+            enum: [OPS_ADMIN, OPS_REVIEWER]
     Membership:
       type: object
       required: [membership_id, clinic_id, clinic_name, clinic_status, role, permissions,
@@ -7642,6 +7970,19 @@ components:
           minimum: 0
           maximum: 6
           description: M6a-P8 appointment reminder this many hours before the visit; 0 is off
+        verified_at:
+          type: [string, 'null']
+          format: date-time
+          description: M6c-P3 when MediEase verified the clinic; null until then (no public page)
+        verification_source:
+          type: [string, 'null']
+          enum: [APPLICATION, OPS_CHECK, null]
+        listed:
+          type: boolean
+          description: M6c-P4 the owner's choice to appear in the directory (only when verified)
+        search_indexing:
+          type: boolean
+          description: M6c-P5 whether search engines may index the public pages
     PublicHours:
       type: object
       required: [weekday, start, end]
@@ -8093,6 +8434,109 @@ components:
           $ref: '#/components/schemas/PatientNotificationKind'
         channel: {type: string, enum: [IN_APP, EMAIL]}
         enabled: {type: boolean}
+    ApplicationRejectReason:
+      type: string
+      enum: [REGISTRATION_NOT_FOUND, CERTIFICATE_UNCLEAR, DETAILS_DO_NOT_MATCH, NOT_ELIGIBLE, DUPLICATE, OTHER]
+    ApplicationStatus:
+      type: string
+      enum: [PENDING, UNDER_REVIEW, APPROVED, REJECTED]
+    OpsApplicationDoctor:
+      type: object
+      required: [id, position, name, qualification, council, registration_number, is_owner, certificate, check]
+      properties:
+        id: {type: string, format: uuid}
+        position: {type: integer, minimum: 1, maximum: 10}
+        name: {type: string}
+        qualification: {type: string}
+        council: {type: string}
+        registration_number: {type: string}
+        is_owner: {type: boolean}
+        certificate:
+          type: object
+          required: [content_type, size]
+          properties:
+            content_type: {type: string}
+            size: {type: integer}
+        check:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [register_checked, certificate_matches, result, note, checked_at, checked_by]
+              properties:
+                register_checked: {type: boolean}
+                certificate_matches: {type: boolean}
+                result: {type: string, enum: [VERIFIED, NOT_VERIFIED]}
+                note: {type: [string, 'null']}
+                checked_at: {type: string, format: date-time}
+                checked_by: {type: string, format: uuid}
+    OpsApplicationDetail:
+      type: object
+      description: M6c-P2 (R26). For OPS_REVIEWER only.
+      required:
+        - id
+        - reference
+        - kind
+        - status
+        - clinic_name
+        - address_line
+        - city
+        - state
+        - pincode
+        - clinic_phone_e164
+        - specialties
+        - owner_name
+        - owner_phone_e164
+        - owner_email
+        - owner_practises
+        - submitted_at
+        - email_verified_at
+        - taken_by
+        - taken_at
+        - decided_at
+        - decision_reason
+        - decision_message
+        - duplicate_of
+        - clinic_id
+        - all_verified
+        - doctors
+      properties:
+        id: {type: string, format: uuid}
+        reference: {type: string}
+        kind: {type: string, enum: [CLINIC, SOLO_DOCTOR]}
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        clinic_name: {type: string}
+        address_line: {type: string}
+        city: {type: string}
+        state: {type: string}
+        pincode: {type: string}
+        clinic_phone_e164: {type: string}
+        specialties:
+          type: array
+          items: {type: string}
+        owner_name: {type: string}
+        owner_phone_e164: {type: string}
+        owner_email: {type: string}
+        owner_practises: {type: boolean}
+        submitted_at: {type: string, format: date-time}
+        email_verified_at: {type: [string, 'null'], format: date-time}
+        taken_by: {type: [string, 'null'], format: uuid}
+        taken_at: {type: [string, 'null'], format: date-time}
+        decided_at: {type: [string, 'null'], format: date-time}
+        decision_reason:
+          oneOf:
+            - $ref: '#/components/schemas/ApplicationRejectReason'
+            - type: 'null'
+        decision_message: {type: [string, 'null']}
+        duplicate_of:
+          type: array
+          items: {type: string}
+        clinic_id: {type: [string, 'null'], format: uuid}
+        all_verified: {type: boolean}
+        doctors:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsApplicationDoctor'
     ClinicApplicationInput:
       type: object
       additionalProperties: false
@@ -8169,6 +8613,9 @@ components:
         - submitted_at
         - email_verified_at
         - possible_duplicate
+        - status
+        - taken_at
+        - decided_at
       properties:
         id: {type: string, format: uuid}
         reference: {type: string}
@@ -8179,6 +8626,10 @@ components:
         submitted_at: {type: string, format: date-time}
         email_verified_at: {type: string, format: date-time}
         possible_duplicate: {type: boolean}
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        taken_at: {type: [string, 'null'], format: date-time}
+        decided_at: {type: [string, 'null'], format: date-time}
     LiveLink:
       type: object
       required: [url, expires_at]
@@ -9361,6 +9812,25 @@ components:
           type: [string, 'null']
         is_active:
           type: boolean
+        verified_at:
+          type: [string, 'null']
+          format: date-time
+          description: M6c-P3 when MediEase verified the registration; cleared when it changes
+        verification_source:
+          type: [string, 'null']
+          enum: [APPLICATION, OPS_CHECK, null]
+        visible:
+          type: boolean
+          description: M6c-P4 shown on the public page and in the directory
+        languages:
+          type: array
+          items: {type: string}
+          description: M6c-P5 languages spoken (from a fixed list)
+        fee_paise:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 1000000
+          description: M6c-P5 consultation fee in paise, if published
     StaffList:
       type: object
       required: [items]

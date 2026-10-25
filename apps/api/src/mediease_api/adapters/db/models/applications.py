@@ -28,7 +28,12 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mediease_api.adapters.db.models.base import Base, Keyed, enum_check
-from mediease_api.domain.onboarding.application import ApplicationKind, ApplicationStatus
+from mediease_api.domain.onboarding.application import (
+    ApplicationKind,
+    ApplicationStatus,
+    CheckResult,
+    RejectReason,
+)
 
 # R9: references are MA-<year>-NNNN from one sequence, never reused.
 APPLICATION_REFERENCE_SEQUENCE = Sequence(
@@ -49,6 +54,14 @@ class ClinicApplicationRow(Keyed, Base):
         # Only a confirmed application can be reviewed.
         CheckConstraint(
             "status = 'PENDING' OR email_verified_at IS NOT NULL", name="reviewed_confirmed"
+        ),
+        enum_check("decision_reason", RejectReason),
+        # R33, R41: a decision has its reviewer and time; a rejection its reason.
+        CheckConstraint(
+            "(status IN ('APPROVED', 'REJECTED')) = (decided_at IS NOT NULL)", name="decided"
+        ),
+        CheckConstraint(
+            "(status = 'REJECTED') = (decision_reason IS NOT NULL)", name="rejected_reason"
         ),
         UniqueConstraint("reference"),
         UniqueConstraint("confirm_digest"),
@@ -78,6 +91,42 @@ class ClinicApplicationRow(Keyed, Base):
     ip_hash: Mapped[str | None] = mapped_column(Text)
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # M6c-P2 (migration 0033, R27, R33): who took it and how it was decided; P3 the clinic.
+    taken_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decided_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decision_reason: Mapped[str | None] = mapped_column(Text)
+    decision_message: Mapped[str | None] = mapped_column(Text)
+    # P3: the clinic an approval created (not ``clinic_id``: still not a tenant row).
+    created_clinic_id: Mapped[UUID | None] = mapped_column(ForeignKey("clinics.id"))
+
+
+class ClinicApplicationCheckRow(Keyed, Base):
+    """R29, R30: a reviewer's check of one application doctor (one row, replaced)."""
+
+    __tablename__ = "clinic_application_checks"
+    __table_args__ = (
+        enum_check("result", CheckResult),
+        CheckConstraint(
+            "result = 'NOT_VERIFIED' OR (register_checked AND certificate_matches)",
+            name="verified_needs_both",
+        ),
+        UniqueConstraint("doctor_id"),
+    )
+
+    application_id: Mapped[UUID] = mapped_column(
+        ForeignKey("clinic_applications.id", ondelete="CASCADE")
+    )
+    doctor_id: Mapped[UUID] = mapped_column(
+        ForeignKey("clinic_application_doctors.id", ondelete="CASCADE")
+    )
+    checked_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    register_checked: Mapped[bool] = mapped_column(Boolean)
+    certificate_matches: Mapped[bool] = mapped_column(Boolean)
+    result: Mapped[str] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
 
 
 class ClinicApplicationDoctorRow(Keyed, Base):

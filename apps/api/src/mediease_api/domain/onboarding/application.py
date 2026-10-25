@@ -20,7 +20,12 @@ from uuid import UUID
 from mediease_api.domain.onboarding.certificate import Certificate
 from mediease_api.domain.onboarding.lists import is_council, is_specialty
 from mediease_api.domain.shared.email import EmailAddress
-from mediease_api.domain.shared.errors import DomainError, InvalidTransition, InvalidValue
+from mediease_api.domain.shared.errors import (
+    DomainError,
+    InvalidTransition,
+    InvalidValue,
+    NotFound,
+)
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.shared.text import required_text
 from mediease_api.domain.shared.time import require_utc
@@ -46,6 +51,97 @@ class ApplicationStatus(StrEnum):
     UNDER_REVIEW = "UNDER_REVIEW"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
+
+
+class RejectReason(StrEnum):
+    """R33: why an application was not approved; the applicant reads ``REJECT_WORDS``."""
+
+    REGISTRATION_NOT_FOUND = "REGISTRATION_NOT_FOUND"
+    CERTIFICATE_UNCLEAR = "CERTIFICATE_UNCLEAR"
+    DETAILS_DO_NOT_MATCH = "DETAILS_DO_NOT_MATCH"
+    NOT_ELIGIBLE = "NOT_ELIGIBLE"
+    DUPLICATE = "DUPLICATE"
+    OTHER = "OTHER"
+
+
+REJECT_WORDS: dict[RejectReason, str] = {
+    RejectReason.REGISTRATION_NOT_FOUND: (
+        "We could not find a doctor's registration in the medical council's register."
+    ),
+    RejectReason.CERTIFICATE_UNCLEAR: "A registration certificate could not be read or checked.",
+    RejectReason.DETAILS_DO_NOT_MATCH: (
+        "The details on a certificate do not match the details in the application."
+    ),
+    RejectReason.NOT_ELIGIBLE: "MediEase cannot list this practice at present.",
+    RejectReason.DUPLICATE: "This practice has already applied or is already on MediEase.",
+    RejectReason.OTHER: "We could not approve the application.",
+}
+MAX_MESSAGE = 500
+# R35: rejected applications are deleted with their certificates this long after the decision.
+REJECTED_RETENTION = timedelta(days=180)
+
+
+class CheckResult(StrEnum):
+    VERIFIED = "VERIFIED"
+    NOT_VERIFIED = "NOT_VERIFIED"
+
+
+class AlreadyTaken(DomainError):
+    """R27: another reviewer took this application first."""
+
+    code = "ONB_ALREADY_TAKEN"
+
+    def __init__(self) -> None:
+        super().__init__("Another reviewer has already taken this application.")
+
+
+class NotUnderReview(DomainError):
+    """R29, R33: checks and decisions only while the application is under review."""
+
+    code = "ONB_NOT_UNDER_REVIEW"
+
+    def __init__(self) -> None:
+        super().__init__("This application is not under review.")
+
+
+@dataclass(frozen=True, slots=True)
+class DoctorCheck:
+    """R29, R30: a reviewer's check of one doctor's registration; a new check replaces it."""
+
+    doctor_id: UUID
+    checked_by: UUID
+    checked_at: datetime
+    register_checked: bool
+    certificate_matches: bool
+    result: CheckResult
+    note: str | None = None
+
+    @classmethod
+    def record(
+        cls,
+        *,
+        doctor_id: UUID,
+        checked_by: UUID,
+        now: datetime,
+        register_checked: bool,
+        certificate_matches: bool,
+        result: CheckResult,
+        note: str | None,
+    ) -> DoctorCheck:
+        if result is CheckResult.VERIFIED and not (register_checked and certificate_matches):
+            raise InvalidValue("result", "VERIFIED needs the register and the certificate checked")
+        clean = note.strip() if note else None
+        if clean is not None and len(clean) > MAX_MESSAGE:
+            raise InvalidValue("note", f"must be at most {MAX_MESSAGE} characters")
+        return cls(
+            doctor_id=doctor_id,
+            checked_by=checked_by,
+            checked_at=require_utc(now, "now"),
+            register_checked=register_checked,
+            certificate_matches=certificate_matches,
+            result=result,
+            note=clean or None,
+        )
 
 
 class ApplicationRateLimited(DomainError):
@@ -245,6 +341,15 @@ class ClinicApplication:
     confirm_digest: str | None = None
     # R17: other applications' references (or "clinic:<id>") with the same registration.
     duplicate_of: tuple[str, ...] = field(default_factory=tuple)
+    # M6c-P2 (R27, R33): who took it and how it was decided.
+    taken_by: UUID | None = None
+    taken_at: datetime | None = None
+    decided_by: UUID | None = None
+    decided_at: datetime | None = None
+    decision_reason: RejectReason | None = None
+    decision_message: str | None = None
+    # P3 (R41): the clinic an approval created.
+    clinic_id: UUID | None = None
 
     @property
     def possible_duplicate(self) -> bool:
@@ -315,20 +420,66 @@ class ClinicApplication:
             raise ConfirmInvalid()
         return replace(self, email_verified_at=now, confirm_digest=None, updated_at=now)
 
-    def start_review(self, *, now: datetime) -> ClinicApplication:
-        """P2: a reviewer takes a confirmed application."""
+    def start_review(self, *, reviewer_id: UUID, now: datetime) -> ClinicApplication:
+        """R27: a reviewer takes a confirmed application; a second one is ``AlreadyTaken``."""
+        if self.status is ApplicationStatus.UNDER_REVIEW:
+            raise AlreadyTaken()
         if self.status is not ApplicationStatus.PENDING or not self.is_confirmed:
             raise InvalidTransition("application", self.status, "start reviewing")
+        now = require_utc(now, "now")
         return replace(
-            self, status=ApplicationStatus.UNDER_REVIEW, updated_at=require_utc(now, "now")
+            self,
+            status=ApplicationStatus.UNDER_REVIEW,
+            taken_by=reviewer_id,
+            taken_at=now,
+            updated_at=now,
         )
 
-    def decide(self, *, approve: bool, now: datetime) -> ClinicApplication:
-        """P2: approved or rejected, only from ``UNDER_REVIEW``."""
+    def reject(
+        self, *, reviewer_id: UUID, reason: RejectReason, message: str | None, now: datetime
+    ) -> ClinicApplication:
+        """R33: from ``UNDER_REVIEW`` only, with a reason; ``OTHER`` needs a message."""
         if self.status is not ApplicationStatus.UNDER_REVIEW:
-            raise InvalidTransition("application", self.status, "decide")
-        status = ApplicationStatus.APPROVED if approve else ApplicationStatus.REJECTED
-        return replace(self, status=status, updated_at=require_utc(now, "now"))
+            raise NotUnderReview()
+        clean = message.strip() if message else None
+        if clean is not None and len(clean) > MAX_MESSAGE:
+            raise InvalidValue("message", f"must be at most {MAX_MESSAGE} characters")
+        if reason is RejectReason.OTHER and not clean:
+            raise InvalidValue("message", "is required when the reason is OTHER")
+        now = require_utc(now, "now")
+        return replace(
+            self,
+            status=ApplicationStatus.REJECTED,
+            decided_by=reviewer_id,
+            decided_at=now,
+            decision_reason=reason,
+            decision_message=clean or None,
+            updated_at=now,
+        )
+
+    def approve(
+        self, *, reviewer_id: UUID, clinic_id: UUID, verified: set[UUID], now: datetime
+    ) -> ClinicApplication:
+        """P3 (R41): from ``UNDER_REVIEW``, every doctor verified; records the new clinic."""
+        if self.status is not ApplicationStatus.UNDER_REVIEW:
+            raise NotUnderReview()
+        if any(d.id not in verified for d in self.doctors):
+            raise InvalidValue("doctors", "every doctor must be verified before approval")
+        now = require_utc(now, "now")
+        return replace(
+            self,
+            status=ApplicationStatus.APPROVED,
+            decided_by=reviewer_id,
+            decided_at=now,
+            clinic_id=clinic_id,
+            updated_at=now,
+        )
+
+    def doctor(self, doctor_id: UUID) -> ApplicationDoctor:
+        for d in self.doctors:
+            if d.id == doctor_id:
+                return d
+        raise NotFound("application doctor")
 
 
 def format_reference(year: int, number: int) -> str:
