@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight); P1 built and confirmed (draft PR #52); P2 approved (A on all eight) and built; P3 and P3b designed with the developer's decisions D1–D9, awaiting approval |
+| Status | Opened 24 Oct 2026 after M6a merged (PR #50); plan and P1 design approved by the developer 24 Oct 2026 (A on all eight); P1 built and confirmed (draft PR #52); P2 approved (A on all eight) and built; P3 and P3b approved and built (pushed 25 Oct 2026); P4 designed 25 Oct 2026, awaiting approval |
 | PRD | v1.2 §0 (C7, C9), §8.9, §8.13, §8.14, §13; NFR-02, NFR-10, NFR-11, NFR-18, NFR-19 |
-| Specs | `docs/specs/patient-portal.md` (Draft, P1–P3, P6), `docs/specs/booking-requests.md` (written at P4) |
-| ADR | ADR-0015 (patient accounts), ADR-0017 (notification service); ADR-0018 at P4 if the soft hold changes how a session's places are counted |
+| Specs | `docs/specs/patient-portal.md` (Draft, P1–P3, P6), `docs/specs/booking-requests.md` (Draft, P4) |
+| ADR | ADR-0015 (patient accounts), ADR-0017 (notification service); ADR-0018 (Proposed at P4: the soft hold is the pending request, counted under the session lock) |
 | Covers | FR-PRT-02..07, FR-BKG-01..08, FR-PUB-01..04, FR-REM-03, FR-QUE-06, NFR-18 |
 | Issue / branch / PR | #51 · `m6b/51-patient-portal-booking` · one PR for the milestone (ADR-0011) |
 | Exit criterion | A patient links clinic records by invite, prescription link or an accepted request; sees My Appointments per clinic, prescriptions, reminders and a medicine plan; requests a slot on `/c/{slug}` and the front desk accepts it from the inbox; cross-clinic isolation tests pass; `make e2e` green |
@@ -19,7 +19,7 @@
 | P2 | **Portal web.** The fresh dashboard with *Find a doctor*, My Appointments grouped by clinic, prescriptions (the patient page and PDF), reminders; link and unlink screens; English and Hindi; 360 px; the patient-page budget | FR-PRT-03, 04, 05, 07, NFR-02, NFR-10, NFR-11 | Below (proposed 24 Oct 2026) |
 | P3 | **Prescription structure and the medicine planner.** Structured frequency patterns read against two central slot sets, the bedtime warning, explicit duration and start, new instruction codes, one medicine-plan engine (portal, PDF schedule section, patient page, P6), the *Medicines* tab and reminder preferences | FR-REM-03, FR-RX-01, 03, 04 (amended) | Below (proposed 24 Oct 2026, rewritten with the developer's decisions D1–D9) |
 | P3b | **Dose tracking.** Taken and Skipped with the time marked, Not recorded derived, a 48-hour correction window, private to the patient, hidden on unlink, one-year retention under review, export and deletion | FR-REM-03 (patient side) | Below (proposed 24 Oct 2026) |
-| P4 | **Public page and booking requests.** `/c/{slug}` with the clinic's hours, doctors and bookable slots or sessions; a request from a verified account with a short reason, a soft hold, rate limits and a cap of five open requests; `BookingRequested` to the front desk | FR-PUB-01..04, FR-BKG-01..03, 07, FR-DIS-05 (slots), NFR-19 | At its start |
+| P4 | **Public page and booking requests.** `/c/{slug}` with the clinic's hours, doctors and bookable slots or sessions; a request from a verified account with a short reason, a soft hold, rate limits and a cap of five open requests; `BookingRequested` to the front desk | FR-PUB-01..04, FR-BKG-01..03, 07, FR-DIS-05 (slots), NFR-19 | Below (proposed 25 Oct 2026) |
 | P5 | **The front-desk inbox.** Accept (match or create the patient record, link the account, create the appointment), decline with a reason, propose another slot, expiry after the response window; an expired count and the response rate for the owner | FR-BKG-04..06, 08, FR-PRT-06 (a), FR-UX-03 | At its start |
 | P6 | **Patient notifications and the live token link.** In-app notifications for patients (request accepted, declined or expired; appointment confirmed, moved or cancelled; prescription ready; medicine due; follow-up due) with read state; a public "you are 3rd in line" link per appointment | FR-NTF-04, 05 (patients), FR-QUE-06 | At its start |
 
@@ -456,3 +456,84 @@ Built 25 Oct 2026 to the approved design. Details settled in the build:
   call; a line saying only the patient sees the marks. *Courses*: *History* per course with counts
   and a switch between versions. English and Hindi.
 - **Measured.** `/portal/medicines` with marks 181 KB at 360 px; axe found nothing serious.
+
+---
+
+## M6b-P4 — The public page and booking requests with a soft hold
+
+Proposed 25 Oct 2026, **awaiting the developer's approval.** Covers FR-PUB-01..04, FR-BKG-01..03
+and 07, FR-DIS-05 (the slots a patient sees) and NFR-17, NFR-19. Rules:
+`docs/specs/booking-requests.md` R1–R30 (Draft). The hold model is ADR-0018 (Proposed). P5
+(accept, decline, propose, expiry, linking) is not designed here; P4 leaves room for it.
+
+Facts the design rests on:
+
+- **The slug exists** (`clinics.slug`, unique, 3–63 lower-case words, not editable since M1) but
+  nothing public uses it. The comments saying "public URLs from M7" are stale.
+- **No "verified" or "listed" state.** A clinic is `ONBOARDING`, `ACTIVE` or `SUSPENDED`;
+  verification and listing are M6c (FR-ONB, FR-DIS). There are no clinic hours, map link, fee
+  or languages: hours exist only as each doctor's weekly blocks and exceptions.
+- **Availability** is computed for staff only (`GET /sessions`, `APPOINTMENTS_MANAGE`); reading
+  it **materialises** the date's sessions (generate-on-read). Capacity is `capacity −
+  booked_count`, kept under the session's `FOR UPDATE` lock; slots taken are the active
+  appointments' `slot_start`. There is **no hold concept** anywhere, and `reconcile` retires an
+  unbooked session (`booked_count == 0`).
+- **Patient accounts have no phone** and no age or sex. FR-BKG-01 asks for the contact phone
+  "from the verified patient account"; no OTP by decision (PRD §0). Verified = Google, or a
+  confirmed email (FR-PUB-03, ADR-0015).
+- **Staff notifications** are typed kinds through the notification service (ADR-0017); a request
+  has no clinic patient record yet, so `PatientRef` (first name · code) does not apply.
+- **Rate limits** exist (`public_rate_limits`, minute and hour windows; IP hashed).
+
+| # | Question | A (rec) | Rejected |
+|---|---|---|---|
+| 1 | Who has a page (FR-PUB-01, NFR-19) | One domain rule, **`Clinic.has_public_page`**: `ACTIVE` until M6c adds verification, when it becomes `ACTIVE ∧ verified` in that one place. An unknown slug, an `ONBOARDING` or `SUSPENDED` clinic: the identical 404 on the page, its availability and a request. Listing in the directory is M6c and independent (FR-DIS-07) | B: a `verified` flag now with no process behind it (a checkbox nobody owns). C: wait for M6c (P4 could not be tried) |
+| 2 | What the page shows (FR-PUB-01, NFR-17) | Only published fields, from one allow-listed body: clinic name, address, city, state, pincode, phone (a call button), a **map link built from the address** (a maps search URL, no coordinates), **hours** derived from the doctors' active weekly blocks ("Mon–Sat 10:00–13:00" per doctor and for the clinic), and each active doctor's display name, qualification and specialty. No registration number, staff, patient or count. A test fails if the body gains a field outside the allow-list | B: new clinic fields for hours, map and fee (an editor and a migration for data the schedule already holds). C: show registration numbers (not needed to book; FR-DIS wording is counsel's, L-04) |
+| 3 | The slots a patient sees (FR-DIS-05) | `GET /public/clinics/{slug}/availability?doctor_id=&from=` → the next **14 days**: in slot mode the free slots (the plan, minus booked slots and **live holds**), in token mode each session with "places left" (never a token number). From **1 hour ahead** (FR-BKG-06's "1 hour before the slot"). Computed **without writing** (the doctor's plan merged with existing rows); the session row is created only when a request is made. Exceptions and leave apply as for staff | B: reuse generate-on-read (a public GET writing rows). C: 30 days (more load, little use before a response window of hours) |
+| 4 | The soft hold (FR-BKG-02; ADR-0018) | A request **is** the hold: `booking_requests` rows with `hold_expires_at` (created + the clinic's `request_hold_minutes`, default 120, 30–480). A hold is live while the request is `PENDING` and `hold_expires_at > now`; nothing has to run for a hold to lapse. Under the session's `FOR UPDATE` lock, places = `capacity − booked_count − live holds`, and a held slot counts as taken. Staff booking into a held slot or a session's last held place is refused **`APT_SLOT_HELD`** (409, "held for an online request until 14:30"); P5 lets staff decline the request. `reconcile` treats a session with live holds like a booked one (closed, never retired) | B: a `held_count` column on `sessions` (needs a job to decrement on time, and drifts). C: no hold, first accept wins (two patients told "requested" for one slot) |
+| 5 | Identity and contact (FR-PUB-03, FR-BKG-01) | `@patient` with a **verified** account, else 403 `PRT_UNVERIFIED_ACCOUNT` (P1's). The form asks the **contact phone** (Indian mobile, normalised to E.164, not verified: no OTP by decision), **age in years** and **sex** (or "prefer not to say") so P5 can match or create the record without a call; the name is the account's. They are stored on the request, never on the account, and the form is prefilled from the account's last request. The request is for the account holder only (dependents are FR-PRT-09) | B: a phone on the account (a field the portal does not otherwise need; one place to change it). C: ask nothing and let front desk phone the patient (FR-BKG-01 names the phone) |
+| 6 | The reason (FR-BKG-01) | Optional free text, 1–200 characters, under a visible notice in the page's language: "Not for emergencies. In an emergency call 112 or go to the nearest hospital." Treated as **clinical (C3)**: never in a log, a notification title or an error | B: a list of reasons (the clinic, not MediEase, knows its services). C: required (a patient may not want to say) |
+| 7 | Abuse controls (FR-BKG-07, NFR-19) | Per **account** 5 requests an hour; per **IP** 20 an hour (hashed, as today); per **phone** 5 a day; at most **5 open** (`PENDING`) requests per account (`PRT_TOO_MANY_REQUESTS`, 409) and **one open request per account per session** (`PRT_REQUEST_EXISTS`, 409). Over a limit: 429 `PRT_RATE_LIMITED` with `Retry-After`. The page and availability: 60 reads a minute per IP. No automatic ban; the no-show counter is shown to staff with the request in P5 | B: CAPTCHA (a third-party script on a 200 KB page). C: per-IP only (shared Wi-Fi and phones) |
+| 8 | Who is told (FR-BKG-03) | Event **`BookingRequested`**; the notification service writes an in-app notification **`booking.requested`** to the clinic's front desk and owners (and the doctor, by preference, default off): "New request · Asha · 26 Oct, 10:30 with Dr. Sample" — the account's first name (no code yet) and the place, never the reason. Links to the staff **Booking requests** list. WhatsApp to staff is out of scope for M6b | B: notify every member (doctors with full queues). C: email (ADR-0016 port, but no staff ask for it) |
+| 9 | What staff see in P4 | A read-only **Booking requests** list (front desk, owners, doctors for their own) of `PENDING` requests: who (name, age, sex, phone), doctor, place, reason, received and "held until". Actions arrive in P5. Held slots show as **Held** on the staff session view and the booking form refuses them (point 4) | B: nothing until P5 (notifications would point nowhere). C: build the actions now (that is P5) |
+| 10 | The patient's side (FR-PUB-04, FR-PRT-07) | `/c/{slug}` (public, English and Hindi with the portal's switch, 360 px, < 200 KB, axe): the clinic, hours, doctors and *Request an appointment*: doctor → day → slot or session → sign in or up if needed and **return to the same choice** (FR-DIS-08) → the form → "Requested. The clinic will confirm or suggest another time." *My Appointments* lists the request as **Requested** under that clinic (even before any link). Sharing: *Share on WhatsApp* (`wa.me/?text=`) and *Copy link*, with Open Graph tags (name and address only). The page stays `noindex` until M6c and counsel (FR-DIS-06, L-04). Owners see the page's link with *Copy* in clinic settings, beside the hold time | B: index now (doctor-listing wording is unreviewed). C: a page with a guest form (FR-PUB-03 forbids guests) |
+
+Fixed points:
+
+- **Migration `0029`:** `booking_requests` (tenant: clinic, doctor, session, `slot_start` null in
+  token mode, account, contact phone, age, sex, reason, `status` `PENDING` (P5 adds `ACCEPTED`,
+  `DECLINED`, `EXPIRED`, `CANCELLED`, `PROPOSED`), `hold_expires_at`, `created_at`); a partial
+  unique index on `(session_id, slot_start)` for live `PENDING` rows in slot mode and on
+  `(account_id, session_id)` for `PENDING`; `clinics.request_hold_minutes`. No patient record
+  until P5.
+- **Contract 0.33.0:** `GET /public/clinics/{slug}`, `GET /public/clinics/{slug}/availability`,
+  `POST /portal/booking-requests`, `GET /portal/booking-requests`, `GET /booking-requests`
+  (staff, read-only), the hold time on the clinic settings; `PortalAppointmentGroup` gains
+  `requests`.
+- **Errors:** `APT_SLOT_HELD` (409), `PRT_TOO_MANY_REQUESTS` (409), `PRT_REQUEST_EXISTS` (409),
+  `PRT_RATE_LIMITED` (429); a slot taken or held meanwhile is `APT_SLOT_TAKEN` /
+  `APT_SESSION_FULL` (409) as for staff.
+- **Audit:** `booking_request.created` (PATIENT; IDs, doctor, place; no phone, reason or age).
+  Page and availability reads are not audited.
+- **Tenancy:** the slug lookup is a named platform reader returning published fields only
+  (`SqlAlchemyPublicClinicReader`, ADR-0003); everything else through `uow.tenant`. The portal
+  suite gains cross-account cases; the HTTP suite proves clinic B never sees A's requests.
+- **Unchanged:** staff booking except the hold refusal; P1–P3b.
+
+Planned verification:
+
+- **Unit:** `has_public_page`; hours from blocks; availability = plan − booked − live holds
+  (slot and token modes, leave, 1-hour lead, 14 days); a lapsed hold frees the place with no
+  job; reconcile keeps a held session; the request rules and limits.
+- **API:** the identical 404s (NFR-19); the allow-list (NFR-17: no field outside it, no staff or
+  patient data); two accounts requesting one slot in parallel → one 201, one 409 (AC1-style);
+  staff booking a held slot → `APT_SLOT_HELD`, after the hold lapses → booked; the limits and
+  the cap; unverified → 403; logs and notifications without phone, reason or age; migration
+  `0029`; contract; tenancy.
+- **Web:** the page and the request flow in both languages; return to the same slot after
+  sign-in; *Requested* in My Appointments; the staff list and the held slot.
+- **Playwright (360 px):** a signed-in patient opens `/c/sample-clinic`, picks a slot, requests
+  it; front desk gets the notification and sees it in the list and as Held; a second account
+  cannot request that slot. Failure path: an unknown slug shows the same "not found" as a
+  suspended clinic. Budget and axe on the page and the form.
+- **Gates:** `make lint typecheck contract-check test` and `make e2e`.
