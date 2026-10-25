@@ -2079,13 +2079,187 @@ export interface paths {
         };
         /**
          * Confirmed clinic applications, oldest first
-         * @description M6c-P1, spec clinic-onboarding R18. Ops only. A summary per application: no phone,
-         *     email, registration number or certificate (the reviewer's detail view is M6c-P2).
-         *     Unconfirmed applications are never listed.
+         * @description M6c-P1, P2, spec clinic-onboarding R18, R25. OPS_REVIEWER only. A summary per
+         *     application: no phone, email, registration number or certificate. `queue` waiting
+         *     (PENDING), review (UNDER_REVIEW) or decided; all when absent. Unconfirmed applications
+         *     are never listed.
          */
         readonly get: operations["listOpsApplications"];
         readonly put?: never;
         readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/applications/{application_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * One clinic application for a reviewer (audited)
+         * @description M6c-P2, spec clinic-onboarding R26. OPS_REVIEWER only. The whole application, each
+         *     doctor's registration and latest check. Opening it is audited (application.viewed).
+         */
+        readonly get: operations["getOpsApplication"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/applications/{application_id}/doctors/{doctor_id}/certificate": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A doctor's registration certificate (audited)
+         * @description M6c-P2, spec R26. OPS_REVIEWER only. The stored file with its stored type, inline,
+         *     nosniff and a sandboxing CSP; never a public link. Each download is audited.
+         */
+        readonly get: operations["getOpsApplicationCertificate"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/applications/{application_id}/take": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Start reviewing a confirmed application
+         * @description M6c-P2, spec R27. PENDING -> UNDER_REVIEW with the reviewer and time; 409
+         *     ONB_ALREADY_TAKEN when another reviewer took it first.
+         */
+        readonly post: operations["takeOpsApplication"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/applications/{application_id}/doctors/{doctor_id}/check": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * Record a doctor's registration check
+         * @description M6c-P2, spec R29, R30. Only UNDER_REVIEW (409 ONB_NOT_UNDER_REVIEW); VERIFIED needs both
+         *     the register and the certificate checked (422). A new check replaces the earlier one.
+         */
+        readonly put: operations["checkOpsApplicationDoctor"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/applications/{application_id}/reject": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Reject an application with a reason the applicant reads
+         * @description M6c-P2, spec R33, R34. UNDER_REVIEW -> REJECTED; OTHER needs a message (1-500). The
+         *     applicant is emailed the reason's words and the message, and may apply again.
+         */
+        readonly post: operations["rejectOpsApplication"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/applications/{application_id}/approve": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Approve an application, creating its clinic, doctors and owner invitation
+         * @description M6c-P3, spec clinic-onboarding R41-R44 (FR-ONB-04, FR-ONB-08). UNDER_REVIEW with every
+         *     doctor's check VERIFIED (else 422). In one transaction: the clinic (ONBOARDING, verified
+         *     with source APPLICATION), every doctor (verified), the owner's invitation sent by email
+         *     (the owner linked to their doctor when they practise) and the application APPROVED. The
+         *     reviewer chooses the slug, booking mode and time zone and may correct the clinic's
+         *     details. A slug already used is 409 and nothing is created. The clinic becomes ACTIVE
+         *     when the owner accepts the invitation.
+         */
+        readonly post: operations["approveOpsApplication"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/clinics/{clinic_id}/doctors/{doctor_id}/verify": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Verify an ops-created clinic's doctor
+         * @description M6c-P3, spec R45 (FR-ONB-06). OPS_REVIEWER only. Both checks must be true (else 422).
+         *     Records the doctor as verified with source OPS_CHECK; idempotent.
+         */
+        readonly post: operations["verifyOpsClinicDoctor"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/clinics/{clinic_id}/verify": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Verify an ops-created clinic
+         * @description M6c-P3, spec R45 (FR-ONB-06). OPS_REVIEWER only. Needs at least one active verified
+         *     doctor (else 422). A verified ACTIVE clinic has a public page.
+         */
+        readonly post: operations["verifyOpsClinic"];
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -3696,6 +3870,8 @@ export interface components {
             readonly email: string | null;
             readonly phone_e164: string | null;
             readonly is_platform_ops: boolean;
+            /** @description M6c-P2. OPS_ADMIN (clinics, imports, costs), OPS_REVIEWER (applications); empty for clinic staff */
+            readonly ops_roles: readonly ("OPS_ADMIN" | "OPS_REVIEWER")[];
         };
         readonly Membership: {
             /** Format: uuid */
@@ -3749,6 +3925,17 @@ export interface components {
             readonly reminder_evening_before: boolean;
             /** @description M6a-P8 appointment reminder this many hours before the visit; 0 is off */
             readonly reminder_hours_before: number;
+            /**
+             * Format: date-time
+             * @description M6c-P3 when MediEase verified the clinic; null until then (no public page)
+             */
+            readonly verified_at?: string | null;
+            /** @enum {string|null} */
+            readonly verification_source?: "APPLICATION" | "OPS_CHECK" | null;
+            /** @description M6c-P4 the owner's choice to appear in the directory (only when verified) */
+            readonly listed?: boolean;
+            /** @description M6c-P5 whether search engines may index the public pages */
+            readonly search_indexing?: boolean;
         };
         readonly PublicHours: {
             /** @description 0 is Monday */
@@ -4052,6 +4239,72 @@ export interface components {
             readonly channel: "IN_APP" | "EMAIL";
             readonly enabled: boolean;
         };
+        /** @enum {string} */
+        readonly ApplicationRejectReason: "REGISTRATION_NOT_FOUND" | "CERTIFICATE_UNCLEAR" | "DETAILS_DO_NOT_MATCH" | "NOT_ELIGIBLE" | "DUPLICATE" | "OTHER";
+        /** @enum {string} */
+        readonly ApplicationStatus: "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED";
+        readonly OpsApplicationDoctor: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly position: number;
+            readonly name: string;
+            readonly qualification: string;
+            readonly council: string;
+            readonly registration_number: string;
+            readonly is_owner: boolean;
+            readonly certificate: {
+                readonly content_type: string;
+                readonly size: number;
+            };
+            readonly check: null | {
+                readonly register_checked: boolean;
+                readonly certificate_matches: boolean;
+                /** @enum {string} */
+                readonly result: "VERIFIED" | "NOT_VERIFIED";
+                readonly note: string | null;
+                /** Format: date-time */
+                readonly checked_at: string;
+                /** Format: uuid */
+                readonly checked_by: string;
+            };
+        };
+        /** @description M6c-P2 (R26). For OPS_REVIEWER only. */
+        readonly OpsApplicationDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly reference: string;
+            /** @enum {string} */
+            readonly kind: "CLINIC" | "SOLO_DOCTOR";
+            readonly status: components["schemas"]["ApplicationStatus"];
+            readonly clinic_name: string;
+            readonly address_line: string;
+            readonly city: string;
+            readonly state: string;
+            readonly pincode: string;
+            readonly clinic_phone_e164: string;
+            readonly specialties: readonly string[];
+            readonly owner_name: string;
+            readonly owner_phone_e164: string;
+            readonly owner_email: string;
+            readonly owner_practises: boolean;
+            /** Format: date-time */
+            readonly submitted_at: string;
+            /** Format: date-time */
+            readonly email_verified_at: string | null;
+            /** Format: uuid */
+            readonly taken_by: string | null;
+            /** Format: date-time */
+            readonly taken_at: string | null;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            readonly decision_reason: components["schemas"]["ApplicationRejectReason"] | null;
+            readonly decision_message: string | null;
+            readonly duplicate_of: readonly string[];
+            /** Format: uuid */
+            readonly clinic_id: string | null;
+            readonly all_verified: boolean;
+            readonly doctors: readonly components["schemas"]["OpsApplicationDoctor"][];
+        };
         /** @description M6c-P1 (spec R2-R5). The `application` part of POST /public/applications */
         readonly ClinicApplicationInput: {
             /** @enum {string} */
@@ -4100,6 +4353,11 @@ export interface components {
             /** Format: date-time */
             readonly email_verified_at: string;
             readonly possible_duplicate: boolean;
+            readonly status: components["schemas"]["ApplicationStatus"];
+            /** Format: date-time */
+            readonly taken_at: string | null;
+            /** Format: date-time */
+            readonly decided_at: string | null;
         };
         readonly LiveLink: {
             /** @description PUBLIC_BASE_URL/q/<token> */
@@ -4832,6 +5090,19 @@ export interface components {
             readonly registration_council: string;
             readonly specialty: string | null;
             readonly is_active: boolean;
+            /**
+             * Format: date-time
+             * @description M6c-P3 when MediEase verified the registration; cleared when it changes
+             */
+            readonly verified_at?: string | null;
+            /** @enum {string|null} */
+            readonly verification_source?: "APPLICATION" | "OPS_CHECK" | null;
+            /** @description M6c-P4 shown on the public page and in the directory */
+            readonly visible?: boolean;
+            /** @description M6c-P5 languages spoken (from a fixed list) */
+            readonly languages?: readonly string[];
+            /** @description M6c-P5 consultation fee in paise, if published */
+            readonly fee_paise?: number | null;
         };
         /** @description Unpaginated by design; a clinic has a handful of staff */
         readonly StaffList: {
@@ -5571,12 +5842,24 @@ export interface components {
                 readonly "application/json": components["schemas"]["ErrorEnvelope"];
             };
         };
+        /** @description The application as the reviewer sees it */
+        readonly ApplicationDetail: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly "Cache-Control": components["headers"]["NoStore"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["OpsApplicationDetail"];
+            };
+        };
         /**
          * @description M6c-P1. ONB_CONFIRM_INVALID (404: unknown, used or expired link); REQ_REQUEST_ENTITY_TOO_LARGE
          *     (413: over 30 MB); REQ_UNSUPPORTED_MEDIA_TYPE (415); REQ_VALIDATION_FAILED (422, the field
          *     named with doctor positions from 1); ONB_FILE_REJECTED (422: details.position and
          *     details.reason type, size or missing); ONB_RATE_LIMITED (429, with Retry-After);
-         *     ONB_UPLOAD_FAILED (503: nothing was kept)
+         *     ONB_UPLOAD_FAILED (503: nothing was kept); ONB_ALREADY_TAKEN, ONB_NOT_UNDER_REVIEW
+         *     (409, the review); REQ_NOT_FOUND (404, an unknown or unconfirmed application)
          */
         readonly ApplicationError: {
             headers: {
@@ -5887,6 +6170,7 @@ export interface components {
         };
     };
     parameters: {
+        readonly ApplicationId: string;
         /** @description Correlation ID. Generated by the API when absent and always echoed back. */
         readonly RequestId: string;
         /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
@@ -9392,7 +9676,9 @@ export interface operations {
     };
     readonly listOpsApplications: {
         readonly parameters: {
-            readonly query?: never;
+            readonly query?: {
+                readonly queue?: "waiting" | "review" | "decided";
+            };
             readonly header?: {
                 /** @description Correlation ID. Generated by the API when absent and always echoed back. */
                 readonly "X-Request-ID"?: components["parameters"]["RequestId"];
@@ -9417,6 +9703,266 @@ export interface operations {
             };
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
+        };
+    };
+    readonly getOpsApplication: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly application_id: components["parameters"]["ApplicationId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            readonly 200: components["responses"]["ApplicationDetail"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["ApplicationError"];
+        };
+    };
+    readonly getOpsApplicationCertificate: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly application_id: components["parameters"]["ApplicationId"];
+                readonly doctor_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The certificate */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/pdf": string;
+                    readonly "image/jpeg": string;
+                    readonly "image/png": string;
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["ApplicationError"];
+        };
+    };
+    readonly takeOpsApplication: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly application_id: components["parameters"]["ApplicationId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            readonly 200: components["responses"]["ApplicationDetail"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["ApplicationError"];
+            readonly 409: components["responses"]["ApplicationError"];
+        };
+    };
+    readonly checkOpsApplicationDoctor: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly application_id: components["parameters"]["ApplicationId"];
+                readonly doctor_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": {
+                    readonly register_checked: boolean;
+                    readonly certificate_matches: boolean;
+                    /** @enum {string} */
+                    readonly result: "VERIFIED" | "NOT_VERIFIED";
+                    readonly note?: string | null;
+                };
+            };
+        };
+        readonly responses: {
+            readonly 200: components["responses"]["ApplicationDetail"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["ApplicationError"];
+            readonly 409: components["responses"]["ApplicationError"];
+            readonly 422: components["responses"]["ApplicationError"];
+        };
+    };
+    readonly rejectOpsApplication: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly application_id: components["parameters"]["ApplicationId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": {
+                    readonly reason: components["schemas"]["ApplicationRejectReason"];
+                    readonly message?: string | null;
+                };
+            };
+        };
+        readonly responses: {
+            readonly 200: components["responses"]["ApplicationDetail"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["ApplicationError"];
+            readonly 409: components["responses"]["ApplicationError"];
+            readonly 422: components["responses"]["ApplicationError"];
+        };
+    };
+    readonly approveOpsApplication: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly application_id: components["parameters"]["ApplicationId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": {
+                    readonly slug: string;
+                    readonly booking_mode?: components["schemas"]["BookingMode"];
+                    /** @default Asia/Kolkata */
+                    readonly timezone?: string;
+                    readonly clinic_name?: string | null;
+                    readonly address_line?: string | null;
+                    readonly city?: string | null;
+                    readonly state?: string | null;
+                    readonly pincode?: string | null;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description Approved; the clinic exists and its owner is invited */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": {
+                        readonly application: components["schemas"]["OpsApplicationDetail"];
+                        readonly clinic: components["schemas"]["Clinic"];
+                        /** @enum {string} */
+                        readonly invitation_delivery: "email" | "link";
+                    };
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["ApplicationError"];
+            readonly 409: components["responses"]["ApplicationError"];
+            readonly 422: components["responses"]["ApplicationError"];
+        };
+    };
+    readonly verifyOpsClinicDoctor: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description The clinic an ops request is about (ops users have no membership to infer). */
+                readonly clinic_id: components["parameters"]["ClinicPath"];
+                readonly doctor_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": {
+                    readonly register_checked: boolean;
+                    readonly certificate_matches: boolean;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description Verified */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": {
+                        /** @constant */
+                        readonly verified: true;
+                        readonly changed: boolean;
+                    };
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["ApplicationError"];
+            readonly 422: components["responses"]["ApplicationError"];
+        };
+    };
+    readonly verifyOpsClinic: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description The clinic an ops request is about (ops users have no membership to infer). */
+                readonly clinic_id: components["parameters"]["ClinicPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The clinic, verified */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Clinic"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["ApplicationError"];
+            readonly 422: components["responses"]["ApplicationError"];
         };
     };
     readonly getOpsMessagingCosts: {
