@@ -15,6 +15,7 @@ from openapi_core import OpenAPI
 from sqlalchemy import Engine, create_engine
 from werkzeug.test import TestResponse
 
+from tests.booking_helpers import offers, request_in, staff_session_after
 from tests.conftest import World
 from tests.contract.test_scheduling_contract import _check, _send, openapi  # noqa: F401
 from tests.integration.test_appointments_http import MONDAY, _schedule
@@ -142,3 +143,82 @@ def test_adr_0008_requests_holds_and_overrides_match_the_contract(
     )
     assert settings.status_code == 200
     _check(openapi, settings)
+
+
+def test_adr_0008_answering_requests_matches_the_contract(
+    openapi: OpenAPI,  # noqa: F811
+    world: World,
+    db: Engine,
+) -> None:
+    """M6b-P5: candidates, accept, decline, propose, the patient's answers and the lists."""
+    desk = world.client_for(world.a.desk)
+    patient, first = request_in(world, world.a, "contract.answer.1@example.test")
+
+    candidates = _send(desk, "GET", f"/api/v1/booking-requests/{first}/candidates")
+    assert candidates.status_code == 200
+    _check(openapi, candidates)
+
+    bad = _send(desk, "POST", f"/api/v1/booking-requests/{first}/accept", {})
+    assert bad.status_code == 422
+    _check(openapi, bad)
+
+    accepted = _send(
+        desk,
+        "POST",
+        f"/api/v1/booking-requests/{first}/accept",
+        {"new_patient": {"sex": "FEMALE", "age_years": 30}},
+    )
+    assert accepted.status_code == 201, accepted.get_json()
+    _check(openapi, accepted)
+
+    again = _send(desk, "POST", f"/api/v1/booking-requests/{first}/decline", {"reason": "OTHER"})
+    assert again.status_code == 409
+    _check(openapi, again)
+
+    _, second = request_in(world, world.a, "contract.answer.2@example.test", phone="9000000801")
+    declined = _send(
+        desk,
+        "POST",
+        f"/api/v1/booking-requests/{second}/decline",
+        {"reason": "PLEASE_CALL", "note": "staff only"},
+    )
+    assert declined.status_code == 200
+    _check(openapi, declined)
+
+    third_client, third = request_in(
+        world, world.a, "contract.answer.3@example.test", phone="9000000802"
+    )
+    starts = offers(world, world.a)[0]["starts_at"]
+    target = staff_session_after(world, world.a, starts)
+    body: dict[str, Any] = {
+        "session_id": target["id"],
+        "new_patient": {"sex": "MALE", "age_years": 41},
+    }
+    if target["slots"]:
+        body["slot_start"] = target["slots"][0]["starts_at"]
+    proposed = _send(desk, "POST", f"/api/v1/booking-requests/{third}/propose", body)
+    assert proposed.status_code == 200, proposed.get_json()
+    _check(openapi, proposed)
+
+    mine = _portal(third_client, "GET", "/api/v1/portal/booking-requests")
+    assert mine.get_json()["items"][0]["status"] == "PROPOSED"
+    _check(openapi, mine)
+    taken = _portal(
+        third_client, "POST", f"/api/v1/portal/booking-requests/{third}/accept-proposal"
+    )
+    assert taken.status_code == 200, taken.get_json()
+    _check(openapi, taken)
+    refused = _portal(
+        third_client, "POST", f"/api/v1/portal/booking-requests/{third}/decline-proposal"
+    )
+    assert refused.status_code == 409
+    _check(openapi, refused)
+
+    for state in ("open", "answered"):
+        listed = _send(desk, "GET", "/api/v1/booking-requests", query={"state": state})
+        assert listed.status_code == 200
+        _check(openapi, listed)
+    today = _send(world.client_for(world.a.owner), "GET", "/api/v1/dashboard/today")
+    assert today.status_code == 200
+    _check(openapi, today)
+    assert patient is not None

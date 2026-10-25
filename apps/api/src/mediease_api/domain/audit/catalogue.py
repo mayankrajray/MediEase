@@ -97,6 +97,10 @@ ACTIONS: dict[A, ActionInfo] = {
         (A.APPOINTMENT_STATUS_CHANGED, "Moved a patient in the queue"),
         (A.APPOINTMENT_HOLD_OVERRIDDEN, "Overrode a patient's booking request hold"),
         (A.BOOKING_REQUEST_CREATED, "A patient asked to book a slot"),
+        (A.BOOKING_REQUEST_ACCEPTED, "Accepted a booking request"),
+        (A.BOOKING_REQUEST_DECLINED, "Declined a booking request"),
+        (A.BOOKING_REQUEST_PROPOSED, "Proposed another time for a booking request"),
+        (A.BOOKING_REQUEST_EXPIRED, "A booking request expired unanswered"),
     ),
     **_c(
         AuditCategory.CLINICAL,

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.33.0
+  version: 0.34.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -903,6 +903,81 @@ paths:
           $ref: '#/components/responses/PortalError'
         '403':
           $ref: '#/components/responses/PortalError'
+  /api/v1/portal/booking-requests/{request_id}/accept-proposal:
+    post:
+      tags: [portal]
+      operationId: acceptBookingProposal
+      summary: Take the time the clinic proposed
+      description: |
+        M6b-P5, R42. @patient, the account's own PROPOSED request (else 404). Books and
+        links as a staff accept, actor PATIENT. 409 BKG_ALREADY_ANSWERED when it is no
+        longer a live proposal. Needs X-CSRF-Token equal to me_pt_csrf.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: request_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Accepted; the appointment now shows under the clinic
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalProposalAnswer'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/BookingRequestError'
+        '409':
+          $ref: '#/components/responses/BookingRequestError'
+  /api/v1/portal/booking-requests/{request_id}/decline-proposal:
+    post:
+      tags: [portal]
+      operationId: declineBookingProposal
+      summary: No thanks to the time the clinic proposed
+      description: |
+        M6b-P5, R43. PROPOSED -> DECLINED (PATIENT_DECLINED), the proposed hold ended at
+        once. Needs X-CSRF-Token equal to me_pt_csrf.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: request_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Declined
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalProposalAnswer'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/BookingRequestError'
+        '409':
+          $ref: '#/components/responses/BookingRequestError'
   /api/v1/portal/prescriptions:
     get:
       tags: [portal]
@@ -1381,16 +1456,25 @@ paths:
     get:
       tags: [booking-requests]
       operationId: listBookingRequests
-      summary: The clinic's open online booking requests
+      summary: The clinic's inbox of online booking requests
       description: |
-        M6b-P4, spec R22. Permission: APPOINTMENTS_MANAGE. Oldest first, at most 100. Read only
-        here; answering a request is M6b-P5. The reason is clinical text for this clinic's staff
-        only. Not audited.
+        M6b-P4, P5 (spec R22, R44, R45). Permission: APPOINTMENTS_MANAGE. `state=open` (default):
+        pending and proposed requests not past their deadline, oldest first; `state=answered`:
+        requests made final in the last 7 days and open ones past their deadline (expired), newest
+        first; at most 100. With the open count and the requests expired unanswered in 7 days.
+        The reason and the staff note are for this clinic's staff only. Not audited.
       security:
         - sessionCookie: []
       parameters:
         - $ref: '#/components/parameters/RequestId'
         - $ref: '#/components/parameters/ClinicId'
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [open, answered]
+            default: open
       responses:
         '200':
           description: The open requests
@@ -1411,6 +1495,203 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '404':
           $ref: '#/components/responses/PermissionError'
+  /api/v1/booking-requests/{request_id}/candidates:
+    get:
+      tags: [booking-requests]
+      operationId: listRequestCandidates
+      summary: The clinic's records that may be this request's patient
+      description: |
+        M6b-P5, R36, R47. Permission: APPOINTMENTS_MANAGE. The records with the request's
+        phone (at most 10) with their no-show count, or only the record the account is
+        already linked to. Phone only suggests; staff choose. Not audited.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - name: request_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The candidates
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestCandidateList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/booking-requests/{request_id}/accept:
+    post:
+      tags: [booking-requests]
+      operationId: acceptBookingRequest
+      summary: "Accept a pending request: book it and link the account"
+      description: |
+        M6b-P5, R34-R38. Permission: APPOINTMENTS_MANAGE (and PATIENTS_MANAGE for a new
+        record). One transaction under the session and request locks: books the request's
+        time (source PUBLIC_PAGE; its own hold excluded, other holds counted), links the
+        account (method BOOKING), records booking_request.accepted. 409 when answered
+        already or expired (BKG_ALREADY_ANSWERED), when the time has gone (APT_SLOT_TAKEN,
+        APT_SESSION_FULL, APT_SLOT_HELD) or the record is linked elsewhere
+        (PRT_ALREADY_LINKED). Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: request_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestRecordChoice'
+      responses:
+        '201':
+          description: Accepted and booked
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestAnswer'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/BookingRequestError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/BookingRequestError'
+  /api/v1/booking-requests/{request_id}/decline:
+    post:
+      tags: [booking-requests]
+      operationId: declineBookingRequest
+      summary: Decline an open request with a reason the patient sees
+      description: |
+        M6b-P5, R39. Permission: APPOINTMENTS_MANAGE. Ends the hold at once and records
+        booking_request.declined with the reason code (never the note). 409
+        BKG_ALREADY_ANSWERED when answered already or expired. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: request_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestDecline'
+      responses:
+        '200':
+          description: Declined
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestAnswer'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/BookingRequestError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/BookingRequestError'
+  /api/v1/booking-requests/{request_id}/propose:
+    post:
+      tags: [booking-requests]
+      operationId: proposeBookingTime
+      summary: Offer the patient another time with the same doctor
+      description: |
+        M6b-P5, R40, R41. Permission: APPOINTMENTS_MANAGE (and PATIENTS_MANAGE for a new
+        record). Once, for a pending request: the status becomes PROPOSED and the hold
+        moves to the new time in one transaction (the clinic's hold time, never past an
+        hour before it). The record is chosen now and linked when the patient accepts.
+        Records booking_request.proposed. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: request_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestProposal'
+      responses:
+        '200':
+          description: Proposed
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestAnswer'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/BookingRequestError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/BookingRequestError'
   /api/v1/clinic:
     get:
       tags: [clinic]
@@ -5625,6 +5906,7 @@ components:
         The public page and booking requests (M6b-P4): REQ_NOT_FOUND (404: an unknown slug, a
         clinic that is not active, or a session that cannot be requested); APT_SLOT_TAKEN,
         APT_SESSION_FULL, APT_SLOT_HELD, APT_SESSION_CLOSED, PRT_REQUEST_EXISTS,
+        BKG_ALREADY_ANSWERED (M6b-P5: answered, or past its deadline), PRT_ALREADY_LINKED,
         PRT_TOO_MANY_REQUESTS (409); APT_OUTSIDE_SCHEDULE, REQ_VALIDATION_FAILED (422);
         PRT_RATE_LIMITED (429, with Retry-After)
       headers:
@@ -7030,6 +7312,9 @@ components:
       required:
         - id
         - status
+        - original_starts_at
+        - decline_reason
+        - respond_by
         - clinic_id
         - clinic_name
         - clinic_slug
@@ -7043,7 +7328,8 @@ components:
         id: {type: string, format: uuid}
         status:
           type: string
-          enum: [REQUESTED]
+          enum: [REQUESTED, PROPOSED, DECLINED, EXPIRED]
+          description: M6b-P5 (R48); PROPOSED shows the clinic's suggested time as starts_at
         clinic_id: {type: string, format: uuid}
         clinic_name: {type: string}
         clinic_slug: {type: string}
@@ -7057,6 +7343,18 @@ components:
           format: date-time
           description: The slot's start, or the session's in token mode
         created_at: {type: string, format: date-time}
+        original_starts_at:
+          type: [string, 'null']
+          format: date-time
+          description: The time first asked for, when the clinic proposed another
+        decline_reason:
+          oneOf:
+            - $ref: '#/components/schemas/DeclineReason'
+            - type: 'null'
+        respond_by:
+          type: [string, 'null']
+          format: date-time
+          description: While open, when the request (or proposal) ends unanswered
     PortalBookingRequestList:
       type: object
       required: [items]
@@ -7082,7 +7380,42 @@ components:
         - holding
         - hold_overridden
         - respond_by
+        - status
+        - doctor_id
+        - session_id
+        - original_starts_at
+        - patient_id
+        - patient_code
+        - appointment_id
+        - answered_at
+        - answered_by_name
+        - decided_at
+        - decided_by
+        - decline_reason
+        - decline_note
       properties:
+        status:
+          $ref: '#/components/schemas/BookingRequestStatus'
+        doctor_id: {type: [string, 'null'], format: uuid}
+        session_id: {type: [string, 'null'], format: uuid}
+        original_starts_at:
+          type: [string, 'null']
+          format: date-time
+          description: A proposal's original time (R40)
+        patient_id: {type: [string, 'null'], format: uuid}
+        patient_code: {type: [string, 'null']}
+        appointment_id: {type: [string, 'null'], format: uuid}
+        answered_at: {type: [string, 'null'], format: date-time}
+        answered_by_name: {type: [string, 'null']}
+        decided_at: {type: [string, 'null'], format: date-time}
+        decided_by:
+          type: [string, 'null']
+          enum: [STAFF, PATIENT, SYSTEM, null]
+        decline_reason:
+          oneOf:
+            - $ref: '#/components/schemas/DeclineReason'
+            - type: 'null'
+        decline_note: {type: [string, 'null'], description: Staff only}
         id: {type: string, format: uuid}
         full_name: {type: string}
         age_years: {type: [integer, 'null']}
@@ -7110,12 +7443,124 @@ components:
           description: After this the request expires (M6b-P5)
     StaffBookingRequestList:
       type: object
-      required: [items]
+      required: [items, open_count, expired_7d]
       properties:
         items:
           type: array
           items:
             $ref: '#/components/schemas/StaffBookingRequest'
+        open_count: {type: integer, minimum: 0, description: Open requests now (R45)}
+        expired_7d:
+          type: integer
+          minimum: 0
+          description: Requests that expired unanswered in the last 7 days
+    BookingRequestStatus:
+      type: string
+      enum: [PENDING, PROPOSED, ACCEPTED, DECLINED, EXPIRED]
+      description: M6b-P5 (R31). PENDING and PROPOSED are open; an open request past its deadline reads EXPIRED
+    DeclineReason:
+      type: string
+      enum: [TIME_UNAVAILABLE, DOCTOR_UNAVAILABLE, PLEASE_CALL, NOT_ONLINE, DUPLICATE, OTHER,
+             PATIENT_DECLINED]
+      description: R39; PATIENT_DECLINED is the patient's No thanks to a proposal, never a staff choice
+    NewRequestRecord:
+      type: object
+      additionalProperties: false
+      description: |
+        R37: a new clinic record from the request. The name defaults to the account's; sex is
+        required when the patient gave none; an age (default the request's) or a date of birth.
+      properties:
+        sex:
+          oneOf:
+            - $ref: '#/components/schemas/Sex'
+            - type: 'null'
+        age_years: {type: [integer, 'null'], minimum: 0, maximum: 120}
+        date_of_birth: {type: [string, 'null'], format: date}
+        full_name: {type: [string, 'null'], minLength: 1, maxLength: 200}
+    RequestRecordChoice:
+      type: object
+      additionalProperties: false
+      description: Exactly one of patient_id (this clinic's record) and new_patient (R36-R38)
+      properties:
+        patient_id: {type: [string, 'null'], format: uuid}
+        new_patient:
+          oneOf:
+            - $ref: '#/components/schemas/NewRequestRecord'
+            - type: 'null'
+    RequestDecline:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum: [TIME_UNAVAILABLE, DOCTOR_UNAVAILABLE, PLEASE_CALL, NOT_ONLINE, DUPLICATE, OTHER]
+        note:
+          type: [string, 'null']
+          maxLength: 200
+          description: For staff only; never shown to the patient, logged or notified
+    RequestProposal:
+      type: object
+      additionalProperties: false
+      required: [session_id]
+      description: R40. Another session (and slot, in slot mode) of the same doctor, plus the record
+      properties:
+        session_id: {type: string, format: uuid}
+        slot_start: {type: [string, 'null'], format: date-time}
+        patient_id: {type: [string, 'null'], format: uuid}
+        new_patient:
+          oneOf:
+            - $ref: '#/components/schemas/NewRequestRecord'
+            - type: 'null'
+    RequestAnswer:
+      type: object
+      required: [id, status, patient_id, appointment_id]
+      properties:
+        id: {type: string, format: uuid}
+        status:
+          $ref: '#/components/schemas/BookingRequestStatus'
+        patient_id: {type: [string, 'null'], format: uuid}
+        appointment_id: {type: [string, 'null'], format: uuid}
+    RequestCandidate:
+      type: object
+      required: [id, code, full_name, age_years, no_shows]
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string}
+        full_name: {type: string}
+        age_years: {type: integer}
+        no_shows:
+          type: integer
+          minimum: 0
+          description: NO_SHOW appointments in the last 12 months (R47); staff only, decides nothing
+    RequestCandidateList:
+      type: object
+      required: [linked, items, suggested]
+      properties:
+        linked:
+          type: boolean
+          description: The account already has this clinic's record (the only item); accept must use it
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequestCandidate'
+        suggested:
+          type: object
+          required: [full_name, age_years, sex]
+          properties:
+            full_name: {type: string}
+            age_years: {type: [integer, 'null']}
+            sex:
+              oneOf:
+                - $ref: '#/components/schemas/Sex'
+                - type: 'null'
+    PortalProposalAnswer:
+      type: object
+      required: [id, status]
+      properties:
+        id: {type: string, format: uuid}
+        status:
+          $ref: '#/components/schemas/BookingRequestStatus'
     HeldPlace:
       type: object
       description: A slot (or, in token mode, a place) held by an online request (ADR-0018)
@@ -9418,6 +9863,9 @@ components:
         - bookings_to_move
         - messages_failed
         - week
+        - booking_requests_open
+        - requests_answered_30d
+        - requests_expired_30d
       properties:
         on_date: {type: string, format: date}
         scope:
@@ -9447,6 +9895,18 @@ components:
           type: ['integer', 'null']
           minimum: 0
           description: Messages that failed today; null in scope DOCTOR
+        booking_requests_open:
+          type: ['integer', 'null']
+          minimum: 0
+          description: M6b-P5 (R45) open online booking requests; null in scope DOCTOR
+        requests_answered_30d:
+          type: ['integer', 'null']
+          minimum: 0
+          description: R46 requests answered by staff in 30 days; scope CLINIC with USAGE_METRICS_VIEW
+        requests_expired_30d:
+          type: ['integer', 'null']
+          minimum: 0
+          description: R46 requests that expired unanswered in 30 days; as requests_answered_30d
         week:
           type: ['array', 'null']
           description: The last 7 days ending today; null without USAGE_METRICS_VIEW

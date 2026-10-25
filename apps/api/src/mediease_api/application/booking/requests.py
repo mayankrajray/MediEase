@@ -33,8 +33,12 @@ from mediease_api.domain.audit.event import ActorType, AuditEvent
 from mediease_api.domain.booking.request import (
     HORIZON_DAYS,
     MAX_OPEN_REQUESTS,
+    OPEN_STATUSES,
     BookingRequest,
+    DecidedBy,
+    DeclineReason,
     RequestExists,
+    RequestStatus,
     TooManyRequests,
 )
 from mediease_api.domain.notifications.events import BookingRequested
@@ -47,7 +51,7 @@ from mediease_api.domain.shared.time import local_date
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.repositories import RowLock
-from mediease_api.ports.unit_of_work import UnitOfWork
+from mediease_api.ports.unit_of_work import TenantRepositories, UnitOfWork
 
 logger = structlog.get_logger(__name__)
 
@@ -83,6 +87,11 @@ class RequestItem:
     mode: BookingMode
     starts_at: datetime
     created_at: datetime
+    # M6b-P5 (R48): what the patient sees; the proposed time is ``starts_at`` when PROPOSED.
+    status: RequestStatus = RequestStatus.PENDING
+    original_starts_at: datetime | None = None
+    decline_reason: DeclineReason | None = None
+    respond_by: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +112,30 @@ class StaffRequestItem:
     holding: bool
     hold_overridden: bool
     respond_by: datetime
+    # M6b-P5 (R44): the outcome and who gave it.
+    status: RequestStatus = RequestStatus.PENDING
+    doctor_id: UUID | None = None
+    session_id: UUID | None = None
+    slot_start: datetime | None = None
+    original_starts_at: datetime | None = None
+    patient_id: UUID | None = None
+    patient_code: str | None = None
+    appointment_id: UUID | None = None
+    answered_at: datetime | None = None
+    answered_by_name: str | None = None
+    decided_at: datetime | None = None
+    decided_by: DecidedBy | None = None
+    decline_reason: DeclineReason | None = None
+    decline_note: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Inbox:
+    """R44-R46: one list, and the counts the page and Today show."""
+
+    items: tuple[StaffRequestItem, ...]
+    open_count: int
+    expired_7d: int
 
 
 class CreateBookingRequest:
@@ -244,7 +277,8 @@ class CreateBookingRequest:
 
 
 class ListMyBookingRequests:
-    """R20: the account's open requests in every clinic, soonest first; never another account's."""
+    """R48: the account's open requests in every clinic, and those declined or expired in the last
+    7 days; never another account's. Accepted ones show as appointments instead."""
 
     def __init__(self, *, uow: UnitOfWork, clock: ClockPort) -> None:
         self._uow = uow
@@ -254,7 +288,9 @@ class ListMyBookingRequests:
         now = self._clock.now()
         items: list[RequestItem] = []
         with self._uow as uow:
-            for request in uow.booking_request_lookup.for_account(principal.account_id, limit=20):
+            for request in uow.booking_request_lookup.for_account(
+                principal.account_id, now, limit=20
+            ):
                 clinic = uow.clinics.get(request.clinic_id)
                 if clinic is None or not clinic.has_public_page:
                     continue  # suspended: hidden like the rest of its records (portal scope)
@@ -263,8 +299,9 @@ class ListMyBookingRequests:
                 doctor = tenant.doctors.get(request.doctor_id)
                 if session is None or doctor is None:  # pragma: no cover - foreign keys
                     continue
+                status = request.effective_status(now)
                 starts_at = request.slot_start or session.starts_at
-                if starts_at <= now:
+                if status in OPEN_STATUSES and starts_at <= now:  # pragma: no cover - deadline
                     continue
                 items.append(
                     RequestItem(
@@ -278,29 +315,53 @@ class ListMyBookingRequests:
                         mode=session.mode,
                         starts_at=starts_at,
                         created_at=request.created_at,
+                        status=status,
+                        original_starts_at=_original_start(tenant, request),
+                        decline_reason=request.decline_reason,
+                        respond_by=request.respond_by if status in OPEN_STATUSES else None,
                     )
                 )
-        return sorted(items, key=lambda i: i.starts_at)
+        return sorted(items, key=lambda i: (i.status not in OPEN_STATUSES, i.starts_at))
+
+
+def _original_start(tenant: TenantRepositories, request: BookingRequest) -> datetime | None:
+    if request.original_session_id is None:
+        return None
+    if request.original_slot_start is not None:
+        return request.original_slot_start
+    original = tenant.sessions.get(request.original_session_id)
+    return original.starts_at if original is not None else None
 
 
 class ListBookingRequests:
-    """R22: the clinic's open requests, oldest first (read-only in P4)."""
+    """R44-R46: the inbox. ``open``: open and not past the deadline, oldest first; ``answered``:
+    final in the last 7 days and those that expired unanswered, newest first."""
 
     def __init__(self, *, uow: UnitOfWork, clock: ClockPort) -> None:
         self._uow = uow
         self._clock = clock
 
-    def execute(self, ctx: RequestContext) -> list[StaffRequestItem]:
+    def execute(self, ctx: RequestContext, state: str = "open") -> Inbox:
         now = self._clock.now()
         items: list[StaffRequestItem] = []
         with self._uow as uow:
             tenant = uow.tenant(ctx.clinic_id)
             doctors = {d.id: d.display_name for d in tenant.doctors.list()}
-            for request in tenant.booking_requests.list_pending(limit=LIST_LIMIT):
+            if state == "answered":
+                requests = tenant.booking_requests.list_answered(now, limit=LIST_LIMIT)
+            else:
+                requests = tenant.booking_requests.list_open(now, limit=LIST_LIMIT)
+            names: dict[UUID, str] = {}
+            for request in requests:
                 session = tenant.sessions.get(request.session_id)
                 account = uow.patient_accounts.get(request.account_id)
                 if session is None or account is None:  # pragma: no cover - foreign keys
                     continue
+                patient = tenant.patients.get(request.patient_id) if request.patient_id else None
+                by = request.answered_by
+                if by is not None and by not in names:
+                    user = uow.users.get(by)
+                    names[by] = user.full_name if user is not None else ""
                 items.append(
                     StaffRequestItem(
                         id=request.id,
@@ -317,6 +378,21 @@ class ListBookingRequests:
                         holding=request.is_live_hold(now),
                         hold_overridden=request.hold_overridden_at is not None,
                         respond_by=request.respond_by,
+                        status=request.effective_status(now),
+                        doctor_id=request.doctor_id,
+                        session_id=request.session_id,
+                        slot_start=request.slot_start,
+                        original_starts_at=_original_start(tenant, request),
+                        patient_id=request.patient_id,
+                        patient_code=patient.code if patient is not None else None,
+                        appointment_id=request.appointment_id,
+                        answered_at=request.answered_at,
+                        answered_by_name=names.get(by) if by is not None else None,
+                        decided_at=request.decided_at,
+                        decided_by=request.decided_by_type,
+                        decline_reason=request.decline_reason,
+                        decline_note=request.decline_note,
                     )
                 )
-        return items
+            counts = tenant.booking_requests.counts(now, days=7)
+        return Inbox(tuple(items), open_count=counts.open, expired_7d=counts.expired)

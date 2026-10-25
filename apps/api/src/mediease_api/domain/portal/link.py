@@ -28,10 +28,12 @@ INVITE_TTL = timedelta(days=7)
 
 
 class LinkMethod(StrEnum):
-    """How the link was made (decision 1A). ``BOOKING`` arrives with P5."""
+    """How the link was made (decision 1A). ``BOOKING``: an accepted booking request (M6b-P5,
+    FR-PRT-06 a)."""
 
     INVITE = "INVITE"
     RX_LINK = "RX_LINK"
+    BOOKING = "BOOKING"
 
 
 class RevokedBy(StrEnum):

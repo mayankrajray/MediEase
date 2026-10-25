@@ -87,6 +87,9 @@ def today_body(view: TodayView) -> dict[str, Any]:
         "follow_ups_pending": view.follow_ups_pending,
         "bookings_to_move": view.bookings_to_move,
         "messages_failed": view.messages_failed,
+        "booking_requests_open": view.booking_requests_open,
+        "requests_answered_30d": view.requests_answered_30d,
+        "requests_expired_30d": view.requests_expired_30d,
         "week": [_day_body(d) for d in view.week] if view.week is not None else None,
     }
 

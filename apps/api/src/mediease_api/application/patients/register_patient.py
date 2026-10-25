@@ -30,9 +30,11 @@ from mediease_api.application.context import Actor, RequestContext
 from mediease_api.application.patients.errors import MAX_CANDIDATES, PhoneExists
 from mediease_api.application.patients.views import CandidateView, PatientView
 from mediease_api.domain.audit.actions import AuditAction
+from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
 from mediease_api.domain.patients.patient import Language, Patient, Sex, parse_phone
 from mediease_api.domain.shared.errors import NotFound
+from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.shared.time import local_date
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -84,39 +86,16 @@ class RegisterPatient:
                 )
                 raise PhoneExists([CandidateView.of(p, today) for p in existing])
 
-            code = clinic.allocate_patient_code(now=now)
-            patient = Patient.create(
-                id=self._ids.new_id(),
-                clinic_id=ctx.clinic_id,
-                code=code,
-                full_name=cmd.full_name,
-                phone=phone,
-                sex=cmd.sex,
-                registered_on=today,
-                created_by=ctx.user_id,
-                now=now,
-                date_of_birth=cmd.date_of_birth,
-                age_years=cmd.age_years,
-                guardian_name=cmd.guardian_name,
-                language=cmd.language,
-            )
-            patients.add(patient)
-            uow.clinics.update(clinic)
-            record_event(
+            patient = add_patient_record(
                 uow,
-                event_id=self._ids.new_id(),
-                action=AuditAction.PATIENT_CREATED,
+                clinic,
+                cmd,
+                phone=phone,
+                ids=self._ids,
                 actor=Actor.staff(ctx),
+                shared_phone=bool(existing),
                 now=now,
-                clinic_id=ctx.clinic_id,
-                entity_type=ENTITY_TYPE,
-                entity_id=patient.id,
-                metadata={
-                    "code": code,
-                    "confirmed_shared_phone": "true" if existing else "false",
-                },
             )
-            record_first_patient(uow, self._ids, ctx.clinic_id, now)
             view = PatientView.of(patient, today)
             uow.commit()
 
@@ -127,6 +106,53 @@ class RegisterPatient:
             code=patient.code,
         )
         return view
+
+
+def add_patient_record(
+    uow: UnitOfWork,
+    clinic: Clinic,
+    cmd: RegisterPatientCommand,
+    *,
+    phone: PhoneNumber,
+    ids: IdPort,
+    actor: Actor,
+    shared_phone: bool,
+    now: datetime,
+) -> Patient:
+    """Create a record in the caller's transaction, the clinic row already locked: the code, the
+    row, ``patient.created`` and the onboarding step. Registration and an accepted booking request
+    (M6b-P5, R37) both use it."""
+    code = clinic.allocate_patient_code(now=now)
+    patient = Patient.create(
+        id=ids.new_id(),
+        clinic_id=clinic.id,
+        code=code,
+        full_name=cmd.full_name,
+        phone=phone,
+        sex=cmd.sex,
+        registered_on=local_date(now, clinic.timezone),
+        created_by=actor.user_id,
+        now=now,
+        date_of_birth=cmd.date_of_birth,
+        age_years=cmd.age_years,
+        guardian_name=cmd.guardian_name,
+        language=cmd.language,
+    )
+    uow.tenant(clinic.id).patients.add(patient)
+    uow.clinics.update(clinic)
+    record_event(
+        uow,
+        event_id=ids.new_id(),
+        action=AuditAction.PATIENT_CREATED,
+        actor=actor,
+        now=now,
+        clinic_id=clinic.id,
+        entity_type=ENTITY_TYPE,
+        entity_id=patient.id,
+        metadata={"code": code, "confirmed_shared_phone": "true" if shared_phone else "false"},
+    )
+    record_first_patient(uow, ids, clinic.id, now)
+    return patient
 
 
 def record_first_patient(uow: UnitOfWork, ids: IdPort, clinic_id: UUID, now: datetime) -> None:

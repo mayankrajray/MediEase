@@ -129,6 +129,11 @@ class AuditAction(StrEnum):
     # email, a name or a digit. Reading the portal is not audited (decision 7A).
     # M6b-P4: a patient's booking request (PATIENT), and staff booking over its hold (STAFF).
     BOOKING_REQUEST_CREATED = "booking_request.created"
+    # M6b-P5 (R34-R43, R32): the answers. IDs and the decline reason code only, never the note.
+    BOOKING_REQUEST_ACCEPTED = "booking_request.accepted"
+    BOOKING_REQUEST_DECLINED = "booking_request.declined"
+    BOOKING_REQUEST_PROPOSED = "booking_request.proposed"
+    BOOKING_REQUEST_EXPIRED = "booking_request.expired"
     APPOINTMENT_HOLD_OVERRIDDEN = "appointment.hold_overridden"
     PATIENT_PORTAL_INVITED = "patient.portal_invited"
     PATIENT_PORTAL_LINKED = "patient.portal_linked"

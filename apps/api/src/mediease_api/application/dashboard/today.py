@@ -76,6 +76,12 @@ class TodayView:
     messages_failed: int | None
     # USAGE_METRICS_VIEW only, oldest first, ending today.
     week: tuple[DayTotals, ...] | None
+    # M6b-P5 (booking-requests R45): open online requests; CLINIC scope only.
+    booking_requests_open: int | None = None
+    # R46: over 30 days, requests staff answered and those that expired unanswered; CLINIC scope
+    # with USAGE_METRICS_VIEW (owners).
+    requests_answered_30d: int | None = None
+    requests_expired_30d: int | None = None
 
 
 class GetToday:
@@ -105,7 +111,17 @@ class GetToday:
                 TodaySession(s, names.get(s.doctor_id, ""), by_session.get(s.id, StatusCounts()))
                 for s in sessions
             )
+            clinic_scope = scope is Scope.CLINIC
+            request_counts = tenant.booking_requests.counts(now, days=30) if clinic_scope else None
+            owner_metrics = request_counts is not None and ctx.allows(Permission.USAGE_METRICS_VIEW)
             today_view = TodayView(
+                booking_requests_open=request_counts.open if request_counts else None,
+                requests_answered_30d=(
+                    request_counts.answered if request_counts and owner_metrics else None
+                ),
+                requests_expired_30d=(
+                    request_counts.expired if request_counts and owner_metrics else None
+                ),
                 on_date=today,
                 scope=scope,
                 doctor_id=doctor_id,

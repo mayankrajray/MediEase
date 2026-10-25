@@ -38,10 +38,21 @@ AUTH_EMAIL_KIND = "send_auth_email"
 # M6a-P5: an owner's emailed staff invitation. It belongs to a clinic, so it is a clinic kind (no
 # migration: only system kinds are listed in ``ck_jobs_system_kind``).
 STAFF_INVITE_KIND = "send_staff_invite"
+# M6b-P5 (booking-requests R32): every 5 minutes, find the clinics with open requests past their
+# deadline (IDs only) and enqueue one EXPIRE_REQUESTS_KIND job per clinic.
+REQUEST_EXPIRY_SWEEP_KIND = "schedule_request_expiry"
+EXPIRE_REQUESTS_KIND = "expire_booking_requests"
 # R9d: the only kinds allowed to have no clinic. The database CHECK ``ck_jobs_system_kind`` lists
 # the same kinds; a test keeps the two in step, and adding a kind is a migration.
 SYSTEM_KINDS: frozenset[str] = frozenset(
-    {PURGE_KIND, WEBHOOK_KIND, RECONCILE_KIND, NO_SHOW_SWEEP_KIND, AUTH_EMAIL_KIND}
+    {
+        PURGE_KIND,
+        WEBHOOK_KIND,
+        RECONCILE_KIND,
+        NO_SHOW_SWEEP_KIND,
+        AUTH_EMAIL_KIND,
+        REQUEST_EXPIRY_SWEEP_KIND,
+    }
 )
 
 DEFAULT_MAX_ATTEMPTS = 5

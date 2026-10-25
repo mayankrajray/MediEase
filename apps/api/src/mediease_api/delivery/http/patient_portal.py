@@ -33,6 +33,7 @@ from uuid import UUID
 from flask import Blueprint, Response, jsonify, request
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
+from mediease_api.application.booking.answers import AcceptProposal, DeclineProposal
 from mediease_api.application.booking.requests import (
     BookingRequestCommand,
     CreateBookingRequest,
@@ -85,6 +86,7 @@ from mediease_api.delivery.http.access import clinic, current_context, current_p
 from mediease_api.delivery.http.bodies import items_body, patient_view_body
 from mediease_api.delivery.http.request_info import request_info
 from mediease_api.delivery.http.validation import parse_json
+from mediease_api.domain.booking.request import RequestStatus
 from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.patients.patient import Language, Sex
 from mediease_api.domain.portal.doses import DoseState
@@ -108,6 +110,8 @@ class PortalRecordUseCases(Protocol):
     def set_medicine_reminder(self) -> SetMedicineReminder: ...
     def create_booking_request(self) -> CreateBookingRequest: ...
     def list_my_booking_requests(self) -> ListMyBookingRequests: ...
+    def accept_proposal(self) -> AcceptProposal: ...
+    def decline_proposal(self) -> DeclineProposal: ...
     def mark_dose(self) -> MarkDose: ...
     def clear_dose(self) -> ClearDose: ...
     def dose_history(self) -> GetDoseHistory: ...
@@ -155,10 +159,23 @@ class BookingRequestBody(BaseModel):
     not_emergency_ack: bool
 
 
+# M6b-P5 (R48, R49): the patient's words for each state; a pending request is "Requested".
+_PATIENT_STATUS = {
+    RequestStatus.PENDING: "REQUESTED",
+    RequestStatus.PROPOSED: "PROPOSED",
+    RequestStatus.ACCEPTED: "ACCEPTED",
+    RequestStatus.DECLINED: "DECLINED",
+    RequestStatus.EXPIRED: "EXPIRED",
+}
+
+
 def request_item_body(r: RequestItem) -> dict[str, Any]:
     return {
         "id": str(r.id),
-        "status": "REQUESTED",
+        "status": _PATIENT_STATUS[r.status],
+        "original_starts_at": r.original_starts_at.isoformat() if r.original_starts_at else None,
+        "decline_reason": r.decline_reason.value if r.decline_reason else None,
+        "respond_by": r.respond_by.isoformat() if r.respond_by else None,
         "clinic_id": str(r.clinic_id),
         "clinic_name": r.clinic_name,
         "clinic_slug": r.clinic_slug,
@@ -557,6 +574,18 @@ def create_portal_records_blueprint(use_cases: PortalRecordUseCases) -> Blueprin
             request_info(),
         )
         return jsonify(request_item_body(item)), 201
+
+    @bp.post("/booking-requests/<uuid:request_id>/accept-proposal")
+    @patient
+    def accept_proposal(request_id: UUID) -> Response:
+        result = use_cases.accept_proposal().execute(current_patient(), request_id, request_info())
+        return jsonify({"id": str(result.request_id), "status": result.status.value})
+
+    @bp.post("/booking-requests/<uuid:request_id>/decline-proposal")
+    @patient
+    def decline_proposal(request_id: UUID) -> Response:
+        result = use_cases.decline_proposal().execute(current_patient(), request_id, request_info())
+        return jsonify({"id": str(result.request_id), "status": result.status.value})
 
     @bp.get("/booking-requests")
     @patient

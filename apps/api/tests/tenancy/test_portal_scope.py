@@ -16,14 +16,23 @@ from dataclasses import dataclass
 
 import pytest
 from flask.testing import FlaskClient
+from sqlalchemy import create_engine
 from werkzeug.test import TestResponse
 
 from mediease_api.delivery.http.access import Access, policy_of
+from tests.booking_helpers import ask, ensure_schedule, offers, propose
 from tests.conftest import World
 from tests.integration.test_portal_http import portal_csrf
 from tests.integration.test_prescriptions_http import _issued
 from tests.integration.test_visits_http import _send
-from tests.portal_helpers import PORTAL, accept, invite_token, link_by_invite, portal_client
+from tests.portal_helpers import (
+    PORTAL,
+    accept,
+    invite_token,
+    link_by_invite,
+    portal_client,
+    verify_email,
+)
 
 
 @dataclass(frozen=True)
@@ -33,6 +42,26 @@ class Scene:
     rx_id: str
     bina_link_id: str
     used_invite: str
+    world: World
+    bina_record: str
+
+
+def _bina_proposal(scene: Scene) -> str:
+    """M6b-P5: Bina asks clinic A for a time and the desk proposes another for her record."""
+    world = scene.world
+    engine = create_engine(world.app.config["SETTINGS"].DATABASE_URL)
+    try:
+        verify_email(engine, "bina.scope@example.test")
+    finally:
+        engine.dispose()
+    ensure_schedule(world, world.a)
+    first = offers(world, world.a)[0]
+    made = ask(scene.bina, world.a, first)
+    assert made.status_code == 201, made.get_json()
+    request_id = str(made.get_json()["id"])
+    resp = propose(world, world.a, request_id, first["starts_at"], patient_id=scene.bina_record)
+    assert resp.status_code == 200, resp.get_json()
+    return request_id
 
 
 def _scene(world: World) -> Scene:
@@ -69,7 +98,7 @@ def _scene(world: World) -> Scene:
     used = invite_token(owner_a, bina_record)
     linked = accept(bina, used)
     assert linked.status_code == 201, linked.get_json()
-    return Scene(asha, bina, rx["id"], linked.get_json()["id"], used)
+    return Scene(asha, bina, rx["id"], linked.get_json()["id"], used, world, bina_record)
 
 
 Case = tuple[str, Callable[[Scene], str], str]
@@ -101,6 +130,17 @@ PORTAL_ID_CASES: dict[str, Case] = {
         "POST",
         lambda s: f"{PORTAL}/invites/{s.used_invite}/accept",
         "PRT_INVITE_INVALID",
+    ),
+    # M6b-P5: Bina's proposal; Asha cannot take or refuse it.
+    "/api/v1/portal/booking-requests/<uuid:request_id>/accept-proposal": (
+        "POST",
+        lambda s: f"{PORTAL}/booking-requests/{_bina_proposal(s)}/accept-proposal",
+        "REQ_NOT_FOUND",
+    ),
+    "/api/v1/portal/booking-requests/<uuid:request_id>/decline-proposal": (
+        "POST",
+        lambda s: f"{PORTAL}/booking-requests/{_bina_proposal(s)}/decline-proposal",
+        "REQ_NOT_FOUND",
     ),
 }
 
