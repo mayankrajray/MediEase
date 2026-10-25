@@ -203,3 +203,88 @@ the confirm page, the ops list, the proxy); Playwright `clinic-application.spec.
 px, the renamed text file refused, confirm from Mailpit, the used link, ops sees it). Also run:
 unit, tenancy, contract, migration and job suites (1,532), the full web suite (655), and the
 Playwright `workspaces`, `portal-accounts` and `password-reset` journeys.
+
+---
+
+## M6c-P2 - The reviewer's workflow
+
+Designed 26 Oct 2026 and **approved in advance by the developer** (26 Oct 2026: every design
+decision for P2-P8 approved; the milestone PR waits for the developer's final approval). Covers
+FR-ONB-03, FR-ONB-05 (rejection) and the reviewer's side of FR-ONB-07. Rules:
+`docs/specs/clinic-onboarding.md` R24-R40.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | Ops roles (milestone M3) | `users.ops_roles` (`OPS_ADMIN`, `OPS_REVIEWER`; migration `0033`), every existing ops user backfilled with both, so nothing changes for them. `@ops` routes (clinics, imports, costs) need `OPS_ADMIN`; the review routes need `OPS_REVIEWER`. `is_platform_ops` stays as "is MediEase staff" (the session and clinic-route refusal rules are unchanged) | One boolean (the PRD names the reviewer role) |
+| 2 | What a reviewer sees | The full application: clinic, owner contact, each doctor's registration and certificate, the duplicate matches. Opening the detail is audited (`application.viewed`), each certificate download too (`application.certificate_viewed`). No clinical content exists in an application | A summary only (the reviewer must see the registration and certificate to check them) |
+| 3 | Taking an application | `POST /ops/applications/{id}/take`: `PENDING` (confirmed) -> `UNDER_REVIEW` with the reviewer and time, under the row lock; a second reviewer taking it is 409 `ONB_ALREADY_TAKEN`. Any reviewer may continue an application already under review (shifts change); the record keeps who took it | Exclusive locks per reviewer (a reviewer off sick would block the queue) |
+| 4 | Checking a doctor | `PUT .../doctors/{doctor_id}/check`: register looked up (yes/no), certificate matches (yes/no), result `VERIFIED` or `NOT_VERIFIED`, a note up to 500 characters (the reviewer's own words, never sent). Allowed only `UNDER_REVIEW`; a new check replaces the earlier one; each is audited (`application.doctor_checked`). `VERIFIED` needs both yes | Checks outside the review (nothing to attach them to) |
+| 5 | Rejecting | `POST .../reject` with a reason code (`REGISTRATION_NOT_FOUND`, `CERTIFICATE_UNCLEAR`, `DETAILS_DO_NOT_MATCH`, `NOT_ELIGIBLE`, `DUPLICATE`, `OTHER`) and a message to the applicant (1-500 characters, required for `OTHER`). `UNDER_REVIEW` -> `REJECTED` with reviewer, time, reason; audited; the applicant is emailed the reason's words and the message. They may apply again (a new application) | Free text only (no consistent reporting) |
+| 6 | Approving | Arrives with P3, because approving creates the clinic (FR-ONB-08: one creation path). P2 shows *Approve* only when every doctor is `VERIFIED`, and it opens P3's prefilled form | Approve now and create later (an `APPROVED` application with no clinic) |
+| 7 | Retention (R21) | Rejected applications are deleted with their certificates 180 days after the decision by the hourly purge; approved ones are kept while the clinic exists | Keep rejected forever |
+| 8 | The applicant's status | Told by email at each decision (received, rejected; approved in P3 with the invitation). No status page: the applicant has no account, and a second token would need its own lifecycle for little gain | A token status page (another secret in another inbox) |
+| 9 | The ops screens | `/ops/applications`: the queue by status (waiting, under review, decided), oldest first, with the duplicate flag. `/ops/applications/{id}`: the details, each doctor with *Open certificate* (fetched through the API, shown in a new tab as a blob, never a public link) and the check form, *Take*, *Reject*. 1280 px first (ops work at a desk) but usable at 768 px | A drawer on the list (too much to check in a drawer) |
+
+Storage: migration `0033`: `users.ops_roles`; `clinic_applications` gains `taken_by`, `taken_at`,
+`decided_by`, `decided_at`, `decision_reason`, `decision_message`; `clinic_application_checks`
+(one row per application doctor: who, when, the two answers, the result, the note). Contract
+0.37.0. Errors: `ONB_ALREADY_TAKEN` (409), `ONB_NOT_UNDER_REVIEW` (409), and the existing
+`PERM_DENIED` for an ops user without the role.
+
+---
+
+## M6c-P3 - Approval into the one creation path, and verification
+
+Designed 26 Oct 2026; **approved in advance** (as P2). Covers FR-ONB-04, 06, 08 and FR-PUB-01's
+"verified". Rules: spec R41-R49.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | One creation path (FR-ONB-08) | `CreateClinic`, `AddDoctor` and `InviteStaff` each gain an `in_transaction(uow, ...)` that holds their whole rule set; their `execute` wraps it. `ApproveApplication` calls the three in **one transaction**: the clinic (`ONBOARDING`), each doctor, the owner's invitation (emailed; the owner linked to their doctor profile as Doctor 1 when they practise), the verification records and `APPROVED`. Any failure (for example a slug taken) leaves nothing | Run the three use cases one after another (a failure half-way leaves a clinic with no owner) |
+| 2 | The prefilled wizard | *Approve and create the clinic* opens a form prefilled from the application: name, address, phone, specialties, the doctors, the owner; the reviewer chooses the **slug** (suggested from the name), the booking mode and the time zone (default Asia/Kolkata), and may correct the clinic's details. The doctors and owner come from the application unchanged | Reuse the four-step ops wizard (built for ops typing everything; every value is already known here) |
+| 3 | Verification records (milestone M4) | `clinics.verified_at`, `verified_by`, `verification_source` (`APPLICATION` \| `OPS_CHECK`), `application_id`; `doctors.verified_at`, `verified_by`, `verification_source`. Approval verifies the clinic and every doctor (source `APPLICATION`). Migration `0034` | A flag on the clinic only |
+| 4 | Ops-created clinics (FR-ONB-06) | Start **unverified**. A reviewer verifies each doctor (`POST /ops/clinics/{id}/doctors/{doctor_id}/verify`, the same two answers as an application check) and then the clinic (`POST /ops/clinics/{id}/verify`, allowed once at least one active doctor is verified); source `OPS_CHECK`, audited | Mark them verified when created (FR-ONB-06 forbids it) |
+| 5 | When verification ends | Changing a verified doctor's registration number or council clears that doctor's verification (to be checked again). Nothing else clears it | Clear on any change (names, qualifications are corrected often and checked against the same certificate) |
+| 6 | `has_public_page` (FR-PUB-01, FR-ONB-02) | `ACTIVE ∧ verified`, in the one domain property. The public page, its availability and new booking requests all use it (one 404). Existing demo clinics are verified by `make seed`; no production clinic exists yet | Keep `ACTIVE` only until P4 (unverified clinics would take requests) |
+| 7 | The owner's email | The invitation goes by email (the existing `send_staff_invite` job) to the application's verified address; the reviewer also sees the accept link once, as for ops invites, to send by hand if needed | Link only (the applicant asked by email and expects it there) |
+| 8 | Activation (D1) | Unchanged: the clinic becomes `ACTIVE` when the owner accepts | — |
+
+### As built (M6c-P2, P3)
+
+Built 26-26 Oct 2026 to the designs above. Details settled in the build:
+
+- **Roles.** `OpsRole` and `User.ops_roles` in the domain; `User.create` gives a new ops user both
+  roles. `AccessPolicy` gains `ops_role`; `@ops` now means `OPS_ADMIN`, the new `@reviewer`
+  `OPS_REVIEWER`. `/me` returns `ops_roles`, and the ops navigation and home show each screen only
+  to its role (`OpsHome`, `OpsShell`).
+- **The application's clinic** is stored as `created_clinic_id`, not `clinic_id`, so the
+  platform table never looks like a tenant table to the scoping guard.
+- **The queue** without `queue=` lists every confirmed application (P1's list route moved to the
+  reviewer blueprint and now needs `OPS_REVIEWER`).
+- **One creation path.** `CreateClinic`, `AddDoctor` and `InviteStaff` gained `in_transaction`;
+  `ApproveApplication` (`application/onboarding/approve.py`) runs them in one unit of work.
+  `InviteStaffCommand.email_delivery` sends an ops invitation by email (without the owner's hourly
+  limit). A failure rolls everything back; the integration test proves it with a taken slug.
+- **Verification** lives on `Clinic` and `Doctor` (`verify`, `is_verified`), with the source
+  in `domain/clinics/verification.py`. `has_public_page` is `ACTIVE` and verified, so the public
+  page, availability, requests, proposal answers and the live token link all follow it.
+- **Seed.** `make seed` verifies the demo clinics and doctors (source `OPS_CHECK` by the seeded
+  ops user), makes the doctors visible with languages and a fee, gives the clinics an address and
+  lists them, so P4-P7 have data. The test world's clinics are verified too.
+- **Web.** `/ops/applications` and `/ops/applications/{id}` with the check form, *Reject…* and the
+  *Approve* dialog (slug suggested from the name, booking mode, time zone, corrections only sent
+  when changed).
+
+Differences from the design:
+
+- **P3 decision 7:** the reviewer does **not** see the owner's accept link. Email invitations are
+  minted by the job when it sends (ADR-0016), so no link exists at approval. If the email does not
+  arrive, the `send_staff_invite` job is the place to look (RUNBOOK 25).
+- The invitation delivery value in the approve answer is lower-case (`email`), as the existing
+  invitation answers are.
+
+Tests (changed code only): domain (`test_clinic_application.py`), integration
+`test_application_review_http.py` (AC10, AC14, R35) and `test_application_approval_http.py` (AC11-AC13,
+R41), migrations `test_0033_*` and `test_0034_*`, route policies, and the unit, contract, tenancy,
+seed, booking, portal and links suites (1,454 passed); web: `ReviewApplication.test.tsx` and the
+ops and shell suites.

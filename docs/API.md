@@ -253,6 +253,26 @@ duplicate registration is flagged for the reviewer and never revealed to the app
 `application.submitted` and `application.email_verified` (actor `APPLICANT`, no clinic, IDs, kind
 and doctor count only). Responses are `no-store` and `noindex`.
 
+M6c-P2 and P3 (spec R24-R49; contract 0.37.0, 0.38.0). The review routes need `OPS_REVIEWER`
+(`@reviewer`); the earlier `@ops` routes now need `OPS_ADMIN`; every ops user from before M6c holds
+both, and `SessionUser.ops_roles` carries them.
+
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| GET | `/api/v1/ops/applications?queue=waiting\|review\|decided` | The reviewer queue, oldest first, with status and times (no `queue`: every confirmed one) | FR-ONB-03 | Implemented (M6c-P2), `@reviewer` |
+| GET | `/api/v1/ops/applications/{id}` | The whole application, each doctor's registration and latest check (audited) | FR-ONB-03 | Implemented (M6c-P2), `@reviewer` |
+| GET | `/api/v1/ops/applications/{id}/doctors/{doctor_id}/certificate` | The certificate file (audited; `inline`, `nosniff`, `sandbox` CSP) | FR-ONB-03 | Implemented (M6c-P2), `@reviewer` |
+| POST | `/api/v1/ops/applications/{id}/take` | `PENDING` -> `UNDER_REVIEW` (409 `ONB_ALREADY_TAKEN` if taken) | FR-ONB-03 | Implemented (M6c-P2), `@reviewer` |
+| PUT | `/api/v1/ops/applications/{id}/doctors/{doctor_id}/check` | A doctor's check: register looked up, certificate matches, result, note | FR-ONB-03 | Implemented (M6c-P2), `@reviewer` |
+| POST | `/api/v1/ops/applications/{id}/reject` | Reject with a reason code and a message; the applicant is emailed | FR-ONB-05 | Implemented (M6c-P2), `@reviewer` |
+| POST | `/api/v1/ops/applications/{id}/approve` | Create the clinic (`ONBOARDING`, verified), its verified doctors and the owner's emailed invitation in one transaction; 201 | FR-ONB-04, 08 | Implemented (M6c-P3), `@reviewer` |
+| POST | `/api/v1/ops/clinics/{id}/doctors/{doctor_id}/verify` | Verify an ops-created clinic's doctor (both answers yes) | FR-ONB-06 | Implemented (M6c-P3), `@reviewer` |
+| POST | `/api/v1/ops/clinics/{id}/verify` | Verify an ops-created clinic (needs a verified active doctor) | FR-ONB-06 | Implemented (M6c-P3), `@reviewer` |
+
+`Clinic` and `Doctor` bodies gain `verified_at` and `verification_source` (and the P4/P5 fields
+`listed`, `search_indexing`, `visible`, `languages`, `fee_paise`). The public clinic page and
+booking requests need the clinic `ACTIVE` and verified (one 404 otherwise).
+
 ### Audit trail (M1-P4)
 
 Every audited action writes one row to `audit_events` in the same transaction as the change, so a

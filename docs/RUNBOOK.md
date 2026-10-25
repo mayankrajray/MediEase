@@ -620,8 +620,8 @@ reverse proxy work (A11).
 
 A clinic or a doctor with their own practice applies at `/apply`, signed out (ADR-0020). The
 application waits until the owner opens the emailed link and presses *Confirm my application*;
-only then does ops see it under *N applications waiting* on `/ops`. Reviewing and deciding arrive
-in M6c-P2; until then the list is read-only. The form and the "received" email promise a reply
+only then does ops see it under *N applications waiting* on `/ops` and in the reviewer queue at
+`/ops/applications` (M6c-P2). The form and the "received" email promise a reply
 within 2 working days (D3), so check the list every working day.
 
 **"I never got the confirmation email."** Find the application by reference or by the email the
@@ -647,3 +647,24 @@ blobs under `applications/<id>/`; never download one into a ticket.
 **Possible duplicate** on the ops list means a doctor's registration number is in another
 confirmed application or on a doctor of an existing clinic (`duplicate_of` holds the references
 or `clinic:<id>`). It is for the reviewer (P2); the applicant is never told.
+
+**Reviewing (M6c-P2, P3).** Reviewers need `OPS_REVIEWER`; clinic set-up needs `OPS_ADMIN`
+(`SELECT email, ops_roles FROM users WHERE is_platform_ops;`). To grant a role:
+`UPDATE users SET ops_roles = array_append(ops_roles, 'OPS_REVIEWER') WHERE email = '<email>' AND NOT 'OPS_REVIEWER' = ANY(ops_roles);`
+(audit the change in the ticket). On `/ops/applications`, open the oldest waiting application,
+press *Take for review*, then for each doctor open the certificate, look the registration up on
+the council's register, tick both answers and *Mark verified* (or *Mark not verified* with a
+note). *Reject…* needs a reason (and a message for *Other*); the applicant is emailed and may
+apply again. *Approve and create the clinic* needs every doctor verified: choose the URL name,
+booking mode and time zone, correct the address if needed, and approve. The owner gets the
+invitation by email; if it does not arrive, check its job:
+`SELECT status, attempts, last_error FROM jobs WHERE kind = 'send_staff_invite' AND clinic_id = '<clinic id>';`.
+The clinic goes live when they accept.
+"Another reviewer has already taken this application" means someone else pressed *Take*; you can
+still continue it.
+
+**An ops-created clinic has no public page.** Clinics made with the wizard start unverified. A
+reviewer verifies each doctor (`POST /api/v1/ops/clinics/<id>/doctors/<doctor_id>/verify`) and then
+the clinic (`POST /api/v1/ops/clinics/<id>/verify`). Changing a doctor's registration number or
+council clears that doctor's verification: check it again. Rejected applications are deleted
+with their certificates 180 days after the decision (hourly purge).
