@@ -286,3 +286,32 @@ describe("queue board and the consultation (M4-P6)", () => {
     opened.mockRestore();
   });
 });
+
+describe("queue board live link (M6b-P6, R69)", () => {
+  it("Copy live link copies the appointment's link and says whose it is", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const url = "https://example.test/q/signed-token";
+    const api = mockApi({
+      ...boardRoutes,
+      "GET /api/v1/queue": queueRoute(queueOf([{}])),
+      [`GET /api/v1/appointments/${FIRST}/live-link`]: () => json(200, { url, expires_at: "2026-10-22T14:30:00Z" }),
+    });
+    await board();
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Asha Rao" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy live link" }));
+
+    expect(await screen.findByText("Live link for Asha Rao copied. It works until the session ends.")).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith(url);
+    expect(api.count(`GET /api/v1/appointments/${FIRST}/live-link`)).toBe(1);
+  });
+
+  it("a completed row has no live link", async () => {
+    mockApi({ ...boardRoutes, "GET /api/v1/queue": queueRoute(queueOf([{ status: "COMPLETED" }])) });
+    await board();
+    const more = screen.queryByRole("button", { name: "More actions for Asha Rao" });
+    if (more !== null) fireEvent.click(more);
+    expect(screen.queryByRole("menuitem", { name: "Copy live link" })).not.toBeInTheDocument();
+  });
+});

@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { appointmentWord, portalCalendarDate, portalDay, portalTime, type PortalStrings } from "@/lib/i18n/portal";
 
 import type { PortalAppointment, PortalReminder } from "./data";
@@ -10,7 +12,12 @@ export function appointmentWhen(a: PortalAppointment, zone: string, s: PortalStr
   return `${day} · ${s.appointments.token(a.token_number)}, ${session}`;
 }
 
-export function AppointmentRow({ a, zone, s }: Readonly<{ a: PortalAppointment; zone: string; s: PortalStrings }>) {
+export function AppointmentRow({
+  a,
+  zone,
+  s,
+  children,
+}: Readonly<{ a: PortalAppointment; zone: string; s: PortalStrings; children?: ReactNode }>) {
   const word = appointmentWord(a.status);
   return (
     <li className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-slate-200 py-2 first:border-t-0">
@@ -29,6 +36,7 @@ export function AppointmentRow({ a, zone, s }: Readonly<{ a: PortalAppointment; 
       >
         {s.appointments.words[word]}
       </span>
+      {children}
     </li>
   );
 }

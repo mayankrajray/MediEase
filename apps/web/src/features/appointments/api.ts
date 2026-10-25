@@ -54,7 +54,11 @@ export interface AppointmentApi {
   readonly proposeTime: (id: string, sessionId: string, slotStart: string | undefined, record: RecordChoice) => Promise<RequestAnswer>;
   /** M6b-P4 (R20): how long a request holds its slot, and whether the form asks age and sex (owners). */
   readonly setRequestSettings: (change: RequestSettings) => Promise<unknown>;
+  /** M6b-P6 (R69): the appointment's live token link, to send to the patient (APPOINTMENTS_MANAGE). */
+  readonly liveLink: (id: string) => Promise<LiveLink>;
 }
+
+export type LiveLink = S["LiveLink"];
 
 export type StaffBookingRequest = S["StaffBookingRequest"];
 export type BookingInbox = S["StaffBookingRequestList"];
@@ -164,6 +168,7 @@ export function useAppointmentApi(): AppointmentApi {
           )
         ).data,
       setRequestSettings: async (change) => (await sessionPatch("/api/v1/clinic", change, base)).data,
+      liveLink: async (id) => (await sessionGet("/api/v1/appointments/{appointment_id}/live-link", appt(id))).data,
     };
   }, [clinicId]);
 }

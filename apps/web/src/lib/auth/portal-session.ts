@@ -10,12 +10,14 @@ import {
   ApiError,
   apiDelete,
   apiGet,
+  apiGetConditional,
   apiPatch,
   apiPost,
   apiPut,
   newRequestId,
   REQUEST_ID_HEADER,
   type ApiResult,
+  type ConditionalResult,
   type DeletePath,
   type DeleteResponse,
   type GetPath,
@@ -51,6 +53,15 @@ export function portalGet<P extends GetPath>(
   options: RequestOptions = {},
 ): Promise<ApiResult<GetResponse<P>>> {
   return withSessionRefresh(() => apiGet(path, options), PORTAL);
+}
+
+/** A conditional portal GET (M6b-P6: the bell's summary), refreshed once like every portal call. */
+export function portalGetConditional<P extends GetPath>(
+  path: P,
+  etag: string | undefined,
+  options: RequestOptions = {},
+): Promise<ConditionalResult<GetResponse<P>>> {
+  return withSessionRefresh(() => apiGetConditional(path, etag, options), PORTAL);
 }
 
 /** `apiPost` for a portal route: sends `me_pt_csrf`, survives an expired access token. */

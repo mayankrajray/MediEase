@@ -82,9 +82,11 @@ describe("proxy (sign-in hint)", () => {
         "/portal/forgot-password",
         "/portal/reset-password/x",
         "/portal/verify-email/x",
+        // M6b-P6: the live token page (ADR-0019).
+        "/q/x",
       ].every(isPublicPath),
     ).toBe(true);
-    expect(["/", "/queue", "/ops", "/invite", "/portal", "/portal/x"].some(isPublicPath)).toBe(false);
+    expect(["/", "/queue", "/ops", "/invite", "/portal", "/portal/x", "/q", "/portal/notifications"].some(isPublicPath)).toBe(false);
     // M6b-P1: linking needs a signed-in patient; the proxy sends others to sign in and back.
     expect(["/portal/link/x", "/portal/link/prescription/x"].some(isPublicPath)).toBe(false);
   });

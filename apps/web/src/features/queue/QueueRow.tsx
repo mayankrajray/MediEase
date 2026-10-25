@@ -45,6 +45,8 @@ export interface RowActions {
   /** M4-P6, spec D6: print the row's issued prescription (RX_PRINT). */
   readonly canPrint?: boolean;
   readonly onPrint?: (rxId: string) => void;
+  /** M6b-P6 (R69): copy the live token link for the patient (APPOINTMENTS_MANAGE, the session's day). */
+  readonly onCopyLiveLink?: (entry: QueueEntry) => void;
 }
 
 /**
@@ -72,6 +74,9 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
   if (actions.canPrint === true && entry.prescription !== null && actions.onPrint !== undefined) {
     const rxId = entry.prescription.id;
     menu.push({ label: "Print prescription", onSelect: () => actions.onPrint?.(rxId) });
+  }
+  if (actions.onCopyLiveLink !== undefined && (status === "BOOKED" || status === "ARRIVED" || status === "IN_CONSULTATION")) {
+    menu.push({ label: "Copy live link", onSelect: () => actions.onCopyLiveLink?.(entry) });
   }
   if (actions.canMove && (status === "BOOKED" || status === "ARRIVED") && started) {
     menu.push({ label: "No-show…", onSelect: () => actions.onNoShow(entry) });

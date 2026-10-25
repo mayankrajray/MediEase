@@ -129,3 +129,16 @@ describe("startPolling (M3-P4, R12)", () => {
     stop();
   });
 });
+
+describe("startPolling from server-rendered data (M6b-P6, R72)", () => {
+  it("with an initial tag, waits one interval and sends that tag first", async () => {
+    const load = vi.fn<(etag: string | undefined, signal: AbortSignal) => Promise<ConditionalResult<Body>>>().mockResolvedValue(same('"s"'));
+    const stop = startPolling<Body>({ load, onData: vi.fn(), initialEtag: '"s"', visibility: page() });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(load).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    expect(load).toHaveBeenCalledWith('"s"', expect.any(AbortSignal));
+    stop();
+  });
+});

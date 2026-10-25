@@ -5,10 +5,11 @@ import { useState } from "react";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { portalGet, portalPost } from "@/lib/auth/portal-session";
 
-import { type PortalAppointmentGroup, type PortalBookingRequest, type PortalReminder, usePortalLoad } from "./data";
+import { type PortalAppointment, type PortalAppointmentGroup, type PortalBookingRequest, type PortalReminder, usePortalLoad } from "./data";
 import { PortalCard, ScreenLoading, usePortal } from "./PortalShell";
 import { AppointmentRow, ReminderRow } from "./Rows";
 import { bookingWords } from "@/lib/i18n/booking-request";
+import { notificationWords } from "@/lib/i18n/patient-notifications";
 import { portalDay, portalTime } from "@/lib/i18n/portal";
 
 /**
@@ -146,6 +147,58 @@ export function MyAppointments() {
   );
 }
 
+/** The clinic's calendar date of an instant (`YYYY-MM-DD`). */
+function dayIn(zone: string, at: number): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+}
+
+/** M6b-P6 (spec R69): today's appointment, still in the queue, has a live token page. */
+export function isLiveToday(a: PortalAppointment, zone: string, now: number): boolean {
+  return (
+    (a.status === "BOOKED" || a.status === "ARRIVED" || a.status === "IN_CONSULTATION") &&
+    a.on_date === dayIn(zone, now) &&
+    Date.parse(a.session_ends_at) > now
+  );
+}
+
+/** Asks for the appointment's live link (owned by this account, R71) and opens the public page. */
+function LiveQueueButton({ appointmentId }: Readonly<{ appointmentId: string }>) {
+  const { s, leave } = usePortal();
+  const words = notificationWords(s.lang);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  async function open() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { data } = await portalGet("/api/v1/portal/appointments/{appointment_id}/live-link", {
+        pathParams: { appointment_id: appointmentId },
+      });
+      // The page is on this site; keep the address relative so it opens wherever the portal runs.
+      window.location.assign(new URL(data.url, window.location.origin).pathname);
+    } catch (failure) {
+      if (!leave(failure)) setError(failure);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="w-full">
+      <button
+        type="button"
+        onClick={() => void open()}
+        disabled={busy}
+        className="inline-flex min-h-11 items-center rounded-lg bg-brand-700 px-4 font-semibold text-white hover:bg-brand-800 disabled:bg-slate-400"
+      >
+        {busy ? words.liveOpening : words.liveButton}
+      </button>
+      {error !== null && <ErrorNotice error={error} />}
+    </div>
+  );
+}
+
 function ClinicGroup({
   group,
   reminders,
@@ -173,7 +226,9 @@ function ClinicGroup({
           ) : (
             <ul>
               {part.rows.map((a) => (
-                <AppointmentRow key={a.id} a={a} zone={group.timezone} s={s} />
+                <AppointmentRow key={a.id} a={a} zone={group.timezone} s={s}>
+                  {isLiveToday(a, group.timezone, now) && <LiveQueueButton appointmentId={a.id} />}
+                </AppointmentRow>
               ))}
             </ul>
           )}

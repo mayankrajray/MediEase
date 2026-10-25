@@ -42,6 +42,8 @@ const PUBLIC_PREFIXES: readonly string[] = [
   "/p/",
   // M6b-P4: a clinic's public page; the clinic's slug in the path is the whole address (FR-PUB-01).
   "/c/",
+  // M6b-P6: the live token page; the signed token in the path is the authority (ADR-0019).
+  "/q/",
   "/reset-password/",
   "/portal/reset-password/",
   "/portal/verify-email/",
