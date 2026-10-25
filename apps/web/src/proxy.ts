@@ -34,6 +34,8 @@ const PUBLIC_PATHS: ReadonlySet<string> = new Set([
   // M6a-P4: asking for a reset link (staff and patients).
   "/forgot-password",
   "/portal/forgot-password",
+  // M6c-P1: applying to join MediEase needs no account (FR-ONB-01, ADR-0020).
+  "/apply",
 ]);
 // /p/<token>: the patient's prescription page (M4-P5); the token and the last-4 check guard it.
 // M6a-P4: emailed reset and verification links; the token in the path is the authority.
@@ -44,6 +46,8 @@ const PUBLIC_PREFIXES: readonly string[] = [
   "/c/",
   // M6b-P6: the live token page; the signed token in the path is the authority (ADR-0019).
   "/q/",
+  // M6c-P1: the application's emailed confirmation link; the token in the path is the authority.
+  "/apply/confirm/",
   "/reset-password/",
   "/portal/reset-password/",
   "/portal/verify-email/",

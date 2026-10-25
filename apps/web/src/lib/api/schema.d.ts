@@ -934,6 +934,55 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/public/applications": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Apply to join MediEase (a clinic or a doctor with their own practice)
+         * @description M6c-P1, spec clinic-onboarding R1-R10, R13, R16, R17. No sign-in, not CSRF-checked
+         *     (no session gives it authority). multipart/form-data: a part `application` (JSON,
+         *     ClinicApplicationInput) and one file `certificate_<n>` per doctor position n (from 1),
+         *     a PDF, JPEG or PNG of at most 5 MB recognised by its first bytes; at most 30 MB in all.
+         *     Stores the application PENDING with the email unconfirmed and emails a confirmation
+         *     link; creates no clinic, user or doctor. A registration already applied or registered
+         *     is flagged for the reviewer, never told. Never cached, noindex.
+         */
+        readonly post: operations["submitClinicApplication"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/public/applications/confirm": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Confirm the application's email with the emailed link's token
+         * @description M6c-P1, spec R11, R12, R16. The token works once, until 48 hours after the application;
+         *     an unknown, used or expired token is the same 404 ONB_CONFIRM_INVALID. The application
+         *     then waits for a reviewer and a "received" email is sent. 20 attempts a minute per
+         *     caller.
+         */
+        readonly post: operations["confirmClinicApplication"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/public/clinics/{slug}": {
         readonly parameters: {
             readonly query?: never;
@@ -2015,6 +2064,28 @@ export interface paths {
          *     Needs X-CSRF-Token.
          */
         readonly post: operations["importOpsPatients"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/applications": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Confirmed clinic applications, oldest first
+         * @description M6c-P1, spec clinic-onboarding R18. Ops only. A summary per application: no phone,
+         *     email, registration number or certificate (the reviewer's detail view is M6c-P2).
+         *     Unconfirmed applications are never listed.
+         */
+        readonly get: operations["listOpsApplications"];
+        readonly put?: never;
+        readonly post?: never;
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -3981,6 +4052,55 @@ export interface components {
             readonly channel: "IN_APP" | "EMAIL";
             readonly enabled: boolean;
         };
+        /** @description M6c-P1 (spec R2-R5). The `application` part of POST /public/applications */
+        readonly ClinicApplicationInput: {
+            /** @enum {string} */
+            readonly kind: "CLINIC" | "SOLO_DOCTOR";
+            readonly clinic_name: string;
+            readonly address_line: string;
+            readonly city: string;
+            readonly state: string;
+            readonly pincode: string;
+            readonly clinic_phone: string;
+            readonly specialties: readonly string[];
+            readonly owner_name: string;
+            /** @description An Indian mobile number */
+            readonly owner_phone: string;
+            readonly owner_email: string;
+            readonly owner_practises: boolean;
+            readonly doctors: readonly components["schemas"]["ClinicApplicationDoctor"][];
+            /** @description Left empty by people; a filled value is answered like a success and dropped */
+            readonly website?: string;
+        };
+        readonly ClinicApplicationDoctor: {
+            readonly name: string;
+            readonly qualification: string;
+            /** @description The National Medical Commission or a state medical council, as published */
+            readonly council: string;
+            readonly registration_number: string;
+            /** @default false */
+            readonly is_owner: boolean;
+        };
+        readonly ApplicationReceipt: {
+            /** @description MA-<year>-NNNN */
+            readonly reference: string;
+            readonly email_masked: string;
+        };
+        readonly OpsApplicationSummary: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly reference: string;
+            /** @enum {string} */
+            readonly kind: "CLINIC" | "SOLO_DOCTOR";
+            readonly clinic_name: string;
+            readonly city: string;
+            readonly doctors: number;
+            /** Format: date-time */
+            readonly submitted_at: string;
+            /** Format: date-time */
+            readonly email_verified_at: string;
+            readonly possible_duplicate: boolean;
+        };
         readonly LiveLink: {
             /** @description PUBLIC_BASE_URL/q/<token> */
             readonly url: string;
@@ -5445,6 +5565,24 @@ export interface components {
         readonly ConflictError: {
             headers: {
                 readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description M6c-P1. ONB_CONFIRM_INVALID (404: unknown, used or expired link); REQ_REQUEST_ENTITY_TOO_LARGE
+         *     (413: over 30 MB); REQ_UNSUPPORTED_MEDIA_TYPE (415); REQ_VALIDATION_FAILED (422, the field
+         *     named with doctor positions from 1); ONB_FILE_REJECTED (422: details.position and
+         *     details.reason type, size or missing); ONB_RATE_LIMITED (429, with Retry-After);
+         *     ONB_UPLOAD_FAILED (503: nothing was kept)
+         */
+        readonly ApplicationError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                /** @description Seconds to wait (429 only) */
+                readonly "Retry-After"?: string;
                 readonly [name: string]: unknown;
             };
             content: {
@@ -7127,6 +7265,100 @@ export interface operations {
             readonly 403: components["responses"]["PortalError"];
             readonly 404: components["responses"]["PortalError"];
             readonly 422: components["responses"]["PortalError"];
+        };
+    };
+    readonly submitClinicApplication: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "multipart/form-data": {
+                    /** @description ClinicApplicationInput as JSON */
+                    readonly application: string;
+                    /** Format: binary */
+                    readonly certificate_1: string;
+                    /** Format: binary */
+                    readonly certificate_2?: string;
+                    /** Format: binary */
+                    readonly certificate_3?: string;
+                    /** Format: binary */
+                    readonly certificate_4?: string;
+                    /** Format: binary */
+                    readonly certificate_5?: string;
+                    /** Format: binary */
+                    readonly certificate_6?: string;
+                    /** Format: binary */
+                    readonly certificate_7?: string;
+                    /** Format: binary */
+                    readonly certificate_8?: string;
+                    /** Format: binary */
+                    readonly certificate_9?: string;
+                    /** Format: binary */
+                    readonly certificate_10?: string;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description Received; the owner must confirm the email to send it for review */
+            readonly 202: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ApplicationReceipt"];
+                };
+            };
+            readonly 413: components["responses"]["ApplicationError"];
+            readonly 415: components["responses"]["ApplicationError"];
+            readonly 422: components["responses"]["ApplicationError"];
+            readonly 429: components["responses"]["ApplicationError"];
+            readonly 503: components["responses"]["ApplicationError"];
+        };
+    };
+    readonly confirmClinicApplication: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": {
+                    readonly token: string;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description Confirmed */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": {
+                        readonly reference: string;
+                    };
+                };
+            };
+            readonly 404: components["responses"]["ApplicationError"];
+            readonly 415: components["responses"]["ApplicationError"];
+            readonly 422: components["responses"]["ApplicationError"];
+            readonly 429: components["responses"]["ApplicationError"];
         };
     };
     readonly getPublicClinic: {
@@ -9156,6 +9388,35 @@ export interface operations {
                     readonly "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
+        };
+    };
+    readonly listOpsApplications: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The applications */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": {
+                        readonly items: readonly components["schemas"]["OpsApplicationSummary"][];
+                    };
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
         };
     };
     readonly getOpsMessagingCosts: {
