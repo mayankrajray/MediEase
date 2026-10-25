@@ -524,6 +524,35 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/portal/booking-requests": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The signed-in account's open booking requests
+         * @description M6b-P4, spec R23. @patient. Shown as "Requested" in My Appointments, also for clinics the
+         *     account is not linked to. Never the reason or phone. Not audited.
+         */
+        readonly get: operations["listPortalBookingRequests"];
+        readonly put?: never;
+        /**
+         * Ask a clinic for a time
+         * @description M6b-P4, spec R9-R15. @patient, a verified account (403 PRT_UNVERIFIED_ACCOUNT). Holds the
+         *     slot (or a place) for the clinic's hold time under the session's row lock (ADR-0018);
+         *     a taken or held time is 409 APT_SLOT_TAKEN, APT_SESSION_FULL or APT_SLOT_HELD. Age and sex
+         *     are optional unless the clinic requires them. Records booking_request.created (PATIENT).
+         *     Needs X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly post: operations["createBookingRequest"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/portal/prescriptions": {
         readonly parameters: {
             readonly query?: never;
@@ -722,6 +751,73 @@ export interface paths {
          *     audited.
          */
         readonly get: operations["getDoseHistory"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/public/clinics/{slug}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A clinic's public page
+         * @description M6b-P4, spec booking-requests R1-R4. No sign-in. Only what a clinic publishes (an
+         *     allow-list: name, address, phone, booking mode, doctors with their weekly hours). An
+         *     unknown slug and a clinic that is not active are the same 404 REQ_NOT_FOUND. Never cached
+         *     and marked noindex until M6c. Rate limited per caller (429 with Retry-After).
+         */
+        readonly get: operations["getPublicClinic"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/public/clinics/{slug}/availability": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * One doctor's bookable times over the next 14 days
+         * @description M6b-P4, spec R5-R8. Computed without writing. A slot or session is offered only if it
+         *     starts at least 2 hours from now, and a slot or place under a live hold (ADR-0018) is not
+         *     offered. Days without a session are omitted.
+         */
+        readonly get: operations["getPublicAvailability"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/booking-requests": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The clinic's open online booking requests
+         * @description M6b-P4, spec R22. Permission: APPOINTMENTS_MANAGE. Oldest first, at most 100. Read only
+         *     here; answering a request is M6b-P5. The reason is clinical text for this clinic's staff
+         *     only. Not audited.
+         */
+        readonly get: operations["listBookingRequests"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -3240,6 +3336,10 @@ export interface components {
         /** @enum {string} */
         readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "SCHEDULES_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW" | "RX_PRINT" | "AUDIT_VIEW";
         readonly Clinic: {
+            /** @description M6b-P4 how long an online request holds its slot (default 120) */
+            readonly request_hold_minutes: number;
+            /** @description M6b-P4 whether the request form must ask age and sex */
+            readonly request_requires_age_sex: boolean;
             /** Format: uuid */
             readonly id: string;
             readonly name: string;
@@ -3262,6 +3362,145 @@ export interface components {
             readonly reminder_evening_before: boolean;
             /** @description M6a-P8 appointment reminder this many hours before the visit; 0 is off */
             readonly reminder_hours_before: number;
+        };
+        readonly PublicHours: {
+            /** @description 0 is Monday */
+            readonly weekday: number;
+            /** @description Clinic-local HH:MM */
+            readonly start: string;
+            /** @description Clinic-local HH:MM */
+            readonly end: string;
+        };
+        readonly PublicDoctor: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly display_name: string;
+            readonly qualification: string | null;
+            readonly specialty: string | null;
+            readonly hours: readonly components["schemas"]["PublicHours"][];
+        };
+        /** @description What a clinic publishes, and nothing else (NFR-17; a test fails on any extra field) */
+        readonly PublicClinic: {
+            readonly name: string;
+            readonly slug: string;
+            readonly address_line: string | null;
+            readonly city: string | null;
+            readonly state: string | null;
+            readonly pincode: string | null;
+            readonly phone_e164: string | null;
+            readonly timezone: string;
+            readonly booking_mode: components["schemas"]["BookingMode"];
+            /** @description A map search link built from the address; null without one */
+            readonly map_url: string | null;
+            /** @description Whether the request form must ask age and sex */
+            readonly requires_age_sex: boolean;
+            readonly doctors: readonly components["schemas"]["PublicDoctor"][];
+        };
+        readonly PublicOfferedSlot: {
+            /** Format: date-time */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly ends_at: string;
+        };
+        readonly PublicOfferedSession: {
+            /** Format: date-time */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly ends_at: string;
+            readonly mode: components["schemas"]["BookingMode"];
+            readonly places_left: number;
+            /** @description Slot mode only; empty in token mode */
+            readonly slots: readonly components["schemas"]["PublicOfferedSlot"][];
+        };
+        readonly PublicAvailabilityDay: {
+            /** Format: date */
+            readonly date: string;
+            readonly sessions: readonly components["schemas"]["PublicOfferedSession"][];
+        };
+        readonly PublicAvailability: {
+            readonly days: readonly components["schemas"]["PublicAvailabilityDay"][];
+        };
+        readonly NewBookingRequest: {
+            readonly clinic_slug: string;
+            /** Format: uuid */
+            readonly doctor_id: string;
+            /**
+             * Format: date-time
+             * @description The session's start as offered (the session may not exist yet)
+             */
+            readonly session_start: string;
+            /**
+             * Format: date-time
+             * @description Slot mode only
+             */
+            readonly slot_start?: string | null;
+            readonly contact_phone: string;
+            readonly age_years?: number | null;
+            readonly sex?: components["schemas"]["Sex"] | null;
+            /** @description Optional; clinical text, never logged or notified */
+            readonly reason?: string | null;
+            /** @description Must be true (the patient confirms this is not an emergency) */
+            readonly not_emergency_ack: boolean;
+        };
+        readonly PortalBookingRequest: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @enum {string} */
+            readonly status: "REQUESTED";
+            /** Format: uuid */
+            readonly clinic_id: string;
+            readonly clinic_name: string;
+            readonly clinic_slug: string;
+            readonly clinic_phone_e164: string | null;
+            readonly timezone: string;
+            readonly doctor_name: string;
+            readonly mode: components["schemas"]["BookingMode"];
+            /**
+             * Format: date-time
+             * @description The slot's start, or the session's in token mode
+             */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        readonly PortalBookingRequestList: {
+            readonly items: readonly components["schemas"]["PortalBookingRequest"][];
+        };
+        readonly StaffBookingRequest: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly full_name: string;
+            readonly age_years: number | null;
+            readonly sex: components["schemas"]["Sex"] | null;
+            readonly phone_e164: string;
+            readonly reason: string | null;
+            readonly doctor_name: string;
+            readonly mode: components["schemas"]["BookingMode"];
+            /** Format: date-time */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly hold_expires_at: string;
+            /** @description True while the request still holds its slot (ADR-0018) */
+            readonly holding: boolean;
+            /** @description True when staff booked over the hold (R18a) */
+            readonly hold_overridden: boolean;
+            /**
+             * Format: date-time
+             * @description After this the request expires (M6b-P5)
+             */
+            readonly respond_by: string;
+        };
+        readonly StaffBookingRequestList: {
+            readonly items: readonly components["schemas"]["StaffBookingRequest"][];
+        };
+        /** @description A slot (or, in token mode, a place) held by an online request (ADR-0018) */
+        readonly HeldPlace: {
+            /** Format: date-time */
+            readonly slot_start: string | null;
+            /** Format: date-time */
+            readonly until: string;
         };
         /**
          * @description How a patient account was linked to a record (M6b-P1; BOOKING from P5)
@@ -3871,7 +4110,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        readonly NotificationKind: "appointment.booked" | "appointment.rescheduled" | "appointment.cancelled" | "appointment.arrived" | "message.failed" | "staff.joined" | "schedule.bookings_to_move";
+        readonly NotificationKind: "appointment.booked" | "appointment.rescheduled" | "appointment.cancelled" | "appointment.arrived" | "message.failed" | "staff.joined" | "schedule.bookings_to_move" | "booking.requested";
         readonly Notification: {
             /** Format: uuid */
             readonly id: string;
@@ -4098,6 +4337,10 @@ export interface components {
             readonly reminder_evening_before?: boolean | null;
             /** @description M6a-P8. 0 (off) to 6; applies to bookings made or moved after the change. */
             readonly reminder_hours_before?: number | null;
+            /** @description M6b-P4. 30 to 480; applies to requests made after the change. */
+            readonly request_hold_minutes?: number | null;
+            /** @description M6b-P4. Whether the public request form must ask age and sex. */
+            readonly request_requires_age_sex?: boolean | null;
         };
         /** @description I3 — every prescription prints the qualification and registration details. */
         readonly NewDoctor: {
@@ -4311,6 +4554,8 @@ export interface components {
         };
         /** @description One doctor's bookable block on one clinic-local date (not the sign-in session) */
         readonly DoctorSession: {
+            /** @description Online requests holding a slot or place now (M6b-P4, ADR-0018) */
+            readonly held: readonly components["schemas"]["HeldPlace"][];
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
@@ -4362,6 +4607,12 @@ export interface components {
             readonly source: "FRONT_DESK" | "PHONE" | "WHATSAPP";
             /** @description Short and non-clinical ("follow-up") */
             readonly reason?: string | null;
+            /**
+             * @description M6b-P4 (R18a): book over a patient's online request. Without it a held time is 409
+             *     APT_SLOT_HELD. Ends the hold, keeps the request pending and records
+             *     appointment.hold_overridden.
+             */
+            readonly override_hold?: boolean;
         };
         readonly AppointmentCancel: {
             /** @enum {string} */
@@ -4370,6 +4621,8 @@ export interface components {
             readonly note?: string | null;
         };
         readonly AppointmentReschedule: {
+            /** @description Move onto a held time anyway (M6b-P4, R18a); see NewAppointment */
+            readonly override_hold?: boolean;
             /** Format: uuid */
             readonly session_id: string;
             /**
@@ -4719,6 +4972,8 @@ export interface components {
         };
         /**
          * @description APT_SLOT_TAKEN, APT_SESSION_FULL (409: no place, also when a parallel booking won);
+         *     APT_SLOT_HELD (409: an online request holds the time; send override_hold to book anyway,
+         *     details.held_until, details.first_name);
          *     APT_SESSION_CLOSED (409: leave, a changed block or an inactive doctor); APT_ALREADY_BOOKED
          *     (409: the patient is already in this session, details.appointment_id); APT_NOT_MODIFIABLE
          *     (409: the status or the session's end forbids it); APT_OUTSIDE_SCHEDULE (422: not one of
@@ -4816,6 +5071,24 @@ export interface components {
             headers: {
                 readonly "X-Request-ID": components["headers"]["RequestId"];
                 /** @description Seconds until the next minute */
+                readonly "Retry-After"?: string;
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description The public page and booking requests (M6b-P4): REQ_NOT_FOUND (404: an unknown slug, a
+         *     clinic that is not active, or a session that cannot be requested); APT_SLOT_TAKEN,
+         *     APT_SESSION_FULL, APT_SLOT_HELD, APT_SESSION_CLOSED, PRT_REQUEST_EXISTS,
+         *     PRT_TOO_MANY_REQUESTS (409); APT_OUTSIDE_SCHEDULE, REQ_VALIDATION_FAILED (422);
+         *     PRT_RATE_LIMITED (429, with Retry-After)
+         */
+        readonly BookingRequestError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                /** @description Seconds to wait (429 only) */
                 readonly "Retry-After"?: string;
                 readonly [name: string]: unknown;
             };
@@ -5662,6 +5935,70 @@ export interface operations {
             readonly 403: components["responses"]["PortalError"];
         };
     };
+    readonly listPortalBookingRequests: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The open requests */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalBookingRequestList"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly createBookingRequest: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewBookingRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Requested; the clinic will reply */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalBookingRequest"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["BookingRequestError"];
+            readonly 409: components["responses"]["BookingRequestError"];
+            readonly 422: components["responses"]["BookingRequestError"];
+            readonly 429: components["responses"]["BookingRequestError"];
+        };
+    };
     readonly listPortalPrescriptions: {
         readonly parameters: {
             readonly query?: never;
@@ -5999,6 +6336,103 @@ export interface operations {
             readonly 403: components["responses"]["PortalError"];
             readonly 404: components["responses"]["PortalError"];
             readonly 422: components["responses"]["PortalError"];
+        };
+    };
+    readonly getPublicClinic: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly slug: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The public page */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PublicClinic"];
+                };
+            };
+            readonly 404: components["responses"]["BookingRequestError"];
+            readonly 429: components["responses"]["BookingRequestError"];
+        };
+    };
+    readonly getPublicAvailability: {
+        readonly parameters: {
+            readonly query: {
+                readonly doctor_id: string;
+                readonly from?: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly slug: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The offered days */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PublicAvailability"];
+                };
+            };
+            readonly 404: components["responses"]["BookingRequestError"];
+            readonly 422: components["responses"]["BookingRequestError"];
+            readonly 429: components["responses"]["BookingRequestError"];
+        };
+    };
+    readonly listBookingRequests: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The open requests */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["StaffBookingRequestList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
         };
     };
     readonly getClinic: {

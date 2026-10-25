@@ -10,6 +10,7 @@ import {
   type Doctor,
   type DoctorSession,
   type ReminderSettings,
+  type RequestSettings,
   type Schedule,
   type ScheduleBlockInput,
 } from "@/features/appointments/api";
@@ -333,6 +334,18 @@ export function ScheduleSettings() {
               }
             />
           )}
+
+          {canSetMode && (
+            <OnlineRequestsSection
+              saving={saving}
+              onSave={(change, text) =>
+                void run(async () => {
+                  await api.setRequestSettings(change);
+                  return { kept: [], text };
+                })
+              }
+            />
+          )}
         </>
       )}
     </section>
@@ -487,6 +500,108 @@ function BookingModeSection({
 }
 
 const HOURS = [0, 1, 2, 3, 4, 5, 6] as const;
+const HOLD_MINUTES = [30, 60, 90, 120, 180, 240, 360, 480] as const;
+
+const holdWords = (minutes: number) => (minutes < 60 ? `${minutes} minutes` : minutes % 60 === 0 ? `${minutes / 60} hour${minutes === 60 ? "" : "s"}` : `${minutes} minutes`);
+
+/**
+ * M6b-P4 (FR-PUB-01, FR-BKG-02, spec R20): the clinic's public page address, how long a patient's
+ * request holds its time, and whether the request form must ask age and sex. Owners only
+ * (CLINIC_MANAGE). Applies to requests made after the change; a request stays open for up to
+ * 4 hours whatever the hold.
+ */
+function OnlineRequestsSection({
+  saving,
+  onSave,
+}: {
+  saving: boolean;
+  onSave: (change: RequestSettings, text: string) => void;
+}) {
+  const clinic = useClinic();
+  const [minutes, setMinutes] = useState(clinic.request_hold_minutes);
+  const [ageSex, setAgeSex] = useState(clinic.request_requires_age_sex);
+  const [copied, setCopied] = useState(false);
+  const ids = { minutes: useId(), ageSex: useId(), link: useId() };
+  const address = `${typeof window === "undefined" ? "" : window.location.origin}/c/${clinic.slug}`;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <section aria-labelledby="requests-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4">
+      <h2 id="requests-heading" className="text-lg font-bold">
+        Online booking requests
+      </h2>
+      <div className="space-y-1">
+        <label htmlFor={ids.link} className="block font-medium">
+          Your clinic page
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <input id={ids.link} readOnly value={address} className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-400 bg-slate-50 px-3 py-2" />
+          <button type="button" onClick={() => void copy()} className="min-h-10 rounded-lg border border-brand-700 px-3 py-1.5 font-medium text-brand-800">
+            Copy link
+          </button>
+        </div>
+        <p role="status" aria-live="polite" className={copied ? "text-sm font-medium text-emerald-900" : "sr-only"}>
+          {copied ? "Link copied." : ""}
+        </p>
+        <p className="text-sm text-slate-700">Patients choose a time here and ask for it; you reply. The page is not listed on search engines yet.</p>
+      </div>
+      <div>
+        <label htmlFor={ids.minutes} className="block font-medium">
+          Keep a requested time for
+        </label>
+        <select
+          id={ids.minutes}
+          value={minutes}
+          onChange={(event) => setMinutes(Number(event.target.value))}
+          className="rounded-lg border border-slate-400 px-2 py-2"
+        >
+          {HOLD_MINUTES.map((m) => (
+            <option key={m} value={m}>
+              {holdWords(m)}
+            </option>
+          ))}
+        </select>
+        <p className="text-sm text-slate-700">
+          While a time is kept, other patients cannot ask for it and the booking drawer shows it as held. After that it can be booked again; the request stays open for
+          up to 4 hours.
+        </p>
+      </div>
+      <div className="flex min-h-10 items-center gap-3">
+        <input
+          id={ids.ageSex}
+          type="checkbox"
+          checked={ageSex}
+          onChange={(event) => setAgeSex(event.target.checked)}
+          className="size-5 rounded border-slate-400 accent-brand-700"
+        />
+        <label htmlFor={ids.ageSex} className="font-medium">
+          Ask patients for age and sex
+        </label>
+      </div>
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() =>
+          onSave(
+            { request_hold_minutes: minutes, request_requires_age_sex: ageSex },
+            `Online requests saved: a requested time is kept for ${holdWords(minutes)}; age and sex ${ageSex ? "are asked" : "are optional"}.`,
+          )
+        }
+        className="rounded-lg bg-brand-700 px-4 py-1.5 font-semibold text-white disabled:bg-slate-400"
+      >
+        Save online requests
+      </button>
+    </section>
+  );
+}
 
 /**
  * M6a-P8 (FR-APT-08, decision 3A): the clinic's appointment reminders, the evening before at 19:00

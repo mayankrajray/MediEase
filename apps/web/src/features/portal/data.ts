@@ -14,6 +14,7 @@ export type PortalAppointmentGroup = S["PortalAppointmentGroup"];
 export type PortalAppointment = S["PortalAppointment"];
 export type PortalPrescription = S["PortalPrescription"];
 export type PortalReminder = S["PortalReminder"];
+export type PortalBookingRequest = S["PortalBookingRequest"];
 
 export type Loaded<T> =
   | { readonly status: "loading" }

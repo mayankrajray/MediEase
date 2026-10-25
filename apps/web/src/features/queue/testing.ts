@@ -52,6 +52,7 @@ export function session(overrides: Partial<DoctorSession> = {}): DoctorSession {
     available: 11,
     next_token: 2,
     slots: [],
+    held: [],
     ...overrides,
   };
 }

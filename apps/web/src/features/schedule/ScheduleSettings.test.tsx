@@ -148,3 +148,31 @@ describe("appointment reminders (M6a-P8, FR-APT-08, decision 3A)", () => {
     expect(screen.queryByRole("region", { name: "Appointment reminders" })).not.toBeInTheDocument();
   });
 });
+
+describe("online booking requests (M6b-P4, spec R20)", () => {
+  it("shows the page address and saves the hold time and the age/sex choice", async () => {
+    const api = mockApi({
+      ...routes,
+      "PATCH /api/v1/clinic": () => json(200, {}),
+    });
+    renderInWorkspace(<ScheduleSettings />);
+    const card = await screen.findByRole("region", { name: "Online booking requests" }, { timeout: 5000 });
+    expect((within(card).getByLabelText("Your clinic page") as HTMLInputElement).value).toMatch(/\/c\/[a-z0-9-]+$/);
+    expect(within(card).getByLabelText("Keep a requested time for")).toHaveValue("120");
+
+    fireEvent.change(within(card).getByLabelText("Keep a requested time for"), { target: { value: "60" } });
+    fireEvent.click(within(card).getByLabelText("Ask patients for age and sex"));
+    fireEvent.click(within(card).getByRole("button", { name: "Save online requests" }));
+
+    expect(await screen.findByText("Online requests saved: a requested time is kept for 1 hour; age and sex are asked.")).toBeInTheDocument();
+    expect(api.calls.find((c) => c.method === "PATCH")?.body).toEqual({ request_hold_minutes: 60, request_requires_age_sex: true });
+  });
+
+  it("is not offered to a member who cannot change clinic settings", async () => {
+    const desk = membership(CLINIC_A, "Alpha Clinic", "FRONT_DESK", { permissions: ["CLINIC_VIEW", "DOCTORS_VIEW"] });
+    mockApi({ ...routes, "GET /api/v1/me": () => json(200, person([desk])) });
+    renderInWorkspace(<ScheduleSettings />);
+    await screen.findByRole("region", { name: /Weekly hours/ }, { timeout: 5000 });
+    expect(screen.queryByRole("region", { name: "Online booking requests" })).not.toBeInTheDocument();
+  });
+});

@@ -40,6 +40,8 @@ const PUBLIC_PATHS: ReadonlySet<string> = new Set([
 const PUBLIC_PREFIXES: readonly string[] = [
   "/invite/",
   "/p/",
+  // M6b-P4: a clinic's public page; the clinic's slug in the path is the whole address (FR-PUB-01).
+  "/c/",
   "/reset-password/",
   "/portal/reset-password/",
   "/portal/verify-email/",
