@@ -203,9 +203,18 @@ indexing (M6c); WhatsApp to staff or patients about requests (P6, L-02).
 ## 12. Open questions
 - Q12 (PRD §14.3): which response window clinics keep; P5 decides the default with the pilot.
 
-## 13. M6b-P5 - Answering requests (Draft, 26 Oct 2026)
+## 13. M6b-P5 - Answering requests (Approved 26 Oct 2026; built 26 Oct 2026)
 
-Design: `docs/milestones/M6b-patient-portal-booking.md`, "M6b-P5" (10 decisions).
+Design: `docs/milestones/M6b-patient-portal-booking.md`, "M6b-P5" (10 decisions). Approved by the
+developer with two clarifications, written into R31a and R43:
+
+- **R31a** Exactly one answer can win for a request. Every answer (accept, decline, propose, the
+  patient's accept or decline of a proposal, and the sweep) locks the request row and re-checks
+  it is open and not past its deadline in the same transaction; the loser gets 409
+  `BKG_ALREADY_ANSWERED`. The UI is never relied on. A proposal changes the status and moves the
+  hold in one transaction, so a request is never `PROPOSED` while the original time is still held.
+  Endpoints reject an expired request themselves; the sweep only persists `EXPIRED` and its
+  audit row (for counts and P6).
 
 ### States
 
@@ -255,8 +264,9 @@ Design: `docs/milestones/M6b-patient-portal-booking.md`, "M6b-P5" (10 decisions)
 - **R42** `POST /portal/booking-requests/{id}/accept-proposal` (the account's own request): books,
   links and sets `ACCEPTED` as R34, with actor PATIENT. If the time has gone meanwhile (it cannot
   while the hold is live; only by a staff override), 409 as R35 and the request stays `PROPOSED`.
-- **R43** `POST /portal/booking-requests/{id}/decline-proposal`: `DECLINED`, reason
-  `PATIENT_DECLINED`, hold ended.
+- **R43** *No thanks*: `POST /portal/booking-requests/{id}/decline-proposal` moves
+  `PROPOSED` -> `DECLINED` (terminal), reason `PATIENT_DECLINED`, and ends the proposed hold at
+  once, in the same transaction.
 
 ### The inbox and counts
 

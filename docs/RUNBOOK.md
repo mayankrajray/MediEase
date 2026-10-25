@@ -577,5 +577,15 @@ together in the pilot. If the clinic page answers 429 for everyone, wait for the
 (`Retry-After`), and raise the proxy work before onboarding more clinics. Logs carry
 `booking.rate_limited` with the bucket kind only.
 
-**A request nobody answers.** In P4 a request is only read and held. After its `respond_by` it no
-longer holds anything; nothing changes its status until P5 (accept, decline, propose, expiry).
+**Answering (M6b-P5).** *Booking requests* -> *Accept* (choose the record or create one; it books
+the time and links the patient's app), *Propose another time* (the patient accepts or says no
+thanks in their app) or *Decline* (a reason the patient sees; the note is for staff only).
+"Someone has already answered this request" means another member answered first or the deadline
+passed: reload the list. A patient who says a proposal vanished: it expired when its hold ended
+(the clinic's hold time); propose again or phone them.
+
+**A request nobody answers.** After `respond_by` it is expired everywhere at once; a sweep every 5
+minutes writes `EXPIRED` (`SELECT status, decided_by_type FROM booking_requests WHERE id =
+'<id>';`, `decided_by_type = 'SYSTEM'`). Owners see the answered-in-time rate on Today. If
+expired requests pile up while the worker is down, they still read as expired; the sweep catches
+up when the worker returns.

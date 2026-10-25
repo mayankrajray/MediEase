@@ -612,7 +612,12 @@ Known limits to carry forward:
 
 ## M6b-P5 - The front-desk inbox: accept, decline, propose, expiry
 
-Proposed 26 Oct 2026, **awaiting the developer's approval**. Covers FR-BKG-04, 05, 06, 07 (the
+Proposed 26 Oct 2026; **approved by the developer 26 Oct 2026** with two clarifications: (A) exactly
+one answer can win, enforced under the request's row lock in the service (not the UI), and a
+proposal changes status and moves the hold in one transaction; endpoints reject an expired request
+themselves and the sweep only persists it; (B) *No thanks* is `PROPOSED` -> `DECLINED` and ends the
+proposed hold at once (spec R31a, R43). The Playwright journey runs the real front desk -> patient
+flow. Covers FR-BKG-04, 05, 06, 07 (the
 no-show counter), 08, FR-PRT-06 (a) and FR-UX-03 (what waits for the desk). Rules:
 `docs/specs/booking-requests.md` section 13, R31-R52 (Draft). Patient notifications (push, email,
 in-app for patients) stay in P6; P5 shows every outcome in the portal and sends the existing
@@ -650,3 +655,48 @@ Testing for P5 (per the developer's rule of 26 Oct 2026): unit and integration t
 code, the booking-request contract test, the affected web tests, lint and typecheck, and one
 Playwright journey (accept with a new record; propose and the patient accepts; decline). The full
 suites run once at the end of M6b.
+
+### As built (M6b-P5)
+
+Built 26 Oct 2026 to the approved design and its two clarifications. Details settled in the build:
+
+- **Storage.** Migration `0030` widens the status CHECK and adds `patient_id`, `appointment_id`,
+  `answered_at`/`answered_by` (the staff member's first answer: accept, decline or propose),
+  `decided_at`/`decided_by_type` (when and how it became final), `decline_reason`,
+  `decline_note`, `original_session_id`/`original_slot_start`, with CHECKs that tie them to the
+  status. The one-open-request index now covers `PENDING` and `PROPOSED` (its name is kept).
+  `LinkMethod.BOOKING` and the `schedule_request_expiry` system job kind join their CHECKs.
+- **One answer wins (R31a).** Every answer reads the request, locks the sessions it touches, then
+  the request row, and checks again (open, same status, same session, before the deadline); the
+  loser is 409 `BKG_ALREADY_ANSWERED`. Proven by a parallel-accept test (one 201, one 409, one
+  appointment). A proposal moves the hold and changes the status in the same transaction.
+- **Accept** books through the same steps as a staff booking (`resolve_holds(exclude=...)` drops
+  only this request's hold), source `PUBLIC_PAGE`, then `link_for_booking` (actor STAFF, or
+  PATIENT when the patient takes a proposal), then `booking_request.accepted`. A new record goes
+  through `add_patient_record`, now shared with registration. Staff accept only `PENDING`; a
+  proposal waits for the patient.
+- **Propose.** A proposal's deadline (`respond_by`) becomes its hold's end, so "expired" means the
+  same check for both open states. The record is chosen when proposing; a new one is created then.
+- **Expiry.** Endpoints read an open request past `respond_by` as expired; a 5-minute sweep
+  (`schedule_request_expiry` -> `expire_booking_requests` per clinic) writes `EXPIRED` with a
+  SYSTEM audit row.
+- **Counts.** `GET /booking-requests` returns `open_count` and `expired_7d`; Today has
+  `booking_requests_open` (clinic scope) and, for owners, `requests_answered_30d` and
+  `requests_expired_30d` (the rate is answered / (answered + expired)). The nav shows the open
+  count beside *Booking requests*, read as "N waiting"; it is refreshed when the page changes.
+- **No-show count** per record over 12 months (`appointments.count_no_shows`), on the accept and
+  propose candidates only.
+- **Web.** The inbox has Open / Answered, *Accept* and *Propose another time* drawers sharing one
+  record picker (phone candidates, search, *Create new record* prefilled), and *Decline* with the
+  reason and a staff-only note. The patient's *My appointments* shows the four states with *Accept
+  this time* / *No thanks* and the call button.
+- **Tests (changed code only, per the 26 Oct rule).** API: domain and integration
+  (`test_booking_answers_http.py`, 14), contract, tenancy (cross-clinic and cross-account cases
+  for the six new ID routes), migrations, worker wiring; web: the inbox, proposal and nav tests,
+  the full web suite (629); Playwright `booking-answers.spec.ts` (the front desk -> patient flow),
+  `booking-requests.spec.ts` and `workspaces.spec.ts`. The full API and Playwright suites run at
+  the end of M6b.
+
+Differences from the design (all small): the staff-only note is shown on the *Answered* list;
+staff may decline a pending proposal (it withdraws the offer); the patient's confirmation after
+*Accept this time* is the appointment appearing under the clinic (the list reloads).
