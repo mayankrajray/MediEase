@@ -30,6 +30,7 @@ from mediease_api.delivery.middleware import get_request_id
 from mediease_api.domain.booking.request import BookingRateLimited
 from mediease_api.domain.links.errors import LinkRateLimited
 from mediease_api.domain.messaging.errors import WebhookRateLimited
+from mediease_api.domain.onboarding.application import ApplicationRateLimited
 from mediease_api.domain.prescriptions.errors import PdfBusy
 from mediease_api.domain.shared.errors import DomainError, InvalidValue
 from mediease_api.ports.readiness import DatabaseTimeout, DatabaseUnavailable, ReadinessError
@@ -83,6 +84,11 @@ DOMAIN_ERROR_STATUS = {
     "BKG_ALREADY_ANSWERED": 409,
     "PRT_RATE_LIMITED": 429,
     "APT_SLOT_HELD": 409,
+    # M6c-P1: clinic applications (clinic-onboarding R7, R10, R12, R16).
+    "ONB_RATE_LIMITED": 429,
+    "ONB_FILE_REJECTED": 422,
+    "ONB_CONFIRM_INVALID": 404,
+    "ONB_UPLOAD_FAILED": 503,
     # M6b-P3b (R46): a dose outside its marking window.
     "PRT_DOSE_NOT_MARKABLE": 409,
     # M6a-P4: emailed verification and reset links.
@@ -185,7 +191,8 @@ def domain_error_response(exc: DomainError) -> tuple[Response, int]:
         | LinkRateLimited
         | WebhookRateLimited
         | InvitesRateLimited
-        | BookingRateLimited,
+        | BookingRateLimited
+        | ApplicationRateLimited,
     ):
         response.headers["Retry-After"] = str(exc.retry_after_seconds)
     return response, status

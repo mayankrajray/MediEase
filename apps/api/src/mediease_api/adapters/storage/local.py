@@ -56,6 +56,10 @@ class LocalBlobStorage:
     def exists(self, key: str) -> bool:
         return self._path(key).is_file()
 
+    def delete(self, key: str) -> None:
+        with contextlib.suppress(FileNotFoundError):
+            self._path(key).unlink()
+
 
 def _fsync_dir(directory: Path) -> None:
     fd = os.open(directory, os.O_RDONLY)

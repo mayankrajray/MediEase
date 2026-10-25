@@ -48,6 +48,10 @@ EXPIRE_REQUESTS_KIND = "expire_booking_requests"
 MEDICINE_DUE_SWEEP_KIND = "schedule_medicine_due"
 NOTIFY_MEDICINE_DUE_KIND = "notify_medicine_due"
 PATIENT_EMAIL_KIND = "send_patient_email"
+# M6c-P1 (clinic-onboarding R9, R12, R14): an application's emails (no clinic yet), and the daily
+# deletion of applications never confirmed, with their certificates.
+APPLICATION_EMAIL_KIND = "send_application_email"
+APPLICATION_PURGE_KIND = "purge_applications"
 # R9d: the only kinds allowed to have no clinic. The database CHECK ``ck_jobs_system_kind`` lists
 # the same kinds; a test keeps the two in step, and adding a kind is a migration.
 SYSTEM_KINDS: frozenset[str] = frozenset(
@@ -59,6 +63,8 @@ SYSTEM_KINDS: frozenset[str] = frozenset(
         AUTH_EMAIL_KIND,
         REQUEST_EXPIRY_SWEEP_KIND,
         MEDICINE_DUE_SWEEP_KIND,
+        APPLICATION_EMAIL_KIND,
+        APPLICATION_PURGE_KIND,
     }
 )
 

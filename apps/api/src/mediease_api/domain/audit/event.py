@@ -45,6 +45,9 @@ class ActorType(StrEnum):
     # M6a-P3 (ADR-0015): a signed-in patient account. Not a staff user, so ``actor_user_id`` stays
     # empty; the account is the event's entity (``patient_account``).
     PATIENT = "PATIENT"
+    # M6c-P1 (ADR-0020): someone applying for a clinic, with no account and no clinic yet. The
+    # application is the event's entity (``clinic_application``).
+    APPLICANT = "APPLICANT"
 
     @property
     def is_human(self) -> bool:

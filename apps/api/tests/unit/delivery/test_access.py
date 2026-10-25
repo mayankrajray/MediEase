@@ -185,6 +185,10 @@ EXPECTED_POLICIES = {
     "ops.invite_staff": (Access.OPS, None),
     # M5-P5 (R18): counts and money per clinic, platform staff only.
     "ops.messaging_costs": (Access.OPS, None),
+    # M6c-P1 (clinic-onboarding R1, R12, R18): applying, confirming, and the ops list.
+    "ops.list_applications": (Access.OPS, None),
+    "public_applications.submit": (Access.PUBLIC, None),
+    "public_applications.confirm": (Access.PUBLIC, None),
     # Ops imports patients but cannot browse them (spec patients §2, M2-P4).
     "ops.import_patients": (Access.OPS, None),
 }

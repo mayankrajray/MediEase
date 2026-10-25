@@ -149,6 +149,9 @@ ACTIONS: dict[A, ActionInfo] = {
     **_c(
         AuditCategory.SETTINGS,
         (A.CLINIC_CREATED, "Created the clinic"),
+        # M6c-P1: platform events with no clinic; they never reach an owner's log.
+        (A.APPLICATION_SUBMITTED, "Applied to join MediEase"),
+        (A.APPLICATION_EMAIL_VERIFIED, "Confirmed the application's email"),
         (A.CLINIC_ACTIVATED, "Activated the clinic"),
         (A.CLINIC_UPDATED, "Changed clinic settings"),
         (A.NOTIFICATION_PREFERENCES_CHANGED, "Changed notification settings"),
@@ -163,6 +166,7 @@ ACTOR_LABELS: dict[ActorType, str] = {
     ActorType.SYSTEM: "System",
     ActorType.PATIENT_LINK: "Patient (prescription link)",
     ActorType.PATIENT: "Patient (portal)",
+    ActorType.APPLICANT: "Clinic applicant",
 }
 
 

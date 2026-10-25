@@ -66,6 +66,17 @@ def test_r18_write_once_a_second_put_keeps_the_first_bytes(storage: BlobStorageP
     assert storage.get(KEY) == b"first"
 
 
+def test_m6c_p1_delete_removes_an_object_and_a_repeat_is_harmless(
+    storage: BlobStoragePort,
+) -> None:
+    """clinic-onboarding R13, R14: an application's certificates are deleted with it."""
+    storage.put("applications/a1/doctor-1", b"%PDF-", content_type="application/pdf")
+    storage.delete("applications/a1/doctor-1")
+    assert not storage.exists("applications/a1/doctor-1")
+    storage.delete("applications/a1/doctor-1")
+    storage.delete("applications/never/doctor-9")
+
+
 @pytest.mark.parametrize("key", BAD_KEYS)
 def test_keys_cannot_escape_the_store(storage: BlobStoragePort, key: str) -> None:
     for call in (

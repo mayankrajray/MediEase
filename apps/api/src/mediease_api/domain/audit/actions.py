@@ -129,6 +129,10 @@ class AuditAction(StrEnum):
     # email, a name or a digit. Reading the portal is not audited (decision 7A).
     # M6b-P4: a patient's booking request (PATIENT), and staff booking over its hold (STAFF).
     BOOKING_REQUEST_CREATED = "booking_request.created"
+    # M6c-P1 (clinic-onboarding R20): an application and its confirmed email (APPLICANT, no
+    # clinic). Metadata: the application ID, kind and doctor count only.
+    APPLICATION_SUBMITTED = "application.submitted"
+    APPLICATION_EMAIL_VERIFIED = "application.email_verified"
     # M6b-P5 (R34-R43, R32): the answers. IDs and the decline reason code only, never the note.
     BOOKING_REQUEST_ACCEPTED = "booking_request.accepted"
     BOOKING_REQUEST_DECLINED = "booking_request.declined"

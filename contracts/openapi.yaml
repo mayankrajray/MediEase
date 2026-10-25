@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.35.0
+  version: 0.36.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -1596,6 +1596,109 @@ paths:
           $ref: '#/components/responses/PortalError'
         '422':
           $ref: '#/components/responses/PortalError'
+  /api/v1/public/applications:
+    post:
+      tags: [public]
+      operationId: submitClinicApplication
+      summary: Apply to join MediEase (a clinic or a doctor with their own practice)
+      description: |
+        M6c-P1, spec clinic-onboarding R1-R10, R13, R16, R17. No sign-in, not CSRF-checked
+        (no session gives it authority). multipart/form-data: a part `application` (JSON,
+        ClinicApplicationInput) and one file `certificate_<n>` per doctor position n (from 1),
+        a PDF, JPEG or PNG of at most 5 MB recognised by its first bytes; at most 30 MB in all.
+        Stores the application PENDING with the email unconfirmed and emails a confirmation
+        link; creates no clinic, user or doctor. A registration already applied or registered
+        is flagged for the reviewer, never told. Never cached, noindex.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [application, certificate_1]
+              properties:
+                application:
+                  type: string
+                  description: ClinicApplicationInput as JSON
+                certificate_1: {type: string, format: binary}
+                certificate_2: {type: string, format: binary}
+                certificate_3: {type: string, format: binary}
+                certificate_4: {type: string, format: binary}
+                certificate_5: {type: string, format: binary}
+                certificate_6: {type: string, format: binary}
+                certificate_7: {type: string, format: binary}
+                certificate_8: {type: string, format: binary}
+                certificate_9: {type: string, format: binary}
+                certificate_10: {type: string, format: binary}
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '202':
+          description: Received; the owner must confirm the email to send it for review
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationReceipt'
+        '413':
+          $ref: '#/components/responses/ApplicationError'
+        '415':
+          $ref: '#/components/responses/ApplicationError'
+        '422':
+          $ref: '#/components/responses/ApplicationError'
+        '429':
+          $ref: '#/components/responses/ApplicationError'
+        '503':
+          $ref: '#/components/responses/ApplicationError'
+  /api/v1/public/applications/confirm:
+    post:
+      tags: [public]
+      operationId: confirmClinicApplication
+      summary: Confirm the application's email with the emailed link's token
+      description: |
+        M6c-P1, spec R11, R12, R16. The token works once, until 48 hours after the application;
+        an unknown, used or expired token is the same 404 ONB_CONFIRM_INVALID. The application
+        then waits for a reviewer and a "received" email is sent. 20 attempts a minute per
+        caller.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token]
+              properties:
+                token: {type: string, minLength: 1, maxLength: 200}
+      responses:
+        '200':
+          description: Confirmed
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reference]
+                properties:
+                  reference: {type: string}
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+        '415':
+          $ref: '#/components/responses/ApplicationError'
+        '422':
+          $ref: '#/components/responses/ApplicationError'
+        '429':
+          $ref: '#/components/responses/ApplicationError'
   /api/v1/public/clinics/{slug}:
     get:
       tags: [public]
@@ -3804,6 +3907,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/ops/applications:
+    get:
+      tags: [ops]
+      operationId: listOpsApplications
+      summary: Confirmed clinic applications, oldest first
+      description: |
+        M6c-P1, spec clinic-onboarding R18. Ops only. A summary per application: no phone,
+        email, registration number or certificate (the reviewer's detail view is M6c-P2).
+        Unconfirmed applications are never listed.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The applications
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OpsApplicationSummary'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
   /api/v1/ops/messaging-costs:
     get:
       tags: [ops]
@@ -6081,6 +6219,24 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    ApplicationError:
+      description: |
+        M6c-P1. ONB_CONFIRM_INVALID (404: unknown, used or expired link); REQ_REQUEST_ENTITY_TOO_LARGE
+        (413: over 30 MB); REQ_UNSUPPORTED_MEDIA_TYPE (415); REQ_VALIDATION_FAILED (422, the field
+        named with doctor positions from 1); ONB_FILE_REJECTED (422: details.position and
+        details.reason type, size or missing); ONB_RATE_LIMITED (429, with Retry-After);
+        ONB_UPLOAD_FAILED (503: nothing was kept)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+        Retry-After:
+          description: Seconds to wait (429 only)
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
     InviteRateLimited:
       description: |
         CLN_INVITE_RATE_LIMITED (M6a-P5): more than 10 invitations in an hour for this clinic, or
@@ -7937,6 +8093,92 @@ components:
           $ref: '#/components/schemas/PatientNotificationKind'
         channel: {type: string, enum: [IN_APP, EMAIL]}
         enabled: {type: boolean}
+    ClinicApplicationInput:
+      type: object
+      additionalProperties: false
+      description: M6c-P1 (spec R2-R5). The `application` part of POST /public/applications
+      required:
+        - kind
+        - clinic_name
+        - address_line
+        - city
+        - state
+        - pincode
+        - clinic_phone
+        - specialties
+        - owner_name
+        - owner_phone
+        - owner_email
+        - owner_practises
+        - doctors
+      properties:
+        kind: {type: string, enum: [CLINIC, SOLO_DOCTOR]}
+        clinic_name: {type: string, maxLength: 200}
+        address_line: {type: string, maxLength: 300}
+        city: {type: string, maxLength: 100}
+        state: {type: string, maxLength: 100}
+        pincode: {type: string, pattern: '^[1-9][0-9]{5}$'}
+        clinic_phone: {type: string, maxLength: 20}
+        specialties:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: {type: string}
+        owner_name: {type: string, maxLength: 200}
+        owner_phone: {type: string, maxLength: 20, description: An Indian mobile number}
+        owner_email: {type: string, maxLength: 254}
+        owner_practises: {type: boolean}
+        doctors:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/ClinicApplicationDoctor'
+        website:
+          type: string
+          maxLength: 200
+          description: Left empty by people; a filled value is answered like a success and dropped
+    ClinicApplicationDoctor:
+      type: object
+      additionalProperties: false
+      required: [name, qualification, council, registration_number]
+      properties:
+        name: {type: string, maxLength: 200}
+        qualification: {type: string, maxLength: 200}
+        council:
+          type: string
+          maxLength: 200
+          description: The National Medical Commission or a state medical council, as published
+        registration_number: {type: string, maxLength: 80}
+        is_owner: {type: boolean, default: false}
+    ApplicationReceipt:
+      type: object
+      required: [reference, email_masked]
+      properties:
+        reference: {type: string, description: 'MA-<year>-NNNN'}
+        email_masked: {type: string}
+    OpsApplicationSummary:
+      type: object
+      required:
+        - id
+        - reference
+        - kind
+        - clinic_name
+        - city
+        - doctors
+        - submitted_at
+        - email_verified_at
+        - possible_duplicate
+      properties:
+        id: {type: string, format: uuid}
+        reference: {type: string}
+        kind: {type: string, enum: [CLINIC, SOLO_DOCTOR]}
+        clinic_name: {type: string}
+        city: {type: string}
+        doctors: {type: integer, minimum: 1, maximum: 10}
+        submitted_at: {type: string, format: date-time}
+        email_verified_at: {type: string, format: date-time}
+        possible_duplicate: {type: boolean}
     LiveLink:
       type: object
       required: [url, expires_at]
