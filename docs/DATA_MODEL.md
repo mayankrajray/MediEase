@@ -750,7 +750,7 @@ a purge can be added with the retention job if they ever matter.
 ## M6b — Medicine reminder choices (migration `0027`, M6b-P3)
 
 Patient portal spec R38–R40, decision D6. **Tenant data** (`SqlAlchemyReminderPrefRepository`,
-`tenant.reminder_prefs`), reached only through `PortalScope`. Stored only: delivery is M6b-P6.
+`tenant.reminder_prefs`), reached only through `PortalScope`. Delivered in the app by M6b-P6's medicine-due sweep.
 
 ### `medicine_reminder_prefs`
 | Column | Type | Notes |
@@ -858,6 +858,48 @@ its hold's end. `patient_account_links.method` gains `BOOKING`; `jobs` gains the
 
 ---
 
+## M6b - Patient notifications (migration `0031`, M6b-P6)
+
+Patient portal spec R55-R66. **Tenant data** (`SqlAlchemyPatientNotificationRepository`,
+`tenant.patient_notifications`); one account's notices across its clinics are read through
+`uow.patient_notification_lookup`, a reviewed cross-clinic exception filtered by the portal scope
+(an unlinked or suspended clinic's appointment and prescription notices disappear).
+
+### `patient_notifications`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | One row per notification |
+| clinic_id | uuid FK not null | |
+| account_id | uuid FK patient_accounts not null | The one recipient |
+| kind | text not null | `booking.accepted` \| `booking.declined` \| `booking.proposed` \| `booking.expired` \| `appointment.confirmed` \| `appointment.moved` \| `appointment.cancelled` \| `prescription.ready` \| `medicine.due` (CHECK) |
+| event_key | text not null | What happened, e.g. `booking.accepted:{request}` or `medicine.due:{clinic}:{date}:{slot}` |
+| entity_type, entity_id | text, uuid not null | The request, appointment or prescription |
+| link | text not null | A portal path (starts with `/portal`) |
+| params | jsonb not null | Only `at`, `token`, `doctor_id`, `reason` (a code), `slot`, `time`; never text |
+| created_at | timestamptz not null | |
+| read_at | timestamptz null | |
+
+Unique `uq_patient_notifications_account_id_event_key (account_id, event_key)`: inserts are
+`ON CONFLICT DO NOTHING`, so a replayed or concurrent event writes nothing (R58). Indexes
+`(account_id, created_at DESC)` and `created_at`. The title is rendered on read in the account's
+language; nothing clinical is stored.
+
+### `patient_notification_preferences`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| account_id | uuid FK patient_accounts not null | The account's own (no clinic) |
+| kind | text not null | As above (CHECK) |
+| channel | text not null | `IN_APP` \| `EMAIL` (CHECK); `EMAIL` only for the four `booking.*` kinds (use case, 422) |
+| enabled | boolean not null | No row means on |
+| created_at, updated_at | timestamptz | |
+
+Unique `(account_id, kind, channel)`. `jobs` gains the system kind `schedule_medicine_due` (and
+the clinic kinds `notify_medicine_due` and `send_patient_email`). The live token link is a
+stateless signed token (`Kind.QUEUE`) and has no table.
+
+---
+
 ## Retention and erasure
 
 | Data | Retention | Mechanism |
@@ -868,6 +910,7 @@ its hold's end. `patient_account_links.method` gains `BOOKING`; `jobs` gains the
 | Audit events | 3 years minimum | Partitioned by month (post-pilot) |
 | Refresh tokens | 30 days after expiry | Purge job (staff and, from M6a-P3, portal sessions) |
 | Email tokens | 30 days after expiry | Purge job (M6a-P4) |
+| Patient notifications (M6b-P6) | 90 days, as staff notifications | The daily purge (`PurgeExpired`, count in its audit row) |
 | Patient links | 30 days after expiry | Purge job |
 | Notifications | 90 days after creation | Purge job (M6a-P7) |
 

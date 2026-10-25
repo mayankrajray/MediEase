@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Proposed (M6b-P6 design, 26 Oct 2026) |
+| Status | Accepted (approved by the developer 26 Oct 2026; the R71 protections and the ownership check on issue are mandatory) |
 | Deciders | Developer |
 | Related | FR-QUE-06, FR-MSG-04, NFR-07, ADR-0006 (tokens), M4-P5 prescription link |
 
@@ -22,6 +22,11 @@ after it ends. Opening it needs **no challenge**. The page shows only the fields
 patient's name, phone, reason, age or anything from the visit. It is `noindex`, never cached,
 rate limited per link and per caller like the prescription link, and refuses a cancelled
 appointment's link with a plain message.
+
+*As built (M6b-P6):* the token is a new token **kind** (`Kind.QUEUE`, claims clinic, appointment,
+not-before and expiry) rather than a `patient_links` purpose: it is stateless, so no row and no
+CHECK change, and it cannot be revoked before it expires (accepted for this content). Limits are
+120 reads a minute per caller and 30 per link.
 
 ## Consequences
 

@@ -21,6 +21,17 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6b-P6 (#51): patient notifications and the live token link (FR-NTF-04, 05 for patients,
+  FR-REM-03, FR-QUE-06; spec patient-portal R55-R74; ADR-0019). The portal header has a bell with
+  the unread count and a *Notifications* screen: booking answers (accepted, declined with the
+  reason's words, another time suggested, expired), appointments booked, moved or cancelled by
+  staff, a new prescription, and medicine times from the reminder choices ("Morning medicines ·
+  08:00", never a medicine name), in English or Hindi. Each notice is written once per account and
+  event (a database constraint). The four booking answers are also emailed to a verified address,
+  without the reason. *Account -> Notifications* turns each kind off in the app or by email. Today's
+  appointments have *Live queue*, and staff can *Copy live link* from the queue row: a public page
+  with no sign-in showing the token or time, how many are ahead and who is being seen, refreshed
+  every 20 seconds, valid that day only. Migration `0031`, contract 0.35.0.
 - M6b-P5 (#51): answering booking requests (FR-BKG-04..07, FR-PRT-06 a; spec R31-R52). The
   *Booking requests* inbox has Open and Answered lists with Accept (book the time for a chosen or
   new record and link the patient's app), Propose another time (the hold moves; the patient

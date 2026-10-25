@@ -705,7 +705,17 @@ staff may decline a pending proposal (it withdraws the offer); the patient's con
 
 ## M6b-P6 - Patient notifications and the live token link
 
-Proposed 26 Oct 2026, **awaiting the developer's approval**. The last phase of M6b. Covers
+Proposed 26 Oct 2026; **approved by the developer 26 Oct 2026** with the three open questions
+answered (email for the four booking outcomes now; the live link without a last-4 check; reminder
+and follow-up notices in the app left for M7) and five clarifications: (1) `patient_notifications`
+holds **one row per notification**, each belonging to an account; (2) `(account_id, event_key)`
+is a **database unique constraint**, so a replayed or concurrent event inserts nothing (no
+check-then-insert); (3) the in-app decline notice names the reason's words, the **email never
+does** ("Booking declined at <clinic>"); (4) medicine-due notices **consume the P3 schedule
+engine** and never read a frequency themselves; (5) the live link stays public with every R71
+protection and a strict ownership check when it is issued (another account's appointment is
+404). `ahead` counts only BOOKED and ARRIVED entries before this one (a cancelled or completed
+token never counts). The last phase of M6b. Covers
 FR-NTF-01 and FR-NTF-04/05 for patients, FR-REM-03 (medicine reminders, in the app) and
 FR-QUE-06. Rules: `docs/specs/patient-portal.md` section 13, R55-R74 (Draft); the live link's
 security choice is ADR-0019 (Proposed). Testing follows the 26 Oct rule (changed code only); the
@@ -752,3 +762,72 @@ Open questions for the developer:
    a token number and a queue position?
 3. **Appointment-reminder and follow-up-due notices in the app** (point 3): leave for M7 as
    proposed, or bring them into P6 (the reminders change makes the phase noticeably bigger)?
+
+### As built (M6b-P6)
+
+Built 26 Oct 2026 to the approved design, its five clarifications and the three answers. Details
+settled in the build, and where it differs from the design:
+
+- **Storage.** Migration `0031`: `patient_notifications` (tenant; one row per notification for
+  one account; `params` holds IDs, a time, a token, a slot or a reason code, never text) with the
+  database constraint `uq_patient_notifications_account_id_event_key`; inserts are
+  `ON CONFLICT DO NOTHING`, so a replayed or concurrent event writes nothing (R58).
+  `patient_notification_preferences` belongs to the account (no clinic), unique per kind and
+  channel; a missing row means on. The 90-day purge and its audit row gain
+  `patient_notifications`. `schedule_medicine_due` joins the system job kinds.
+- **Recipients.** Only the request's account (booking kinds), or the account with the active
+  link to the record in that clinic (`portal_links.active_for_patient`). Never by phone, email or
+  name. A booking from an accepted request (source `PUBLIC_PAGE`) gets no `appointment.confirmed`
+  (the `booking.accepted` notice already says it). The patient's own choices (*Accept this
+  time*, *No thanks*) are not told back to them.
+- **Titles** are rendered on read in the account's language from the kind and params
+  (`domain/portal/notifications.py`). The decline notice carries the reason's words; the email
+  never does ("Booking declined at <clinic>"). Unlinking hides that clinic's notices.
+- **Email** (`send_patient_email`, a clinic job, dedupe `patient_email:{account}:{event_key}`):
+  the four booking kinds only, to a verified email, English or Hindi, a portal link and no reason
+  or note. The job checks again that the email is verified and the switch still on. Email for
+  any other kind is refused 422.
+- **Medicine due.** `schedule_medicine_due` every 5 minutes enqueues `notify_medicine_due` per
+  clinic, which reads the enabled reminder choices and asks the P3 engine (`plan_for_day`) for
+  the day; nothing here reads a frequency. Due in (now − 30 min, now]; one notice per account,
+  slot and day (`medicine.due:{clinic}:{date}:{slot}`); "Morning medicines · 08:00", never a
+  medicine name. In the app only; the *Courses* line now says so.
+- **The live link** is a new signed token kind, **`Kind.QUEUE`** with `QueueClaims` (clinic,
+  appointment, not-before, expiry; 40 bytes), **not** a `LinkPurpose` member as the design said:
+  it is stateless, so the `patient_links` table and its CHECK are untouched. Valid from the
+  start of the session's day (clinic time) until 2 hours after the session ends. Issued by
+  `GET /portal/appointments/{id}/live-link` (the account's own appointment only, else 404) and
+  staff `GET /appointments/{id}/live-link` (`APPOINTMENTS_MANAGE`); a cancelled or finished
+  appointment is 422. `GET /public/queue/{token}`: an allow-listed body (`LIVE_FIELDS`), ETag,
+  `no-store`, `noindex`, no referrer; 404 `LINK_INVALID`, 410 `LINK_EXPIRED`; 120 reads a minute
+  per caller and 30 per link. `ahead` counts BOOKED and ARRIVED entries before this one only.
+- **Web.** The portal header's bell (summary every 30 s with ETag while visible; a polite live
+  region on a new arrival); `/portal/notifications` (newest 50, opening one marks it read,
+  *Mark all as read*); *Account -> Notifications* switches (email only where offered); *Live
+  queue* on today's appointments in *My appointments*; the public `/q/{token}` page
+  (server-rendered, then polling every 20 s from the server's ETag; English and Hindi; stops on
+  an expired or invalid link); *Copy live link* in the staff queue row's menu (today only).
+- **Measured** at 360 px: `/q/{token}` under 200 KB on a first load (asserted in the journey);
+  axe found nothing serious on `/portal/notifications` or `/q/{token}`.
+
+Differences from the design:
+
+- `Kind.QUEUE` instead of a `QUEUE_VIEW` link purpose (above).
+- Rate limits of 120 reads a minute per caller and 30 per link rather than the prescription
+  link's (20 per link would trip for a family on two phones refreshing every 20 seconds).
+- Unlinking does not void a live link already issued: the token is stateless and stays valid
+  until its expiry (that day). It shows only a token number and a queue position (ADR-0019); the
+  portal issues no new one after unlinking.
+- Patient-made decisions are not notified back (not in the design's catalogue either way).
+
+Tests (changed code, then the full suites closing M6b): domain unit tests for rendering, channels
+and the live view; `test_patient_notifications_http.py` (accept once and replay, propose then
+the patient's decline, the decline's words and the email without them, switches, appointment
+notices and the bell with unlinking, no linked account, the medicine window, the live page
+moving, expired and forged links); the contract test
+`test_patient_notifications_contract.py`; tenancy (cross-account notices, the portal live-link
+ownership 404, the staff live-link cross-clinic case); migrations, worker wiring and purge
+metadata. Web: the bell, notifications, switches, live button, the live page, the queue's
+*Copy live link*, the polling start from server data. Playwright
+`patient-notifications.spec.ts` (AC23 bell after accept and propose; AC27 the live link
+following the queue).

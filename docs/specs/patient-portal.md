@@ -4,8 +4,8 @@
 |---|---|
 | Requirements | FR-PRT-02, 03, 06 (b, c); NFR-18 (P1). FR-PRT-04, 05, 07 (P2), FR-REM-03 (P3) and patient notifications (P6) are added in their phases |
 | Milestone / phases | M6b / P1, P2, P3, P3b, P6 |
-| Status | P1 approved (developer sign-off 24 Oct 2026, A on all eight) and built; P2 (R15–R27, AC7–AC12) approved and built; P3 (R28–R44, AC13–AC18) approved 24 Oct 2026 and built (as-built notes in the M6b design note); P3b (R45–R54, AC19–AC22) approved and built |
-| Last updated | 2026-10-24 |
+| Status | P1 approved (developer sign-off 24 Oct 2026, A on all eight) and built; P2 (R15–R27, AC7–AC12) approved and built; P3 (R28–R44, AC13–AC18) approved 24 Oct 2026 and built (as-built notes in the M6b design note); P3b (R45–R54, AC19–AC22) approved and built; P6 (R55–R74, AC23–AC28) approved and built 26 Oct 2026 |
+| Last updated | 2026-10-26 |
 
 ## 1. Context
 A patient account (M6a-P3) holds no clinic data. Patients want their appointments and
@@ -303,14 +303,16 @@ account (FR-PRT-09); patient cancel or reschedule (FR-PRT-08); data export and d
 ## 12. Open questions
 None for P1 once the design is approved.
 
-## 13. M6b-P6 - Patient notifications and the live token link (Draft, 26 Oct 2026)
+## 13. M6b-P6 - Patient notifications and the live token link (Approved and built 26 Oct 2026)
 
-Design: `docs/milestones/M6b-patient-portal-booking.md`, "M6b-P6" (10 decisions, 3 open
-questions); ADR-0019 (Proposed).
+Design: `docs/milestones/M6b-patient-portal-booking.md`, "M6b-P6" (10 decisions); ADR-0019
+(Accepted). Approved with email for booking outcomes, the live link without a challenge, reminder
+notices left for M7, and the clarifications written into R55, R58, R63, R65 and R69.
 
 ### Notifications
 
-- **R55** A patient notification belongs to one **account** and one clinic: kind, `event_key`
+- **R55** `patient_notifications` holds **one row per notification**; each belongs to one
+  **account** and one clinic: kind, `event_key`
   (unique per account), the entity and its link, `params` (IDs and a time only), `created_at`,
   `read_at`. No text is stored; the title is rendered on read in the account's language.
 - **R56** Recipients: the account a booking request belongs to; for an appointment or a
@@ -320,7 +322,9 @@ questions); ADR-0019 (Proposed).
   `appointment.confirmed` (a staff booking; an accepted request's appointment is told once, as
   `booking.accepted`), `appointment.moved`, `appointment.cancelled`, `prescription.ready`,
   `medicine.due`.
-- **R58** Delivery is idempotent: replaying an event writes nothing new (FR-NTF-06).
+- **R58** Delivery is idempotent: `(account_id, event_key)` is a unique constraint and rows are
+  inserted with "on conflict do nothing", so replaying an event, or two workers handling it at
+  once, writes nothing new (FR-NTF-06).
 - **R59** A title never contains a diagnosis, medicine, dose, reason, staff note, phone or age.
   Allowed: the clinic's name, the doctor's display name, a day and time or token, the decline
   reason's words.
@@ -332,16 +336,18 @@ questions); ADR-0019 (Proposed).
 
 - **R62** In the app: every kind, on by default; each kind can be turned off under *Account*.
   In-app delivery ignores quiet hours.
-- **R63** Email (subject to open question 1): the four booking kinds only, to a **verified**
+- **R63** Email: the four booking kinds only, to a **verified**
   email, in the account's language, on by default and switchable; subject and body name the
-  clinic and the outcome and link to the portal; never the reason or note. Sent by a job, at most
+  clinic and the outcome and link to the portal; never the reason or note (a decline email says
+  "Booking declined at <clinic>"; the reason's words are in the app only). Sent by a job, at most
   once per notice.
 - **R64** WhatsApp and SMS are unchanged: the clinic record's consent and approved templates.
 
 ### Medicine due
 
-- **R65** For each enabled reminder choice of a current prescription version, on each day of its
-  course, one `medicine.due` notice per account, slot and day at the chosen time (or the slot's).
+- **R65** The days and slots come from the P3 schedule engine (the same plan the *Medicines* tab
+  shows); P6 never reads a frequency itself. For each enabled reminder choice of a current
+  prescription version, on each day of its course, one `medicine.due` notice per account, slot and day at the chosen time (or the slot's).
   The title names the slot and time only ("Morning medicines · 08:00").
 - **R66** A sweep every 5 minutes writes the notices due since its last run and at most 30
   minutes ago; nothing older is back-filled. A revision's new version starts with its own choices.
@@ -357,10 +363,12 @@ questions); ADR-0019 (Proposed).
 
 - **R69** `GET /portal/appointments/{id}/live-link` (the account's own appointment) and staff
   `GET /appointments/{id}/live-link` return `{url, expires_at}` for an appointment today or later;
-  the link is valid from the start of its session's day until 2 hours after the session ends.
+  the link is valid from the start of its session's day until 2 hours after the session ends. The
+  portal route issues a link only for an appointment of a record linked to the account (else
+  404); staff only for their own clinic's.
 - **R70** `GET /public/queue/{token}` (no sign-in, ADR-0019) returns the clinic name, the doctor's
-  display name, the mode, the token or slot time, `ahead` (BOOKED or ARRIVED entries before it
-  in queue order), `now_seeing` (the IN_CONSULTATION token or slot time, or null) and a state:
+  display name, the mode, the token or slot time, `ahead` (only BOOKED or ARRIVED entries before
+  it in queue order: a cancelled, completed or no-show entry never counts), `now_seeing` (the IN_CONSULTATION token or slot time, or null) and a state:
   `NOT_STARTED`, `WAITING`, `YOUR_TURN` (IN_CONSULTATION), `DONE` (COMPLETED or NO_SHOW),
   `CANCELLED`. Never a name, phone, reason or age, nor anything about other patients.
 - **R71** The public route has an ETag, `Cache-Control: no-store`, `noindex`, and the prescription
@@ -371,7 +379,10 @@ questions); ADR-0019 (Proposed).
 ### Storage and contract
 
 - **R73** Migration `0031`: `patient_notifications`, `patient_notification_preferences`, the
-  `QUEUE_VIEW` link purpose, the medicine sweep's job kinds.
+  medicine sweep's job kinds. *As built:* the live link is a stateless signed token kind
+  (`Kind.QUEUE`), not a `patient_links` purpose, so it needs no table or CHECK change; its rate
+  limits are 120 reads a minute per caller and 30 per link (a page that refreshes every 20
+  seconds), not the prescription link's 20 per link.
 - **R74** Contract 0.35.0 with the routes above.
 
 ### Acceptance criteria (P6)
