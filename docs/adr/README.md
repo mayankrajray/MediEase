@@ -21,6 +21,7 @@
 | [0017](0017-notification-service.md) | Domain events and a notification service, dispatched in the publishing transaction | Accepted (M6a-P7) |
 | [0018](0018-soft-hold-as-booking-request.md) | The soft hold is the pending booking request, counted under the session lock | Accepted |
 | [0019](0019-live-token-link-without-challenge.md) | The live token link needs no last-4 check | Accepted |
+| [0020](0020-clinic-applications-as-platform-data.md) | Clinic applications are platform data; the applicant has no account until approval | Accepted (M6c) |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, and add a row here.
 Accepted ADRs are never edited; supersede them with a new ADR.

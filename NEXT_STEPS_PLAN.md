@@ -1,83 +1,83 @@
-# NEXT_STEPS_PLAN.md — Plan for M6b (patient identity, portal and booking requests)
+# NEXT_STEPS_PLAN.md — Plan for M6c (SaaS clinic onboarding, verification and discovery)
 
 | Field | Value |
 |---|---|
-| Status | **M6b opened 24 Oct 2026** after M6a merged (PR #50, #49 closed). Milestone plan and P1 design proposed, awaiting the developer's approval |
-| Scope | Milestone 6b in phase detail; M6c–M6d and M7–M9 as a roadmap. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39), M5 (PR #41), M6a (PR #50, merged 24 Oct 2026) |
+| Status | **M6c opened and approved 26 Oct 2026** after M6b merged (PR #52, #51 closed). Phase plan, milestone decisions and the P1 design approved with D1–D4; P1 is next to build |
+| Scope | Milestone 6c in phase detail; M6d and M7–M9 as a roadmap. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39), M5 (PR #41), M6a (PR #50), M6b (PR #52, merged 26 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
-| Design notes | `docs/milestones/M6b-patient-portal-booking.md`; M6a: `docs/milestones/M6-mvp-demo.md`; M8: `docs/milestones/M8-multi-clinic-whatsapp.md` |
+| Design notes | `docs/milestones/M6c-onboarding-verification-discovery.md`; M6b: `docs/milestones/M6b-patient-portal-booking.md`; M8: `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Workflow rules | `CLAUDE.md` → "Git Workflow"; `CONTRIBUTING.md`; ADR-0010, ADR-0011 |
 
 ---
 
 ## 1. Problem statement
 
-M6a gave patients an account of their own, but it holds nothing: no clinic, no appointment, no
-prescription. M6b connects a patient account to the records clinics already keep, only on proof
-the clinic gave the patient, and lets a patient ask a clinic for an appointment from its own page
-while the front desk stays in control (PRD v1.2 C7, C9).
+M6b lets a patient ask a clinic for a time on its own page, but only clinics MediEase set up by
+hand exist, nobody has checked their doctors, and a patient cannot find a clinic they do not
+already know. M6c lets a clinic or a solo doctor apply, has MediEase check every doctor's
+registration by hand, creates the approved clinic through the one existing creation path, and
+then lets patients find verified, listed clinics and doctors and request a time (PRD v1.2 C7, C8,
+C14).
 
 ## 2. Requirements
 
-- PRD v1.2 §8.9, §8.13, §8.14: FR-PRT-02..07, FR-BKG-01..08, FR-PUB-01..04, FR-REM-03, FR-QUE-06;
-  NFR-02, NFR-10, NFR-11, NFR-18, NFR-19.
-- A link is made only from clinic-given proof: a clinic invite, a prescription link's last-4
-  check, or a request the clinic accepts and matches; never by phone number alone (FR-PRT-06).
-- The patient sees only what the clinic gave them, never notes or a diagnosis (FR-PRT-03).
-- Every new table and route is covered by a tenancy test; portal routes get their own
-  cross-account suite (NFR-18).
-- Patient pages keep their budgets (NFR-02) and are in English and Hindi (NFR-11).
+- PRD v1.2 §8.14: FR-ONB-01..10, FR-DIS-01..08, FR-LND-01..03; NFR-17, NFR-19.
+- Application status, clinic status, verification and listing are four separate things, never
+  inferred from each other (PRD §8.14).
+- No clinic, user or membership exists before approval (FR-ONB-02, ADR-0020).
+- Discoverable = `ACTIVE` ∧ verified ∧ listed, decided by one domain rule used by every public
+  endpoint (FR-ONB-09); a non-discoverable profile answers exactly like not found (NFR-19).
+- Public bodies are allow-lists proven by tests (NFR-17); no ratings, ads or paid ranking.
+- The developer's decisions: **D1** a clinic becomes `ACTIVE` when the owner accepts the
+  invitation; **D2** `/apply` is English-only in M6c; **D3** the application says MediEase will
+  reply within 2 working days; **D4** issue #53, branch from the latest `main`.
 - Each phase gets its design and spec rules approved before code. Coverage gates stay
-  (≥ 90% package, ≥ 80% `domain/` + `application/`).
-- **Until M6c** there is no clinic verification: `/c/{slug}` and booking requests will be
-  limited to `ACTIVE` clinics that switched their public page on (decided at P4).
+  (≥ 90% package, ≥ 80% `domain/` + `application/`). Per phase: tests for changed code plus lint
+  and typecheck; full API and Playwright suites once, at the end of P8.
 
 ## 3. Delivery workflow (ADR-0011)
 
 ```
-Milestone issue #51 → branch m6b/51-patient-portal-booking (from origin/main at 4aac81f)
-  → per phase: design → approval → logical commits → make lint typecheck test
+Milestone issue #53 → branch m6c/53-onboarding-discovery (from origin/main at 9df830b)
+  → per phase: design → approval → logical commits → make lint typecheck test (changed code)
     → developer confirms → push (with permission) to the same branch
-  → one PR for the milestone: draft after P1, ready when P6 is done and the exit criteria hold
+  → one PR for the milestone: draft after P1, ready when P8 is done and the exit criteria hold
   → CI green → review → maintainer merges
 ```
 
-- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #51`; the last
-  commit of M6b carries `Closes #51`.
+- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #53`; the last
+  commit of M6c carries `Closes #53`.
 - Agents never push to `main`, push to the milestone branch only with permission, and never merge.
 
 ### 3.1 Open prerequisites
 
 | # | Needed | State |
 |---|---|---|
+| L-11 | A free-tier transactional email account (application emails and the owner's invitation) | Open; Mailpit covers local use |
 | L-09 | A Google Cloud OAuth client for Google sign-in | Open; the fake provider covers local use |
-| L-11 | A free-tier transactional email account | Open; Mailpit covers local use |
-| L-01, L-02 | Meta account and approved templates (now incl. appointment reminder and cancellation; P6 adds patient messages) | Pending |
-| L-03 | SMS provider and DLT registration | Pending |
-| L-04 | Counsel: MediEase as data fiduciary for patient accounts (PRD §10 v1.2) | Open; before any public launch |
+| L-04 | Counsel: MediEase as data fiduciary; doctor-listing wording before profiles are indexed (FR-DIS-06) | Open; before any public launch |
+| L-01, L-02 | Meta account and approved templates | Pending |
 | W-5 | Branch protection on `main` | Open (GitHub Free) |
-| — | #30: an import over 2 MB through the web origin can answer 500 instead of 413 | Open; outside the milestones |
+| — | #30: an import over 2 MB through the web origin can answer 500 instead of 413 (the same proxy limit applies to certificate uploads, P1) | Open |
 
 ## 4. Phase breakdown
 
 Details, file lists and test plans per phase are in the design notes; each phase is designed at
-its start. P1 and P2 are done (draft PR #52); P3 and P3b are designed and await approval.
+its start. P1 is designed and approved.
 
 | Phase | Objective | Requirements | Verify |
 |---|---|---|---|
-| P1 | Linking by clinic invite and prescription link; the read-only patient API; portal tenancy suite | FR-PRT-02, 03, 06 (b, c), NFR-18 | An invite links once; an account never reads an unlinked clinic or another record |
-| P2 | Portal web: fresh dashboard, My Appointments by clinic, prescriptions, reminders; English and Hindi | FR-PRT-03, 04, 05, 07, NFR-02, 10, 11 | 360 px journey; budget; Hindi |
-| P3 | Prescription structure, the medicine-plan engine, *Medicines* tab, reminder preferences | FR-REM-03, FR-RX amended | Every 3/4-digit 0/1 pattern maps by the central slot sets; no screen interprets a frequency |
-| P3b | Dose tracking and its data lifecycle | FR-REM-03 | Private to the patient; Not recorded derived; 48-hour window; retention job |
-| P4 | `/c/{slug}` and booking requests with a soft hold | FR-PUB-01..04, FR-BKG-01..03, 07, NFR-19 | Two patients cannot hold one slot; unverified account refused |
-| P5 | Front-desk inbox: accept (link), decline, propose, expire | FR-BKG-04..06, 08, FR-PRT-06 (a) | Accepted request appears under the right clinic |
-| P6 | Patient notifications and the live token link | FR-NTF-04, 05, FR-QUE-06 | Each event once, with read state; token link shows place, nothing personal |
+| P1 | `/apply`: application, certificates, verified email, lifecycle states, limits, duplicate flag | FR-ONB-01, 02, 07 | No clinic or user before approval; a renamed non-PDF refused; unconfirmed applications purged |
+| P2 | Reviewer workflow: ops roles, queue, per-doctor checks, decision with a reason, applicant emails | FR-ONB-03, 05 | Every transition audited with reviewer, time and reason; no clinical content visible |
+| P3 | Approval into the pre-filled ops wizard; clinic and doctor verification; `has_public_page` = `ACTIVE` ∧ verified | FR-ONB-04, 06, 08 | Self-service and ops-created clinics made by the same code; ops-created start unverified |
+| P4 | Suspension and listing; the one discoverability rule | FR-ONB-05, 09, 10 | A suspended clinic leaves discovery at once and its open requests are withdrawn with patients told |
+| P5 | Public clinic and doctor profiles | FR-DIS-03, 06, 07 | Allow-list bodies; indexable only when discoverable |
+| P6 | Clinic and doctor search | FR-DIS-01, 02, 04, 05 | Only discoverable results; < 500 ms at pilot scale |
+| P7 | Discovery to booking | FR-DIS-08 | Search → profile → slot → sign-in → request lands in that clinic's inbox |
+| P8 | Landing page v1 | FR-LND-01..03 | LCP < 2.5 s on 4G; WCAG 2.1 AA; no PII in analytics |
 
-## 5. Roadmap after M6b
+## 5. Roadmap after M6c
 
-- **M6c SaaS clinic onboarding, verification and discovery** — application, reviewer workflow,
-  approved onboarding, verification and listing kept separate, profiles, clinic and doctor search,
-  discovery-to-booking into the M6b request flow, landing page v1.
 - **M6d Billing and documents** — fees, bills, receipts, dues, daily collection, attachments,
   plan limits.
 - **M7 AI assistant and pitch** — LLM gateway (Groq first, ADR-0013), tools with the user's own
@@ -192,3 +192,5 @@ its start. P1 and P2 are done (draft PR #52); P3 and P3b are designed and await 
 | 26 Oct 2026 | M6b-P5 approved with two clarifications (exactly one answer wins, enforced in the service under the request's row lock, with a proposal's status and hold moved in one transaction and endpoints rejecting expired requests themselves; *No thanks* is PROPOSED -> DECLINED with the hold ended at once). Built: migration `0030`, accept / decline / propose / candidates and the patient's proposal answers, the 5-minute expiry sweep, inbox Open / Answered with counts, the nav count and Today tiles, the owner's response rate, the per-record no-show count; contract 0.34.0. Tests for the changed code: API integration 14, contract, tenancy, migrations; web suite 629; Playwright booking-answers (front desk -> patient), booking-requests and workspaces. |
 | 26 Oct 2026 | M6b-P5 pushed (PR #52, `c460b23`). M6b-P6 designed (10 decisions, 3 open questions): account-scoped patient notifications rendered at read in the account's language, recipients by request or active link only, the patient event catalogue (booking outcomes, appointment confirmed/moved/cancelled, prescription ready, medicine due), in-app for every kind plus email for booking outcomes (recommended), medicine-due notices from the stored reminder choices by a 5-minute sweep, the portal bell and list, and a signed live token link `/q/{token}` without a challenge (ADR-0019, Proposed); migration `0031`, contract 0.35.0; portal spec section 13 R55-R74, AC23-AC28 (Draft). Awaiting approval. |
 | 26 Oct 2026 | M6b-P6 approved with five clarifications (one row per notification; `(account_id, event_key)` a database unique constraint with on-conflict-do-nothing; the decline reason in the app, never in the email; medicine-due notices from the P3 engine; the live link public with every R71 protection and an ownership check on issue) and the three answers (booking emails now; no last-4 check, ADR-0019 Accepted; reminder notices in M7). Built: migration `0031` (`patient_notifications`, `patient_notification_preferences`, the medicine sweep), the notification service's patient recipients, booking emails, the 5-minute medicine-due sweep, the live token as `Kind.QUEUE` (stateless; not a `patient_links` purpose), the portal bell, *Notifications*, the switches, *Live queue*, the public `/q/{token}` page and the staff *Copy live link*; contract 0.35.0. **Full suites closing M6b:** API 2049 passed (96.85%; domain and application 96%), web 644, lint, typecheck and contract check green, smoke passed; Playwright 40 of 42 locally, the two failures being `lonelySession` finding no free hour among 62 leftover e2e sessions in the local database (both specs passed on their own earlier; CI starts fresh). |
+| 26 Oct 2026 | M6b-P6 pushed (PR #52, `cc70edc`); PR #52 described through P6 and marked ready; CI green on every job. The developer merged PR #52 (#51 closed). | #51 / PR #52 | M6b merged |
+| 26 Oct 2026 | M6c designed and **approved**: 8 phases (application; reviewer workflow; approval into the pre-filled wizard with verification; suspension and listing; profiles; search; discovery to booking; landing page), milestone decisions M1–M6 (applications as platform data with no applicant account, ADR-0020 Accepted; ops roles `OPS_ADMIN` and `OPS_REVIEWER`; verification per clinic and doctor; activation unchanged; PostgreSQL search with a directory read model) and the P1 design (10 decisions; spec `clinic-onboarding.md` R1–R23, AC1–AC9, Approved). Decisions locked: D1 active when the owner accepts the invitation; D2 `/apply` English-only; D3 reply within 2 working days; D4 issue #53 and branch `m6c/53-onboarding-discovery` from `main` at `9df830b`. | #53 | Approved; P1 next |
