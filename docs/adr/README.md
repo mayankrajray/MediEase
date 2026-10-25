@@ -19,6 +19,7 @@
 | [0015](0015-patient-accounts-and-google-sign-in.md) | Patient accounts apart from staff, and Google sign-in through the API | Accepted (M6a-P3) |
 | [0016](0016-email-port-smtp-and-auth-emails.md) | Email behind a port, sent over SMTP from the job queue | Accepted (M6a-P4) |
 | [0017](0017-notification-service.md) | Domain events and a notification service, dispatched in the publishing transaction | Accepted (M6a-P7) |
+| [0018](0018-soft-hold-as-booking-request.md) | The soft hold is the pending booking request, counted under the session lock | Proposed |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, and add a row here.
 Accepted ADRs are never edited; supersede them with a new ADR.
