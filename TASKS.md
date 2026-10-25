@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M6b — Patient identity, portal and booking requests** (issue #51, branch `m6b/51-patient-portal-booking`, one PR for the milestone). M6a merged in PR #50 on 24 Oct 2026 (#49 closed) |
-| Active phase | **M6b-P6 - patient notifications and the live token link (designed 26 Oct 2026, awaiting approval).** M6b-P5 pushed 26 Oct 2026 (PR #52). M6b-P4 pushed 26 Oct 2026 (PR #52). Earlier text follows: M6b-P1 — Linking and the patient API:** designed with the milestone plan (`docs/milestones/M6b-patient-portal-booking.md`, 8 decisions; spec `docs/specs/patient-portal.md` Draft), awaiting the developer's approval |
+| Active phase | **M6b-P6 - patient notifications and the live token link: built 26 Oct 2026, gates green; awaiting confirmation and push.** It is the last phase of M6b: after the push the milestone PR (#52) leaves draft for review. M6b-P1 to P5 pushed to PR #52 (24-26 Oct 2026) |
 | Design notes | `docs/milestones/M6b-patient-portal-booking.md` (M6b); M6a in `docs/milestones/M6-mvp-demo.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M6a phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -172,9 +172,9 @@ tests pass. Issue #51, branch `m6b/51-patient-portal-booking`; design notes
 | M6b-P2 | Portal web: fresh dashboard, My Appointments by clinic, prescriptions, reminders, English and Hindi (FR-PRT-03, 04, 05, 07) | ✅ (pushed 24 Oct 2026, PR #52) |
 | M6b-P3 | Prescription structure (frequency patterns, bedtime warning, explicit duration and start, instruction codes), the medicine-plan engine, *Medicines* tab, reminder preferences (FR-REM-03; FR-RX amended) | ✅ (pushed 25 Oct 2026, PR #52) |
 | M6b-P3b | Dose tracking: Taken / Skipped, Not recorded derived, private health data and its lifecycle (FR-REM-03) | ✅ (pushed 25 Oct 2026, PR #52) |
-| M6b-P4 | Public page `/c/{slug}` and booking requests with a soft hold (FR-PUB-01..04, FR-BKG-01..03, 07) | ▶ (built 26 Oct 2026; gates green; awaiting confirmation and push) |
-| M6b-P5 | Front-desk inbox: accept with linking, decline, propose, expiry (FR-BKG-04..06, 08, FR-PRT-06 a) | ☐ (pushed 26 Oct 2026, PR #52) |
-| M6b-P6 | Patient notifications and the live token link (FR-NTF-04, 05 for patients, FR-QUE-06) | ☐ (designed 26 Oct 2026; awaiting approval) |
+| M6b-P4 | Public page `/c/{slug}` and booking requests with a soft hold (FR-PUB-01..04, FR-BKG-01..03, 07) | ✅ (pushed 26 Oct 2026, PR #52) |
+| M6b-P5 | Front-desk inbox: accept with linking, decline, propose, expiry (FR-BKG-04..06, 08, FR-PRT-06 a) | ✅ (pushed 26 Oct 2026, PR #52) |
+| M6b-P6 | Patient notifications and the live token link (FR-NTF-04, 05 for patients, FR-REM-03, FR-QUE-06) | ▶ (approved and built 26 Oct 2026; full API and Playwright suites run; awaiting confirmation and push) |
 
 ## M6c — SaaS clinic onboarding, verification and discovery  `☐`
 

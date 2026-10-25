@@ -540,8 +540,9 @@ course ends (`keep_until`).
 **The medicine plan (M6b-P3).** The *Medicines* tab only lays out the doctor's issued lines; a
 patient who says it is wrong is shown what the prescription says (the patient page or PDF), and the
 clinic revises the prescription if needed. Times of day are the patient's own (*Account*,
-`patient_accounts.morning_time` …). Reminder choices are stored in `medicine_reminder_prefs` and
-not sent until M6b-P6; they are deleted when the link ends. Never read or quote a patient's
+`patient_accounts.morning_time` …). Reminder choices are stored in `medicine_reminder_prefs` and,
+from M6b-P6, appear under the patient's *Notifications* in the app (no phone alert); they are
+deleted when the link ends. Never read or quote a patient's
 choices into a ticket beyond their IDs.
 
 **The portal's language (M6b-P2).** Each patient account has a language (`en` or `hi`), chosen
@@ -589,3 +590,23 @@ minutes writes `EXPIRED` (`SELECT status, decided_by_type FROM booking_requests 
 '<id>';`, `decided_by_type = 'SYSTEM'`). Owners see the answered-in-time rate on Today. If
 expired requests pile up while the worker is down, they still read as expired; the sweep catches
 up when the worker returns.
+**Patient notifications (M6b-P6).** A patient sees notices under the bell in the portal: booking
+answers, appointments booked, moved or cancelled by staff, a new prescription, and medicine times.
+"I was not told": check they are linked to the record (staff profile, *Patient app*) and that the
+switch is on (*Account -> Notifications*); a record with no linked account gets no notice in the
+app (WhatsApp is unchanged). By IDs only:
+`SELECT kind, created_at, read_at FROM patient_notifications WHERE account_id = '<account>' ORDER BY created_at DESC LIMIT 20;`
+and `SELECT kind, channel, enabled FROM patient_notification_preferences WHERE account_id = '<account>';`.
+Booking emails are `send_patient_email` jobs (`SELECT status, last_error FROM jobs WHERE kind =
+'send_patient_email' AND payload->>'account_id' = '<account>';`); they go only to a verified
+email. Medicine-time notices come from the `schedule_medicine_due` sweep every 5 minutes, at most
+30 minutes late; a worker that was down does not back-fill missed times. Notices are kept 90 days.
+
+**The live token link (M6b-P6, ADR-0019).** Staff copy it from the queue row's menu (*Copy live
+link*) and send it by hand; linked patients open it from *My appointments* on the day. It needs
+no sign-in and shows only the clinic, the doctor, the token or time, how many are ahead and who is
+being seen. It works from the start of the session's day until 2 hours after the session ends,
+then says it has expired: copy a new one the next time. It cannot be revoked early (it is signed,
+not stored); that is acceptable because it carries no name or clinical detail. "Too many
+refreshes": 30 reads a minute per link and 120 per address, and the address is shared until the
+reverse proxy work (A11).

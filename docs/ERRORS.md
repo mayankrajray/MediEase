@@ -209,6 +209,16 @@ only in the log (`auth.password_reset_requested` `sent=true|false`).
 | `LINK_RATE_LIMITED` | 429 | Too many requests. Please wait a moment | > 20 a minute for one link or > 300 from one caller; `Retry-After` | `public_rate_limits` |
 | `LINK_NOT_LOCKED` | 409 | This link is not locked | Reset of a link that is not locked (staff) | The link's `locked` |
 
+**The live token link (M6b-P6, ADR-0019)** adds no code. `GET /public/queue/{token}` answers
+`LINK_INVALID` (404: not our signature, not a queue token, or the appointment is gone),
+`LINK_EXPIRED` (410: before the session's day or more than 2 hours after it ends) and
+`LINK_RATE_LIMITED` (429: over 120 reads a minute from one caller or 30 for one link; logged as
+`live_queue.rate_limited`). Issuing one for a cancelled or ended appointment is `REQ_VALIDATION`
+(422); the portal's route answers another account's appointment with `REQ_NOT_FOUND`.
+Patient notifications reuse `REQ_NOT_FOUND` (another account's notice) and `REQ_VALIDATION`
+(email switched on for a kind that has no email). A failed booking email is a job failure
+(`EMAIL_*`, retried as for other emails), never an error to the patient.
+
 ## Reminders, messaging, webhooks, jobs (M5)
 
 | Code | HTTP | Meaning | Likely cause | Where to look |
