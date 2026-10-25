@@ -72,7 +72,8 @@ test("M6b-P3: the medicine plan lays out the prescription, and a reminder choice
   await expect(page.getByRole("region", { name: /^Night/ })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "As the doctor wrote" })).toContainText("Only when needed");
   await expect(page.getByText("This plan only lays out your prescription. If anything is unclear, ask your doctor.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Contact your clinic" })).toHaveAttribute("href", /^tel:/);
+  // Scoped to the support card: a skipped or not-recorded dose (it depends on the hour) shows the same link.
+  await expect(page.getByRole("region", { name: "Contact your clinic" }).getByRole("link", { name: "Contact your clinic" })).toHaveAttribute("href", /^tel:/);
   await checkScreen(page, browser, "My medicines");
 
   // AC15: a 07:30 morning reminder, saved and still there after a reload (R38).
@@ -105,6 +106,6 @@ test("M6b-P3: the medicine plan lays out the prescription, and a reminder choice
   await page.getByRole("button", { name: /view in Hindi/ }).click();
   await page.getByRole("navigation", { name: "मरीज़ ऐप" }).getByRole("link", { name: "दवाइयाँ" }).click();
   await expect(page.getByRole("region", { name: "सुबह · 08:00" })).toContainText("Tab Sample");
-  await expect(page.getByRole("link", { name: "अपने क्लिनिक से संपर्क करें" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "अपने क्लिनिक से संपर्क करें" }).getByRole("link", { name: "अपने क्लिनिक से संपर्क करें" })).toBeVisible();
   await checkScreen(page, browser, "मेरी दवाइयाँ");
 });

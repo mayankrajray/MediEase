@@ -43,7 +43,7 @@ test("FR-UX-05: the owner, the doctor and the front desk each get their own home
   }
 
   expect(seen["owner"]).toEqual({
-    nav: ["Today", "Queue", "Patients", "Follow-ups", "Team", "Schedule", "Audit log", "Notifications"],
+    nav: ["Today", "Queue", "Booking requests", "Patients", "Follow-ups", "Team", "Schedule", "Audit log", "Notifications"],
     actions: ["Invite someone", "Schedule settings", "See the queue"],
   });
   expect(seen["doctor"]).toEqual({
@@ -51,7 +51,7 @@ test("FR-UX-05: the owner, the doctor and the front desk each get their own home
     actions: ["Open my queue", "My patients", "My follow-ups"],
   });
   expect(seen["desk"]).toEqual({
-    nav: ["Today", "Queue", "Patients", "Follow-ups", "Notifications"],
+    nav: ["Today", "Queue", "Booking requests", "Patients", "Follow-ups", "Notifications"],
     actions: ["Register a patient", "Book an appointment", "Add a walk-in"],
   });
 });

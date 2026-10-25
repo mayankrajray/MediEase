@@ -3,26 +3,57 @@
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { portalGet } from "@/lib/auth/portal-session";
 
-import { type PortalAppointmentGroup, type PortalReminder, usePortalLoad } from "./data";
+import { type PortalAppointmentGroup, type PortalBookingRequest, type PortalReminder, usePortalLoad } from "./data";
 import { PortalCard, ScreenLoading, usePortal } from "./PortalShell";
 import { AppointmentRow, ReminderRow } from "./Rows";
+import { bookingWords } from "@/lib/i18n/booking-request";
+import { portalDay, portalTime } from "@/lib/i18n/portal";
+
+function RequestedList({ requests }: Readonly<{ requests: readonly PortalBookingRequest[] }>) {
+  const { s } = usePortal();
+  const words = bookingWords(s.lang);
+  return (
+    <PortalCard id="requested" title={words.mine.title}>
+      <ul>
+        {requests.map((r) => (
+          <li key={r.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-slate-200 py-2 first:border-t-0">
+            <span>
+              <span className="block font-semibold">
+                {portalDay(r.starts_at, r.timezone, s)}
+                {r.mode === "SLOTS" ? `, ${portalTime(r.starts_at, r.timezone, s)}` : ""}
+              </span>
+              <span className="block text-sm text-slate-700">
+                {r.doctor_name} · {r.clinic_name}
+              </span>
+              <span className="block text-sm text-slate-700">{words.mine.waiting}</span>
+            </span>
+            <span className="rounded-full border border-amber-800 px-2 py-0.5 text-sm font-medium text-amber-950">{words.mine.requested}</span>
+          </li>
+        ))}
+      </ul>
+    </PortalCard>
+  );
+}
 
 async function loadAppointments(): Promise<{
   readonly groups: readonly PortalAppointmentGroup[];
   readonly reminders: readonly PortalReminder[];
+  readonly requests: readonly PortalBookingRequest[];
   readonly now: number;
 }> {
-  const [groups, reminders] = await Promise.all([
+  const [groups, reminders, requests] = await Promise.all([
     portalGet("/api/v1/portal/appointments"),
     portalGet("/api/v1/portal/reminders"),
+    portalGet("/api/v1/portal/booking-requests"),
   ]);
-  return { groups: groups.data.items, reminders: reminders.data.items, now: Date.now() };
+  return { groups: groups.data.items, reminders: reminders.data.items, requests: requests.data.items, now: Date.now() };
 }
 
 /**
  * *My appointments* (M6b-P2; FR-PRT-07, spec R18): one group per linked clinic, upcoming then past,
  * on that clinic's clock; the clinic's reminders under its appointments (decision 7A). One clinic's
- * records never appear in another's group.
+ * records never appear in another's group. Open booking requests (M6b-P4, spec R23) come first,
+ * as "Requested", also for clinics the account is not linked to.
  */
 export function MyAppointments() {
   const { s } = usePortal();
@@ -33,9 +64,10 @@ export function MyAppointments() {
       <h1 className="text-2xl font-bold tracking-tight">{s.appointments.title}</h1>
       {loaded.status === "loading" && <ScreenLoading label={s.loading} />}
       {loaded.status === "failed" && <ErrorNotice error={loaded.error} onRetry={loaded.retry} />}
+      {loaded.status === "ready" && loaded.data.requests.length > 0 && <RequestedList requests={loaded.data.requests} />}
       {loaded.status === "ready" &&
         (loaded.data.groups.length === 0 ? (
-          <p>{s.appointments.empty}</p>
+          loaded.data.requests.length === 0 && <p>{s.appointments.empty}</p>
         ) : (
           loaded.data.groups.map((g) => (
             <ClinicGroup key={g.clinic_id} group={g} now={loaded.data.now} reminders={loaded.data.reminders.filter((r) => r.clinic_id === g.clinic_id)} />

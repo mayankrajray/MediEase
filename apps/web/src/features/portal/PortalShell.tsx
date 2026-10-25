@@ -69,7 +69,9 @@ export function PortalShell({ children }: Readonly<{ children: ReactNode }>) {
       if (reason === undefined) return false;
       setLoad({ status: "leaving" });
       const query = new URLSearchParams({ reason });
-      if (pathname !== "/portal") query.set("next", pathname);
+      // Keep the query (M6b-P4): the booking request form's chosen time is in it.
+      const here = `${pathname}${typeof window === "undefined" ? "" : window.location.search}`;
+      if (pathname !== "/portal") query.set("next", here);
       router.replace(`${PORTAL_SIGN_IN_PATH}?${query.toString()}`);
       return true;
     },

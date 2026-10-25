@@ -32,7 +32,7 @@ export interface AppointmentApi {
   readonly sessions: (date: string, doctorId?: string) => Promise<readonly DoctorSession[]>;
   readonly book: (body: S["NewAppointment"]) => Promise<Appointment>;
   readonly cancel: (id: string, reason: CancelReason, note?: string) => Promise<Appointment>;
-  readonly reschedule: (id: string, sessionId: string, slotStart?: string) => Promise<Appointment>;
+  readonly reschedule: (id: string, sessionId: string, slotStart?: string, overrideHold?: boolean) => Promise<Appointment>;
   readonly transition: (id: string, from: AppointmentStatus, to: AppointmentStatus) => Promise<Appointment>;
   readonly walkIn: (doctorId: string, patientId: string) => Promise<Appointment>;
   readonly patientAppointments: (patientId: string) => Promise<readonly Appointment[]>;
@@ -45,6 +45,16 @@ export interface AppointmentApi {
   readonly toMove: (doctorId?: string) => Promise<readonly BookingToMove[]>;
   /** M6a-P8 (FR-APT-08): the clinic's appointment reminders (owners). */
   readonly setReminders: (change: ReminderSettings) => Promise<unknown>;
+  /** M6b-P4 (R22): the clinic's open online booking requests, oldest first. */
+  readonly bookingRequests: () => Promise<readonly StaffBookingRequest[]>;
+  /** M6b-P4 (R20): how long a request holds its slot, and whether the form asks age and sex (owners). */
+  readonly setRequestSettings: (change: RequestSettings) => Promise<unknown>;
+}
+
+export type StaffBookingRequest = S["StaffBookingRequest"];
+export interface RequestSettings {
+  readonly request_hold_minutes?: number;
+  readonly request_requires_age_sex?: boolean;
 }
 
 export type BookingToMove = S["BookingToMove"];
@@ -75,11 +85,15 @@ export function useAppointmentApi(): AppointmentApi {
             appt(id),
           )
         ).data,
-      reschedule: async (id, sessionId, slotStart) =>
+      reschedule: async (id, sessionId, slotStart, overrideHold) =>
         (
           await sessionPost(
             "/api/v1/appointments/{appointment_id}/reschedule",
-            { session_id: sessionId, ...(slotStart === undefined ? {} : { slot_start: slotStart }) },
+            {
+              session_id: sessionId,
+              ...(slotStart === undefined ? {} : { slot_start: slotStart }),
+              ...(overrideHold === true ? { override_hold: true } : {}),
+            },
             appt(id),
           )
         ).data,
@@ -117,6 +131,8 @@ export function useAppointmentApi(): AppointmentApi {
           })
         ).data.items,
       setReminders: async (change) => (await sessionPatch("/api/v1/clinic", change, base)).data,
+      bookingRequests: async () => (await sessionGet("/api/v1/booking-requests", base)).data.items,
+      setRequestSettings: async (change) => (await sessionPatch("/api/v1/clinic", change, base)).data,
     };
   }, [clinicId]);
 }

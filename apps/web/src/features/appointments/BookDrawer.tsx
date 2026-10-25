@@ -8,6 +8,7 @@ import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import type { Patient } from "@/features/patients/fields";
 import { useClinic } from "@/features/shell/ClinicGate";
+import { ApiError } from "@/lib/api/client";
 import { formatClock, formatDay } from "@/lib/format/time";
 
 import { useAppointmentApi, type Appointment, type Doctor, type DoctorSession } from "./api";
@@ -25,8 +26,24 @@ export type BookingTarget =
 
 type Choice = { readonly sessionId: string; readonly slotStart?: string };
 
+/** Staff asked to book over an online request: shown until they confirm or back out (R18a). */
+type Override = { readonly until: string };
+
 function bookable(session: DoctorSession, now: number): boolean {
   return session.status === "OPEN" && new Date(session.ends_at).getTime() > now && session.available > 0;
+}
+
+/** M6b-P4 (ADR-0018): the online requests still holding this session's places at `now`. */
+function liveHolds(session: DoctorSession, now: number) {
+  return session.held.filter((h) => new Date(h.until).getTime() > now);
+}
+
+/** When the hold on the chosen place ends, or undefined if nothing holds it (R18). */
+export function heldUntil(session: DoctorSession, choice: Choice, now: number): string | undefined {
+  const holds = liveHolds(session, now);
+  if (choice.slotStart !== undefined) return holds.find((h) => h.slot_start === choice.slotStart)?.until;
+  if (holds.length === 0 || session.available - holds.length > 0) return undefined;
+  return holds.map((h) => h.until).sort()[0];
 }
 
 function freeSlots(session: DoctorSession, now: number) {
@@ -79,6 +96,7 @@ export function BookDrawer({
   const [choice, setChoice] = useState<Choice | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(undefined);
+  const [override, setOverride] = useState<Override | undefined>(undefined);
   const ids = { doctor: useId(), date: useId() };
   const key = `${doctorId}|${date}|${reload}`;
 
@@ -104,10 +122,16 @@ export function BookDrawer({
   const who = target.kind === "reschedule" ? target.patientName : patient?.full_name;
   const chosen = day?.find((s) => s.id === choice?.sessionId);
 
-  async function confirm() {
+  async function confirm(overrideHold = false) {
     if (choice === undefined || (target.kind === "book" && patient === undefined)) return;
+    const holdEnds = chosen === undefined ? undefined : heldUntil(chosen, choice, Date.now());
+    if (holdEnds !== undefined && !overrideHold) {
+      setOverride({ until: holdEnds }); // ask first; nothing is sent (R18a)
+      return;
+    }
     setSaving(true);
     setError(undefined);
+    setOverride(undefined);
     try {
       const done =
         target.kind === "book"
@@ -116,14 +140,21 @@ export function BookDrawer({
               patient_id: patient?.id ?? "",
               source: "FRONT_DESK",
               ...(choice.slotStart === undefined ? {} : { slot_start: choice.slotStart }),
+              ...(overrideHold ? { override_hold: true } : {}),
             })
-          : await api.reschedule(target.appointment.id, choice.sessionId, choice.slotStart);
+          : await api.reschedule(target.appointment.id, choice.sessionId, choice.slotStart, overrideHold);
       const place = done.token_number !== null ? `token ${done.token_number}` : clock(done.slot_start ?? "");
       const verb = target.kind === "book" ? "booked" : "moved";
       onDone(done, `${who ?? "Patient"} ${verb}: ${formatDay(done.on_date)}, ${place}.`);
     } catch (failure) {
       if (endSession(failure)) return;
-      setError(failure);
+      if (failure instanceof ApiError && failure.code === "APT_SLOT_HELD") {
+        // A request arrived while the drawer was open: same question as above.
+        const until = failure.details["held_until"];
+        setOverride({ until: typeof until === "string" ? until : new Date().toISOString() });
+      } else {
+        setError(failure);
+      }
       setReload((n) => n + 1); // someone may have taken the place: show the day as it is now
     } finally {
       setSaving(false);
@@ -201,10 +232,14 @@ export function BookDrawer({
                     name="place"
                     disabled={!open}
                     checked={choice?.sessionId === session.id}
-                    onChange={() => setChoice({ sessionId: session.id })}
+                    onChange={() => {
+                      setChoice({ sessionId: session.id });
+                      setOverride(undefined);
+                    }}
                   />
                   <span>
                     {label} · {open ? `next token ${session.next_token ?? ""}, ${session.available} left` : "not taking bookings"}
+                    {open && liveHolds(session, now).length > 0 && ` · ${liveHolds(session, now).length} held for online requests`}
                   </span>
                 </label>
               );
@@ -227,9 +262,15 @@ export function BookDrawer({
                           type="radio"
                           name="place"
                           checked={choice?.slotStart === slot.starts_at}
-                          onChange={() => setChoice({ sessionId: session.id, slotStart: slot.starts_at })}
+                          onChange={() => {
+                            setChoice({ sessionId: session.id, slotStart: slot.starts_at });
+                            setOverride(undefined);
+                          }}
                         />
                         {clock(slot.starts_at)}
+                        {liveHolds(session, now).some((h) => h.slot_start === slot.starts_at) && (
+                          <span className="text-xs font-medium text-amber-900"> Held</span>
+                        )}
                       </label>
                     ))}
                   {open && slots.length === 0 && <span className="text-slate-700">No free slots</span>}
@@ -241,6 +282,30 @@ export function BookDrawer({
       )}
 
       {error !== undefined && <ErrorNotice error={error} />}
+      {override !== undefined && (
+        <div role="alertdialog" aria-labelledby="override-title" className="space-y-2 rounded-lg border border-amber-700 bg-amber-50 p-3 text-amber-950">
+          <p id="override-title" className="font-semibold">
+            A patient asked for this time online
+          </p>
+          <p>
+            The clinic is holding it until {clock(override.until)}. Book anyway only if you have agreed this with the patient: the request stays open, but it no
+            longer holds the time, and this is recorded in the audit log.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void confirm(true)}
+              className="min-h-10 rounded bg-amber-800 px-4 py-2 font-semibold text-white hover:bg-amber-900 disabled:bg-slate-400"
+            >
+              Book anyway (override the patient&apos;s request)
+            </button>
+            <button type="button" onClick={() => setOverride(undefined)} className="min-h-10 rounded border border-slate-400 bg-white px-4 py-2 font-medium">
+              Choose another time
+            </button>
+          </div>
+        </div>
+      )}
       <button
         type="button"
         disabled={saving || choice === undefined || chosen === undefined || (target.kind === "book" && patient === undefined)}

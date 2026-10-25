@@ -170,6 +170,7 @@ describe("My appointments (FR-PRT-07, R18, R22)", () => {
           ],
         }),
       "GET /api/v1/portal/reminders": () => json(200, { items: [] }),
+      "GET /api/v1/portal/booking-requests": () => json(200, { items: [] }),
     });
     await renderPortal(<MyAppointments />);
     const first = await screen.findByRole("region", { name: "Sample Clinic" });

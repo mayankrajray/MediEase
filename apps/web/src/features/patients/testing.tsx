@@ -77,6 +77,8 @@ export const workspaceRoutes = {
       patient_code_prefix: "SC",
       reminder_evening_before: true,
       reminder_hours_before: 2,
+      request_hold_minutes: 120,
+      request_requires_age_sex: false,
     }),
 };
 

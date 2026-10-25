@@ -50,13 +50,15 @@ export function rememberWorkspace(clinicId: string, workspace: Workspace): void 
 
 /**
  * Each workspace's navigation (decision 3A). An item appears only once its page exists:
- * booking requests (M6b) and payments (M8) join in their phases; notifications joined in P7. A page left
+ * booking requests (M6b-P4) and payments (M8) join in their phases; notifications joined in P7. A page left
  * out of a workspace stays reachable by URL when the role is allowed (the switch is a view).
  */
 export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
   OWNER: [
     { href: "/today", label: "Today" },
     { href: "/queue", label: "Queue" },
+    // M6b-P4 (spec R22): what patients asked for on the clinic page.
+    { href: "/booking-requests", label: "Booking requests", requires: "APPOINTMENTS_MANAGE" },
     { href: "/patients", label: "Patients", requires: "PATIENTS_MANAGE" },
     { href: "/follow-ups", label: "Follow-ups", requires: "REMINDERS_SCHEDULE" },
     { href: "/team", label: "Team", requires: "STAFF_MANAGE" },
@@ -76,6 +78,7 @@ export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
   FRONT_DESK: [
     { href: "/today", label: "Today" },
     { href: "/queue", label: "Queue" },
+    { href: "/booking-requests", label: "Booking requests", requires: "APPOINTMENTS_MANAGE" },
     { href: "/patients", label: "Patients", requires: "PATIENTS_MANAGE" },
     { href: "/follow-ups", label: "Follow-ups", requires: "REMINDERS_SCHEDULE" },
     { href: "/settings/notifications", label: "Notifications" },
