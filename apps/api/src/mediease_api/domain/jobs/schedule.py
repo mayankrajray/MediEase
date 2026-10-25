@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
 from mediease_api.domain.jobs.job import (
+    MEDICINE_DUE_SWEEP_KIND,
     NO_SHOW_SWEEP_KIND,
     PURGE_KIND,
     RECONCILE_KIND,
@@ -36,6 +37,8 @@ RECURRING: tuple[Recurring, ...] = (
     Recurring(NO_SHOW_SWEEP_KIND, timedelta(minutes=5)),
     # M6b-P5: open booking requests past their deadline become EXPIRED (booking-requests R32).
     Recurring(REQUEST_EXPIRY_SWEEP_KIND, timedelta(minutes=5)),
+    # M6b-P6: medicine-due notices for the reminder choices patients turned on (portal R66).
+    Recurring(MEDICINE_DUE_SWEEP_KIND, timedelta(minutes=5)),
 )
 
 
@@ -98,3 +101,5 @@ class PurgeCounts:
     email_tokens: int = 0
     notifications: int = 0
     dose_records: int = 0
+    # M6b-P6 (portal R61): patient notifications, 90 days after they were created.
+    patient_notifications: int = 0

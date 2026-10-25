@@ -22,6 +22,7 @@ from werkzeug.test import TestResponse
 from mediease_api.delivery.http.access import Access, policy_of
 from tests.booking_helpers import ask, ensure_schedule, offers, propose
 from tests.conftest import World
+from tests.integration.test_appointments_http import _book, _schedule, _session
 from tests.integration.test_portal_http import portal_csrf
 from tests.integration.test_prescriptions_http import _issued
 from tests.integration.test_visits_http import _send
@@ -44,6 +45,19 @@ class Scene:
     used_invite: str
     world: World
     bina_record: str
+    bina_appointment: str
+
+
+def _bina_notice(scene: Scene) -> str:
+    """M6b-P6: the desk books Bina's record again; her linked account is told (one notice)."""
+    world = scene.world
+    _schedule(world)
+    desk = world.client_for(world.a.desk)
+    booked = _book(desk, _session(desk, world)["id"], scene.bina_record)
+    assert booked.status_code == 201, booked.get_json()
+    items = scene.bina.get(f"{PORTAL}/notifications").get_json()["items"]
+    assert items, "Bina should have been told of the booking"
+    return str(items[0]["id"])
 
 
 def _bina_proposal(scene: Scene) -> str:
@@ -98,7 +112,16 @@ def _scene(world: World) -> Scene:
     used = invite_token(owner_a, bina_record)
     linked = accept(bina, used)
     assert linked.status_code == 201, linked.get_json()
-    return Scene(asha, bina, rx["id"], linked.get_json()["id"], used, world, bina_record)
+    return Scene(
+        asha,
+        bina,
+        rx["id"],
+        linked.get_json()["id"],
+        used,
+        world,
+        bina_record,
+        str(visit["appointment_id"]),
+    )
 
 
 Case = tuple[str, Callable[[Scene], str], str]
@@ -130,6 +153,17 @@ PORTAL_ID_CASES: dict[str, Case] = {
         "POST",
         lambda s: f"{PORTAL}/invites/{s.used_invite}/accept",
         "PRT_INVITE_INVALID",
+    ),
+    # M6b-P6: Bina's notice and her appointment's live link; Asha reaches neither.
+    "/api/v1/portal/notifications/<uuid:notification_id>/read": (
+        "POST",
+        lambda s: f"{PORTAL}/notifications/{_bina_notice(s)}/read",
+        "REQ_NOT_FOUND",
+    ),
+    "/api/v1/portal/appointments/<uuid:appointment_id>/live-link": (
+        "GET",
+        lambda s: f"{PORTAL}/appointments/{s.bina_appointment}/live-link",
+        "REQ_NOT_FOUND",
     ),
     # M6b-P5: Bina's proposal; Asha cannot take or refuse it.
     "/api/v1/portal/booking-requests/<uuid:request_id>/accept-proposal": (
@@ -175,7 +209,7 @@ def test_ac4_nfr_18_another_accounts_resource_is_not_found(world: World, rule: s
     assert resp.get_json()["error"]["code"] == code
     if rule not in _TOKEN_RULES:
         # The same URL works for the account it belongs to: the 404 is the scope, not the route.
-        assert _call(scene.bina, method, url).status_code == 200
+        assert _call(scene.bina, method, url).status_code in (200, 204)
 
 
 def test_ac4_ac5_lists_hold_only_the_accounts_own_records(world: World) -> None:

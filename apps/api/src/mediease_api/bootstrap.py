@@ -55,6 +55,11 @@ from mediease_api.adapters.storage.local import LocalBlobStorage
 from mediease_api.adapters.storage.s3 import S3BlobStorage
 from mediease_api.application.appointments.book import BookAppointment
 from mediease_api.application.appointments.cancel import CancelAppointment
+from mediease_api.application.appointments.live import (
+    GetLiveQueue,
+    IssuePortalLiveLink,
+    IssueStaffLiveLink,
+)
 from mediease_api.application.appointments.no_show import MarkNoShows, SweepNoShows
 from mediease_api.application.appointments.queries import GetAppointment, ListPatientAppointments
 from mediease_api.application.appointments.queue import AddWalkIn, GetQueue, TransitionAppointment
@@ -151,10 +156,20 @@ from mediease_api.application.portal.linking import (
     UnlinkPatient,
     UnlinkPortal,
 )
+from mediease_api.application.portal.medicine_due import NotifyMedicineDue, SweepMedicineDue
 from mediease_api.application.portal.medicines import (
     GetMedicinePlan,
     ListMedicineCourses,
     SetMedicineReminder,
+)
+from mediease_api.application.portal.patient_email import SendPatientEmail
+from mediease_api.application.portal.patient_notifications import (
+    GetPatientNotificationSummary,
+    GetPatientPreferences,
+    ListPatientNotifications,
+    MarkAllPatientNotificationsRead,
+    MarkPatientNotificationRead,
+    SetPatientPreference,
 )
 from mediease_api.application.portal.records import (
     GetPortalPrescription,
@@ -242,6 +257,7 @@ from mediease_api.delivery.http.portal import create_portal_blueprint
 from mediease_api.delivery.http.prescriptions import create_prescriptions_blueprint
 from mediease_api.delivery.http.public_clinics import create_public_clinics_blueprint
 from mediease_api.delivery.http.public_links import create_public_links_blueprint
+from mediease_api.delivery.http.public_queue import create_public_queue_blueprint
 from mediease_api.delivery.http.reminders import create_reminders_blueprint
 from mediease_api.delivery.http.request_info import register_request_info
 from mediease_api.delivery.http.rx_library import create_rx_library_blueprint
@@ -255,7 +271,10 @@ from mediease_api.domain.jobs.job import (
     AUTH_EMAIL_KIND,
     EXPIRE_REQUESTS_KIND,
     MARK_NO_SHOWS_KIND,
+    MEDICINE_DUE_SWEEP_KIND,
     NO_SHOW_SWEEP_KIND,
+    NOTIFY_MEDICINE_DUE_KIND,
+    PATIENT_EMAIL_KIND,
     PURGE_KIND,
     RECONCILE_KIND,
     REQUEST_EXPIRY_SWEEP_KIND,
@@ -321,6 +340,46 @@ class _UseCases:
     whatsapp_verify_token: str = ""
     # M5-P5: a STOP sender's number is stored encrypted until processed (decision 1A).
     phones: PhoneCipherPort | None = None
+    # M6b-P6: the live token link's address (PUBLIC_BASE_URL/q/<token>).
+    public_base_url: str = ""
+
+    # --- M6b-P6: patient notifications and the live token link ---------------------------------
+    def list_patient_notifications(self) -> ListPatientNotifications:
+        return ListPatientNotifications(uow=self._uow())
+
+    def patient_notification_summary(self) -> GetPatientNotificationSummary:
+        return GetPatientNotificationSummary(uow=self._uow())
+
+    def mark_patient_notification_read(self) -> MarkPatientNotificationRead:
+        return MarkPatientNotificationRead(uow=self._uow(), clock=self.clock)
+
+    def mark_all_patient_notifications_read(self) -> MarkAllPatientNotificationsRead:
+        return MarkAllPatientNotificationsRead(uow=self._uow(), clock=self.clock)
+
+    def get_patient_preferences(self) -> GetPatientPreferences:
+        return GetPatientPreferences(uow=self._uow())
+
+    def set_patient_preference(self) -> SetPatientPreference:
+        return SetPatientPreference(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def issue_portal_live_link(self) -> IssuePortalLiveLink:
+        return IssuePortalLiveLink(
+            uow=self._uow(),
+            clock=self.clock,
+            tokens=self.link_tokens,
+            base_url=self.public_base_url,
+        )
+
+    def issue_staff_live_link(self) -> IssueStaffLiveLink:
+        return IssueStaffLiveLink(
+            uow=self._uow(),
+            clock=self.clock,
+            tokens=self.link_tokens,
+            base_url=self.public_base_url,
+        )
+
+    def get_live_queue(self) -> GetLiveQueue:
+        return GetLiveQueue(uow=self._uow(), clock=self.clock, tokens=self.link_tokens)
 
     def schedule_reminder(self) -> ScheduleReminder:
         return ScheduleReminder(uow=self._uow(), clock=self.clock, ids=self.ids)
@@ -1019,6 +1078,13 @@ def _messaging_handlers(
         EXPIRE_REQUESTS_KIND: ExpireBookingRequests(
             uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids
         ),
+        # M6b-P6 (portal R65, R66): medicine-due notices from the reminder choices.
+        MEDICINE_DUE_SWEEP_KIND: SweepMedicineDue(
+            uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids
+        ),
+        NOTIFY_MEDICINE_DUE_KIND: NotifyMedicineDue(
+            uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids
+        ),
         BOOKING_CONFIRMATION_KIND: SendBookingConfirmation(sender=sender),
         # M6a-P8 (decision 7A): a visit the clinic cancelled.
         CANCELLATION_NOTICE_KIND: SendCancellationNotice(sender=sender),
@@ -1062,6 +1128,10 @@ def build_worker(settings: AppSettings, stop: threading.Event) -> Worker:
             secrets=Sha256RefreshTokenSecrets(),
             email=email,
             public_base_url=settings.PUBLIC_BASE_URL,
+        ),
+        # M6b-P6 (portal R63): a booking answer by email, at most once per notice.
+        PATIENT_EMAIL_KIND: SendPatientEmail(
+            uow=SqlAlchemyUnitOfWork(factory), email=email, public_base_url=settings.PUBLIC_BASE_URL
         ),
         **_messaging_handlers(settings, factory, clock, ids),
     }
@@ -1157,6 +1227,7 @@ def create_app(
         whatsapp_app_secret=settings.WHATSAPP_APP_SECRET.get_secret_value(),
         whatsapp_verify_token=settings.WHATSAPP_VERIFY_TOKEN.get_secret_value(),
         phones=FernetPhoneCipher(settings.messaging_phone_keys()),
+        public_base_url=settings.PUBLIC_BASE_URL,
     )
 
     # static_folder=None: the API serves JSON only, so there is no static route
@@ -1200,6 +1271,7 @@ def create_app(
     )
     app.register_blueprint(create_public_links_blueprint(use_cases))
     app.register_blueprint(create_public_clinics_blueprint(use_cases))
+    app.register_blueprint(create_public_queue_blueprint(use_cases))
     app.register_blueprint(create_booking_requests_blueprint(use_cases))
     app.register_blueprint(create_rx_library_blueprint(use_cases))
     app.register_blueprint(create_whatsapp_webhook_blueprint(use_cases))

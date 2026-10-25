@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0030"
+HEAD = "0031"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -47,6 +47,9 @@ M6B_P1_TABLES = sorted([*M6A_P7_TABLES, "patient_account_links", "patient_portal
 M6B_P3_TABLES = sorted([*M6B_P1_TABLES, "medicine_reminder_prefs"])
 M6B_P3B_TABLES = sorted([*M6B_P3_TABLES, "dose_records"])
 M6B_P4_TABLES = sorted([*M6B_P3B_TABLES, "booking_requests"])
+M6B_P6_TABLES = sorted(
+    [*M6B_P4_TABLES, "patient_notifications", "patient_notification_preferences"]
+)
 
 
 @pytest.fixture
@@ -654,7 +657,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6B_P4_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6B_P6_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -912,3 +915,33 @@ def test_0030_answers_booking_requests_and_downgrades(
         assert "decided_at" not in columns
     finally:
         engine.dispose()
+
+
+def test_0031_adds_patient_notifications_and_downgrades(
+    scratch_database_url: str, alembic_config: Config
+) -> None:
+    """M6b-P6 (R58, R73): one row per notice, unique per account and event; preferences per
+    account; the medicine sweep's system kind. The downgrade restores 0030."""
+    command.upgrade(alembic_config, "0031")
+    assert _tables(scratch_database_url) == M6B_P6_TABLES
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            unique = conn.execute(
+                text(
+                    "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+                    " WHERE conname = 'uq_patient_notifications_account_id_event_key'"
+                )
+            ).scalar_one()
+            jobs = conn.execute(
+                text(
+                    "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+                    " WHERE conname = 'ck_jobs_system_kind'"
+                )
+            ).scalar_one()
+        assert "account_id, event_key" in unique
+        assert "schedule_medicine_due" in jobs
+    finally:
+        engine.dispose()
+    command.downgrade(alembic_config, "0030")
+    assert _tables(scratch_database_url) == M6B_P4_TABLES

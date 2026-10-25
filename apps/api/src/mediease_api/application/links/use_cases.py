@@ -109,6 +109,14 @@ class LinkTokens:
         claims = ViewClaims(jti=link.id, exp=expires_at.replace(microsecond=0))
         return self._sign(Kind.VIEW, self.current_key_id, tokens.view_claims_bytes(claims))
 
+    def queue_token(self, claims: tokens.QueueClaims) -> str:
+        """M6b-P6 (R69): a live-queue link, signed with the current key."""
+        return self._sign(Kind.QUEUE, self.current_key_id, tokens.queue_claims_bytes(claims))
+
+    def queue_claims(self, token: str) -> tokens.QueueClaims:
+        """``LinkInvalid`` for anything that is not a live-queue link signed by a known key."""
+        return tokens.read_queue_claims(self._verified(token, Kind.QUEUE))
+
     def check_view(self, token: str | None, link: PatientLink, now: datetime) -> None:
         if not token:
             raise ChallengeRequired()

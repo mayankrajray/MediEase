@@ -19,7 +19,9 @@ from mediease_api.delivery.worker.loop import Worker
 from mediease_api.domain.jobs.job import (
     EXPIRE_REQUESTS_KIND,
     MARK_NO_SHOWS_KIND,
+    MEDICINE_DUE_SWEEP_KIND,
     NO_SHOW_SWEEP_KIND,
+    NOTIFY_MEDICINE_DUE_KIND,
     RECONCILE_KIND,
     REQUEST_EXPIRY_SWEEP_KIND,
     WEBHOOK_KIND,
@@ -55,6 +57,9 @@ def test_m5_the_worker_handles_the_messaging_jobs(
         # M6b-P5: the expiry of unanswered booking requests.
         REQUEST_EXPIRY_SWEEP_KIND,
         EXPIRE_REQUESTS_KIND,
+        # M6b-P6: medicine-due notices.
+        MEDICINE_DUE_SWEEP_KIND,
+        NOTIFY_MEDICINE_DUE_KIND,
         OPT_OUT_CONFIRMATION_KIND,
         SMS_FALLBACK_KIND,
     }

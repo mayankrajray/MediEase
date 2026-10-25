@@ -279,6 +279,14 @@ class SqlAlchemyRetentionRepository:
                 {"cutoff": cutoffs.notifications},
             )
             notifications = gone.rowcount  # type: ignore[attr-defined]
+        patient_notices = 0
+        if cutoffs.notifications is not None:
+            # M6b-P6 (portal R61): the patients' notices follow the staff ones.
+            gone_patient = self._session.execute(
+                text("DELETE FROM patient_notifications WHERE created_at < :cutoff"),
+                {"cutoff": cutoffs.notifications},
+            )
+            patient_notices = gone_patient.rowcount  # type: ignore[attr-defined]
         doses = 0
         if cutoffs.dose_records is not None:
             # M6b-P3b (R53): a year after the course end, or the dose date when open-ended
@@ -296,6 +304,7 @@ class SqlAlchemyRetentionRepository:
             email_tokens=email_tokens.rowcount,  # type: ignore[attr-defined]
             notifications=notifications,
             dose_records=doses,
+            patient_notifications=patient_notices,
         )
 
 

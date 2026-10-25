@@ -53,7 +53,7 @@ from mediease_api.domain.booking.request import (
     RequestStatus,
 )
 from mediease_api.domain.clinics.clinic import Clinic
-from mediease_api.domain.notifications.events import AppointmentBooked
+from mediease_api.domain.notifications.events import AppointmentBooked, BookingRequestAnswered
 from mediease_api.domain.patients.patient import Sex
 from mediease_api.domain.portal.link import AlreadyLinked
 from mediease_api.domain.scheduling.mode import BookingMode
@@ -380,7 +380,23 @@ def _accept(
             "account_id": str(request.account_id),
         },
     )
+    _announce(uow, request, who=who, ids=ids, now=now)
     return AnswerResult(request.id, request.status, patient_id, appointment.id)
+
+
+def _announce(
+    uow: UnitOfWork, request: BookingRequest, *, who: _Who, ids: IdPort, now: datetime
+) -> None:
+    """M6b-P6 (portal R57): the requester hears of the answer, in this transaction."""
+    publish(
+        uow,
+        BookingRequestAnswered(request.id),
+        clinic_id=request.clinic_id,
+        ids=ids,
+        now=now,
+        request_id=who.info.request_id,
+        actor_user_id=who.user_id,
+    )
 
 
 def _log(event: str, result: AnswerResult, clinic_id: UUID) -> None:
@@ -454,6 +470,7 @@ class DeclineBookingRequest(_UseCase):
                 entity_id=request.id,
                 metadata={"reason": reason.value, "account_id": str(request.account_id)},
             )
+            _announce(uow, request, who=_staff(ctx), ids=self._ids, now=now)
             result = AnswerResult(request.id, request.status, request.patient_id, None)
             uow.commit()
         _log("booking_request.declined", result, ctx.clinic_id)
@@ -542,6 +559,7 @@ class ProposeBookingTime(_UseCase):
                     "patient_id": str(patient_id),
                 },
             )
+            _announce(uow, request, who=who, ids=self._ids, now=now)
             result = AnswerResult(request.id, request.status, patient_id, None)
             uow.commit()
         _log("booking_request.proposed", result, ctx.clinic_id)

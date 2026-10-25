@@ -14,6 +14,10 @@ from mediease_api.adapters.db.models.jobs import JobRow
 from mediease_api.adapters.db.models.links import PatientLinkRow, PublicRateLimitRow
 from mediease_api.adapters.db.models.messages import MessageRow, WebhookEventRow
 from mediease_api.adapters.db.models.notifications import NotificationPreferenceRow, NotificationRow
+from mediease_api.adapters.db.models.patient_notifications import (
+    PatientNotificationPreferenceRow,
+    PatientNotificationRow,
+)
 from mediease_api.adapters.db.models.patients import PatientRow
 from mediease_api.adapters.db.models.portal import (
     EmailTokenRow,
@@ -59,6 +63,8 @@ __all__ = [
     "PatientAccountLinkRow",
     "PatientAccountRow",
     "PatientLinkRow",
+    "PatientNotificationPreferenceRow",
+    "PatientNotificationRow",
     "PatientPortalInviteRow",
     "PatientRefreshTokenRow",
     "PatientRow",

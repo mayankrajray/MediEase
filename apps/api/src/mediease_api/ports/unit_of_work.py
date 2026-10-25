@@ -33,6 +33,11 @@ from mediease_api.ports.messaging import (
     WebhookEventRepository,
 )
 from mediease_api.ports.notifications import NotificationRepository, PreferenceRepository
+from mediease_api.ports.patient_notifications import (
+    PatientNotificationLookup,
+    PatientNotificationRepository,
+    PatientPreferenceRepository,
+)
 from mediease_api.ports.portal import (
     DoseLifecycle,
     DoseRecordRepository,
@@ -123,6 +128,11 @@ class TenantRepositories(Protocol):
         ...
 
     @property
+    def patient_notifications(self) -> PatientNotificationRepository:
+        """Notices for patient accounts, written in this clinic's context (M6b-P6)."""
+        ...
+
+    @property
     def dose_records(self) -> DoseRecordRepository:
         """A patient account's dose marks (M6b-P3b); reached only from patient routes."""
         ...
@@ -188,6 +198,16 @@ class UnitOfWork(Protocol):
     @property
     def booking_request_lookup(self) -> BookingRequestLookup:
         """A patient account's own requests in every clinic (M6b-P4, reviewed exception)."""
+        ...
+
+    @property
+    def patient_notification_lookup(self) -> PatientNotificationLookup:
+        """One account's notices in every clinic (M6b-P6, reviewed cross-clinic exception)."""
+        ...
+
+    @property
+    def patient_preferences(self) -> PatientPreferenceRepository:
+        """A patient account's notification choices (M6b-P6); not tenant data."""
         ...
 
     @property

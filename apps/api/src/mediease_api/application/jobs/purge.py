@@ -45,6 +45,7 @@ class PurgeExpired:
                         "email_tokens": str(counts.email_tokens),
                         "notifications": str(counts.notifications),
                         "dose_records": str(counts.dose_records),
+                        "patient_notifications": str(counts.patient_notifications),
                     },
                 )
             )
@@ -58,6 +59,7 @@ class PurgeExpired:
             email_tokens=counts.email_tokens,
             notifications=counts.notifications,
             dose_records=counts.dose_records,
+            patient_notifications=counts.patient_notifications,
         )
         return counts
 

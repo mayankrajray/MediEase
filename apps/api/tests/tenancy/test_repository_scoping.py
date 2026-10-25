@@ -21,6 +21,7 @@ from mediease_api.adapters.db.notifications import (
     SqlAlchemyNotificationRepository,
     SqlAlchemyPreferenceRepository,
 )
+from mediease_api.adapters.db.patient_notifications import SqlAlchemyPatientNotificationRepository
 from mediease_api.adapters.db.portal_links import (
     SqlAlchemyDoseRecordRepository,
     SqlAlchemyPortalInviteRepository,
@@ -136,6 +137,12 @@ class Tenant:
 # the IDs of active clinics with overdue requests, as the no-show sweep does. Each clinic, doctor
 # and session is then read through that clinic's tenant repositories
 # (tests/integration/test_booking_requests_http.py).
+#
+# Reviewed exception (M6b-P6): SqlAlchemyPatientNotificationLookup reads patient_notifications by
+# account alone, limited to the clinics the account is linked to (plus its own booking notices)
+# and never a suspended clinic's; and gives the medicine sweep the IDs of active clinics with a
+# reminder turned on. Writes go through the tenant-scoped repository
+# (tests/integration/test_patient_notifications_http.py).
 NOT_TENANT_SCOPED = {"audit_events", "jobs"}
 
 
@@ -633,6 +640,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "medicine_reminder_prefs",
             "dose_records",
             "booking_requests",
+            "patient_notifications",
             "messages",
             "reminders",
             "notifications",
@@ -663,6 +671,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyReminderPrefRepository,
         SqlAlchemyDoseRecordRepository,
         SqlAlchemyBookingRequestRepository,
+        SqlAlchemyPatientNotificationRepository,
         SqlAlchemyMessageRepository,
         SqlAlchemyReminderRepository,
         SqlAlchemyNotificationRepository,

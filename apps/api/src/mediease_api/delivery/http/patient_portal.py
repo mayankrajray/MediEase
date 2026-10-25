@@ -15,6 +15,10 @@ Patients (``@patient``, under ``/api/v1/portal``, the portal cookies):
 | ``POST`` / ``GET /booking-requests`` | ask a clinic for a time; the open requests (M6b-P4) |
 | ``PUT`` / ``DELETE /medicine-plan/doses`` | mark a dose Taken or Skipped, or clear it (R45) |
 | ``GET /medicine-plan/history?prescription_id=`` | a version's doses by day (R47, R49) |
+| ``GET /notifications`` / ``/summary`` (ETag) | the bell and its count (M6b-P6, R67, R68) |
+| ``POST /notifications/{id}/read`` / ``/read-all`` | read state (R68) |
+| ``GET`` / ``PUT /notification-preferences`` | in-app and email switches (R62, R63) |
+| ``GET /appointments/{id}/live-link`` | the live link of the account's appointment (R69) |
 
 Staff (``PATIENTS_MANAGE``, under ``/api/v1/patients/{patient_id}``): ``POST /portal-invite``,
 ``GET /portal``, ``DELETE /portal-link`` (R1, R8, R14).
@@ -33,6 +37,7 @@ from uuid import UUID
 from flask import Blueprint, Response, jsonify, request
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
+from mediease_api.application.appointments.live import IssuePortalLiveLink
 from mediease_api.application.booking.answers import AcceptProposal, DeclineProposal
 from mediease_api.application.booking.requests import (
     BookingRequestCommand,
@@ -72,6 +77,15 @@ from mediease_api.application.portal.medicines import (
     ReminderChoice,
     SetMedicineReminder,
 )
+from mediease_api.application.portal.patient_notifications import (
+    GetPatientNotificationSummary,
+    GetPatientPreferences,
+    ListPatientNotifications,
+    MarkAllPatientNotificationsRead,
+    MarkPatientNotificationRead,
+    NoticeView,
+    SetPatientPreference,
+)
 from mediease_api.application.portal.records import (
     GetPortalPrescription,
     ListPortalAppointments,
@@ -84,12 +98,14 @@ from mediease_api.application.portal.records import (
 from mediease_api.application.prescriptions.pdf import PDF_CONTENT_TYPE
 from mediease_api.delivery.http.access import clinic, current_context, current_patient, patient
 from mediease_api.delivery.http.bodies import items_body, patient_view_body
+from mediease_api.delivery.http.etag import conditional_json
 from mediease_api.delivery.http.request_info import request_info
 from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.booking.request import RequestStatus
 from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.patients.patient import Language, Sex
 from mediease_api.domain.portal.doses import DoseState
+from mediease_api.domain.portal.notifications import PatientChannel, PatientNotificationKind
 from mediease_api.domain.prescriptions.schedule import Slot
 from mediease_api.domain.shared.errors import InvalidValue
 
@@ -111,6 +127,14 @@ class PortalRecordUseCases(Protocol):
     def create_booking_request(self) -> CreateBookingRequest: ...
     def list_my_booking_requests(self) -> ListMyBookingRequests: ...
     def accept_proposal(self) -> AcceptProposal: ...
+    # M6b-P6: the bell, preferences and the live token link.
+    def list_patient_notifications(self) -> ListPatientNotifications: ...
+    def patient_notification_summary(self) -> GetPatientNotificationSummary: ...
+    def mark_patient_notification_read(self) -> MarkPatientNotificationRead: ...
+    def mark_all_patient_notifications_read(self) -> MarkAllPatientNotificationsRead: ...
+    def get_patient_preferences(self) -> GetPatientPreferences: ...
+    def set_patient_preference(self) -> SetPatientPreference: ...
+    def issue_portal_live_link(self) -> IssuePortalLiveLink: ...
     def decline_proposal(self) -> DeclineProposal: ...
     def mark_dose(self) -> MarkDose: ...
     def clear_dose(self) -> ClearDose: ...
@@ -185,6 +209,27 @@ def request_item_body(r: RequestItem) -> dict[str, Any]:
         "mode": r.mode.value,
         "starts_at": r.starts_at.isoformat(),
         "created_at": r.created_at.isoformat(),
+    }
+
+
+class PreferenceRequest(BaseModel):
+    """M6b-P6 (R62, R63): one switch; email only for the four booking kinds."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: PatientNotificationKind
+    channel: PatientChannel
+    enabled: bool
+
+
+def notice_body(n: NoticeView) -> dict[str, Any]:
+    return {
+        "id": str(n.id),
+        "kind": n.kind.value,
+        "title": n.title,
+        "link": n.link,
+        "created_at": n.created_at.isoformat(),
+        "read_at": n.read_at.isoformat() if n.read_at else None,
     }
 
 
@@ -574,6 +619,70 @@ def create_portal_records_blueprint(use_cases: PortalRecordUseCases) -> Blueprin
             request_info(),
         )
         return jsonify(request_item_body(item)), 201
+
+    # --- M6b-P6: the notification centre (R67, R68) and the live token link (R69) -------------
+
+    @bp.get("/notifications")
+    @patient
+    def list_notifications() -> Response:
+        return jsonify(
+            items_body(
+                notice_body(n)
+                for n in use_cases.list_patient_notifications().execute(current_patient())
+            )
+        )
+
+    @bp.get("/notifications/summary")
+    @patient
+    def notification_summary() -> Response:
+        summary = use_cases.patient_notification_summary().execute(current_patient())
+        return conditional_json(
+            {
+                "unread": summary.unread,
+                "latest_id": str(summary.latest_id) if summary.latest_id else None,
+            }
+        )
+
+    @bp.post("/notifications/<uuid:notification_id>/read")
+    @patient
+    def read_notification(notification_id: UUID) -> tuple[Response, int]:
+        use_cases.mark_patient_notification_read().execute(current_patient(), notification_id)
+        return Response(status=204), 204
+
+    @bp.post("/notifications/read-all")
+    @patient
+    def read_all_notifications() -> Response:
+        marked = use_cases.mark_all_patient_notifications_read().execute(current_patient())
+        return jsonify({"marked": marked})
+
+    @bp.get("/notification-preferences")
+    @patient
+    def notification_preferences() -> Response:
+        return jsonify(
+            items_body(
+                {"kind": p.kind.value, "in_app": p.in_app, "email": p.email}
+                for p in use_cases.get_patient_preferences().execute(current_patient())
+            )
+        )
+
+    @bp.put("/notification-preferences")
+    @patient
+    def set_notification_preference() -> Response:
+        body = parse_json(PreferenceRequest)
+        principal = current_patient()
+        use_cases.set_patient_preference().execute(principal, body.kind, body.channel, body.enabled)
+        return jsonify(
+            items_body(
+                {"kind": p.kind.value, "in_app": p.in_app, "email": p.email}
+                for p in use_cases.get_patient_preferences().execute(principal)
+            )
+        )
+
+    @bp.get("/appointments/<uuid:appointment_id>/live-link")
+    @patient
+    def live_link(appointment_id: UUID) -> Response:
+        link = use_cases.issue_portal_live_link().execute(current_patient(), appointment_id)
+        return jsonify({"url": link.url, "expires_at": link.expires_at.isoformat()})
 
     @bp.post("/booking-requests/<uuid:request_id>/accept-proposal")
     @patient

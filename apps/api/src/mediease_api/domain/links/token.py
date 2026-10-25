@@ -2,9 +2,11 @@
 
 ``<header>.<claims>.<mac>``, each part base64url without padding:
 
-- header: version (1 byte), kind (1 byte: ``1`` link, ``2`` view), key ID (1-16 ASCII bytes);
+- header: version (1 byte), kind (1 byte: ``1`` link, ``2`` view, ``3`` live queue), key ID (1-16
+  ASCII bytes);
 - claims, a link: ``jti`` (16 bytes) ``cid`` (16) ``rid`` (16) ``exp`` (4, Unix seconds, big
-  endian) ``pur`` (1); a view (the 30-minute cookie): ``jti`` (16) ``exp`` (4);
+  endian) ``pur`` (1); a view (the 30-minute cookie): ``jti`` (16) ``exp`` (4); a live-queue link
+  (M6b-P6, ADR-0019): ``cid`` (16) ``aid`` (16, the appointment) ``nbf`` (4) ``exp`` (4);
 - mac: HMAC-SHA256 over ``<header>.<claims>`` (the ASCII text), truncated to 16 bytes, made and
   checked by ``LinkSignerPort`` with the key the header names.
 
@@ -37,6 +39,8 @@ _MAX_TOKEN = 200
 class Kind(IntEnum):
     LINK = 1
     VIEW = 2
+    # M6b-P6: a signed live-queue link; its own kind, so it is never taken for a prescription link.
+    QUEUE = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +55,16 @@ class LinkClaims:
 @dataclass(frozen=True, slots=True)
 class ViewClaims:
     jti: UUID
+    exp: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class QueueClaims:
+    """M6b-P6 (R69, ADR-0019): one appointment's live-queue link, valid from ``nbf`` to ``exp``."""
+
+    cid: UUID
+    aid: UUID
+    nbf: datetime
     exp: datetime
 
 
@@ -112,6 +126,10 @@ def view_claims_bytes(claims: ViewClaims) -> bytes:
     return claims.jti.bytes + _seconds(claims.exp)
 
 
+def queue_claims_bytes(claims: QueueClaims) -> bytes:
+    return claims.cid.bytes + claims.aid.bytes + _seconds(claims.nbf) + _seconds(claims.exp)
+
+
 def assemble(signing: bytes, mac: bytes) -> str:
     if len(mac) != MAC_BYTES:
         raise ValueError(f"a MAC is {MAC_BYTES} bytes")
@@ -165,6 +183,19 @@ def read_view_claims(token: Unverified) -> ViewClaims:
     return ViewClaims(jti=UUID(bytes=raw[0:16]), exp=_moment(raw[16:20]))
 
 
+def read_queue_claims(token: Unverified) -> QueueClaims:
+    """Call only after the MAC was verified."""
+    raw = token.claims
+    if token.kind is not Kind.QUEUE or len(raw) != 40:
+        raise LinkInvalid()
+    return QueueClaims(
+        cid=UUID(bytes=raw[0:16]),
+        aid=UUID(bytes=raw[16:32]),
+        nbf=_moment(raw[32:36]),
+        exp=_moment(raw[36:40]),
+    )
+
+
 def describe(token: str) -> dict[str, str]:
     """Header and claims without checking the MAC, for ``scripts/inspect_link_token.py``."""
     parts = split(token)
@@ -177,6 +208,14 @@ def describe(token: str) -> dict[str, str]:
             "rid": str(link.rid),
             "purpose": link.purpose.value,
             "exp": link.exp.isoformat(),
+        }
+    elif parts.kind is Kind.QUEUE:
+        queue = read_queue_claims(parts)
+        shown |= {
+            "cid": str(queue.cid),
+            "aid": str(queue.aid),
+            "nbf": queue.nbf.isoformat(),
+            "exp": queue.exp.isoformat(),
         }
     else:
         view = read_view_claims(parts)
