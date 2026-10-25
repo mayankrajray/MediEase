@@ -607,3 +607,46 @@ Known limits to carry forward:
   the per-address request limit (20 an hour) therefore apply to *all* patients together in the
   pilot. RUNBOOK 24 says what to do if they trip.
 - A suspended-clinic page is covered by the API test (identical 404), not by a browser journey.
+
+---
+
+## M6b-P5 - The front-desk inbox: accept, decline, propose, expiry
+
+Proposed 26 Oct 2026, **awaiting the developer's approval**. Covers FR-BKG-04, 05, 06, 07 (the
+no-show counter), 08, FR-PRT-06 (a) and FR-UX-03 (what waits for the desk). Rules:
+`docs/specs/booking-requests.md` section 13, R31-R52 (Draft). Patient notifications (push, email,
+in-app for patients) stay in P6; P5 shows every outcome in the portal and sends the existing
+WhatsApp booking confirmation when the record has consent.
+
+Facts the design rests on (checked in the code):
+
+- A request is `PENDING` only (CHECK in `0029`); its hold is counted by `resolve_holds`, which
+  today would block the request's **own** accept.
+- Registering a patient needs name, phone and sex, and exactly one of date of birth or **age**
+  (`Age.from_recorded_age` exists); the phone check returns up to 10 candidates
+  (`PAT_PHONE_EXISTS`). Search is `GET /patients?q=`.
+- Linking (`_create_link`) locks the record and enforces one active link per record and per
+  account per clinic (`PRT_ALREADY_LINKED`); `LinkMethod` has `INVITE` and `RX_LINK`, and the
+  `0025` CHECK allows only those.
+- The worker runs recurring jobs every minute through `RECURRING` (no-show sweep every 5 minutes
+  is the pattern); a new job kind is a migration.
+- There is no per-patient no-show count anywhere yet, and nothing notifies a portal account.
+- `APPOINTMENTS_MANAGE` and `PATIENTS_MANAGE` are held by every role.
+
+| # | Decision | Recommended | Alternatives |
+|---|---|---|---|
+| 1 | States | `PENDING` -> `ACCEPTED` \| `DECLINED` \| `PROPOSED` \| `EXPIRED`; `PROPOSED` -> `ACCEPTED` (the patient takes it) \| `DECLINED` (the patient says no) \| `EXPIRED`. Every change only from an open state, under the request's row lock; a second answer is 409 **`BKG_ALREADY_ANSWERED`** ("Someone has already answered this request") | B: separate tables per outcome (more joins, no gain) |
+| 2 | Accept (FR-BKG-05, FR-PRT-06 a) | One staff action in one transaction: lock the session and the request; the request's own hold is excluded (`resolve_holds(..., exclude=request.id)`), other patients' holds still count; book with source **`PUBLIC_PAGE`** (the existing confirmation and staff notification follow); **link** the account to the record (method **`BOOKING`**, actor STAFF); mark `ACCEPTED` with `patient_id`, `appointment_id`, `decided_by`, `decided_at`; audit `booking_request.accepted` (IDs only). If the time was taken after the hold lapsed: 409 `APT_SLOT_TAKEN` / `APT_SESSION_FULL`, and the desk proposes instead | B: accept without linking (the patient would not see the appointment; FR-PRT-06 a says link) |
+| 3 | Matching the record | The accept form opens with **candidates by the request's phone** (name, code, age, and the no-show count) and a search box. Choose one, or **Create new** prefilled with the account's name, the phone, the age (recorded as age, `age_is_estimated`) and sex (staff must choose sex if the patient did not give it). If the account is **already linked** in this clinic, that record is the only choice. A record linked to another account is refused `PRT_ALREADY_LINKED`. Never automatic by phone alone | B: auto-match on phone and name (family members share phones, FR-PAT-02) |
+| 4 | Decline (FR-BKG-04, 05) | A reason from a short list the patient sees in their language: *Time no longer available*, *Doctor unavailable*, *Please call the clinic*, *Not something we can book online*, *Duplicate request*, *Other*; plus an optional staff note (200 characters, **staff only**, never shown to the patient, so nothing clinical leaks). Ends the hold at once. Audit `booking_request.declined` with the reason code | B: free-text reason shown to the patient (staff may write clinical text into it) |
+| 5 | Propose another time (FR-BKG-04) | Staff choose another session or slot of the **same doctor** (the booking drawer's picker, holds respected) **and match the record now** (as in point 3). The request becomes `PROPOSED`: its hold **moves** to the new time (`session_id`/`slot_start` replaced, the original kept in `original_session_id`/`original_slot_start`), with a fresh hold of the clinic's hold time, never past 1 hour before the new time. The patient sees *The clinic suggests Tue 11:00* with **Accept this time** / **No thanks**. Accept by the patient books, links and marks `ACCEPTED` exactly as point 2 (actor PATIENT; staff already agreed); *No thanks* is `DECLINED` by the patient. A proposal unanswered when its hold ends `EXPIRED`. One proposal per request | B: decline with a suggested time in text; the patient asks again and the desk answers twice (slower, and the time is not kept). C: propose any doctor (a different doctor is a different request) |
+| 6 | Expiry (FR-BKG-06) | Read as expired at once wherever it matters (`PENDING` with `respond_by <= now`, `PROPOSED` with `hold_expires_at <= now`): not answerable, not held, shown as Expired. A **sweep every 5 minutes** (new job kinds, the no-show pattern) writes `EXPIRED` and audits `booking_request.expired` (SYSTEM), so counts and P6's notice have a row to act on. The 4-hour window stays a constant (P4 decision); a clinic setting can come when a pilot asks | B: a job only (expiry late by up to 5 minutes). C: read-time only (nothing for P6 to notify on) |
+| 7 | The inbox (FR-UX-03) | *Booking requests* becomes the inbox: **Open** (oldest first, with "reply by 14:30" and *Held* / *Hold ended*), **Answered** (last 7 days: outcome, by whom, when) and an **Expired** count. Row actions *Accept*, *Propose another time*, *Decline*. The nav item shows the open count; Today (clinic scope) gets a **Requests waiting** tile next to *Bookings to move*. Doctors use the same inbox (FR-BKG-04 lets them), as for booking | B: actions in the notification only (no overview) |
+| 8 | Response rate and the no-show counter (FR-BKG-06, 07, PRD risk) | Owners' Today shows **Answered in time, last 30 days** (answered before `respond_by` / all requests decided or expired) and the expired count. The no-show counter is per **record** (NO_SHOW appointments in the last 12 months), shown on the accept form's candidates and on accepted rows; there is no automatic ban (FR-BKG-07) | B: a counter per account (an account's history at other clinics is not this clinic's business) |
+| 9 | The patient's side (R23) | *My appointments* lists open and recently answered requests (7 days): *Requested*, *Suggested another time* (with the two buttons), *Declined - <reason>* with a call button, *Expired - the clinic did not reply in time* with the call button. An accepted request disappears from the list because the appointment now appears under its clinic (the account is linked). English and Hindi. No new channel until P6 | B: keep answered requests forever (clutter; the appointment is the record) |
+| 10 | Storage and contract | Migration `0030`: request statuses widened; columns `patient_id`, `appointment_id`, `decided_at`, `decided_by` (user, null for patient or system), `decided_by_type` (STAFF \| PATIENT \| SYSTEM), `decline_reason`, `decline_note`, `original_session_id`, `original_slot_start`; the open-request unique index becomes `WHERE status IN ('PENDING','PROPOSED')`; live holds count both open states; `LinkMethod.BOOKING` and its CHECK; two job kinds. Contract 0.34.0: `POST /booking-requests/{id}/accept`, `/decline`, `/propose`; `GET /booking-requests?state=open\|answered`; `GET /booking-requests/{id}/candidates`; `POST /portal/booking-requests/{id}/accept-proposal` and `/decline-proposal`; request items gain `status` and outcome fields | B: put the proposal in its own table (a second hold source to count everywhere) |
+
+Testing for P5 (per the developer's rule of 26 Oct 2026): unit and integration tests for the new
+code, the booking-request contract test, the affected web tests, lint and typecheck, and one
+Playwright journey (accept with a new record; propose and the patient accepts; decline). The full
+suites run once at the end of M6b.
