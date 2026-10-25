@@ -21,6 +21,17 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6b-P4 (#51): the public clinic page `/c/{slug}` and booking requests with a soft hold
+  (FR-PUB-01..04, FR-BKG-01..03, 07, NFR-17, NFR-19; ADR-0018). A clinic's page (English and
+  Hindi, 360 px, under 200 KB) shows only what it publishes and the next 14 days of free times; an
+  unknown or inactive clinic is one plain 404. A patient with a verified account asks for a time:
+  the request holds it for the clinic's setting (default 2 hours, 30 minutes to 8 hours), stays
+  open up to 4 hours, and shows as *Requested* in *My appointments*; after the hold the time can
+  be booked again. Owners and front desk are notified (no reason, phone or age in it) and see a
+  *Booking requests* list and *Held* times in the booking drawer; booking over a hold needs
+  *Book anyway* and is audited. Limits per account, address and phone. Age and sex are optional
+  unless the clinic asks. Contract 0.33.0, migration `0029`, error codes `APT_SLOT_HELD`,
+  `PRT_REQUEST_EXISTS`, `PRT_TOO_MANY_REQUESTS`, `PRT_RATE_LIMITED`; RUNBOOK 24.
 - M6b-P3b (#51): dose tracking (FR-REM-03; portal R45–R54; decisions D4, D5). On *Today* the
   patient marks each timed dose Taken or Skipped, with the time marked, and may change or clear it
   from 00:00 of its day until 48 hours after its time; a past dose with no mark shows "Not recorded"

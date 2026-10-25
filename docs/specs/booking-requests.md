@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Draft (M6b-P4 design, 25 Oct 2026), awaiting approval. P5 (accept, decline, propose, expiry, linking) is added when it is designed |
+| Status | Approved by the developer 25 Oct 2026 with two changes (R12: age and sex optional unless the clinic requires them; R18a: staff may explicitly override a hold); built (M6b-P4, 26 Oct 2026; as-built differences in `docs/milestones/M6b-patient-portal-booking.md`). P5 (accept, decline, propose, expiry, linking) is added when it is designed |
 | PRD | §8.9 FR-PUB-01..04; §8.14 FR-BKG-01..03, 07, FR-DIS-05, 07, 08; NFR-02, 10, 11, 17, 19 |
 | ADR | ADR-0003 (tenancy), ADR-0015 (patient accounts), ADR-0017 (notifications), ADR-0018 (soft hold, Proposed) |
 | Design | `docs/milestones/M6b-patient-portal-booking.md` "M6b-P4" |
@@ -24,12 +24,20 @@ the clinic did not publish (NFR-17, NFR-19).
 
 ## 3. Domain model
 - **`BookingRequest`** (tenant): `clinic_id`, `doctor_id`, `session_id`, `slot_start` (slot mode;
-  null in token mode), `account_id`, `contact_phone` (E.164), `age_years`, `sex`, `reason` (null
-  or 1–200 characters), `status`, `hold_expires_at`, `created_at`.
+  null in token mode), `account_id`, `contact_phone` (E.164), `age_years` and `sex` (null unless
+  given), `reason` (null or 1–200 characters), `status`, `hold_expires_at`, `respond_by` (the
+  response deadline), `hold_overridden_at` / `hold_overridden_by` (a staff override, R18a),
+  `created_at`.
   - P4 creates `PENDING` only. P5 adds `ACCEPTED`, `DECLINED`, `EXPIRED`, `CANCELLED` and
     `PROPOSED`.
   - A **live hold** is a `PENDING` request with `hold_expires_at > now` (ADR-0018).
-- **`Clinic.request_hold_minutes`**: 30–480, default 120. **`Clinic.has_public_page`**: one rule.
+- **`Clinic.request_hold_minutes`**: 30–480, default 120. **`Clinic.request_requires_age_sex`**:
+  default false. **`Clinic.has_public_page`**: one rule.
+- **Two clocks (developer, 25 Oct 2026).** The *hold* protects the slot (default 2 hours, 30
+  minutes to 8 hours). The *response deadline* `respond_by` is how long the request may stay
+  open: 4 hours after it was made, or 1 hour before the slot if that is sooner (FR-BKG-06). The
+  hold never outlasts the deadline. After the hold ends the slot is bookable again; the request
+  stays `PENDING` until the deadline, when P5 expires it. P5's accept or decline is the decision.
 
 ```mermaid
 stateDiagram-v2
@@ -58,7 +66,8 @@ stateDiagram-v2
 
 ### Availability
 - **R6** `GET /public/clinics/{slug}/availability?doctor_id=&from=` covers 14 days from `from`
-  (default today, clinic calendar), starting 1 hour from now.
+  (default today, clinic calendar). A slot or session is offered only if it starts at least
+  2 hours from now, so the deadline (1 hour before it) is still ahead.
 - **R7** Slot mode: the doctor's slots minus booked slots and slots under a live hold. Token mode:
   each open session with its places left (capacity − booked − live holds), never a token number
   (FR-DIS-05). Sessions with no place left are listed as full.
@@ -71,13 +80,14 @@ stateDiagram-v2
   account, else 403 `PRT_UNVERIFIED_ACCOUNT`.
 - **R10** Under the session's row lock (the booking lock order), the request is refused 409
   `APT_SLOT_TAKEN` when the slot is booked or under a live hold, or `APT_SESSION_FULL` when no
-  place is left; otherwise it is created `PENDING` with `hold_expires_at = now +
-  request_hold_minutes`. Two parallel requests for one slot give one 201 and one 409.
+  place is left; otherwise it is created `PENDING` with `hold_expires_at = min(now +
+  request_hold_minutes, respond_by)` and `respond_by = min(now + 4 hours, start − 1 hour)`. Two parallel requests for one slot give one 201 and one 409.
 - **R11** The slot must be on the session's grid, the session open, its doctor active, its start
-  at least 1 hour away and within the 14 days, else 422 on the field.
-- **R12** `contact_phone` is an Indian mobile normalised to E.164; `age_years` 0–120; `sex`
-  `FEMALE`, `MALE`, `OTHER` or `UNDISCLOSED`; `reason` optional, 1–200 characters;
-  `not_emergency_ack` must be true. The name is the account's. Nothing is stored on the account.
+  at least 2 hours away and within the 14 days, else 422 on the field.
+- **R12** `contact_phone` is an Indian mobile normalised to E.164 and always required.
+  `age_years` (0–120) and `sex` (`FEMALE`, `MALE`, `OTHER` or `UNDISCLOSED`) are **optional**, and
+  required only when the clinic sets `request_requires_age_sex` (else 422 on the field; the page
+  marks them required). `reason` optional, 1–200 characters; `not_emergency_ack` must be true. The name is the account's. Nothing is stored on the account.
 - **R13** The form shows, in the page's language: "Not for emergencies. In an emergency call
   112 or go to the nearest hospital."
 - **R14** At most 5 `PENDING` requests per account (409 `PRT_TOO_MANY_REQUESTS`) and one per
@@ -92,7 +102,16 @@ stateDiagram-v2
   expires it, but holds nothing.
 - **R18** Staff booking into a slot under a live hold, or the last place of a session whose other
   places are booked or held, is refused 409 `APT_SLOT_HELD` with the hold's end time; once the
-  hold lapses the booking succeeds. FR-BKG-08 otherwise applies unchanged.
+  hold lapses the booking succeeds. FR-BKG-08 otherwise applies.
+- **R18a** *Override (developer, 25 Oct 2026).* A patient must not be able to block a slot the
+  clinic needs. Staff with the right to book may book anyway only through an explicit action,
+  **Book anyway (override the patient's request)**, with a confirmation that names the request
+  (first name and the hold's end). The API takes `override_hold: true`. Then, in the booking's
+  transaction, the blocking hold ends at once (`hold_expires_at = now`, `hold_overridden_at`,
+  `hold_overridden_by`) and **`appointment.hold_overridden`** is audited (STAFF; IDs of the
+  appointment, session and request(s) only). In token mode, if places are free but held, the
+  newest hold ends. The request stays `PENDING` (the patient is told by P5/P6; accept then fails
+  as the slot is taken). Overriding cannot create a place: a full session stays `APT_SESSION_FULL`.
 - **R19** A schedule change never retires a session with a live hold; it closes it, as for a
   booked one (appointments D10).
 
@@ -145,12 +164,13 @@ Contract 0.33.0: `GET /api/v1/public/clinics/{slug}`, `GET /api/v1/public/clinic
 |---|---|---|---|
 | Request created | `booking_request.created` (PATIENT) | `booking.requested` to front desk and owners (doctor by preference) | Hold starts; IDs, doctor and place only |
 | Hold lapses | — | — | By time; nothing runs (ADR-0018) |
+| Staff override | `appointment.hold_overridden` (STAFF) | — | Appointment, session and request IDs only |
 
 ## 8. Edge cases
 | Case | Expected outcome |
 |---|---|
 | Two accounts request the last slot at once | One 201, one 409 `APT_SLOT_TAKEN` |
-| Front desk books a held slot by phone | 409 `APT_SLOT_HELD` until the hold lapses (P5: decline the request first) |
+| Front desk books a held slot by phone | 409 `APT_SLOT_HELD`; **Book anyway** (confirmed, audited) ends the hold; or wait for it to lapse |
 | The doctor takes leave over a held session | The session is closed, not retired; the request stays for P5 to answer |
 | An unverified password account | 403 `PRT_UNVERIFIED_ACCOUNT`, with a link to resend the email |
 | A family shares one phone | The phone limit (5 a day) applies to all; each account has its own cap |
@@ -163,7 +183,9 @@ Contract 0.33.0: `GET /api/v1/public/clinics/{slug}`, `GET /api/v1/public/clinic
   registration number, staff, patient or appointment data.
 - **AC4 (R7, R17)** A held slot is missing from availability; after the hold lapses it is offered
   again with no job run.
-- **AC5 (R18)** Staff booking a held slot gets `APT_SLOT_HELD`; after the hold lapses it books.
+- **AC5 (R18, R18a)** Staff booking a held slot gets `APT_SLOT_HELD`; with `override_hold` it
+  books, ends the hold and writes `appointment.hold_overridden`; without it, it books once the
+  hold lapses.
 - **AC6 (R14, R15)** The sixth open request is refused; limits answer 429 with `Retry-After`.
 - **AC7 (R21, R24)** The notification title, logs and audit rows contain no reason, phone or age.
 - **AC8 (R30)** Sign-in from the page returns to the same slot.
