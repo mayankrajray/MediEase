@@ -304,7 +304,13 @@ cookies); every response is `Cache-Control: no-store`.
 | GET | `/api/v1/public/clinics/{slug}/availability?doctor_id&from` | One doctor's free times for 14 days, from now + 2 hours, minus booked slots and live holds; days or sessions with nothing left are omitted; computed without writing | FR-PUB-04, FR-DIS-05 | Implemented (M6b-P4), no sign-in, 60 reads a minute per caller |
 | POST | `/api/v1/portal/booking-requests` | Ask a clinic for a time and hold it (201 `REQUESTED`; 403 `PRT_UNVERIFIED_ACCOUNT`; 409 `APT_SLOT_TAKEN`, `APT_SESSION_FULL`, `APT_SLOT_HELD`, `PRT_REQUEST_EXISTS`, `PRT_TOO_MANY_REQUESTS`; 429 `PRT_RATE_LIMITED`) | FR-PUB-02, 03, FR-BKG-01, 02, 07 | Implemented (M6b-P4), `booking_request.created` (PATIENT) |
 | GET | `/api/v1/portal/booking-requests` | The account's open requests, shown as Requested | FR-PRT-07 | Implemented (M6b-P4) |
-| GET | `/api/v1/booking-requests` | Staff: the clinic's open requests, oldest first, with the hold (`holding`, `hold_expires_at`, `hold_overridden`) and `respond_by` | FR-BKG-03 | Implemented (M6b-P4), `APPOINTMENTS_MANAGE` |
+| GET | `/api/v1/booking-requests?state=open\|answered` | Staff: the inbox (open oldest first; answered in the last 7 days newest first) with the hold, the outcome, `open_count` and `expired_7d` | FR-BKG-03, 06 | Implemented (M6b-P4, P5), `APPOINTMENTS_MANAGE` |
+| GET | `/api/v1/booking-requests/{id}/candidates` | Staff: records with the request's phone (or the one already linked) and their no-show count | FR-PRT-06 (a), FR-BKG-07 | Implemented (M6b-P5) |
+| POST | `/api/v1/booking-requests/{id}/accept` | Staff: book the request (source `PUBLIC_PAGE`) for a chosen or new record and link the account (409 `BKG_ALREADY_ANSWERED`, `APT_*`, `PRT_ALREADY_LINKED`) | FR-BKG-04, 05, FR-PRT-06 (a) | Implemented (M6b-P5) |
+| POST | `/api/v1/booking-requests/{id}/decline` | Staff: decline with a reason the patient sees and an optional staff note | FR-BKG-04, 05 | Implemented (M6b-P5) |
+| POST | `/api/v1/booking-requests/{id}/propose` | Staff: offer another session or slot of the same doctor; the hold moves | FR-BKG-04 | Implemented (M6b-P5) |
+| POST | `/api/v1/portal/booking-requests/{id}/accept-proposal` | Patient: take the proposed time (books and links) | FR-BKG-04, 05 | Implemented (M6b-P5) |
+| POST | `/api/v1/portal/booking-requests/{id}/decline-proposal` | Patient: *No thanks* (`DECLINED`, hold ended) | FR-BKG-04 | Implemented (M6b-P5) |
 | GET | `/api/v1/patients/{patient_id}/portal` | Staff: `NOT_LINKED`, `INVITED` (with expiry) or `LINKED` (method, since); never the account's details | FR-PRT-06 | Implemented (M6b-P1), `PATIENTS_MANAGE` |
 | DELETE | `/api/v1/patients/{patient_id}/portal-link` | Staff: end the link; returns the new status | FR-PRT-06 | Implemented (M6b-P1), `PATIENTS_MANAGE` |
 

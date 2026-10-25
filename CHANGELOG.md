@@ -21,6 +21,14 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6b-P5 (#51): answering booking requests (FR-BKG-04..07, FR-PRT-06 a; spec R31-R52). The
+  *Booking requests* inbox has Open and Answered lists with Accept (book the time for a chosen or
+  new record and link the patient's app), Propose another time (the hold moves; the patient
+  accepts or says no thanks in *My appointments*) and Decline (a reason the patient reads in
+  English or Hindi; a staff-only note). Exactly one answer wins, under the request's row lock
+  (`BKG_ALREADY_ANSWERED`). An unanswered request expires at its deadline, persisted by a 5-minute
+  sweep. The nav and Today show the open count; owners see the answered-in-time rate; candidates
+  show a 12-month no-show count. Migration `0030`, contract 0.34.0.
 - M6b-P4 (#51): the public clinic page `/c/{slug}` and booking requests with a soft hold
   (FR-PUB-01..04, FR-BKG-01..03, 07, NFR-17, NFR-19; ADR-0018). A clinic's page (English and
   Hindi, 360 px, under 200 KB) shows only what it publishes and the next 14 days of free times; an

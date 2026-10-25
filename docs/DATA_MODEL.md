@@ -839,6 +839,23 @@ A session with a `PENDING` request is never deleted or retired by a schedule cha
 
 `notifications.kind` and `notification_preferences.kind` CHECKs now include `booking.requested`.
 
+### `booking_requests` (migration `0030`, M6b-P5)
+
+| Column | Type | Notes |
+|---|---|---|
+| status | text not null | `PENDING` \| `PROPOSED` (open) \| `ACCEPTED` \| `DECLINED` \| `EXPIRED`; an open row past `respond_by` reads as expired before the sweep writes it |
+| patient_id | uuid FK patients null | The record chosen at accept or propose |
+| appointment_id | uuid FK appointments null | Set exactly when `ACCEPTED` (CHECK) |
+| answered_at, answered_by | timestamptz, uuid FK users null | The staff member's first answer (accept, decline, propose): the response rate |
+| decided_at, decided_by_type | timestamptz, text null | When it became final and by whom (`STAFF` \| `PATIENT` \| `SYSTEM`); null exactly while open (CHECK) |
+| decline_reason | text null | `TIME_UNAVAILABLE` \| `DOCTOR_UNAVAILABLE` \| `PLEASE_CALL` \| `NOT_ONLINE` \| `DUPLICATE` \| `OTHER` \| `PATIENT_DECLINED`; set exactly when `DECLINED` |
+| decline_note | text null | 1-200 characters, staff only; never shown to the patient, logged or notified |
+| original_session_id, original_slot_start | uuid FK sessions, timestamptz null | A proposal's first-asked time; `session_id`/`slot_start` then hold the proposed time |
+
+The unique open-request index now covers `PENDING` and `PROPOSED`. A proposal's `respond_by` is
+its hold's end. `patient_account_links.method` gains `BOOKING`; `jobs` gains the system kind
+`schedule_request_expiry` (and the clinic kind `expire_booking_requests`).
+
 ---
 
 ## Retention and erasure
