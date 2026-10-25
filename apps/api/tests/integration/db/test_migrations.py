@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0031"
+HEAD = "0032"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -50,6 +50,7 @@ M6B_P4_TABLES = sorted([*M6B_P3B_TABLES, "booking_requests"])
 M6B_P6_TABLES = sorted(
     [*M6B_P4_TABLES, "patient_notifications", "patient_notification_preferences"]
 )
+M6C_P1_TABLES = sorted([*M6B_P6_TABLES, "clinic_application_doctors", "clinic_applications"])
 
 
 @pytest.fixture
@@ -657,7 +658,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6B_P6_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6C_P1_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -945,3 +946,33 @@ def test_0031_adds_patient_notifications_and_downgrades(
         engine.dispose()
     command.downgrade(alembic_config, "0030")
     assert _tables(scratch_database_url) == M6B_P4_TABLES
+
+
+def test_0032_adds_clinic_applications_and_downgrades(
+    scratch_database_url: str, alembic_config: Config
+) -> None:
+    """M6c-P1 (clinic-onboarding R9, R17, R20; ADR-0020): two platform tables with no clinic, the
+    reference sequence, the APPLICANT actor and the two system kinds. Downgrade restores 0031."""
+    command.upgrade(alembic_config, "0032")
+    assert _tables(scratch_database_url) == M6C_P1_TABLES
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            columns = {c["name"] for c in inspect(conn).get_columns("clinic_applications")}
+            definitions = {
+                name: conn.execute(
+                    text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :n"),
+                    {"n": name},
+                ).scalar_one()
+                for name in ("ck_jobs_system_kind", "ck_audit_events_actor_type")
+            }
+            first = conn.execute(text("SELECT nextval('clinic_application_reference_seq')"))
+            assert first.scalar_one() == 1
+        assert "clinic_id" not in columns
+        assert "send_application_email" in definitions["ck_jobs_system_kind"]
+        assert "purge_applications" in definitions["ck_jobs_system_kind"]
+        assert "APPLICANT" in definitions["ck_audit_events_actor_type"]
+    finally:
+        engine.dispose()
+    command.downgrade(alembic_config, "0031")
+    assert _tables(scratch_database_url) == M6B_P6_TABLES

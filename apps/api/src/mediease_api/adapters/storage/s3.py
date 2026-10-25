@@ -71,3 +71,7 @@ class S3BlobStorage:
                 return False
             raise
         return True
+
+    def delete(self, key: str) -> None:
+        # S3 answers 204 for a key that does not exist, so a repeat is harmless.
+        self._client.delete_object(Bucket=self._bucket, Key=self._key(key))

@@ -17,6 +17,7 @@ from uuid import UUID
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from mediease_api.adapters.db.applications import SqlAlchemyApplicationRepository
 from mediease_api.adapters.db.audit import SqlAlchemyAuditReader, SqlAlchemyAuditWriter
 from mediease_api.adapters.db.booking import (
     SqlAlchemyBookingRequestLookup,
@@ -261,6 +262,7 @@ class _OpenUnit:
         # M6b-P6: one account's notices in every clinic, and its notification preferences.
         self.patient_notification_lookup = SqlAlchemyPatientNotificationLookup(session)
         self.patient_preferences = SqlAlchemyPatientPreferenceRepository(session)
+        self.applications = SqlAlchemyApplicationRepository(session)
         self.rate_limits = SqlAlchemyRateLimitRepository(session)
         # Shares the session, so an audit row commits with the change (R11).
         self.audit = SqlAlchemyAuditWriter(session)
@@ -355,6 +357,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def patient_preferences(self) -> SqlAlchemyPatientPreferenceRepository:
         return self._require_open().patient_preferences
+
+    @property
+    def applications(self) -> SqlAlchemyApplicationRepository:
+        return self._require_open().applications
 
     @property
     def dose_lifecycle(self) -> SqlAlchemyDoseLifecycle:

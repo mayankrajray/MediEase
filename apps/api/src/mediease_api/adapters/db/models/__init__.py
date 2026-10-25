@@ -4,6 +4,10 @@ Models are persistence shapes only; repositories map them to and from domain
 entities, so nothing outside ``adapters/db`` ever sees a row object.
 """
 
+from mediease_api.adapters.db.models.applications import (
+    ClinicApplicationDoctorRow,
+    ClinicApplicationRow,
+)
 from mediease_api.adapters.db.models.appointments import AppointmentRow, AppointmentStatusHistoryRow
 from mediease_api.adapters.db.models.audit import AuditEventRow
 from mediease_api.adapters.db.models.base import Base
@@ -47,6 +51,8 @@ __all__ = [
     "AuditEventRow",
     "Base",
     "BookingRequestRow",
+    "ClinicApplicationDoctorRow",
+    "ClinicApplicationRow",
     "ClinicMembershipRow",
     "ClinicRow",
     "DoctorRow",

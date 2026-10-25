@@ -33,6 +33,7 @@ from mediease_api.ports.messaging import (
     WebhookEventRepository,
 )
 from mediease_api.ports.notifications import NotificationRepository, PreferenceRepository
+from mediease_api.ports.onboarding import ApplicationRepository
 from mediease_api.ports.patient_notifications import (
     PatientNotificationLookup,
     PatientNotificationRepository,
@@ -208,6 +209,11 @@ class UnitOfWork(Protocol):
     @property
     def patient_preferences(self) -> PatientPreferenceRepository:
         """A patient account's notification choices (M6b-P6); not tenant data."""
+        ...
+
+    @property
+    def applications(self) -> ApplicationRepository:
+        """Clinic applications (M6c-P1, ADR-0020): platform data, no clinic until approval."""
         ...
 
     @property

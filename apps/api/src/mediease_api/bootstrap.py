@@ -139,6 +139,12 @@ from mediease_api.application.notifications.use_cases import (
     ReadNotification,
     SetNotificationPreferences,
 )
+from mediease_api.application.onboarding.jobs import (
+    ListApplications,
+    PurgeApplications,
+    SendApplicationEmail,
+)
+from mediease_api.application.onboarding.submit import ConfirmApplication, SubmitApplication
 from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics, MessagingCosts
 from mediease_api.application.patients.consent import OptIn, OptOut, RecordConsent
 from mediease_api.application.patients.import_patients import ImportPatients
@@ -255,6 +261,7 @@ from mediease_api.delivery.http.patients import (
 from mediease_api.delivery.http.platform import create_platform_blueprint
 from mediease_api.delivery.http.portal import create_portal_blueprint
 from mediease_api.delivery.http.prescriptions import create_prescriptions_blueprint
+from mediease_api.delivery.http.public_applications import create_public_applications_blueprint
 from mediease_api.delivery.http.public_clinics import create_public_clinics_blueprint
 from mediease_api.delivery.http.public_links import create_public_links_blueprint
 from mediease_api.delivery.http.public_queue import create_public_queue_blueprint
@@ -268,6 +275,8 @@ from mediease_api.delivery.webhooks.whatsapp import create_whatsapp_webhook_blue
 from mediease_api.delivery.worker.heartbeat import beat
 from mediease_api.delivery.worker.loop import LockRenewer, Worker
 from mediease_api.domain.jobs.job import (
+    APPLICATION_EMAIL_KIND,
+    APPLICATION_PURGE_KIND,
     AUTH_EMAIL_KIND,
     EXPIRE_REQUESTS_KIND,
     MARK_NO_SHOWS_KIND,
@@ -902,6 +911,20 @@ class _UseCases:
     def messaging_costs(self) -> MessagingCosts:
         return MessagingCosts(uow=self._uow())
 
+    # --- M6c-P1: clinic applications ------------------------------------------------------------
+    def submit_application(self) -> SubmitApplication:
+        return SubmitApplication(
+            uow=self._uow(), clock=self.clock, ids=self.ids, storage=self.blob_storage
+        )
+
+    def confirm_application(self) -> ConfirmApplication:
+        return ConfirmApplication(
+            uow=self._uow(), clock=self.clock, ids=self.ids, secrets=self.refresh_secrets
+        )
+
+    def list_applications(self) -> ListApplications:
+        return ListApplications(uow=self._uow())
+
     def _uow(self) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(self.session_factory)
 
@@ -1133,6 +1156,17 @@ def build_worker(settings: AppSettings, stop: threading.Event) -> Worker:
         PATIENT_EMAIL_KIND: SendPatientEmail(
             uow=SqlAlchemyUnitOfWork(factory), email=email, public_base_url=settings.PUBLIC_BASE_URL
         ),
+        # M6c-P1 (clinic-onboarding R11-R14): an application's emails, and unconfirmed ones deleted.
+        APPLICATION_EMAIL_KIND: SendApplicationEmail(
+            uow=SqlAlchemyUnitOfWork(factory),
+            clock=clock,
+            secrets=Sha256RefreshTokenSecrets(),
+            email=email,
+            public_base_url=settings.PUBLIC_BASE_URL,
+        ),
+        APPLICATION_PURGE_KIND: PurgeApplications(
+            uow=SqlAlchemyUnitOfWork(factory), clock=clock, storage=build_blob_storage(settings)
+        ),
         **_messaging_handlers(settings, factory, clock, ids),
     }
     return Worker(
@@ -1271,6 +1305,7 @@ def create_app(
     )
     app.register_blueprint(create_public_links_blueprint(use_cases))
     app.register_blueprint(create_public_clinics_blueprint(use_cases))
+    app.register_blueprint(create_public_applications_blueprint(use_cases))
     app.register_blueprint(create_public_queue_blueprint(use_cases))
     app.register_blueprint(create_booking_requests_blueprint(use_cases))
     app.register_blueprint(create_rx_library_blueprint(use_cases))

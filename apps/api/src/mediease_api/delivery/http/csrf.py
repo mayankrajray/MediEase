@@ -41,6 +41,9 @@ _EXEMPT_PATHS = frozenset(
         "/api/v1/portal/auth/password-reset",
         "/api/v1/portal/auth/password-reset/complete",
         "/api/v1/portal/auth/verify-email",
+        # M6c-P1: a clinic application and its emailed link; no session gives them authority.
+        "/api/v1/public/applications",
+        "/api/v1/public/applications/confirm",
     }
 )
 # The token is in the path, so the exemption is by prefix.
