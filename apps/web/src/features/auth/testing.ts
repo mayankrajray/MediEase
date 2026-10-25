@@ -34,10 +34,12 @@ export function person(
       email: "person@sample-clinic.example",
       phone_e164: null,
       is_platform_ops: false,
+      ops_roles: [],
       ...user,
     },
     memberships,
   };
 }
 
-export const ops = () => person([], { full_name: "Sample Ops", is_platform_ops: true });
+export const ops = () =>
+  person([], { full_name: "Sample Ops", is_platform_ops: true, ops_roles: ["OPS_ADMIN", "OPS_REVIEWER"] });

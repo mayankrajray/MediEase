@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { TABLE, TABLE_WRAP, TD, TH, TR } from "@/components/ui/table";
@@ -18,8 +19,8 @@ const KIND_LABEL: Record<Applications[number]["kind"], string> = {
 
 /**
  * Confirmed clinic applications waiting for MediEase (M6c-P1; spec clinic-onboarding R18): the
- * count and a summary list, oldest first. Read-only until the reviewer's workflow (M6c-P2); no
- * phone, email, registration number or certificate is shown or fetched.
+ * count and a summary list, oldest first, each opening the review (M6c-P2). No phone, email,
+ * registration number or certificate is shown or fetched here.
  */
 export function ApplicationsWaiting() {
   const { endSession } = useSession();
@@ -28,7 +29,7 @@ export function ApplicationsWaiting() {
 
   useEffect(() => {
     let cancelled = false;
-    sessionGet("/api/v1/ops/applications").then(
+    sessionGet("/api/v1/ops/applications", { query: { queue: "waiting" } }).then(
       ({ data }) => {
         if (!cancelled) setItems(data.items);
       },
@@ -48,6 +49,9 @@ export function ApplicationsWaiting() {
       <h2 id="applications-heading" className="text-lg font-semibold">
         {items.length === 0 ? "No applications waiting" : items.length === 1 ? "1 application waiting" : `${items.length} applications waiting`}
       </h2>
+      <Link href="/ops/applications" className="font-medium text-brand-800 underline">
+        All applications
+      </Link>
       {items.length > 0 && (
         <div className={TABLE_WRAP}>
           <table role="table" className={TABLE}>
@@ -74,7 +78,9 @@ export function ApplicationsWaiting() {
               {items.map((a) => (
                 <tr key={a.id} role="row" className={TR}>
                   <td role="cell" className={`${TD} font-mono`} data-label="Reference">
-                    {a.reference}
+                    <Link href={`/ops/applications/${a.id}`} className="font-semibold text-brand-800 underline">
+                      {a.reference}
+                    </Link>
                     {a.possible_duplicate && <span className="ml-2 font-sans text-sm font-medium text-amber-900">Possible duplicate</span>}
                   </td>
                   <td role="cell" className={TD} data-label="Clinic">
