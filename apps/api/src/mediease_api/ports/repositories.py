@@ -391,6 +391,11 @@ class AppointmentRepository(Protocol):
         """Appointments still ``BOOKED`` whose session ended by ``cutoff`` (M5-P4, R10)."""
         ...
 
+    def count_no_shows(self, patient_ids: Collection[UUID], since: datetime) -> dict[UUID, int]:
+        """M6b-P5 (FR-BKG-07, R47): ``NO_SHOW`` appointments per record whose session started on
+        or after ``since``; records without any are left out."""
+        ...
+
     def list_to_move(
         self, *, from_date: date, doctor_id: UUID | None = None, limit: int
     ) -> Sequence[tuple[Appointment, Session]]:

@@ -130,10 +130,12 @@ class Tenant:
 # support command delivery/cli/dose_data.py uses it (tests/tenancy/test_dose_privacy.py). The
 # retention purge deletes dose_records by keep_until alone, like its other tables.
 #
-# Reviewed exception (M6b-P4): SqlAlchemyBookingRequestLookup selects booking_requests by account
-# alone, because a portal caller names no clinic: the patient's own open requests and a count by
-# phone for the rate limit. Each clinic, doctor and session is then read through that clinic's
-# tenant repositories (tests/integration/test_booking_requests_http.py).
+# Reviewed exception (M6b-P4, P5): SqlAlchemyBookingRequestLookup selects booking_requests by
+# account alone, because a portal caller names no clinic: the patient's own requests (and one by
+# ID to answer a proposal) and a count by phone for the rate limit. It also gives the expiry sweep
+# the IDs of active clinics with overdue requests, as the no-show sweep does. Each clinic, doctor
+# and session is then read through that clinic's tenant repositories
+# (tests/integration/test_booking_requests_http.py).
 NOT_TENANT_SCOPED = {"audit_events", "jobs"}
 
 

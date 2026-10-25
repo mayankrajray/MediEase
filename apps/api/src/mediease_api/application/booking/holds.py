@@ -35,16 +35,18 @@ def resolve_holds(
     *,
     slot_start: datetime | None,
     override: bool,
-    actor: Actor,
+    actor: Actor | None,
     now: datetime,
+    exclude: UUID | None = None,
 ) -> HoldResolution:
     """Read the session's live holds; with ``override``, end the ones that block this booking.
 
     A hold blocks if it is on the chosen slot, or (token mode, or a session whose free places are
     all held) if it is what keeps the last place: then the newest hold ends. Without ``override``
-    nothing changes and ``Appointment.book`` decides.
+    nothing changes and ``Appointment.book`` decides. ``exclude`` is the request being accepted
+    (M6b-P5, R34): its own hold never blocks it; everyone else's still counts.
     """
-    holds = list(tenant.booking_requests.live_holds([session.id], now))
+    holds = [h for h in tenant.booking_requests.live_holds([session.id], now) if h.id != exclude]
     if not override or not holds:
         return HoldResolution(tuple(holds), ())
     released = [h for h in holds if slot_start is not None and h.slot_start == slot_start]
@@ -55,6 +57,7 @@ def resolve_holds(
                 break
             remaining.remove(newest)
             released.append(newest)
+    assert actor is not None, "only staff override a hold"
     for hold in released:
         hold.override_hold(by=actor.user_id, now=now)
         tenant.booking_requests.update(hold)

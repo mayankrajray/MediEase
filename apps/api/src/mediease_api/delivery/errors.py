@@ -80,6 +80,7 @@ DOMAIN_ERROR_STATUS = {
     # M6b-P4: online booking requests and their soft hold.
     "PRT_TOO_MANY_REQUESTS": 409,
     "PRT_REQUEST_EXISTS": 409,
+    "BKG_ALREADY_ANSWERED": 409,
     "PRT_RATE_LIMITED": 429,
     "APT_SLOT_HELD": 409,
     # M6b-P3b (R46): a dose outside its marking window.

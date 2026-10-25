@@ -12,12 +12,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date, timedelta
+from uuid import uuid4
 
 import pytest
 from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
 from mediease_api.delivery.http.access import Access, policy_of
+from tests.booking_helpers import offers, request_in, staff_session_after
 from tests.conftest import World
 from tests.integration.test_portal_http import portal_csrf
 from tests.portal_helpers import portal_client
@@ -94,6 +96,13 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/patients/<uuid:patient_id>/portal-link": lambda w: (
         f"{_linked_patient_url(w)}/portal-link"
     ),
+    # M6b-P5: a booking request clinic B received; clinic A can neither see nor answer it.
+    "/api/v1/booking-requests/<uuid:request_id>/candidates": lambda w: (
+        f"{_request_url(w)}/candidates"
+    ),
+    "/api/v1/booking-requests/<uuid:request_id>/accept": lambda w: f"{_request_url(w)}/accept",
+    "/api/v1/booking-requests/<uuid:request_id>/decline": lambda w: f"{_request_url(w)}/decline",
+    "/api/v1/booking-requests/<uuid:request_id>/propose": lambda w: _proposable_url(w),
 }
 
 # Clinical writes need CLINICAL_WRITE and the visit's doctor (prescriptions spec §2), so these
@@ -150,6 +159,12 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
     "/api/v1/reminders/<uuid:reminder_id>": ("PATCH", {"cancel": True}),
     "/api/v1/notifications/<uuid:notification_id>/read": ("POST", {}),
     "/api/v1/patients/<uuid:patient_id>/portal-invite": ("POST", {}),
+    "/api/v1/booking-requests/<uuid:request_id>/accept": (
+        "POST",
+        {"new_patient": {"sex": "FEMALE", "age_years": 30}},
+    ),
+    "/api/v1/booking-requests/<uuid:request_id>/decline": ("POST", {"reason": "PLEASE_CALL"}),
+    "/api/v1/booking-requests/<uuid:request_id>/propose": ("POST", lambda w: _PROPOSALS[id(w)]),
     "/api/v1/patients/<uuid:patient_id>/portal-link": ("DELETE", {}),
 }
 
@@ -379,6 +394,31 @@ def _opted_out_patient_url(world: World) -> str:
         owner_of_b.post(f"{url}/opt-out", headers={"X-CSRF-Token": csrf.value}).status_code == 200
     )
     return url
+
+
+# A proposal's body names one of clinic B's sessions, found when its URL is built (per world).
+_PROPOSALS: dict[int, dict[str, object]] = {}
+
+
+def _request_url(world: World) -> str:
+    """An open booking request of clinic B from a fresh verified account (M6b-P5)."""
+    _, request_id = request_in(world, world.b, f"beta.req.{uuid4().hex[:10]}@example.test")
+    return f"/api/v1/booking-requests/{request_id}"
+
+
+def _proposable_url(world: World) -> str:
+    """Clinic B's request and, kept on the world for the body, a later session of B to offer."""
+    url = _request_url(world)
+    first = offers(world, world.b)[0]
+    target = staff_session_after(world, world.b, first["starts_at"])
+    body: dict[str, object] = {
+        "session_id": target["id"],
+        "new_patient": {"sex": "FEMALE", "age_years": 30},
+    }
+    if target["slots"]:
+        body["slot_start"] = target["slots"][0]["starts_at"]
+    _PROPOSALS[id(world)] = body
+    return f"{url}/propose"
 
 
 def _clinic_rules_with_an_id(world: World) -> set[str]:

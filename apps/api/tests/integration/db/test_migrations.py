@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0029"
+HEAD = "0030"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -857,5 +857,58 @@ def test_0029_adds_booking_requests_and_the_clinic_settings(
         assert _tables(scratch_database_url) == M6B_P3B_TABLES
         with engine.connect() as conn:
             assert "booking.requested" not in _check(conn, "ck_notifications_kind")
+    finally:
+        engine.dispose()
+
+
+def test_0030_answers_booking_requests_and_downgrades(
+    scratch_database_url: str, alembic_config: Config
+) -> None:
+    """M6b-P5 (R51): the answer columns and CHECKs, both open states in the unique index, the
+    BOOKING link method and the expiry sweep kind; the downgrade restores 0029."""
+    command.upgrade(alembic_config, "0030")
+    assert _tables(scratch_database_url) == M6B_P4_TABLES
+    engine = create_engine(scratch_database_url)
+    try:
+        columns = {c["name"] for c in inspect(engine).get_columns("booking_requests")}
+        assert {
+            "patient_id",
+            "appointment_id",
+            "answered_at",
+            "answered_by",
+            "decided_at",
+            "decided_by_type",
+            "decline_reason",
+            "decline_note",
+            "original_session_id",
+            "original_slot_start",
+        } <= columns
+        with engine.connect() as conn:
+            index = conn.execute(
+                text(
+                    "SELECT indexdef FROM pg_indexes"
+                    " WHERE indexname = 'uq_booking_requests_account_session_pending'"
+                )
+            ).scalar_one()
+            checks = dict(
+                conn.execute(
+                    text(
+                        "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint"
+                        " WHERE conname IN ('ck_patient_account_links_method',"
+                        " 'ck_jobs_system_kind', 'ck_booking_requests_status')"
+                    )
+                ).all()
+            )
+        assert "PROPOSED" in index
+        assert "BOOKING" in checks["ck_patient_account_links_method"]
+        assert "schedule_request_expiry" in checks["ck_jobs_system_kind"]
+        assert "EXPIRED" in checks["ck_booking_requests_status"]
+    finally:
+        engine.dispose()
+    command.downgrade(alembic_config, "0029")
+    engine = create_engine(scratch_database_url)
+    try:
+        columns = {c["name"] for c in inspect(engine).get_columns("booking_requests")}
+        assert "decided_at" not in columns
     finally:
         engine.dispose()

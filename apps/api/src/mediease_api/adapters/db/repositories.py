@@ -1182,6 +1182,24 @@ class SqlAlchemyAppointmentRepository(TenantScopedRepository[AppointmentRow]):
         )
         return list(self._session.scalars(query))
 
+    def count_no_shows(self, patient_ids: Collection[UUID], since: datetime) -> dict[UUID, int]:
+        ids = sorted(set(patient_ids))
+        if not ids:
+            return {}
+        query = (
+            select(AppointmentRow.patient_id, func.count())
+            .join(SessionRow, SessionRow.id == AppointmentRow.session_id)
+            .where(
+                AppointmentRow.clinic_id == self.clinic_id,
+                SessionRow.clinic_id == self.clinic_id,
+                AppointmentRow.patient_id.in_(ids),
+                AppointmentRow.status == AppointmentStatus.NO_SHOW.value,
+                SessionRow.starts_at >= since,
+            )
+            .group_by(AppointmentRow.patient_id)
+        )
+        return {row[0]: int(row[1]) for row in self._session.execute(query)}
+
     def _to_move(self, from_date: date, doctor_id: UUID | None) -> Select[AppointmentRow]:
         query = (
             select(AppointmentRow)

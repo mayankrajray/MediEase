@@ -187,6 +187,72 @@ def _create_link(
     return link
 
 
+def link_for_booking(
+    uow: UnitOfWork,
+    tenant: TenantRepositories,
+    *,
+    ids: IdPort,
+    info: RequestInfo,
+    patient_id: UUID,
+    account_id: UUID,
+    staff: Actor | None,
+    now: datetime,
+) -> PatientAccountLink | None:
+    """M6b-P5 (FR-PRT-06 a, spec R34, R42): link the account to the record an accepted request
+    was booked for, in the caller's transaction. Nothing to do if they are already linked; a
+    second link either way is ``PRT_ALREADY_LINKED``. ``staff`` is the accepting member (actor
+    STAFF), or None when the patient takes a proposal (actor PATIENT)."""
+    current = tenant.portal_links.active_for_account(account_id)
+    if current is not None and current.patient_id == patient_id:
+        return None
+    if staff is None:
+        return _create_link(
+            uow,
+            tenant,
+            ids=ids,
+            info=info,
+            patient_id=patient_id,
+            account_id=account_id,
+            method=LinkMethod.BOOKING,
+            created_by_user_id=None,
+            now=now,
+        )
+    tenant.patients.get(patient_id, for_update=True)
+    try:
+        check_can_link(
+            record_link=tenant.portal_links.active_for_patient(patient_id), account_link=current
+        )
+        link = PatientAccountLink.create(
+            id=ids.new_id(),
+            clinic_id=tenant.clinic_id,
+            patient_id=patient_id,
+            account_id=account_id,
+            method=LinkMethod.BOOKING,
+            created_by_user_id=staff.user_id,
+            now=now,
+        )
+        tenant.portal_links.add(link)
+    except AlreadyLinked:
+        logger.info("portal.link_refused", reason=AlreadyLinked.code)
+        raise
+    record_event(
+        uow,
+        event_id=ids.new_id(),
+        action=AuditAction.PATIENT_PORTAL_LINKED,
+        actor=staff,
+        now=now,
+        clinic_id=tenant.clinic_id,
+        entity_type=ENTITY_TYPE,
+        entity_id=patient_id,
+        metadata={
+            "link_id": str(link.id),
+            "account_id": str(account_id),
+            "method": LinkMethod.BOOKING.value,
+        },
+    )
+    return link
+
+
 def _linked_record(link: PatientAccountLink, clinic_name: str, patient: Patient) -> LinkedRecord:
     return LinkedRecord(
         link_id=link.id,

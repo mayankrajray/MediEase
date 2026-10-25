@@ -133,6 +133,13 @@ EXPECTED_POLICIES = {
     "public_clinics.get_clinic": (Access.PUBLIC, None),
     "public_clinics.availability": (Access.PUBLIC, None),
     "booking_requests.list_booking_requests": (Access.CLINIC, Permission.APPOINTMENTS_MANAGE),
+    # M6b-P5: answering requests (a new record also needs PATIENTS_MANAGE, checked in the route).
+    "booking_requests.candidates": (Access.CLINIC, Permission.APPOINTMENTS_MANAGE),
+    "booking_requests.accept": (Access.CLINIC, Permission.APPOINTMENTS_MANAGE),
+    "booking_requests.decline": (Access.CLINIC, Permission.APPOINTMENTS_MANAGE),
+    "booking_requests.propose": (Access.CLINIC, Permission.APPOINTMENTS_MANAGE),
+    "portal_records.accept_proposal": (Access.PATIENT, None),
+    "portal_records.decline_proposal": (Access.PATIENT, None),
     "portal_records.create_booking_request": (Access.PATIENT, None),
     "portal_records.list_booking_requests": (Access.PATIENT, None),
     "public_links.describe_link": (Access.PUBLIC, None),

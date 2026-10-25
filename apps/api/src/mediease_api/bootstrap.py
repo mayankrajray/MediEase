@@ -74,6 +74,15 @@ from mediease_api.application.auth.password_reset import (
 from mediease_api.application.auth.refresh_session import RefreshSession
 from mediease_api.application.auth.sign_in import SignIn
 from mediease_api.application.auth.sign_out import SignOut
+from mediease_api.application.booking.answers import (
+    AcceptBookingRequest,
+    AcceptProposal,
+    DeclineBookingRequest,
+    DeclineProposal,
+    ListRequestCandidates,
+    ProposeBookingTime,
+)
+from mediease_api.application.booking.expiry import ExpireBookingRequests, SweepRequestExpiry
 from mediease_api.application.booking.public import GetAvailability, GetPublicClinic
 from mediease_api.application.booking.requests import (
     CreateBookingRequest,
@@ -244,10 +253,12 @@ from mediease_api.delivery.worker.heartbeat import beat
 from mediease_api.delivery.worker.loop import LockRenewer, Worker
 from mediease_api.domain.jobs.job import (
     AUTH_EMAIL_KIND,
+    EXPIRE_REQUESTS_KIND,
     MARK_NO_SHOWS_KIND,
     NO_SHOW_SWEEP_KIND,
     PURGE_KIND,
     RECONCILE_KIND,
+    REQUEST_EXPIRY_SWEEP_KIND,
     STAFF_INVITE_KIND,
     WEBHOOK_KIND,
 )
@@ -754,6 +765,25 @@ class _UseCases:
     def list_booking_requests(self) -> ListBookingRequests:
         return ListBookingRequests(uow=self._uow(), clock=self.clock)
 
+    # M6b-P5: answering requests (spec R31-R47).
+    def accept_booking_request(self) -> AcceptBookingRequest:
+        return AcceptBookingRequest(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def decline_booking_request(self) -> DeclineBookingRequest:
+        return DeclineBookingRequest(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def propose_booking_time(self) -> ProposeBookingTime:
+        return ProposeBookingTime(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def list_request_candidates(self) -> ListRequestCandidates:
+        return ListRequestCandidates(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def accept_proposal(self) -> AcceptProposal:
+        return AcceptProposal(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def decline_proposal(self) -> DeclineProposal:
+        return DeclineProposal(uow=self._uow(), clock=self.clock, ids=self.ids)
+
     def list_portal_reminders(self) -> ListPortalReminders:
         return ListPortalReminders(uow=self._uow())
 
@@ -982,6 +1012,13 @@ def _messaging_handlers(
         REMINDER_KIND: SendReminder(sender=sender, ids=ids, fallback=fallback),
         NO_SHOW_SWEEP_KIND: SweepNoShows(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
         MARK_NO_SHOWS_KIND: MarkNoShows(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
+        # M6b-P5 (booking-requests R32): persist the expiry of unanswered requests.
+        REQUEST_EXPIRY_SWEEP_KIND: SweepRequestExpiry(
+            uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids
+        ),
+        EXPIRE_REQUESTS_KIND: ExpireBookingRequests(
+            uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids
+        ),
         BOOKING_CONFIRMATION_KIND: SendBookingConfirmation(sender=sender),
         # M6a-P8 (decision 7A): a visit the clinic cancelled.
         CANCELLATION_NOTICE_KIND: SendCancellationNotice(sender=sender),

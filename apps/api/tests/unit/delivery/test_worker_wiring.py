@@ -17,9 +17,11 @@ from mediease_api.bootstrap import _messaging_handlers, build_messaging, build_s
 from mediease_api.config.settings import load_settings
 from mediease_api.delivery.worker.loop import Worker
 from mediease_api.domain.jobs.job import (
+    EXPIRE_REQUESTS_KIND,
     MARK_NO_SHOWS_KIND,
     NO_SHOW_SWEEP_KIND,
     RECONCILE_KIND,
+    REQUEST_EXPIRY_SWEEP_KIND,
     WEBHOOK_KIND,
 )
 from mediease_api.domain.messaging.jobs import (
@@ -50,6 +52,9 @@ def test_m5_the_worker_handles_the_messaging_jobs(
         REMINDER_KIND,
         NO_SHOW_SWEEP_KIND,
         MARK_NO_SHOWS_KIND,
+        # M6b-P5: the expiry of unanswered booking requests.
+        REQUEST_EXPIRY_SWEEP_KIND,
+        EXPIRE_REQUESTS_KIND,
         OPT_OUT_CONFIRMATION_KIND,
         SMS_FALLBACK_KIND,
     }
