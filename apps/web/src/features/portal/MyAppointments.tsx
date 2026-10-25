@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
+
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
-import { portalGet } from "@/lib/auth/portal-session";
+import { portalGet, portalPost } from "@/lib/auth/portal-session";
 
 import { type PortalAppointmentGroup, type PortalBookingRequest, type PortalReminder, usePortalLoad } from "./data";
 import { PortalCard, ScreenLoading, usePortal } from "./PortalShell";
@@ -9,32 +11,99 @@ import { AppointmentRow, ReminderRow } from "./Rows";
 import { bookingWords } from "@/lib/i18n/booking-request";
 import { portalDay, portalTime } from "@/lib/i18n/portal";
 
-function RequestedList({ requests }: Readonly<{ requests: readonly PortalBookingRequest[] }>) {
+/**
+ * Open and recently answered booking requests (M6b-P4, P5; spec R48, R49): *Requested*,
+ * *Suggested another time* with Accept this time / No thanks, *Declined* with the reason's words,
+ * *Expired*; with a call button where the clinic should be phoned. Accepted ones are appointments.
+ */
+function RequestedList({ requests, onChanged }: Readonly<{ requests: readonly PortalBookingRequest[]; onChanged: () => void }>) {
   const { s } = usePortal();
   const words = bookingWords(s.lang);
   return (
     <PortalCard id="requested" title={words.mine.title}>
       <ul>
         {requests.map((r) => (
-          <li key={r.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-slate-200 py-2 first:border-t-0">
-            <span>
-              <span className="block font-semibold">
-                {portalDay(r.starts_at, r.timezone, s)}
-                {r.mode === "SLOTS" ? `, ${portalTime(r.starts_at, r.timezone, s)}` : ""}
-              </span>
-              <span className="block text-sm text-slate-700">
-                {r.doctor_name} · {r.clinic_name}
-              </span>
-              <span className="block text-sm text-slate-700">{words.mine.waiting}</span>
-            </span>
-            <span className="rounded-full border border-amber-800 px-2 py-0.5 text-sm font-medium text-amber-950">{words.mine.requested}</span>
-          </li>
+          <RequestRow key={r.id} r={r} onChanged={onChanged} />
         ))}
       </ul>
     </PortalCard>
   );
 }
 
+function RequestRow({ r, onChanged }: Readonly<{ r: PortalBookingRequest; onChanged: () => void }>) {
+  const { s, leave } = usePortal();
+  const words = bookingWords(s.lang);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | undefined>(undefined);
+  const when = (iso: string) => `${portalDay(iso, r.timezone, s)}${r.mode === "SLOTS" ? `, ${portalTime(iso, r.timezone, s)}` : ""}`;
+
+  async function answer(action: "accept-proposal" | "decline-proposal") {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const path =
+        action === "accept-proposal"
+          ? ("/api/v1/portal/booking-requests/{request_id}/accept-proposal" as const)
+          : ("/api/v1/portal/booking-requests/{request_id}/decline-proposal" as const);
+      await portalPost(path, undefined, { pathParams: { request_id: r.id } });
+      setResult(action === "accept-proposal" ? words.mine.accepted : words.mine.declinedByYou);
+      onChanged();
+    } catch (failure) {
+      if (!leave(failure)) setResult(words.mine.answerFailed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const badge =
+    r.status === "PROPOSED" ? words.mine.proposed : r.status === "DECLINED" ? words.mine.declined : r.status === "EXPIRED" ? words.mine.expired : words.mine.requested;
+  const call =
+    r.clinic_phone_e164 !== null && (r.status === "DECLINED" || r.status === "EXPIRED") ? (
+      <a href={`tel:${r.clinic_phone_e164}`} className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+        {words.mine.call}
+      </a>
+    ) : null;
+  const button = "inline-flex min-h-11 items-center rounded-lg px-4 font-semibold";
+
+  return (
+    <li className="space-y-1 border-t border-slate-200 py-2 first:border-t-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span>
+          <span className="block font-semibold">{when(r.starts_at)}</span>
+          <span className="block text-sm text-slate-700">
+            {r.doctor_name} · {r.clinic_name}
+          </span>
+        </span>
+        <span className="rounded-full border border-amber-800 px-2 py-0.5 text-sm font-medium text-amber-950">{badge}</span>
+      </div>
+      {r.status === "REQUESTED" ? <p className="text-sm text-slate-700">{words.mine.waiting}</p> : null}
+      {r.status === "PROPOSED" && (
+        <div className="space-y-2">
+          <p>{words.mine.proposedBody(when(r.starts_at), r.original_starts_at === null ? "" : when(r.original_starts_at))}</p>
+          {r.respond_by !== null && <p className="text-sm text-slate-700">{words.mine.replyBy(`${portalDay(r.respond_by, r.timezone, s)}, ${portalTime(r.respond_by, r.timezone, s)}`)}</p>}
+          {result === undefined && (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={busy} onClick={() => void answer("accept-proposal")} className={`${button} bg-brand-700 text-white disabled:bg-slate-400`}>
+                {words.mine.acceptTime}
+              </button>
+              <button type="button" disabled={busy} onClick={() => void answer("decline-proposal")} className={`${button} border border-slate-400 bg-white text-slate-900`}>
+                {words.mine.noThanks}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {r.status === "DECLINED" && r.decline_reason !== null && <p>{words.mine.reasons[r.decline_reason] ?? words.mine.reasons["OTHER"]}</p>}
+      {r.status === "EXPIRED" && <p>{words.mine.expiredBody}</p>}
+      {result !== undefined && (
+        <p role="status" className="font-medium">
+          {result}
+        </p>
+      )}
+      {call}
+    </li>
+  );
+}
 async function loadAppointments(): Promise<{
   readonly groups: readonly PortalAppointmentGroup[];
   readonly reminders: readonly PortalReminder[];
@@ -64,7 +133,7 @@ export function MyAppointments() {
       <h1 className="text-2xl font-bold tracking-tight">{s.appointments.title}</h1>
       {loaded.status === "loading" && <ScreenLoading label={s.loading} />}
       {loaded.status === "failed" && <ErrorNotice error={loaded.error} onRetry={loaded.retry} />}
-      {loaded.status === "ready" && loaded.data.requests.length > 0 && <RequestedList requests={loaded.data.requests} />}
+      {loaded.status === "ready" && loaded.data.requests.length > 0 && <RequestedList requests={loaded.data.requests} onChanged={loaded.retry} />}
       {loaded.status === "ready" &&
         (loaded.data.groups.length === 0 ? (
           loaded.data.requests.length === 0 && <p>{s.appointments.empty}</p>

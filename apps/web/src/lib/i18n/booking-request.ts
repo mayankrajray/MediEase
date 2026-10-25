@@ -63,6 +63,20 @@ export interface BookingWords {
     readonly title: string;
     readonly requested: string;
     readonly waiting: string;
+    // M6b-P5 (R49).
+    readonly proposed: string;
+    readonly proposedBody: (when: string, original: string) => string;
+    readonly replyBy: (when: string) => string;
+    readonly acceptTime: string;
+    readonly noThanks: string;
+    readonly accepted: string;
+    readonly declinedByYou: string;
+    readonly declined: string;
+    readonly expired: string;
+    readonly expiredBody: string;
+    readonly call: string;
+    readonly reasons: Readonly<Record<string, string>>;
+    readonly answerFailed: string;
   };
 }
 
@@ -134,6 +148,27 @@ const EN: BookingWords = {
     title: "Requested",
     requested: "Requested",
     waiting: "Waiting for the clinic to reply",
+    proposed: "Suggested another time",
+    proposedBody: (when, original) => `The clinic suggests ${when} instead of ${original}.`,
+    replyBy: (when) => `Please answer by ${when}.`,
+    acceptTime: "Accept this time",
+    noThanks: "No thanks",
+    accepted: "Booked. You can see it under your clinic below.",
+    declinedByYou: "You said no thanks to the suggested time.",
+    declined: "Declined",
+    expired: "Expired",
+    expiredBody: "The clinic did not reply in time. Please call them.",
+    call: "Call the clinic",
+    reasons: {
+      TIME_UNAVAILABLE: "That time is no longer available.",
+      DOCTOR_UNAVAILABLE: "The doctor is not available then.",
+      PLEASE_CALL: "Please call the clinic.",
+      NOT_ONLINE: "This cannot be booked online. Please call the clinic.",
+      DUPLICATE: "You already have a request or booking for this.",
+      OTHER: "The clinic could not book this time.",
+      PATIENT_DECLINED: "You said no thanks to the suggested time.",
+    },
+    answerFailed: "This suggestion is no longer open. Please call the clinic.",
   },
 };
 
@@ -205,6 +240,27 @@ const HI: BookingWords = {
     title: "अनुरोध भेजे गए",
     requested: "अनुरोध भेजा गया",
     waiting: "क्लिनिक के जवाब का इंतज़ार",
+    proposed: "दूसरा समय सुझाया गया",
+    proposedBody: (when, original) => `क्लिनिक ${original} की जगह ${when} सुझाता है।`,
+    replyBy: (when) => `कृपया ${when} तक जवाब दें।`,
+    acceptTime: "यह समय स्वीकार करें",
+    noThanks: "नहीं, धन्यवाद",
+    accepted: "बुक हो गया। नीचे अपने क्लिनिक में देखें।",
+    declinedByYou: "आपने सुझाए गए समय के लिए मना कर दिया।",
+    declined: "मना किया गया",
+    expired: "समय निकल गया",
+    expiredBody: "क्लिनिक ने समय पर जवाब नहीं दिया। कृपया उन्हें फ़ोन करें।",
+    call: "क्लिनिक को फ़ोन करें",
+    reasons: {
+      TIME_UNAVAILABLE: "वह समय अब उपलब्ध नहीं है।",
+      DOCTOR_UNAVAILABLE: "उस समय डॉक्टर उपलब्ध नहीं हैं।",
+      PLEASE_CALL: "कृपया क्लिनिक को फ़ोन करें।",
+      NOT_ONLINE: "इसे ऑनलाइन बुक नहीं किया जा सकता। कृपया क्लिनिक को फ़ोन करें।",
+      DUPLICATE: "इसके लिए आपका अनुरोध या बुकिंग पहले से है।",
+      OTHER: "क्लिनिक यह समय बुक नहीं कर सका।",
+      PATIENT_DECLINED: "आपने सुझाए गए समय के लिए मना कर दिया।",
+    },
+    answerFailed: "यह सुझाव अब खुला नहीं है। कृपया क्लिनिक को फ़ोन करें।",
   },
 };
 

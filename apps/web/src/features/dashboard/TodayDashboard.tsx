@@ -180,6 +180,27 @@ function Overview({ today, timeZone }: { today: Today; timeZone: string }) {
                 href="/bookings-to-move"
               />
             )}
+            {today.booking_requests_open !== null && today.booking_requests_open > 0 && (
+              // M6b-P5 (R45): what patients asked for on the clinic page, waiting for an answer.
+              <StatTile
+                label="Booking requests waiting"
+                value={today.booking_requests_open}
+                hint="Answer before the reply-by time"
+                tone="waiting"
+                href="/booking-requests"
+              />
+            )}
+            {today.requests_answered_30d !== null &&
+              today.requests_expired_30d !== null &&
+              today.requests_answered_30d + today.requests_expired_30d > 0 && (
+                // R46: the share answered before the deadline; owners only.
+                <StatTile
+                  label="Requests answered in time"
+                  value={`${Math.round((100 * today.requests_answered_30d) / (today.requests_answered_30d + today.requests_expired_30d))}%`}
+                  hint={`Last 30 days · ${today.requests_expired_30d} expired unanswered`}
+                  tone={today.requests_expired_30d > 0 ? "waiting" : "done"}
+                />
+              )}
             {today.messages_failed !== null && (
               <StatTile
                 label="Messages failed today"

@@ -153,3 +153,72 @@ describe("My appointments shows requests (R23)", () => {
     await waitFor(() => expect(screen.queryByText(/no appointments/i)).not.toBeInTheDocument());
   });
 });
+
+describe("answering a proposal (M6b-P5, R42, R43, R49)", () => {
+  const PROPOSED = {
+    ...REQUESTED,
+    status: "PROPOSED",
+    starts_at: "2026-11-03T05:30:00Z",
+    original_starts_at: SLOT,
+    decline_reason: null,
+    respond_by: "2026-11-02T08:30:00Z",
+  };
+
+  function routes(extra: Record<string, () => Response>) {
+    return {
+      ...me(),
+      "GET /api/v1/portal/appointments": () => json(200, { items: [] }),
+      "GET /api/v1/portal/reminders": () => json(200, { items: [] }),
+      ...extra,
+    };
+  }
+
+  it("shows the suggested time and books it with one tap", async () => {
+    const api = mockApi(
+      routes({
+        "GET /api/v1/portal/booking-requests": () => json(200, { items: [PROPOSED] }),
+        [`POST /api/v1/portal/booking-requests/${PROPOSED.id}/accept-proposal`]: () => json(200, { id: PROPOSED.id, status: "ACCEPTED" }),
+      }),
+    );
+    await renderPortal(<MyAppointments />);
+    const card = await screen.findByRole("region", { name: "Requested" });
+    expect(within(card).getByText("Suggested another time")).toBeInTheDocument();
+    expect(within(card).getByText(/The clinic suggests .* instead of /)).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole("button", { name: "Accept this time" }));
+    await waitFor(() => expect(api.calls.some((c) => c.path.endsWith("/accept-proposal"))).toBe(true));
+    expect(api.calls.filter((c) => c.method === "POST").map((c) => c.path)).toEqual([
+      `/api/v1/portal/booking-requests/${PROPOSED.id}/accept-proposal`,
+    ]);
+  });
+
+  it("No thanks declines it", async () => {
+    const api = mockApi(
+      routes({
+        "GET /api/v1/portal/booking-requests": () => json(200, { items: [PROPOSED] }),
+        [`POST /api/v1/portal/booking-requests/${PROPOSED.id}/decline-proposal`]: () => json(200, { id: PROPOSED.id, status: "DECLINED" }),
+      }),
+    );
+    await renderPortal(<MyAppointments />);
+    fireEvent.click(await screen.findByRole("button", { name: "No thanks" }));
+    await waitFor(() => expect(api.calls.some((c) => c.path.endsWith("/decline-proposal"))).toBe(true));
+  });
+
+  it("a declined request says why, an expired one says to call, both with the call button", async () => {
+    mockApi(
+      routes({
+        "GET /api/v1/portal/booking-requests": () =>
+          json(200, {
+            items: [
+              { ...REQUESTED, id: "d1", status: "DECLINED", decline_reason: "DOCTOR_UNAVAILABLE", original_starts_at: null, respond_by: null },
+              { ...REQUESTED, id: "e1", status: "EXPIRED", decline_reason: null, original_starts_at: null, respond_by: null },
+            ],
+          }),
+      }),
+    );
+    await renderPortal(<MyAppointments />);
+    const card = await screen.findByRole("region", { name: "Requested" });
+    expect(within(card).getByText("The doctor is not available then.")).toBeInTheDocument();
+    expect(within(card).getByText(/did not reply in time/)).toBeInTheDocument();
+    expect(within(card).getAllByRole("link", { name: "Call the clinic" })).toHaveLength(2);
+  });
+});

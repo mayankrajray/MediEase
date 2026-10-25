@@ -21,7 +21,8 @@ async function home(page: Page): Promise<{ nav: string[]; actions: string[] }> {
   const quick = page.getByRole("navigation", { name: "Quick actions" });
   await expect(quick.getByRole("listitem")).toHaveCount(3);
   return {
-    nav: await page.getByRole("navigation", { name: "Main" }).getByRole("link").allTextContents(),
+    // M6b-P5: the open-request count rides on its link's name and depends on the data; drop it.
+    nav: (await page.getByRole("navigation", { name: "Main" }).getByRole("link").allTextContents()).map((t) => t.replace(/, \d+ waiting$/, "")),
     actions: await quick.getByRole("listitem").allTextContents(),
   };
 }

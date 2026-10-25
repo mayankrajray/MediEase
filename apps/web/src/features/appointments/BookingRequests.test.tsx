@@ -39,13 +39,112 @@ const REQUEST = {
   holding: true,
   hold_overridden: false,
   respond_by: iso(230),
+  status: "PENDING",
+  doctor_id: "0192f0a0-0000-7000-8000-0000000000d1",
+  session_id: "0192f0a0-0000-7000-8000-0000000000e1",
+  original_starts_at: null,
+  patient_id: null,
+  patient_code: null,
+  appointment_id: null,
+  answered_at: null,
+  answered_by_name: null,
+  decided_at: null,
+  decided_by: null,
+  decline_reason: null,
+  decline_note: null,
 };
+
+const inbox = (items: unknown[], open = items.length, expired = 0) => ({ items, open_count: open, expired_7d: expired });
+
+const CANDIDATES = {
+  linked: false,
+  items: [{ id: "0192f0a0-0000-7000-8000-0000000000c9", code: "SC-0042", full_name: "Requester One", age_years: 34, no_shows: 2 }],
+  suggested: { full_name: "Requester One", age_years: 34, sex: "FEMALE" },
+};
+
+describe("answering requests (M6b-P5, R34, R36, R39)", () => {
+  it("accept: the phone's candidates show their no-shows; a new record is prefilled and sent", async () => {
+    const api = mockApi({
+      ...boardRoutes,
+      "GET /api/v1/booking-requests": () => json(200, inbox([REQUEST])),
+      [`GET /api/v1/booking-requests/${REQUEST.id}/candidates`]: () => json(200, CANDIDATES),
+      [`POST /api/v1/booking-requests/${REQUEST.id}/accept`]: () => json(201, { id: REQUEST.id, status: "ACCEPTED", patient_id: "p", appointment_id: "a" }),
+    });
+    renderInWorkspace(<BookingRequests />);
+    fireEvent.click(await screen.findByRole("button", { name: "Accept Requester One's request" }, { timeout: 5000 }));
+    const drawer = await screen.findByRole("dialog", { name: "Accept request" });
+    expect(await within(drawer).findByText("2 no-shows in 12 months")).toBeInTheDocument();
+    const confirm = within(drawer).getByRole("button", { name: "Accept and book" });
+    expect(confirm).toBeDisabled(); // nothing is chosen by phone alone
+    fireEvent.click(within(drawer).getByRole("radio", { name: "Create new record" }));
+    expect(within(drawer).getByLabelText("Full name")).toHaveValue("Requester One");
+    expect(within(drawer).getByLabelText("Sex (required)")).toHaveValue("FEMALE");
+    fireEvent.click(confirm);
+    expect(await screen.findByText("Requester One's request accepted and booked.")).toBeInTheDocument();
+    expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({
+      new_patient: { full_name: "Requester One", sex: "FEMALE", age_years: 34 },
+    });
+  });
+
+  it("accept: a candidate can be chosen; a lost race says someone answered", async () => {
+    const api = mockApi({
+      ...boardRoutes,
+      "GET /api/v1/booking-requests": () => json(200, inbox([REQUEST])),
+      [`GET /api/v1/booking-requests/${REQUEST.id}/candidates`]: () => json(200, CANDIDATES),
+      [`POST /api/v1/booking-requests/${REQUEST.id}/accept`]: () => apiError(409, "BKG_ALREADY_ANSWERED", "Answered."),
+    });
+    renderInWorkspace(<BookingRequests />);
+    fireEvent.click(await screen.findByRole("button", { name: "Accept Requester One's request" }, { timeout: 5000 }));
+    const drawer = await screen.findByRole("dialog", { name: "Accept request" });
+    fireEvent.click(await within(drawer).findByRole("radio", { name: /Requester One · SC-0042/ }));
+    fireEvent.click(within(drawer).getByRole("button", { name: "Accept and book" }));
+    expect(await within(drawer).findByRole("alert")).toHaveTextContent("Someone has already answered this request");
+    expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ patient_id: CANDIDATES.items[0]?.id });
+  });
+
+  it("decline: a reason the patient sees and a staff-only note", async () => {
+    const api = mockApi({
+      ...boardRoutes,
+      "GET /api/v1/booking-requests": () => json(200, inbox([REQUEST])),
+      [`POST /api/v1/booking-requests/${REQUEST.id}/decline`]: () => json(200, { id: REQUEST.id, status: "DECLINED", patient_id: null, appointment_id: null }),
+    });
+    renderInWorkspace(<BookingRequests />);
+    fireEvent.click(await screen.findByRole("button", { name: "Decline Requester One's request" }, { timeout: 5000 }));
+    const dialog = await screen.findByRole("dialog", { name: "Decline Requester One's request" });
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Please call the clinic" }));
+    fireEvent.change(within(dialog).getByLabelText("Note for the clinic (optional)"), { target: { value: "  called twice  " } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Decline request" }));
+    expect(await screen.findByText("Requester One's request declined.")).toBeInTheDocument();
+    expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ reason: "PLEASE_CALL", note: "called twice" });
+  });
+
+  it("answered: the outcome, who and the note", async () => {
+    mockApi({
+      ...boardRoutes,
+      "GET /api/v1/booking-requests": (call) =>
+        json(
+          200,
+          call.search.get("state") === "answered"
+            ? inbox([{ ...REQUEST, status: "DECLINED", decline_reason: "DUPLICATE", decline_note: "same as yesterday", answered_by_name: "Alpha Front_Desk", decided_at: iso(-5) }], 0, 1)
+            : inbox([]),
+        ),
+    });
+    renderInWorkspace(<BookingRequests />);
+    fireEvent.click(await screen.findByRole("button", { name: "Answered" }, { timeout: 5000 }));
+    const table = await screen.findByRole("table");
+    expect(within(table).getByText("Duplicate request")).toBeInTheDocument();
+    expect(within(table).getByText("Note: same as yesterday")).toBeInTheDocument();
+    expect(within(table).getByText(/By Alpha Front_Desk/)).toBeInTheDocument();
+    expect(screen.getByText(/1 expired unanswered/)).toBeInTheDocument();
+  });
+});
 
 describe("booking requests (M6b-P4, spec R22)", () => {
   it("lists what patients asked for, with the hold and the reply-by time", async () => {
     mockApi({
       ...boardRoutes,
-      "GET /api/v1/booking-requests": () => json(200, { items: [REQUEST, { ...REQUEST, id: "b2", full_name: "Second Person", holding: false, hold_overridden: true, age_years: null, sex: null, reason: null }] }),
+      "GET /api/v1/booking-requests": () =>
+        json(200, inbox([REQUEST, { ...REQUEST, id: "b2", full_name: "Second Person", holding: false, hold_overridden: true, age_years: null, sex: null, reason: null }])),
     });
     renderInWorkspace(<BookingRequests />);
     const table = await screen.findByRole("table", {}, { timeout: 5000 });
@@ -57,7 +156,7 @@ describe("booking requests (M6b-P4, spec R22)", () => {
   });
 
   it("says plainly when there are none", async () => {
-    mockApi({ ...boardRoutes, "GET /api/v1/booking-requests": () => json(200, { items: [] }) });
+    mockApi({ ...boardRoutes, "GET /api/v1/booking-requests": () => json(200, inbox([])) });
     renderInWorkspace(<BookingRequests />);
     expect(await screen.findByText("No open requests", {}, { timeout: 5000 })).toBeInTheDocument();
   });
@@ -134,5 +233,19 @@ describe("booking over a held time (R18, R18a)", () => {
     await within(dialog).findByRole("radio");
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirm booking" }));
     expect(await within(dialog).findByRole("alertdialog")).toHaveTextContent(/Book anyway only if you have agreed/);
+  });
+});
+
+describe("the open-request count in the nav (M6b-P5, R45)", () => {
+  it("shows the count beside Booking requests, read as words", async () => {
+    mockApi({
+      ...boardRoutes,
+      "GET /api/v1/booking-requests": () => json(200, { items: [], open_count: 3, expired_7d: 0 }),
+    });
+    renderInWorkspace(<BookingRequests />);
+    const nav = await screen.findByRole("navigation", { name: "Main" }, { timeout: 5000 });
+    const link = await within(nav).findByRole("link", { name: /^Booking requests/ });
+    await waitFor(() => expect(link).toHaveAccessibleName(/^Booking requests.*3 waiting$/));
+    expect(link).toHaveAttribute("href", "/booking-requests");
   });
 });

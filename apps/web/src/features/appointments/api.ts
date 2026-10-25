@@ -45,13 +45,23 @@ export interface AppointmentApi {
   readonly toMove: (doctorId?: string) => Promise<readonly BookingToMove[]>;
   /** M6a-P8 (FR-APT-08): the clinic's appointment reminders (owners). */
   readonly setReminders: (change: ReminderSettings) => Promise<unknown>;
-  /** M6b-P4 (R22): the clinic's open online booking requests, oldest first. */
-  readonly bookingRequests: () => Promise<readonly StaffBookingRequest[]>;
+  /** M6b-P4, P5 (R44, R45): the inbox, open (oldest first) or answered (last 7 days), with counts. */
+  readonly bookingRequests: (state?: "open" | "answered") => Promise<BookingInbox>;
+  /** M6b-P5 (R36): the records that may be the request's patient. */
+  readonly requestCandidates: (id: string) => Promise<RequestCandidates>;
+  readonly acceptRequest: (id: string, record: RecordChoice) => Promise<RequestAnswer>;
+  readonly declineRequest: (id: string, reason: StaffDeclineReason, note?: string) => Promise<RequestAnswer>;
+  readonly proposeTime: (id: string, sessionId: string, slotStart: string | undefined, record: RecordChoice) => Promise<RequestAnswer>;
   /** M6b-P4 (R20): how long a request holds its slot, and whether the form asks age and sex (owners). */
   readonly setRequestSettings: (change: RequestSettings) => Promise<unknown>;
 }
 
 export type StaffBookingRequest = S["StaffBookingRequest"];
+export type BookingInbox = S["StaffBookingRequestList"];
+export type RequestCandidates = S["RequestCandidateList"];
+export type RequestAnswer = S["RequestAnswer"];
+export type RecordChoice = S["RequestRecordChoice"];
+export type StaffDeclineReason = S["RequestDecline"]["reason"];
 export interface RequestSettings {
   readonly request_hold_minutes?: number;
   readonly request_requires_age_sex?: boolean;
@@ -131,7 +141,28 @@ export function useAppointmentApi(): AppointmentApi {
           })
         ).data.items,
       setReminders: async (change) => (await sessionPatch("/api/v1/clinic", change, base)).data,
-      bookingRequests: async () => (await sessionGet("/api/v1/booking-requests", base)).data.items,
+      bookingRequests: async (state = "open") =>
+        (await sessionGet("/api/v1/booking-requests", { ...base, query: { state } })).data,
+      requestCandidates: async (id) =>
+        (await sessionGet("/api/v1/booking-requests/{request_id}/candidates", { ...base, pathParams: { request_id: id } })).data,
+      acceptRequest: async (id, record) =>
+        (await sessionPost("/api/v1/booking-requests/{request_id}/accept", record, { ...base, pathParams: { request_id: id } })).data,
+      declineRequest: async (id, reason, note) =>
+        (
+          await sessionPost(
+            "/api/v1/booking-requests/{request_id}/decline",
+            { reason, ...(note === undefined || note.trim() === "" ? {} : { note: note.trim() }) },
+            { ...base, pathParams: { request_id: id } },
+          )
+        ).data,
+      proposeTime: async (id, sessionId, slotStart, record) =>
+        (
+          await sessionPost(
+            "/api/v1/booking-requests/{request_id}/propose",
+            { session_id: sessionId, ...(slotStart === undefined ? {} : { slot_start: slotStart }), ...record },
+            { ...base, pathParams: { request_id: id } },
+          )
+        ).data,
       setRequestSettings: async (change) => (await sessionPatch("/api/v1/clinic", change, base)).data,
     };
   }, [clinicId]);

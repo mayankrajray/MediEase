@@ -59,6 +59,9 @@ export function todayOf(overrides: Partial<Today> = {}): Today {
     bookings_to_move: 0,
     messages_failed: 1,
     week: null,
+    booking_requests_open: null,
+    requests_answered_30d: null,
+    requests_expired_30d: null,
     ...overrides,
   };
 }
