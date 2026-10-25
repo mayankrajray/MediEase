@@ -37,6 +37,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0011` | `rx_favourites`, `rx_templates`; `prescription_items.favourite_id`, `prescriptions.template_id`; the medicine-name prefix index | M4-P3 |
 | `0012` | `clinics.rx_paper_size` (`A5` for existing clinics; `A5` \| `A4`) | M4-P4 |
 | `0013` | `patient_links`, `public_rate_limits`; `prescriptions.layout_version` (1 for existing rows) | M4-P5 |
+| `0032` | `clinic_applications`, `clinic_application_doctors`, the reference sequence; actor `APPLICANT`; two system job kinds | M6c-P1 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -900,6 +901,57 @@ stateless signed token (`Kind.QUEUE`) and has no table.
 
 ---
 
+## M6c - Clinic applications (migration `0032`, M6c-P1, ADR-0020)
+
+Spec `docs/specs/clinic-onboarding.md`. **Platform data**, not tenant data: an application belongs
+to no clinic until a reviewer approves it (FR-ONB-02). Reached only through
+`SqlAlchemyApplicationRepository` (`uow.applications`), used by the public application routes,
+the application jobs and the ops routes. Personal data (C2): the owner's contact details and each
+doctor's registration; certificates are private blobs.
+
+### `clinic_applications`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| reference | text unique | `MA-<year>-NNNN` from `clinic_application_reference_seq` |
+| kind | text | `CLINIC` \| `SOLO_DOCTOR` (CHECK) |
+| status | text | `PENDING` \| `UNDER_REVIEW` \| `APPROVED` \| `REJECTED` (CHECK); not `PENDING` only once confirmed (CHECK) |
+| clinic_name, address_line, city, state | text | |
+| pincode | text | Six digits, not starting with 0 (CHECK) |
+| clinic_phone_e164, owner_phone_e164 | text | E.164; the owner's is an Indian mobile |
+| specialties | text[] | From the published list |
+| owner_name, owner_email | text | Email lower-case |
+| owner_practises | boolean | The owner is one of the doctors |
+| email_verified_at | timestamptz null | Set when the emailed link is used; then in the reviewer queue |
+| confirm_digest | text null unique | SHA-256 of the link's secret; cleared when used (CHECK) |
+| duplicate_of | text[] | References or `clinic:<id>` with the same registration (R17) |
+| ip_hash | text null | HMAC of the caller's address (the per-address limit) |
+| submitted_at, updated_at | timestamptz | The link expires 48 hours after `submitted_at` |
+
+Indexes on `owner_email`, `owner_phone_e164`, `ip_hash` and `submitted_at` (the limits and the
+purge).
+
+### `clinic_application_doctors`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| application_id | uuid FK clinic_applications, cascade | |
+| position | smallint | 1-10 (CHECK), unique per application |
+| name, qualification | text | |
+| registration_council | text | The National Medical Commission or a state medical council |
+| registration_number | text | Normalised: spaces removed, upper case; unique per application and council |
+| is_owner | boolean | |
+| certificate_key | text | `applications/{application_id}/doctor-{position}` in private blob storage |
+| certificate_content_type | text | `application/pdf` \| `image/jpeg` \| `image/png` (CHECK), from the first bytes |
+| certificate_size | integer | 1 to 5 242 880 (CHECK) |
+| certificate_sha256 | text | |
+
+Index `(registration_council, registration_number)` for the duplicate check.
+`audit_events.actor_type` gains `APPLICANT`; `jobs` gains the system kinds
+`send_application_email` and `purge_applications`.
+
+---
+
 ## Retention and erasure
 
 | Data | Retention | Mechanism |
@@ -911,6 +963,8 @@ stateless signed token (`Kind.QUEUE`) and has no table.
 | Refresh tokens | 30 days after expiry | Purge job (staff and, from M6a-P3, portal sessions) |
 | Email tokens | 30 days after expiry | Purge job (M6a-P4) |
 | Patient notifications (M6b-P6) | 90 days, as staff notifications | The daily purge (`PurgeExpired`, count in its audit row) |
+| Clinic applications, unconfirmed (M6c-P1) | 72 hours after submission, with their certificates | The hourly `purge_applications` job |
+| Clinic applications, rejected or approved (M6c-P2) | Rejected 180 days; approved while the clinic exists (the verification evidence) | Designed with P2 |
 | Patient links | 30 days after expiry | Purge job |
 | Notifications | 90 days after creation | Purge job (M6a-P7) |
 

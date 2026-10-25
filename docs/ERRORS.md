@@ -196,6 +196,22 @@ only in the log (`auth.password_reset_requested` `sent=true|false`).
 | `RX_NAME_TAKEN` | 409 | You already have one with that name | A favourite or template name the doctor already uses, ignoring case and spaces (M4-P3) | `GET /rx-favourites`, `/rx-templates` |
 | `RX_LIBRARY_FULL` | 409 | You have reached the limit; delete one first | 200 favourites or 50 templates per doctor; `details.limit` | The doctor's list |
 
+## Clinic applications (M6c-P1)
+
+Spec clinic-onboarding R6-R16. Logged as `application.*` with the application ID, reference and
+counts only (never a name, phone, email, registration number or file name).
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `ONB_FILE_REJECTED` | 422 | The certificate of doctor N must be a PDF, JPEG or PNG file / at most 5 MB / is required | `details.position` (from 1) and `details.reason` (`type`, `size`, `missing`): the first bytes are not a PDF, JPEG or PNG signature, the file is over 5 MB, or no file for that doctor | The applicant's file; nothing is stored |
+| `ONB_CONFIRM_INVALID` | 404 | This link is not valid any more | One answer for an unknown token, a link already used, a link replaced by a newer submission, or 48 hours after the application | `application.confirm_invalid` (`reason` unknown or expired); the applicant applies again |
+| `ONB_RATE_LIMITED` | 429 | Too many applications. Please try again later | 5 submissions a day from one address, or 3 a day for one owner phone or email (counted from `clinic_applications`); 20 confirmations a minute from one address; `Retry-After` | `application.rate_limited` with the bucket kind only; RUNBOOK "Clinic applications" |
+| `ONB_UPLOAD_FAILED` | 503 | Your files could not be saved | Blob storage refused a write; files already written were deleted and no row was kept | `application.upload_failed`; the storage backend (ADR-0012) |
+
+A form field is `REQ_VALIDATION_FAILED` (422) with `details.fields[].field` naming it, doctors
+counted from 1 (`doctors.2.council`); a request that is not `multipart/form-data` is
+`REQ_UNSUPPORTED_MEDIA_TYPE` (415) and one over 30 MB `REQ_REQUEST_ENTITY_TOO_LARGE` (413).
+
 ## Patient links (M4)
 
 | Code | HTTP | Meaning | Likely cause | Where to look |
@@ -213,9 +229,9 @@ only in the log (`auth.password_reset_requested` `sent=true|false`).
 `LINK_INVALID` (404: not our signature, not a queue token, or the appointment is gone),
 `LINK_EXPIRED` (410: before the session's day or more than 2 hours after it ends) and
 `LINK_RATE_LIMITED` (429: over 120 reads a minute from one caller or 30 for one link; logged as
-`live_queue.rate_limited`). Issuing one for a cancelled or ended appointment is `REQ_VALIDATION`
+`live_queue.rate_limited`). Issuing one for a cancelled or ended appointment is `REQ_VALIDATION_FAILED`
 (422); the portal's route answers another account's appointment with `REQ_NOT_FOUND`.
-Patient notifications reuse `REQ_NOT_FOUND` (another account's notice) and `REQ_VALIDATION`
+Patient notifications reuse `REQ_NOT_FOUND` (another account's notice) and `REQ_VALIDATION_FAILED`
 (email switched on for a kind that has no email). A failed booking email is a job failure
 (`EMAIL_*`, retried as for other emails), never an error to the patient.
 

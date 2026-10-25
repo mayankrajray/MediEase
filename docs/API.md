@@ -236,6 +236,23 @@ codes, consent "not asked". Nothing from the file is echoed and no existing pati
 ops cannot browse patients. A file that cannot be read at all is `422 PAT_IMPORT_INVALID` with
 `details.problems`; nothing is imported. Procedure: RUNBOOK §10.
 
+### Clinic applications (M6c-P1, ADR-0020)
+
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| POST | `/api/v1/public/applications` | Apply: `multipart/form-data` with a JSON part `application` and a certificate per doctor (`certificate_<n>`, PDF/JPEG/PNG up to 5 MB, 30 MB in all). 202 `{reference, email_masked}`; the application waits until its email is confirmed | FR-ONB-01, 02, 07 | Implemented (M6c-P1), no sign-in, not CSRF-checked |
+| POST | `/api/v1/public/applications/confirm` | `{token}` from the emailed link (once, 48 hours): the application goes to the reviewer queue and a "received" email is sent | FR-ONB-01 | Implemented (M6c-P1), no sign-in |
+| GET | `/api/v1/ops/applications` | Confirmed applications, oldest first: reference, kind, clinic name, city, doctor count, times, possible duplicate. No phone, email, registration number or certificate | FR-ONB-03 (queue, read-only) | Implemented (M6c-P1), `@ops` |
+
+M6c-P1 rules (spec clinic-onboarding R1-R23; contract 0.36.0): nothing creates a clinic, user,
+membership or doctor. Errors: `REQ_VALIDATION_FAILED` (fields named with doctors from 1),
+`ONB_FILE_REJECTED` (the doctor's position and `type`, `size` or `missing`), `ONB_CONFIRM_INVALID`
+(one answer), `ONB_RATE_LIMITED` (5 a day per address, 3 per owner phone and per owner email; 20
+confirmations a minute per address; `Retry-After`), `ONB_UPLOAD_FAILED` (503), 413 and 415. A
+duplicate registration is flagged for the reviewer and never revealed to the applicant. Audit
+`application.submitted` and `application.email_verified` (actor `APPLICANT`, no clinic, IDs, kind
+and doctor count only). Responses are `no-store` and `noindex`.
+
 ### Audit trail (M1-P4)
 
 Every audited action writes one row to `audit_events` in the same transaction as the change, so a

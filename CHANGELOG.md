@@ -21,6 +21,15 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6c-P1 (#53): clinics and doctors with their own practice can apply to join MediEase at
+  `/apply` (FR-ONB-01, 02, 07; spec clinic-onboarding R1-R23; ADR-0020). Five short steps at 360 px
+  (158 KB): the clinic, the owner, and each doctor's registration details with the certificate
+  (PDF, JPEG or PNG, up to 5 MB, checked by its content). The owner confirms the email from a link;
+  only then does the application reach MediEase, and ops see it waiting on `/ops`. The form and
+  the "received" email say MediEase will reply within 2 working days. Nothing creates a clinic or
+  an account before approval. Limits per address, phone and email; duplicate registration numbers
+  are flagged for the reviewer; unconfirmed applications are deleted after 72 hours. English only
+  in M6c. Migration `0032`, contract 0.36.0.
 - M6b-P6 (#51): patient notifications and the live token link (FR-NTF-04, 05 for patients,
   FR-REM-03, FR-QUE-06; spec patient-portal R55-R74; ADR-0019). The portal header has a bell with
   the unread count and a *Notifications* screen: booking answers (accepted, declined with the

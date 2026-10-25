@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Proposed 26 Oct 2026; **approved by the developer 26 Oct 2026** (the phase plan, milestone decisions M1–M6 and the P1 design) with decisions D1–D4 locked below. Opened after M6b merged (PR #52) |
+| Status | Proposed 26 Oct 2026; **approved by the developer 26 Oct 2026** (the phase plan, milestone decisions M1–M6 and the P1 design) with decisions D1–D4 locked below. Opened after M6b merged (PR #52). P1 built 26 Oct 2026 (as-built notes below), awaiting confirmation and push |
 | PRD | v1.2 §0 (C7, C8, C14), §8.9, §8.14 (FR-ONB, FR-DIS, FR-LND), NFR-17, NFR-19 |
 | Specs | `docs/specs/clinic-onboarding.md` (P1 Approved; P2–P4 written at their start); `docs/specs/discovery.md` (written at P5) |
 | ADR | ADR-0020 (Accepted): clinic applications are platform data, kept apart from clinics, and the applicant has no account until approval |
@@ -115,7 +115,7 @@ Fixed points:
   `ClinicApplicationInput`, `ApplicationReceipt`, `OpsApplicationSummary`.
 - **Errors:** `ONB_RATE_LIMITED` (429), `ONB_FILE_REJECTED` (422: type, size or unreadable, with
   the doctor's position), `ONB_CONFIRM_INVALID` (404: unknown, used or expired link, one
-  answer). Field errors are `REQ_VALIDATION`.
+  answer). Field errors are `REQ_VALIDATION_FAILED`.
 - **Code:** `domain/onboarding/application.py` (entity, states, rules), `ports/onboarding.py`,
   `adapters/db/applications.py`, `application/onboarding/` (submit, confirm, list, purge),
   `delivery/http/public_applications.py`; a file-type sniffer in the domain (first bytes only, no
@@ -140,3 +140,66 @@ Planned verification:
   doctor's row.
 
 Open questions: none. The three asked at the proposal were answered by D1, D2 and D3.
+
+### As built (M6c-P1)
+
+Built 26 Oct 2026 to the approved design with D1–D4. Details settled in the build, and where it
+differs from the design:
+
+- **Storage.** Migration `0032`: `clinic_applications` and `clinic_application_doctors` (platform
+  tables, no `clinic_id`), the sequence `clinic_application_reference_seq` for `MA-<year>-NNNN`
+  (never reused, across years), CHECKs tying the confirmation digest to an unconfirmed
+  application and review states to a confirmed one, a unique digest, and the doctors'
+  `(council, number)` index for duplicates. The doctors' table is cascaded from its application.
+  `audit_events.actor_type` gains `APPLICANT`; `ck_jobs_system_kind` gains
+  `send_application_email` and `purge_applications`. Downgrade is refused while applicant audit
+  rows exist (the audit table is append-only), as for `PATIENT`.
+- **The form** is one `multipart/form-data` request (JSON part `application`, files
+  `certificate_<n>`), at most 30 MB; field errors name doctors from 1. Registration numbers are
+  stored normalised (spaces removed, upper case). Councils and specialties are published lists in
+  `domain/onboarding/lists.py`; the web copy in `features/apply/lists.ts` is checked against it by
+  an API test, as is the reply promise (D3). The honeypot field `website` answers 202 with a
+  made-up reference and keeps nothing.
+- **Certificates** are written to blob storage before the transaction under
+  `applications/{id}/doctor-{n}`; a failed write deletes what was written and answers 503
+  `ONB_UPLOAD_FAILED`; a failed transaction deletes the files. `BlobStoragePort` gains `delete`
+  (local and S3), used only for application files.
+- **The email link** is minted by the `send_application_email` job when it sends, as the account
+  emails are (ADR-0016): no usable secret at rest, and a retry replaces the link. It expires 48
+  hours after the application, not after the email. The confirm page needs a button press, so a
+  mail scanner that fetches the link confirms nothing.
+- **Limits** are counted from the applications table per address, owner phone and owner email
+  (24 hours), because the M4-P5 limiter keeps windows for an hour only; confirming uses the
+  limiter (20 a minute per address). Over a limit: 429 `ONB_RATE_LIMITED` with `Retry-After`.
+- **Duplicates** match other confirmed, not rejected applications by council and number, and
+  existing doctors by the normalised **number alone** (ops-created doctors have a council typed
+  by hand). The flag is stored as references and `clinic:<id>`; the applicant's answer is
+  identical either way.
+- **Purge** is hourly (`purge_applications`), not part of the daily retention job, so an
+  unconfirmed application goes at most an hour after its 72 hours. It logs a count only.
+- **Ops.** `GET /ops/applications` (summary only) and *N applications waiting* under the clinics
+  on `/ops`, read-only until P2.
+- **Web.** `/apply` (five steps; client-side checks for every rule the form can check; the API's
+  field errors bring the person back to the step concerned; English only, D2; the reply promise on
+  the first step, the review and the page after sending, D3) and `/apply/confirm/{token}`. Both
+  are public paths in the proxy. The shared client gains `apiPostForm` for multipart requests.
+- **Measured** at 360 px: `/apply` 158 KB on a first load; axe found nothing serious on the form,
+  the doctors' step or the confirm page.
+
+Differences from the design:
+
+- An error code was added: `ONB_UPLOAD_FAILED` (503) for R10.
+- The purge is hourly rather than folded into the daily purge.
+- Existing doctors are matched by number alone (above).
+- Dental, AYUSH and other councils are not on the list: the list is the National Medical
+  Commission and the state medical councils, as FR-ONB-03 names. A clinic of another kind cannot
+  apply yet; to decide when the first one asks.
+
+Tests (changed code only, per the 26 Oct rule): domain (`test_clinic_application.py`, 34: the
+form's rules, the sniffer, the lifecycle), the lists-match test, integration
+(`test_clinic_applications_http.py`, 15: AC1–AC9 and the failure paths), the contract test,
+migrations (`test_0032_*`), route policies, storage `delete` on both adapters; web (the form,
+the confirm page, the ops list, the proxy); Playwright `clinic-application.spec.ts` (apply at 360
+px, the renamed text file refused, confirm from Mailpit, the used link, ops sees it). Also run:
+unit, tenancy, contract, migration and job suites (1,532), the full web suite (655), and the
+Playwright `workspaces`, `portal-accounts` and `password-reset` journeys.

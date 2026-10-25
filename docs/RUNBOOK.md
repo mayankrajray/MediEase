@@ -33,6 +33,9 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 20. Account emails: Mailpit locally, the SMTP provider in production (M6a-P4)
 21. Notifications in the app (M6a-P7)
 22. Appointment reminders and bookings to move (M6a-P8)
+23. Patient app links (M6b-P1)
+24. The public clinic page and booking requests (M6b-P4)
+25. Clinic applications (M6c-P1)
 
 ---
 
@@ -590,6 +593,7 @@ minutes writes `EXPIRED` (`SELECT status, decided_by_type FROM booking_requests 
 '<id>';`, `decided_by_type = 'SYSTEM'`). Owners see the answered-in-time rate on Today. If
 expired requests pile up while the worker is down, they still read as expired; the sweep catches
 up when the worker returns.
+
 **Patient notifications (M6b-P6).** A patient sees notices under the bell in the portal: booking
 answers, appointments booked, moved or cancelled by staff, a new prescription, and medicine times.
 "I was not told": check they are linked to the record (staff profile, *Patient app*) and that the
@@ -610,3 +614,36 @@ then says it has expired: copy a new one the next time. It cannot be revoked ear
 not stored); that is acceptable because it carries no name or clinical detail. "Too many
 refreshes": 30 reads a minute per link and 120 per address, and the address is shared until the
 reverse proxy work (A11).
+---
+
+### 25. Clinic applications (M6c-P1)
+
+A clinic or a doctor with their own practice applies at `/apply`, signed out (ADR-0020). The
+application waits until the owner opens the emailed link and presses *Confirm my application*;
+only then does ops see it under *N applications waiting* on `/ops`. Reviewing and deciding arrive
+in M6c-P2; until then the list is read-only. The form and the "received" email promise a reply
+within 2 working days (D3), so check the list every working day.
+
+**"I never got the confirmation email."** Find the application by reference or by the email the
+applicant gives, IDs only in the ticket:
+`SELECT id, reference, email_verified_at, submitted_at FROM clinic_applications WHERE owner_email = '<lower-case email>';`
+and its job: `SELECT status, attempts, last_error FROM jobs WHERE kind = 'send_application_email'
+AND payload->>'application_id' = '<id>';`. Locally the email is in Mailpit. Applying again with the
+same email replaces an unconfirmed application (the old link stops working). After 72 hours an
+unconfirmed application is deleted with its certificates by the hourly `purge_applications` job.
+
+**"This link is not valid any more."** One answer for a used link, a link replaced by a newer
+submission, and 48 hours after applying. If `email_verified_at` is set, the application was
+received: nothing to do. Otherwise the applicant applies again.
+
+**"Too many applications."** 3 a day per owner phone or email and 5 per address, counted from the
+table over 24 hours (`ONB_RATE_LIMITED`, logged with the bucket kind only). The per-address limit
+is shared by every visitor until the reverse proxy sets the client address (A11).
+
+**A file was refused.** Only PDF, JPEG or PNG, up to 5 MB each, recognised by the file's content:
+a Word file or a renamed text file is refused on that doctor's step. Certificates are private
+blobs under `applications/<id>/`; never download one into a ticket.
+
+**Possible duplicate** on the ops list means a doctor's registration number is in another
+confirmed application or on a doctor of an existing clinic (`duplicate_of` holds the references
+or `clinic:<id>`). It is for the reviewer (P2); the applicant is never told.
