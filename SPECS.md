@@ -18,8 +18,10 @@ wrong, update the spec first, then the code.
 | [appointments-and-queue.md](docs/specs/appointments-and-queue.md) | FR-APT, FR-QUE | M3 | Approved |
 | [prescriptions.md](docs/specs/prescriptions.md) | FR-VIS, FR-RX | M4; M6b-P3 | Approved (M4); R21–R25 Draft (M6b-P3) |
 | [reminders-and-messaging.md](docs/specs/reminders-and-messaging.md) | FR-REM, FR-MSG | M5 | Approved |
-| [patient-portal.md](docs/specs/patient-portal.md) | FR-PRT, FR-REM-03, NFR-18 | M6b | Approved (P1, P2); P3, P3b Draft |
-| Booking requests and the public page (`booking-requests.md`) | FR-PUB, FR-BKG, FR-QUE-06 | M6b | Not started (written at P4) |
+| [patient-portal.md](docs/specs/patient-portal.md) | FR-PRT, FR-REM-03, FR-NTF (patients), FR-QUE-06, NFR-18 | M6b | Implemented (P1–P3b, P6) |
+| [booking-requests.md](docs/specs/booking-requests.md) | FR-PUB, FR-BKG | M6b | Implemented (P4, P5) |
+| [clinic-onboarding.md](docs/specs/clinic-onboarding.md) | FR-ONB | M6c | P1 Approved; P2–P4 written at their start |
+| Discovery (`discovery.md`) | FR-DIS, FR-LND | M6c | Not started (written at P5) |
 
 Status values: `Not started` → `Draft` → `Approved` (developer sign-off; implementation may begin)
 → `Implemented` (all acceptance criteria have passing tests) → `Superseded`.
