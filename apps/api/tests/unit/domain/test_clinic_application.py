@@ -13,12 +13,17 @@ import pytest
 
 from mediease_api.domain.onboarding.application import (
     CONFIRM_TTL,
+    AlreadyTaken,
     ApplicationInput,
     ApplicationKind,
     ApplicationStatus,
+    CheckResult,
     ClinicApplication,
     ConfirmInvalid,
+    DoctorCheck,
     DoctorInput,
+    NotUnderReview,
+    RejectReason,
     format_reference,
     normalise_registration,
     validate,
@@ -234,16 +239,58 @@ def test_r11_r12_the_link_confirms_once_and_only_in_time() -> None:
         confirmed.with_confirm_digest("digest-2", now=NOW)
 
 
-def test_the_review_transitions_need_a_confirmed_application() -> None:
+def test_r27_r33_r41_the_review_transitions() -> None:
+    reviewer = uuid4()
     with pytest.raises(InvalidTransition):
-        submitted().start_review(now=NOW)
+        submitted().start_review(reviewer_id=reviewer, now=NOW)
     confirmed = submitted().with_confirm_digest("d", now=NOW).confirm(now=NOW)
-    reviewing = confirmed.start_review(now=NOW)
-    assert reviewing.status is ApplicationStatus.UNDER_REVIEW
-    assert reviewing.decide(approve=False, now=NOW).status is ApplicationStatus.REJECTED
-    assert reviewing.decide(approve=True, now=NOW).status is ApplicationStatus.APPROVED
-    with pytest.raises(InvalidTransition):
-        confirmed.decide(approve=True, now=NOW)
+    reviewing = confirmed.start_review(reviewer_id=reviewer, now=NOW)
+    assert (reviewing.status, reviewing.taken_by) == (ApplicationStatus.UNDER_REVIEW, reviewer)
+    with pytest.raises(AlreadyTaken):
+        reviewing.start_review(reviewer_id=uuid4(), now=NOW)
+    rejected = reviewing.reject(
+        reviewer_id=reviewer, reason=RejectReason.CERTIFICATE_UNCLEAR, message=None, now=NOW
+    )
+    assert (rejected.status, rejected.decision_reason) == (
+        ApplicationStatus.REJECTED,
+        RejectReason.CERTIFICATE_UNCLEAR,
+    )
+    with pytest.raises(InvalidValue):
+        reviewing.reject(reviewer_id=reviewer, reason=RejectReason.OTHER, message=" ", now=NOW)
+    with pytest.raises(NotUnderReview):
+        confirmed.reject(reviewer_id=reviewer, reason=RejectReason.DUPLICATE, message=None, now=NOW)
+    doctor = reviewing.doctors[0]
+    assert doctor.id is not None and reviewing.doctor(doctor.id) == doctor
+    with pytest.raises(InvalidValue):
+        reviewing.approve(reviewer_id=reviewer, clinic_id=uuid4(), verified=set(), now=NOW)
+    clinic_id = uuid4()
+    approved = reviewing.approve(
+        reviewer_id=reviewer, clinic_id=clinic_id, verified={doctor.id}, now=NOW
+    )
+    assert (approved.status, approved.clinic_id) == (ApplicationStatus.APPROVED, clinic_id)
+
+
+def test_r30_verified_needs_both_checks() -> None:
+    with pytest.raises(InvalidValue):
+        DoctorCheck.record(
+            doctor_id=uuid4(),
+            checked_by=uuid4(),
+            now=NOW,
+            register_checked=True,
+            certificate_matches=False,
+            result=CheckResult.VERIFIED,
+            note=None,
+        )
+    check = DoctorCheck.record(
+        doctor_id=uuid4(),
+        checked_by=uuid4(),
+        now=NOW,
+        register_checked=True,
+        certificate_matches=False,
+        result=CheckResult.NOT_VERIFIED,
+        note="  name differs  ",
+    )
+    assert check.note == "name differs"
 
 
 def test_r17_duplicates_are_remembered_once_each() -> None:

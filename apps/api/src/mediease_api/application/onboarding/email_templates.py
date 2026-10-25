@@ -50,6 +50,24 @@ def confirm_application(name: str, clinic: str, reference: str, link: str) -> Re
     )
 
 
+def application_rejected(
+    name: str, clinic: str, reference: str, reason_words: str, message: str | None, apply_link: str
+) -> Rendered:
+    """R34: the reason's words and the reviewer's message; the applicant may apply again."""
+    hello = f"Hello {name},"
+    lines = [
+        f"We could not approve application {reference} for {clinic}.",
+        reason_words,
+        *([message] if message else []),
+        "You are welcome to apply again with the details corrected.",
+    ]
+    return Rendered(
+        subject=f"Your MediEase application {reference}",
+        text="\n\n".join([hello, *lines, apply_link, "MediEase"]),
+        html=_page([hello, *lines], ("Apply again", apply_link)),
+    )
+
+
 def application_received(name: str, clinic: str, reference: str) -> Rendered:
     hello = f"Hello {name},"
     lines = [

@@ -81,6 +81,9 @@ class InviteStaffCommand:
     # M6a-P6 (decision 8A): the owner also practises here, as this unlinked doctor profile
     # ("Doctor 1"). Linked in the same transaction; it counts once the owner accepts.
     doctor_id: UUID | None = None
+    # M6c-P3 (FR-ONB-08): an approved application's owner is invited by email, without the
+    # owner's hourly limit (that is for the Team page).
+    email_delivery: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,78 +138,92 @@ class InviteStaff:
         self._secrets = secrets
 
     def execute(self, *, clinic_id: UUID, actor: Actor, cmd: InviteStaffCommand) -> StaffInvitation:
-        email, phone = _parse_identifiers(cmd)
         with self._uow as uow:
-            now = self._clock.now()
-            if uow.clinics.get(clinic_id) is None:
-                raise NotFound("clinic")
-            if cmd.by_owner:
-                _limit(uow, f"staff-invite:{clinic_id}", INVITES_PER_CLINIC_PER_HOUR, now)
-
-            user = self._find_or_create_user(uow, cmd, email, phone, now)
-            staff = uow.tenant(clinic_id).memberships
-            membership = staff.get_for_user(user.id)
-            action = AuditAction.STAFF_INVITED
-            is_new = membership is None
-            if membership is None:
-                membership = ClinicMembership.invite(
-                    id=self._ids.new_id(),
-                    clinic_id=clinic_id,
-                    user_id=user.id,
-                    role=cmd.role,
-                    now=now,
-                )
-            elif membership.status is MembershipStatus.INVITED:
-                # Re-invite: the new delivery below retires the previous link.
-                membership.role = cmd.role
-            elif membership.status is MembershipStatus.DEACTIVATED:
-                membership.reinvite(cmd.role, now=now)
-                action = AuditAction.STAFF_REINVITED
-            else:
-                raise MemberExists()
-
-            delivery = (
-                InviteDelivery.EMAIL
-                if cmd.by_owner and user.email is not None
-                else InviteDelivery.LINK
+            invitation = self.in_transaction(
+                uow, clinic_id=clinic_id, actor=actor, cmd=cmd, now=self._clock.now()
             )
-            token = _prepare_delivery(membership, delivery, self._secrets, now)
-            if is_new:
-                staff.add(membership)
-            else:
-                staff.update(membership)
-            if delivery is InviteDelivery.EMAIL:
-                enqueue_staff_invite(
-                    uow,
-                    ids=self._ids,
-                    clinic_id=clinic_id,
-                    membership_id=membership.id,
-                    now=now,
-                    request_id=actor.info.request_id,
-                )
-
-            self._record_first_invite(uow, clinic_id, now)
-            metadata = {
-                "target_user_id": str(user.id),
-                "role": cmd.role.value,
-                "delivery": delivery.value,
-            }
-            if cmd.doctor_id is not None:
-                self._link_doctor(uow, clinic_id, actor, cmd, user, now)
-                metadata["doctor_id"] = str(cmd.doctor_id)
-            record_event(
-                uow,
-                event_id=self._ids.new_id(),
-                action=action,
-                actor=actor,
-                now=now,
-                clinic_id=clinic_id,
-                entity_type=ENTITY_TYPE,
-                entity_id=membership.id,
-                metadata=metadata,
-            )
-            member = _member(uow, clinic_id, membership.id)
             uow.commit()
+        return invitation
+
+    def in_transaction(
+        self,
+        uow: UnitOfWork,
+        *,
+        clinic_id: UUID,
+        actor: Actor,
+        cmd: InviteStaffCommand,
+        now: datetime,
+    ) -> StaffInvitation:
+        """The whole invitation inside the caller's transaction (M6c-P3: approval uses it)."""
+        email, phone = _parse_identifiers(cmd)
+        if uow.clinics.get(clinic_id) is None:
+            raise NotFound("clinic")
+        if cmd.by_owner:
+            _limit(uow, f"staff-invite:{clinic_id}", INVITES_PER_CLINIC_PER_HOUR, now)
+
+        user = self._find_or_create_user(uow, cmd, email, phone, now)
+        staff = uow.tenant(clinic_id).memberships
+        membership = staff.get_for_user(user.id)
+        action = AuditAction.STAFF_INVITED
+        is_new = membership is None
+        if membership is None:
+            membership = ClinicMembership.invite(
+                id=self._ids.new_id(),
+                clinic_id=clinic_id,
+                user_id=user.id,
+                role=cmd.role,
+                now=now,
+            )
+        elif membership.status is MembershipStatus.INVITED:
+            # Re-invite: the new delivery below retires the previous link.
+            membership.role = cmd.role
+        elif membership.status is MembershipStatus.DEACTIVATED:
+            membership.reinvite(cmd.role, now=now)
+            action = AuditAction.STAFF_REINVITED
+        else:
+            raise MemberExists()
+
+        delivery = (
+            InviteDelivery.EMAIL
+            if (cmd.by_owner or cmd.email_delivery) and user.email is not None
+            else InviteDelivery.LINK
+        )
+        token = _prepare_delivery(membership, delivery, self._secrets, now)
+        if is_new:
+            staff.add(membership)
+        else:
+            staff.update(membership)
+        if delivery is InviteDelivery.EMAIL:
+            enqueue_staff_invite(
+                uow,
+                ids=self._ids,
+                clinic_id=clinic_id,
+                membership_id=membership.id,
+                now=now,
+                request_id=actor.info.request_id,
+            )
+
+        self._record_first_invite(uow, clinic_id, now)
+        metadata = {
+            "target_user_id": str(user.id),
+            "role": cmd.role.value,
+            "delivery": delivery.value,
+        }
+        if cmd.doctor_id is not None:
+            self._link_doctor(uow, clinic_id, actor, cmd, user, now)
+            metadata["doctor_id"] = str(cmd.doctor_id)
+        record_event(
+            uow,
+            event_id=self._ids.new_id(),
+            action=action,
+            actor=actor,
+            now=now,
+            clinic_id=clinic_id,
+            entity_type=ENTITY_TYPE,
+            entity_id=membership.id,
+            metadata=metadata,
+        )
+        member = _member(uow, clinic_id, membership.id)
 
         logger.info(
             action.value,

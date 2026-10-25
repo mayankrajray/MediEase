@@ -139,10 +139,19 @@ from mediease_api.application.notifications.use_cases import (
     ReadNotification,
     SetNotificationPreferences,
 )
-from mediease_api.application.onboarding.jobs import (
-    ListApplications,
-    PurgeApplications,
-    SendApplicationEmail,
+from mediease_api.application.onboarding.approve import (
+    ApproveApplication,
+    VerifyClinic,
+    VerifyDoctor,
+)
+from mediease_api.application.onboarding.jobs import PurgeApplications, SendApplicationEmail
+from mediease_api.application.onboarding.review import (
+    CheckDoctor,
+    GetApplication,
+    GetCertificate,
+    ListReviewQueue,
+    RejectApplication,
+    TakeApplication,
 )
 from mediease_api.application.onboarding.submit import ConfirmApplication, SubmitApplication
 from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics, MessagingCosts
@@ -250,6 +259,10 @@ from mediease_api.delivery.http.invites import create_invite_blueprint
 from mediease_api.delivery.http.me import create_me_blueprint
 from mediease_api.delivery.http.notifications import create_notifications_blueprint
 from mediease_api.delivery.http.ops import create_ops_blueprint
+from mediease_api.delivery.http.ops_applications import (
+    create_ops_applications_blueprint,
+    create_ops_verification_blueprint,
+)
 from mediease_api.delivery.http.patient_portal import (
     create_patient_portal_blueprint,
     create_portal_records_blueprint,
@@ -922,8 +935,38 @@ class _UseCases:
             uow=self._uow(), clock=self.clock, ids=self.ids, secrets=self.refresh_secrets
         )
 
-    def list_applications(self) -> ListApplications:
-        return ListApplications(uow=self._uow())
+    # --- M6c-P2: the reviewer's workflow ---------------------------------------------------------
+    def list_review_queue(self) -> ListReviewQueue:
+        return ListReviewQueue(uow=self._uow())
+
+    def get_application(self) -> GetApplication:
+        return GetApplication(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def get_application_certificate(self) -> GetCertificate:
+        return GetCertificate(
+            uow=self._uow(), clock=self.clock, ids=self.ids, storage=self.blob_storage
+        )
+
+    def take_application(self) -> TakeApplication:
+        return TakeApplication(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def check_application_doctor(self) -> CheckDoctor:
+        return CheckDoctor(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def reject_application(self) -> RejectApplication:
+        return RejectApplication(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    # --- M6c-P3: approval and verification ---------------------------------------------------
+    def approve_application(self) -> ApproveApplication:
+        return ApproveApplication(
+            uow=self._uow(), clock=self.clock, ids=self.ids, secrets=self.invite_secrets
+        )
+
+    def verify_clinic_doctor(self) -> VerifyDoctor:
+        return VerifyDoctor(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def verify_clinic(self) -> VerifyClinic:
+        return VerifyClinic(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def _uow(self) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(self.session_factory)
@@ -1306,6 +1349,8 @@ def create_app(
     app.register_blueprint(create_public_links_blueprint(use_cases))
     app.register_blueprint(create_public_clinics_blueprint(use_cases))
     app.register_blueprint(create_public_applications_blueprint(use_cases))
+    app.register_blueprint(create_ops_applications_blueprint(use_cases))
+    app.register_blueprint(create_ops_verification_blueprint(use_cases))
     app.register_blueprint(create_public_queue_blueprint(use_cases))
     app.register_blueprint(create_booking_requests_blueprint(use_cases))
     app.register_blueprint(create_rx_library_blueprint(use_cases))

@@ -20,6 +20,8 @@ from mediease_api.application.onboarding.submit import EmailKind
 from mediease_api.domain.jobs.job import ClaimedJob
 from mediease_api.domain.jobs.retry import JobFailure
 from mediease_api.domain.onboarding.application import (
+    REJECT_WORDS,
+    REJECTED_RETENTION,
     UNCONFIRMED_RETENTION,
     ApplicationStatus,
 )
@@ -55,7 +57,7 @@ class SendApplicationEmail:
             kind = str(job.payload["email"])
         except (KeyError, ValueError):
             raise JobFailure("JOB_HANDLER_ERROR", retryable=False) from None
-        if kind not in (EmailKind.CONFIRM, EmailKind.RECEIVED):
+        if kind not in (EmailKind.CONFIRM, EmailKind.RECEIVED, "rejected"):
             raise JobFailure("JOB_HANDLER_ERROR", retryable=False)
         message = self._prepare(application_id, kind)
         if message is None:
@@ -81,7 +83,21 @@ class SendApplicationEmail:
             if application is None:
                 logger.info("email.skipped", email=f"application_{kind}", reason="gone")
                 return None
-            if kind == EmailKind.RECEIVED:
+            if kind == "rejected":
+                if (
+                    application.status is not ApplicationStatus.REJECTED
+                    or application.decision_reason is None
+                ):
+                    return None
+                rendered = email_templates.application_rejected(
+                    application.owner_name,
+                    application.clinic_name,
+                    application.reference,
+                    REJECT_WORDS[application.decision_reason],
+                    application.decision_message,
+                    f"{self._base}/apply",
+                )
+            elif kind == EmailKind.RECEIVED:
                 if not application.is_confirmed:
                     return None
                 rendered = email_templates.application_received(
@@ -121,9 +137,11 @@ class PurgeApplications:
         self._storage = storage
 
     def execute(self) -> int:
-        cutoff = self._clock.now() - UNCONFIRMED_RETENTION
+        now = self._clock.now()
         with self._uow as uow:
-            removed = uow.applications.remove_unconfirmed_before(cutoff)
+            removed = uow.applications.remove_unconfirmed_before(now - UNCONFIRMED_RETENTION)
+            # R35 (M6c-P2): rejected applications 180 days after the decision.
+            removed += uow.applications.remove_rejected_before(now - REJECTED_RETENTION)
             uow.commit()
         failed = 0
         for gone in removed:

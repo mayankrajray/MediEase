@@ -36,6 +36,7 @@ from mediease_api.config.logging import configure_logging
 from mediease_api.config.settings import AppEnv, AppSettings
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
+from mediease_api.domain.clinics.verification import VerificationSource
 from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.identity.user import User
 from mediease_api.ports.readiness import ReadinessError
@@ -399,6 +400,8 @@ def _seed_tenant(uow: SqlAlchemyUnitOfWork, label: str) -> Tenant:
     doctor = a_doctor(clinic.id, user_id=users[Role.DOCTOR].id, display_name=f"Dr. {label} Sample")
     staff.doctors.add(doctor)
     clinic.activate(active_owner_count=1, now=NOW)
+    # M6c-P3: the world's clinics are verified, so their public pages exist (FR-PUB-01).
+    clinic.verify(by=users[Role.OWNER].id, source=VerificationSource.OPS_CHECK, now=NOW)
     uow.clinics.update(clinic)
     return Tenant(
         clinic=clinic,

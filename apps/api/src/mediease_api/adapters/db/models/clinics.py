@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from mediease_api.adapters.db.models.base import Base, Keyed, TenantOwned, Timestamps, enum_check
 from mediease_api.domain.clinics.clinic import ClinicStatus, PaperSize
+from mediease_api.domain.clinics.verification import VerificationSource
 from mediease_api.domain.scheduling.mode import BookingMode
 
 
@@ -39,6 +40,10 @@ class ClinicRow(Keyed, Timestamps, Base):
         CheckConstraint(
             "request_hold_minutes BETWEEN 30 AND 480", name="request_hold_minutes_range"
         ),
+        enum_check("verification_source", VerificationSource),
+        # Listed only when verified (FR-ONB-09); the rest of the requirements are checked by the
+        # use case (they span tables).
+        CheckConstraint("NOT listed OR verified_at IS NOT NULL", name="listed_verified"),
     )
 
     name: Mapped[str] = mapped_column(Text)
@@ -65,6 +70,17 @@ class ClinicRow(Keyed, Timestamps, Base):
     # request form must ask age and sex.
     request_hold_minutes: Mapped[int] = mapped_column(SmallInteger, server_default=text("120"))
     request_requires_age_sex: Mapped[bool] = mapped_column(server_default=text("false"))
+    # M6c-P3, P4, P5 (migration 0034): MediEase's verification, the directory listing and
+    # whether search engines may index the profiles.
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    verified_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    verification_source: Mapped[str | None] = mapped_column(Text)
+    application_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("clinic_applications.id", use_alter=True)
+    )
+    listed: Mapped[bool] = mapped_column(server_default=text("false"))
+    listed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    search_indexing: Mapped[bool] = mapped_column(server_default=text("true"))
 
 
 class DoctorRow(TenantOwned, Timestamps, Base):
@@ -81,6 +97,10 @@ class DoctorRow(TenantOwned, Timestamps, Base):
             unique=True,
             postgresql_where=text("user_id IS NOT NULL"),
         ),
+        enum_check("verification_source", VerificationSource),
+        CheckConstraint(
+            "fee_paise IS NULL OR fee_paise BETWEEN 0 AND 1000000", name="fee_paise_range"
+        ),
     )
 
     user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
@@ -90,6 +110,13 @@ class DoctorRow(TenantOwned, Timestamps, Base):
     registration_council: Mapped[str] = mapped_column(Text)
     specialty: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(server_default=text("true"))
+    # M6c-P3, P4, P5 (migration 0034): verification, directory visibility and the profile.
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    verified_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    verification_source: Mapped[str | None] = mapped_column(Text)
+    visible: Mapped[bool] = mapped_column(server_default=text("false"))
+    languages: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
+    fee_paise: Mapped[int | None]
 
 
 class OnboardingChecklistRow(TenantOwned, Base):

@@ -14,6 +14,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mediease_api.adapters.db.models.base import Base, Keyed, TenantOwned, Timestamps, enum_check
@@ -37,6 +38,8 @@ class UserRow(Keyed, Timestamps, Base):
     email: Mapped[str | None] = mapped_column(Text, unique=True)
     phone_e164: Mapped[str | None] = mapped_column(Text, unique=True)
     is_platform_ops: Mapped[bool] = mapped_column(server_default=text("false"))
+    # M6c-P2 (migration 0033): OPS_ADMIN, OPS_REVIEWER; empty for clinic staff.
+    ops_roles: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
     status: Mapped[str] = mapped_column(Text)
     # M1-P2. Null until a password is set (invited users cannot sign in yet).
     password_hash: Mapped[str | None] = mapped_column(Text)

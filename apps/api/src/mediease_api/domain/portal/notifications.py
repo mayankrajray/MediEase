@@ -185,6 +185,7 @@ _REASONS = {
         DeclineReason.DUPLICATE: "you already have a request or booking for this",
         DeclineReason.OTHER: "the clinic could not book this time",
         DeclineReason.PATIENT_DECLINED: "you said no thanks",
+        DeclineReason.CLINIC_UNAVAILABLE: "the clinic is not taking online bookings now",
     },
     Language.HI: {
         DeclineReason.TIME_UNAVAILABLE: "वह समय अब उपलब्ध नहीं है",
@@ -194,6 +195,7 @@ _REASONS = {
         DeclineReason.DUPLICATE: "इसके लिए आपका अनुरोध या बुकिंग पहले से है",
         DeclineReason.OTHER: "क्लिनिक यह समय बुक नहीं कर सका",
         DeclineReason.PATIENT_DECLINED: "आपने मना कर दिया",
+        DeclineReason.CLINIC_UNAVAILABLE: "क्लिनिक अभी ऑनलाइन बुकिंग नहीं ले रहा है",
     },
 }
 

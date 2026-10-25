@@ -32,6 +32,18 @@ class UserStatus(StrEnum):
     DISABLED = "DISABLED"
 
 
+class OpsRole(StrEnum):
+    """M6c-P2 (milestone decision M3): what a MediEase staff member may do on the platform."""
+
+    # Clinics, imports, schedules and costs (the ops console as it was before M6c).
+    ADMIN = "OPS_ADMIN"
+    # Clinic applications: take, check doctors, decide (FR-ONB-03).
+    REVIEWER = "OPS_REVIEWER"
+
+
+ALL_OPS_ROLES: frozenset[OpsRole] = frozenset(OpsRole)
+
+
 @dataclass(slots=True)
 class User:
     """A user. Build new ones with ``User.create``; the constructor rehydrates."""
@@ -50,6 +62,11 @@ class User:
     failed_sign_in_count: int = 0
     locked_until: datetime | None = None
     last_signed_in_at: datetime | None = None
+    # M6c-P2: empty for clinic staff; an ops user holds at least one.
+    ops_roles: frozenset[OpsRole] = frozenset()
+
+    def has_ops_role(self, role: OpsRole) -> bool:
+        return self.is_platform_ops and role in self.ops_roles
 
     @classmethod
     def create(
@@ -62,6 +79,7 @@ class User:
         phone: PhoneNumber | None = None,
         is_platform_ops: bool = False,
         password_hash: str | None = None,
+        ops_roles: frozenset[OpsRole] | None = None,
     ) -> User:
         if email is None and phone is None:
             raise InvalidValue("email", "an email address or a phone number is required")
@@ -76,6 +94,12 @@ class User:
             created_at=now,
             updated_at=now,
             password_hash=password_hash,
+            # An ops user created without roles gets both, as every ops user had before M6c.
+            ops_roles=(
+                frozenset()
+                if not is_platform_ops
+                else (ALL_OPS_ROLES if ops_roles is None else frozenset(ops_roles))
+            ),
         )
 
     @property

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from mediease_api.adapters.db.models.applications import (
     APPLICATION_REFERENCE_SEQUENCE,
+    ClinicApplicationCheckRow,
     ClinicApplicationDoctorRow,
     ClinicApplicationRow,
 )
@@ -25,7 +26,10 @@ from mediease_api.domain.onboarding.application import (
     ApplicationDoctor,
     ApplicationKind,
     ApplicationStatus,
+    CheckResult,
     ClinicApplication,
+    DoctorCheck,
+    RejectReason,
     format_reference,
 )
 from mediease_api.domain.onboarding.certificate import Certificate
@@ -82,6 +86,13 @@ def _application(
         email_verified_at=_utc(row.email_verified_at),
         confirm_digest=row.confirm_digest,
         duplicate_of=tuple(row.duplicate_of or ()),
+        taken_by=row.taken_by,
+        taken_at=_utc(row.taken_at),
+        decided_by=row.decided_by,
+        decided_at=_utc(row.decided_at),
+        decision_reason=RejectReason(row.decision_reason) if row.decision_reason else None,
+        decision_message=row.decision_message,
+        clinic_id=row.created_clinic_id,
     )
 
 
@@ -178,6 +189,15 @@ class SqlAlchemyApplicationRepository:
         row.confirm_digest = application.confirm_digest
         row.duplicate_of = list(application.duplicate_of)
         row.updated_at = application.updated_at
+        row.taken_by = application.taken_by
+        row.taken_at = application.taken_at
+        row.decided_by = application.decided_by
+        row.decided_at = application.decided_at
+        row.decision_reason = (
+            application.decision_reason.value if application.decision_reason else None
+        )
+        row.decision_message = application.decision_message
+        row.created_clinic_id = application.clinic_id
         self._session.flush()
 
     def _remove(self, ids: list[UUID]) -> list[Removed]:
@@ -270,7 +290,62 @@ class SqlAlchemyApplicationRepository:
         )
         return references + [f"clinic:{c}" for c in clinics]
 
-    def list_confirmed(self) -> list[ApplicationSummary]:
+    def checks(self, application_id: UUID) -> dict[UUID, DoctorCheck]:
+        rows = self._session.scalars(
+            select(ClinicApplicationCheckRow).where(
+                ClinicApplicationCheckRow.application_id == application_id
+            )
+        )
+        return {
+            r.doctor_id: DoctorCheck(
+                doctor_id=r.doctor_id,
+                checked_by=r.checked_by,
+                checked_at=r.checked_at.astimezone(UTC),
+                register_checked=r.register_checked,
+                certificate_matches=r.certificate_matches,
+                result=CheckResult(r.result),
+                note=r.note,
+            )
+            for r in rows
+        }
+
+    def put_check(self, application_id: UUID, check: DoctorCheck) -> None:
+        self._session.execute(
+            delete(ClinicApplicationCheckRow).where(
+                ClinicApplicationCheckRow.doctor_id == check.doctor_id
+            )
+        )
+        self._session.add(
+            ClinicApplicationCheckRow(
+                id=check.doctor_id,
+                application_id=application_id,
+                doctor_id=check.doctor_id,
+                checked_by=check.checked_by,
+                checked_at=check.checked_at,
+                register_checked=check.register_checked,
+                certificate_matches=check.certificate_matches,
+                result=check.result.value,
+                note=check.note,
+            )
+        )
+        self._session.flush()
+
+    def remove_rejected_before(self, cutoff: datetime) -> list[Removed]:
+        ids = list(
+            self._session.scalars(
+                select(ClinicApplicationRow.id)
+                .where(
+                    ClinicApplicationRow.status == ApplicationStatus.REJECTED.value,
+                    ClinicApplicationRow.decided_at < cutoff,
+                )
+                .with_for_update(skip_locked=True)
+            )
+        )
+        return self._remove(ids)
+
+    def list_confirmed(
+        self, statuses: frozenset[ApplicationStatus] | None = None
+    ) -> list[ApplicationSummary]:
         counts = (
             select(
                 ClinicApplicationDoctorRow.application_id,
@@ -282,7 +357,14 @@ class SqlAlchemyApplicationRepository:
         rows = self._session.execute(
             select(ClinicApplicationRow, counts.c.doctors)
             .join(counts, counts.c.application_id == ClinicApplicationRow.id)
-            .where(ClinicApplicationRow.email_verified_at.is_not(None))
+            .where(
+                ClinicApplicationRow.email_verified_at.is_not(None),
+                *(
+                    [ClinicApplicationRow.status.in_(sorted(s.value for s in statuses))]
+                    if statuses
+                    else []
+                ),
+            )
             .order_by(ClinicApplicationRow.email_verified_at, ClinicApplicationRow.id)
         ).all()
         result: list[ApplicationSummary] = []
@@ -299,6 +381,9 @@ class SqlAlchemyApplicationRepository:
                     submitted_at=row.submitted_at.astimezone(UTC),
                     email_verified_at=row.email_verified_at.astimezone(UTC),
                     possible_duplicate=bool(row.duplicate_of),
+                    status=ApplicationStatus(row.status),
+                    taken_at=_utc(row.taken_at),
+                    decided_at=_utc(row.decided_at),
                 )
             )
         return result

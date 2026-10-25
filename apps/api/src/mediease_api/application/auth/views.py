@@ -27,6 +27,8 @@ class UserView:
     email: str | None
     phone_e164: str | None
     is_platform_ops: bool
+    # M6c-P2: OPS_ADMIN, OPS_REVIEWER (empty for clinic staff).
+    ops_roles: tuple[str, ...] = ()
 
     @classmethod
     def of(cls, user: User) -> UserView:
@@ -36,6 +38,7 @@ class UserView:
             email=user.email.value if user.email else None,
             phone_e164=user.phone.e164 if user.phone else None,
             is_platform_ops=user.is_platform_ops,
+            ops_roles=tuple(sorted(r.value for r in user.ops_roles)),
         )
 
 

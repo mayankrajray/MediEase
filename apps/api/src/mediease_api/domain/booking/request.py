@@ -76,10 +76,13 @@ class DeclineReason(StrEnum):
     DUPLICATE = "DUPLICATE"
     OTHER = "OTHER"
     PATIENT_DECLINED = "PATIENT_DECLINED"
+    # M6c-P4 (FR-ONB-05): the clinic was suspended; never a staff choice.
+    CLINIC_UNAVAILABLE = "CLINIC_UNAVAILABLE"
 
 
 STAFF_DECLINE_REASONS: frozenset[DeclineReason] = frozenset(DeclineReason) - {
-    DeclineReason.PATIENT_DECLINED
+    DeclineReason.PATIENT_DECLINED,
+    DeclineReason.CLINIC_UNAVAILABLE,
 }
 
 
