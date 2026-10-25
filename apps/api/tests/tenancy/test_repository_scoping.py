@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from mediease_api.adapters.db.booking import SqlAlchemyBookingRequestRepository
 from mediease_api.adapters.db.messages import SqlAlchemyMessageRepository
 from mediease_api.adapters.db.models import Base
 from mediease_api.adapters.db.notifications import (
@@ -128,6 +129,11 @@ class Tenant:
 # by account alone, in every clinic, for the patient's own export or deletion on request. Only the
 # support command delivery/cli/dose_data.py uses it (tests/tenancy/test_dose_privacy.py). The
 # retention purge deletes dose_records by keep_until alone, like its other tables.
+#
+# Reviewed exception (M6b-P4): SqlAlchemyBookingRequestLookup selects booking_requests by account
+# alone, because a portal caller names no clinic: the patient's own open requests and a count by
+# phone for the rate limit. Each clinic, doctor and session is then read through that clinic's
+# tenant repositories (tests/integration/test_booking_requests_http.py).
 NOT_TENANT_SCOPED = {"audit_events", "jobs"}
 
 
@@ -624,6 +630,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "patient_portal_invites",
             "medicine_reminder_prefs",
             "dose_records",
+            "booking_requests",
             "messages",
             "reminders",
             "notifications",
@@ -653,6 +660,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyPortalInviteRepository,
         SqlAlchemyReminderPrefRepository,
         SqlAlchemyDoseRecordRepository,
+        SqlAlchemyBookingRequestRepository,
         SqlAlchemyMessageRepository,
         SqlAlchemyReminderRepository,
         SqlAlchemyNotificationRepository,

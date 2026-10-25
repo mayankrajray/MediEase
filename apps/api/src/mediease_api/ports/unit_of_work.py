@@ -22,6 +22,7 @@ from typing import Protocol, Self
 from uuid import UUID
 
 from mediease_api.ports.audit import AuditReader, AuditWriter
+from mediease_api.ports.booking import BookingRequestLookup, BookingRequestRepository
 from mediease_api.ports.dashboard import DashboardReads
 from mediease_api.ports.jobs import JobQueue, RetentionRepository
 from mediease_api.ports.messaging import (
@@ -117,6 +118,11 @@ class TenantRepositories(Protocol):
         ...
 
     @property
+    def booking_requests(self) -> BookingRequestRepository:
+        """Online booking requests, and the soft hold they are (M6b-P4, ADR-0018)."""
+        ...
+
+    @property
     def dose_records(self) -> DoseRecordRepository:
         """A patient account's dose marks (M6b-P3b); reached only from patient routes."""
         ...
@@ -177,6 +183,11 @@ class UnitOfWork(Protocol):
     @property
     def portal_lookup(self) -> PortalLookup:
         """An account's active links and an invite's clinic (M6b-P1, reviewed cross-clinic)."""
+        ...
+
+    @property
+    def booking_request_lookup(self) -> BookingRequestLookup:
+        """A patient account's own requests in every clinic (M6b-P4, reviewed exception)."""
         ...
 
     @property

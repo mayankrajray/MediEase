@@ -36,6 +36,9 @@ class ClinicRow(Keyed, Timestamps, Base):
         CheckConstraint(
             "reminder_hours_before BETWEEN 0 AND 6", name="reminder_hours_before_range"
         ),
+        CheckConstraint(
+            "request_hold_minutes BETWEEN 30 AND 480", name="request_hold_minutes_range"
+        ),
     )
 
     name: Mapped[str] = mapped_column(Text)
@@ -58,6 +61,10 @@ class ClinicRow(Keyed, Timestamps, Base):
     # M6a-P8 (migration 0024): appointment reminders, the evening before and hours before.
     reminder_evening_before: Mapped[bool] = mapped_column(server_default=text("true"))
     reminder_hours_before: Mapped[int] = mapped_column(SmallInteger, server_default=text("2"))
+    # M6b-P4 (migration 0029): how long an online request holds its slot, and whether the
+    # request form must ask age and sex.
+    request_hold_minutes: Mapped[int] = mapped_column(SmallInteger, server_default=text("120"))
+    request_requires_age_sex: Mapped[bool] = mapped_column(server_default=text("false"))
 
 
 class DoctorRow(TenantOwned, Timestamps, Base):

@@ -128,6 +128,8 @@ def _clinic_from_row(row: ClinicRow) -> Clinic:
         rx_paper_size=PaperSize(row.rx_paper_size),
         reminder_evening_before=row.reminder_evening_before,
         reminder_hours_before=row.reminder_hours_before,
+        request_hold_minutes=row.request_hold_minutes,
+        request_requires_age_sex=row.request_requires_age_sex,
     )
 
 
@@ -148,6 +150,8 @@ def _write_clinic(row: ClinicRow, clinic: Clinic) -> None:
     row.rx_paper_size = clinic.rx_paper_size.value
     row.reminder_evening_before = clinic.reminder_evening_before
     row.reminder_hours_before = clinic.reminder_hours_before
+    row.request_hold_minutes = clinic.request_hold_minutes
+    row.request_requires_age_sex = clinic.request_requires_age_sex
     row.updated_at = clinic.updated_at
 
 

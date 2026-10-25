@@ -64,6 +64,13 @@ class BookingsToMove:
     on_date: date | None
 
 
+@dataclass(frozen=True, slots=True)
+class BookingRequested:
+    """M6b-P4 (FR-BKG-03): a patient asked a clinic for a time; front desk and owners are told."""
+
+    request_id: UUID
+
+
 Event = (
     AppointmentBooked
     | AppointmentRescheduled
@@ -73,4 +80,5 @@ Event = (
     | MessageFailed
     | StaffJoined
     | BookingsToMove
+    | BookingRequested
 )

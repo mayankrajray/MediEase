@@ -18,6 +18,10 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from mediease_api.adapters.db.audit import SqlAlchemyAuditReader, SqlAlchemyAuditWriter
+from mediease_api.adapters.db.booking import (
+    SqlAlchemyBookingRequestLookup,
+    SqlAlchemyBookingRequestRepository,
+)
 from mediease_api.adapters.db.dashboard import SqlAlchemyDashboardReads
 from mediease_api.adapters.db.jobs import SqlAlchemyJobQueue, SqlAlchemyRetentionRepository
 from mediease_api.adapters.db.messages import (
@@ -105,6 +109,7 @@ class SqlAlchemyTenantRepositories:
         self._portal_invites = SqlAlchemyPortalInviteRepository(session, clinic_id)
         self._reminder_prefs = SqlAlchemyReminderPrefRepository(session, clinic_id)
         self._dose_records = SqlAlchemyDoseRecordRepository(session, clinic_id)
+        self._booking_requests = SqlAlchemyBookingRequestRepository(session, clinic_id)
         self._messages = SqlAlchemyMessageRepository(session, clinic_id)
         self._reminders = SqlAlchemyReminderRepository(session, clinic_id)
         self._notifications = SqlAlchemyNotificationRepository(session, clinic_id)
@@ -193,6 +198,10 @@ class SqlAlchemyTenantRepositories:
         return self._dose_records
 
     @property
+    def booking_requests(self) -> SqlAlchemyBookingRequestRepository:
+        return self._booking_requests
+
+    @property
     def messages(self) -> SqlAlchemyMessageRepository:
         return self._messages
 
@@ -237,6 +246,8 @@ class _OpenUnit:
         self.portal_lookup = SqlAlchemyPortalLookup(session)
         # M6b-P3b (R54): one account's dose records, for its export or deletion on request.
         self.dose_lifecycle = SqlAlchemyDoseLifecycle(session)
+        # M6b-P4: a patient's own requests in every clinic (selected by account alone).
+        self.booking_request_lookup = SqlAlchemyBookingRequestLookup(session)
         self.rate_limits = SqlAlchemyRateLimitRepository(session)
         # Shares the session, so an audit row commits with the change (R11).
         self.audit = SqlAlchemyAuditWriter(session)
@@ -319,6 +330,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def portal_lookup(self) -> SqlAlchemyPortalLookup:
         return self._require_open().portal_lookup
+
+    @property
+    def booking_request_lookup(self) -> SqlAlchemyBookingRequestLookup:
+        return self._require_open().booking_request_lookup
 
     @property
     def dose_lifecycle(self) -> SqlAlchemyDoseLifecycle:

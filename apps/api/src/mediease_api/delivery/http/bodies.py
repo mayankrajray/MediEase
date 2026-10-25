@@ -7,12 +7,16 @@ contract has one schema for each.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import datetime, time
 from typing import Any
 
 from mediease_api.application.appointments.queue import QueueView
-from mediease_api.application.appointments.views import AppointmentDetail, AppointmentView
+from mediease_api.application.appointments.views import (
+    AppointmentDetail,
+    AppointmentView,
+    HeldPlace,
+)
 from mediease_api.application.links.use_cases import LinkInfo
 from mediease_api.application.patients.views import CandidateView, PatientView
 from mediease_api.application.prescriptions.pdf import Printable
@@ -57,6 +61,8 @@ def clinic_body(clinic: Clinic) -> dict[str, Any]:
         "rx_paper_size": clinic.rx_paper_size.value,
         "reminder_evening_before": clinic.reminder_evening_before,
         "reminder_hours_before": clinic.reminder_hours_before,
+        "request_hold_minutes": clinic.request_hold_minutes,
+        "request_requires_age_sex": clinic.request_requires_age_sex,
     }
 
 
@@ -192,7 +198,11 @@ def schedule_body(schedule: ScheduleView) -> dict[str, Any]:
     }
 
 
-def session_body(session: Session, taken: frozenset[datetime] | None = None) -> dict[str, Any]:
+def session_body(
+    session: Session,
+    taken: frozenset[datetime] | None = None,
+    held: Sequence[HeldPlace] = (),
+) -> dict[str, Any]:
     """A session; the slots in slot mode, the next token in token mode (R3, R4).
 
     ``taken`` (the listing passes it, M3-P2) marks each slot ``available`` or not; without it,
@@ -220,6 +230,8 @@ def session_body(session: Session, taken: frozenset[datetime] | None = None) -> 
         "available": session.available,
         "next_token": None if slots else session.next_token,
         "slots": [slot(start, end) for start, end in session.slots()],
+        # M6b-P4 (R23): places an online request holds for now; the requester is not named.
+        "held": [{"slot_start": _iso(h.slot_start), "until": h.until.isoformat()} for h in held],
     }
 
 

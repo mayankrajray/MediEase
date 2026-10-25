@@ -31,6 +31,8 @@ class NotificationKind(StrEnum):
     STAFF_JOINED = "staff.joined"
     # M6a-P8 (FR-APT-09): leave or a schedule change closed sessions with bookings in them.
     BOOKINGS_TO_MOVE = "schedule.bookings_to_move"
+    # M6b-P4 (FR-BKG-03): a patient's online request for a time.
+    BOOKING_REQUESTED = "booking.requested"
 
 
 class Channel(StrEnum):
@@ -56,6 +58,7 @@ KINDS: dict[NotificationKind, KindInfo] = {
     NotificationKind.MESSAGE_FAILED: KindInfo("A message to a patient failed"),
     NotificationKind.STAFF_JOINED: KindInfo("Someone joined the team"),
     NotificationKind.BOOKINGS_TO_MOVE: KindInfo("Bookings need moving after a schedule change"),
+    NotificationKind.BOOKING_REQUESTED: KindInfo("A patient asks for an appointment online"),
 }
 
 
@@ -142,6 +145,12 @@ def bookings_to_move_title(doctor: PersonName, count: int, on_date: date | None)
 
 
 BOOKINGS_TO_MOVE_LINK = "/bookings-to-move"
+BOOKING_REQUESTS_LINK = "/booking-requests"
+
+
+def booking_requested_title(first_name: PersonName, place: Place, doctor: PersonName) -> str:
+    """ "New request · Asha · 26 Oct, 10:30 with Dr. Sample": never the reason, phone or age."""
+    return f"New request · {first_name.text[:40]} · {place.text} with {doctor.text[:80]}"
 
 
 def queue_link(on_date: date) -> str:

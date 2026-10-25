@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from mediease_api.domain.shared.errors import DomainError
@@ -99,3 +100,19 @@ class NoSession(DomainError):
 
     def __init__(self) -> None:
         super().__init__("The doctor has no session left today.")
+
+
+class SlotHeld(DomainError):
+    """ADR-0018, R18: an online request holds this slot (or the last free place) for now.
+
+    Staff may book anyway with ``override_hold`` (R18a). ``held_until`` is when the hold ends;
+    ``first_name`` is the requester's first name for the confirmation, when the use case has it.
+    """
+
+    code = "APT_SLOT_HELD"
+
+    def __init__(self, held_until: datetime, first_name: str | None = None) -> None:
+        details: dict[str, str] = {"held_until": held_until.isoformat()}
+        if first_name:
+            details["first_name"] = first_name
+        super().__init__("An online request is holding this time.", **details)

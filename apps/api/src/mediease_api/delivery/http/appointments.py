@@ -87,6 +87,8 @@ class BookRequest(BaseModel):
     slot_start: AwareDatetime | None = None
     source: AppointmentSource = AppointmentSource.FRONT_DESK
     reason: str | None = Field(default=None, max_length=REASON_MAX)
+    # M6b-P4 (R18a): book over an online request's hold; ends the hold and is audited.
+    override_hold: bool = False
 
     @field_validator("source")
     @classmethod
@@ -115,6 +117,8 @@ class RescheduleRequest(BaseModel):
 
     session_id: UUID
     slot_start: AwareDatetime | None = None
+    # M6b-P4 (R18a): the confirmed "Book anyway" action over an online request's hold.
+    override_hold: bool = False
 
 
 class TransitionRequest(BaseModel):
@@ -192,6 +196,7 @@ def create_appointments_blueprint(use_cases: AppointmentUseCases) -> Blueprint:
                 slot_start=_as_utc(body.slot_start),
                 source=body.source,
                 reason=body.reason,
+                override_hold=body.override_hold,
             ),
         )
         return jsonify(appointment_body(view)), 201
@@ -224,7 +229,11 @@ def create_appointments_blueprint(use_cases: AppointmentUseCases) -> Blueprint:
             clinic_id=ctx.clinic_id,
             actor=Actor.staff(ctx),
             appointment_id=appointment_id,
-            cmd=RescheduleCommand(session_id=body.session_id, slot_start=_as_utc(body.slot_start)),
+            cmd=RescheduleCommand(
+                session_id=body.session_id,
+                slot_start=_as_utc(body.slot_start),
+                override_hold=body.override_hold,
+            ),
         )
         return jsonify(appointment_body(view)), 201
 

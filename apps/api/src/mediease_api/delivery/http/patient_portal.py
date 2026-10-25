@@ -12,6 +12,7 @@ Patients (``@patient``, under ``/api/v1/portal``, the portal cookies):
 | ``GET /reminders`` | reminders with their visible status (R13) |
 | ``GET /medicine-plan?date=`` / ``/medicine-plan/courses`` | the medicine plan (M6b-P3, R35) |
 | ``PUT /medicine-plan/reminders`` | a reminder choice for one line and slot (R38) |
+| ``POST`` / ``GET /booking-requests`` | ask a clinic for a time; the open requests (M6b-P4) |
 | ``PUT`` / ``DELETE /medicine-plan/doses`` | mark a dose Taken or Skipped, or clear it (R45) |
 | ``GET /medicine-plan/history?prescription_id=`` | a version's doses by day (R47, R49) |
 
@@ -25,13 +26,19 @@ reason and no staff fields; staff never see the account's email or name.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import date, datetime, time
+from datetime import UTC, date, datetime, time
 from typing import Any, Protocol
 from uuid import UUID
 
 from flask import Blueprint, Response, jsonify, request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
+from mediease_api.application.booking.requests import (
+    BookingRequestCommand,
+    CreateBookingRequest,
+    ListMyBookingRequests,
+    RequestItem,
+)
 from mediease_api.application.portal.doses import (
     ClearDose,
     DoseChoice,
@@ -79,7 +86,7 @@ from mediease_api.delivery.http.bodies import items_body, patient_view_body
 from mediease_api.delivery.http.request_info import request_info
 from mediease_api.delivery.http.validation import parse_json
 from mediease_api.domain.identity.permissions import Permission
-from mediease_api.domain.patients.patient import Language
+from mediease_api.domain.patients.patient import Language, Sex
 from mediease_api.domain.portal.doses import DoseState
 from mediease_api.domain.prescriptions.schedule import Slot
 from mediease_api.domain.shared.errors import InvalidValue
@@ -99,6 +106,8 @@ class PortalRecordUseCases(Protocol):
     def get_medicine_plan(self) -> GetMedicinePlan: ...
     def list_medicine_courses(self) -> ListMedicineCourses: ...
     def set_medicine_reminder(self) -> SetMedicineReminder: ...
+    def create_booking_request(self) -> CreateBookingRequest: ...
+    def list_my_booking_requests(self) -> ListMyBookingRequests: ...
     def mark_dose(self) -> MarkDose: ...
     def clear_dose(self) -> ClearDose: ...
     def dose_history(self) -> GetDoseHistory: ...
@@ -127,6 +136,39 @@ class ReminderRequest(BaseModel):
     slot: Slot
     enabled: bool
     remind_at: time | None = None
+
+
+class BookingRequestBody(BaseModel):
+    """M6b-P4 (booking-requests R9, R12): the session is named by its start (it may not exist
+    yet); age and sex are optional unless the clinic requires them."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    clinic_slug: str = Field(min_length=3, max_length=63)
+    doctor_id: UUID
+    session_start: AwareDatetime
+    slot_start: AwareDatetime | None = None
+    contact_phone: str = Field(min_length=1, max_length=20)
+    age_years: int | None = Field(default=None, ge=0, le=120)
+    sex: Sex | None = None
+    reason: str | None = Field(default=None, max_length=200)
+    not_emergency_ack: bool
+
+
+def request_item_body(r: RequestItem) -> dict[str, Any]:
+    return {
+        "id": str(r.id),
+        "status": "REQUESTED",
+        "clinic_id": str(r.clinic_id),
+        "clinic_name": r.clinic_name,
+        "clinic_slug": r.clinic_slug,
+        "clinic_phone_e164": r.clinic_phone_e164,
+        "timezone": r.timezone,
+        "doctor_name": r.doctor_name,
+        "mode": r.mode.value,
+        "starts_at": r.starts_at.isoformat(),
+        "created_at": r.created_at.isoformat(),
+    }
 
 
 class DoseRequest(BaseModel):
@@ -494,6 +536,35 @@ def create_portal_records_blueprint(use_cases: PortalRecordUseCases) -> Blueprin
             ),
         )
         return jsonify(reminder_body(reminder))
+
+    @bp.post("/booking-requests")
+    @patient
+    def create_booking_request() -> tuple[Response, int]:
+        body = parse_json(BookingRequestBody)
+        item = use_cases.create_booking_request().execute(
+            current_patient(),
+            BookingRequestCommand(
+                clinic_slug=body.clinic_slug,
+                doctor_id=body.doctor_id,
+                session_start=body.session_start.astimezone(UTC),
+                slot_start=body.slot_start.astimezone(UTC) if body.slot_start else None,
+                contact_phone=body.contact_phone,
+                age_years=body.age_years,
+                sex=body.sex,
+                reason=body.reason,
+                not_emergency_ack=body.not_emergency_ack,
+            ),
+            request_info(),
+        )
+        return jsonify(request_item_body(item)), 201
+
+    @bp.get("/booking-requests")
+    @patient
+    def list_booking_requests() -> Response:
+        return _items(
+            request_item_body(i)
+            for i in use_cases.list_my_booking_requests().execute(current_patient())
+        )
 
     @bp.put("/medicine-plan/doses")
     @patient

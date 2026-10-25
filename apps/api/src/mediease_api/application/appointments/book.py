@@ -23,10 +23,11 @@ from mediease_api.application.appointments.common import (
 )
 from mediease_api.application.appointments.views import AppointmentView
 from mediease_api.application.audit import record_event
+from mediease_api.application.booking.holds import held_error, record_override, resolve_holds
 from mediease_api.application.context import Actor
 from mediease_api.application.notifications.service import publish
 from mediease_api.domain.appointments.appointment import Appointment
-from mediease_api.domain.appointments.errors import SessionClosed
+from mediease_api.domain.appointments.errors import SessionClosed, SlotHeld
 from mediease_api.domain.appointments.status import AppointmentSource
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.notifications.events import AppointmentBooked
@@ -45,6 +46,8 @@ class BookCommand:
     slot_start: datetime | None = None
     source: AppointmentSource = AppointmentSource.FRONT_DESK
     reason: str | None = None
+    # M6b-P4 (R18a): book over an online request's hold; the confirmed "Book anyway" action.
+    override_hold: bool = False
 
 
 class BookAppointment:
@@ -71,17 +74,29 @@ class BookAppointment:
                 raise SessionClosed()
 
             now = self._clock.now()
-            appointment = Appointment.book(
+            resolution = resolve_holds(
+                tenant,
                 session,
-                id=self._ids.new_id(),
-                patient_id=cmd.patient_id,
-                active=tenant.appointments.list_active_for_sessions([session.id]),
-                now=now,
                 slot_start=cmd.slot_start,
-                source=cmd.source,
-                reason=cmd.reason,
-                created_by=actor.user_id,
+                override=cmd.override_hold,
+                actor=actor,
+                now=now,
             )
+            try:
+                appointment = Appointment.book(
+                    session,
+                    id=self._ids.new_id(),
+                    patient_id=cmd.patient_id,
+                    active=tenant.appointments.list_active_for_sessions([session.id]),
+                    now=now,
+                    slot_start=cmd.slot_start,
+                    source=cmd.source,
+                    reason=cmd.reason,
+                    created_by=actor.user_id,
+                    holds=resolution.holds,
+                )
+            except SlotHeld:
+                raise held_error(uow, tenant, session, cmd.slot_start, now) from None
             tenant.sessions.update(session)
             tenant.appointments.add(appointment)
             record_history(tenant, appointment, ids=self._ids, actor=actor, from_status=None)
@@ -95,6 +110,16 @@ class BookAppointment:
                 entity_type=ENTITY_TYPE,
                 entity_id=appointment.id,
                 metadata=place_metadata(appointment, session),
+            )
+            record_override(
+                uow,
+                ids_new_id=self._ids.new_id(),
+                actor=actor,
+                now=now,
+                clinic_id=clinic_id,
+                appointment_id=appointment.id,
+                session_id=session.id,
+                released=resolution.released,
             )
             # FR-APT-06 (M5-P2), through the notification service from M6a-P7 (ADR-0017): the
             # patient's confirmation and the doctor's notification commit with the booking.

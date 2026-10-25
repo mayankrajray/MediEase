@@ -30,6 +30,7 @@ from mediease_api.application.appointments.common import (
 )
 from mediease_api.application.appointments.views import AppointmentView
 from mediease_api.application.audit import record_event
+from mediease_api.application.booking.holds import held_error
 from mediease_api.application.context import Actor, RequestContext
 from mediease_api.application.notifications.service import publish
 from mediease_api.application.patients.views import PatientView
@@ -37,7 +38,7 @@ from mediease_api.application.scheduling.generation import generate
 from mediease_api.application.scheduling.schedules import load_clinic, load_doctor
 from mediease_api.application.scheduling.sessions import sessions_for_date
 from mediease_api.domain.appointments.appointment import Appointment
-from mediease_api.domain.appointments.errors import NoSession, SessionClosed, SessionFull
+from mediease_api.domain.appointments.errors import NoSession, SessionClosed, SessionFull, SlotHeld
 from mediease_api.domain.appointments.queue import first_free_slot, transition, wait_minutes
 from mediease_api.domain.appointments.status import (
     AppointmentSource,
@@ -185,24 +186,33 @@ class AddWalkIn:
 
             session = lock_sessions(tenant, clinic_id, [chosen.id]).sessions[chosen.id]
             active = tenant.appointments.list_active_for_sessions([session.id])
+            # M6b-P4: slots under an online request's hold are not free for a walk-in either.
+            holds = tenant.booking_requests.live_holds([session.id], now)
             slot_start = cmd.slot_start
             if session.mode is BookingMode.SLOTS and slot_start is None:
                 slot_start = first_free_slot(
-                    session, taken={a.slot_start for a in active if a.slot_start}, now=now
+                    session,
+                    taken={a.slot_start for a in active if a.slot_start}
+                    | {h.slot_start for h in holds if h.slot_start},
+                    now=now,
                 )
                 if slot_start is None:
                     raise SessionFull()
-            appointment = Appointment.book(
-                session,
-                id=self._ids.new_id(),
-                patient_id=cmd.patient_id,
-                active=active,
-                now=now,
-                slot_start=slot_start if session.mode is BookingMode.SLOTS else None,
-                source=AppointmentSource.WALK_IN,
-                reason=cmd.reason,
-                created_by=actor.user_id,
-            )
+            try:
+                appointment = Appointment.book(
+                    session,
+                    id=self._ids.new_id(),
+                    patient_id=cmd.patient_id,
+                    active=active,
+                    now=now,
+                    slot_start=slot_start if session.mode is BookingMode.SLOTS else None,
+                    source=AppointmentSource.WALK_IN,
+                    reason=cmd.reason,
+                    created_by=actor.user_id,
+                    holds=holds,
+                )
+            except SlotHeld:
+                raise held_error(uow, tenant, session, slot_start, now) from None
             record = AppointmentView(appointment, session)
             tenant.sessions.update(session)
             tenant.appointments.add(appointment)

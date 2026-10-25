@@ -14,6 +14,7 @@ from enum import StrEnum
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from mediease_api.domain.booking.request import DEFAULT_HOLD_MINUTES, HOLD_MINUTES_RANGE
 from mediease_api.domain.patients.code import derive_code_prefix, format_code, validate_code_prefix
 from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.shared.errors import DomainError, InvalidTransition, InvalidValue
@@ -23,7 +24,7 @@ from mediease_api.domain.shared.time import require_utc
 
 DEFAULT_TIMEZONE = "Asia/Kolkata"
 
-# Lower-case words joined by single hyphens; used in public URLs from M7.
+# Lower-case words joined by single hyphens; the public page is /c/<slug> (M6b-P4).
 _SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _SLUG_LENGTH = range(3, 64)
 # Indian PIN code: six digits, never starting with 0.
@@ -86,6 +87,15 @@ class Clinic:
     # before the visit (0 = off). Applied to bookings made or moved after a change.
     reminder_evening_before: bool = True
     reminder_hours_before: int = 2
+    # M6b-P4 (spec booking-requests R12, R27; ADR-0018): how long an online request holds its
+    # slot, and whether the request form must ask age and sex (phone is always asked).
+    request_hold_minutes: int = DEFAULT_HOLD_MINUTES
+    request_requires_age_sex: bool = False
+
+    @property
+    def has_public_page(self) -> bool:
+        """R1, NFR-19: the one rule for ``/c/{slug}``. M6c adds "and verified" here only."""
+        return self.status is ClinicStatus.ACTIVE
 
     @classmethod
     def create(
@@ -179,8 +189,8 @@ class Clinic:
         """Change the clinic's own details (FR-ORG-01, M1-P5).
 
         Only the fields given are touched, so a caller cannot blank a field by
-        omitting it. The slug is not editable: it appears in public links from
-        M7, so changing it would break them; the status has its own
+        omitting it. The slug is not editable: it appears in the public page's
+        address (/c/<slug>, M6b-P4), so changing it would break shared links; the status has its own
         transitions. Every value is validated before anything changes.
         """
         validated_name = required_text(name, "name", max_length=200) if name is not None else None
@@ -201,6 +211,23 @@ class Clinic:
         for attribute, value in validated.items():
             if value is not None:
                 setattr(self, attribute, value)
+
+    def change_booking_requests(
+        self,
+        *,
+        now: datetime,
+        hold_minutes: int | None = None,
+        requires_age_sex: bool | None = None,
+    ) -> None:
+        """Developer decision 25 Oct 2026: the hold (30 minutes to 8 hours) and whether the
+        request form must ask age and sex; only the values given change."""
+        if hold_minutes is not None and hold_minutes not in HOLD_MINUTES_RANGE:
+            raise InvalidValue("request_hold_minutes", "must be 30-480")
+        self.updated_at = require_utc(now, "now")
+        if hold_minutes is not None:
+            self.request_hold_minutes = hold_minutes
+        if requires_age_sex is not None:
+            self.request_requires_age_sex = requires_age_sex
 
     def change_reminders(
         self, *, now: datetime, evening_before: bool | None = None, hours_before: int | None = None
