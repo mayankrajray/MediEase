@@ -5,10 +5,11 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
-import { PORTAL_SIGN_IN_PATH, portalDelete, portalGet, portalPatch, portalPost } from "@/lib/auth/portal-session";
+import { PORTAL_SIGN_IN_PATH, portalDelete, portalGet, portalPatch, portalPost, portalPut } from "@/lib/auth/portal-session";
+import { notificationWords } from "@/lib/i18n/patient-notifications";
 import { type PortalLanguage, portalDate } from "@/lib/i18n/portal";
 
-import { type PortalLink, usePortalLoad } from "./data";
+import { type PortalLink, type PortalNotificationPreference, usePortalLoad } from "./data";
 import { PortalCard, ScreenLoading, usePortal } from "./PortalShell";
 
 async function loadLinks(): Promise<readonly PortalLink[]> {
@@ -113,6 +114,8 @@ export function PortalAccountPage() {
       </PortalCard>
 
       <SlotTimesCard onSaved={(text) => setStatus(text)} />
+
+      <NotificationSwitches onSaved={(text) => setStatus(text)} />
 
       <PortalCard id="clinics-heading" title={s.account.clinics}>
         {links.status === "loading" && <ScreenLoading label={s.loading} />}
@@ -246,6 +249,81 @@ function SlotTimesCard({ onSaved }: Readonly<{ onSaved: (text: string) => void }
       <Button size="sm" onClick={() => void save()} disabled={busy}>
         {s.account.saveTimes}
       </Button>
+    </PortalCard>
+  );
+}
+
+async function loadPreferences(): Promise<readonly PortalNotificationPreference[]> {
+  return (await portalGet("/api/v1/portal/notification-preferences")).data.items;
+}
+
+/**
+ * M6b-P6 (spec R62, R63): what the person is told about, in the app and by email. Everything is on
+ * until they turn it off; email is offered only for the four answers to a booking request.
+ */
+function NotificationSwitches({ onSaved }: Readonly<{ onSaved: (text: string) => void }>) {
+  const { s, leave } = usePortal();
+  const words = notificationWords(s.lang);
+  const loaded = usePortalLoad(loadPreferences);
+  const [items, setItems] = useState<readonly PortalNotificationPreference[] | undefined>(undefined);
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  const shown = items ?? (loaded.status === "ready" ? loaded.data : []);
+
+  async function change(kind: PortalNotificationPreference["kind"], channel: "IN_APP" | "EMAIL", enabled: boolean) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { data } = await portalPut("/api/v1/portal/notification-preferences", { kind, channel, enabled });
+      setItems(data.items);
+      onSaved(words.switches.saved);
+    } catch (failure) {
+      if (!leave(failure)) setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <PortalCard id="notifications-heading" title={words.switches.title}>
+      <p className="text-sm text-slate-700">{words.switches.help}</p>
+      {loaded.status === "loading" && <ScreenLoading label={s.loading} />}
+      {loaded.status === "failed" && <ErrorNotice error={loaded.error} onRetry={loaded.retry} />}
+      {error !== null && <ErrorNotice error={error} />}
+      <ul className="space-y-2">
+        {shown.map((p) => (
+          <li key={p.kind} className="border-t border-slate-200 pt-2 first:border-t-0 first:pt-0">
+            <fieldset>
+              <legend className="font-medium">{words.switches.kinds[p.kind]}</legend>
+              <div className="flex flex-wrap gap-x-6">
+                <label className="flex min-h-11 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={p.in_app}
+                    disabled={busy}
+                    onChange={(e) => void change(p.kind, "IN_APP", e.target.checked)}
+                    className="size-5"
+                  />
+                  {words.switches.inApp}
+                </label>
+                {p.email !== null && (
+                  <label className="flex min-h-11 items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={p.email}
+                      disabled={busy}
+                      onChange={(e) => void change(p.kind, "EMAIL", e.target.checked)}
+                      className="size-5"
+                    />
+                    {words.switches.email}
+                  </label>
+                )}
+              </div>
+            </fieldset>
+          </li>
+        ))}
+      </ul>
     </PortalCard>
   );
 }

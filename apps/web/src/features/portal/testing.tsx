@@ -17,11 +17,30 @@ export const PORTAL_ACCOUNT = {
   slot_times: { morning: "08:00", afternoon: "14:00", evening: "18:00", night: "21:00" },
 } as const;
 
+/** Everything on, email only for the booking answers (spec R62, R63). */
+export const PREFERENCES = [
+  "booking.accepted",
+  "booking.declined",
+  "booking.proposed",
+  "booking.expired",
+  "appointment.confirmed",
+  "appointment.moved",
+  "appointment.cancelled",
+  "prescription.ready",
+  "medicine.due",
+].map((kind) => ({ kind, in_app: true, email: kind.startsWith("booking.") ? true : null }));
+
 export const CLINIC_ID = "0192f0a0-0000-7000-8000-0000000000e2";
 export const OTHER_CLINIC_ID = "0192f0a0-0000-7000-8000-0000000000f2";
 
 export function me(overrides: Record<string, unknown> = {}): Record<string, Route> {
-  return { "GET /api/v1/portal/me": () => json(200, { account: { ...PORTAL_ACCOUNT, ...overrides } }) };
+  return {
+    "GET /api/v1/portal/me": () => json(200, { account: { ...PORTAL_ACCOUNT, ...overrides } }),
+    // M6b-P6: the header's bell asks for its count on every screen.
+    "GET /api/v1/portal/notifications/summary": () => json(200, { unread: 0, latest_id: null }, { ETag: '"n0"' }),
+    // M6b-P6: the account page's notification switches.
+    "GET /api/v1/portal/notification-preferences": () => json(200, { items: PREFERENCES }),
+  };
 }
 
 export function link(clinicId = CLINIC_ID, name = "Sample Clinic", extra: Record<string, unknown> = {}) {

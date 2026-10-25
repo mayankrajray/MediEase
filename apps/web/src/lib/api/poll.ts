@@ -27,6 +27,11 @@ export interface PollOptions<T> {
   readonly onError?: (error: unknown) => void;
   readonly intervalMs?: number;
   readonly backoffMs?: number;
+  /**
+   * M6b-P6: the tag of data the page already has (rendered on the server). With it the first
+   * request waits one interval and sends the tag, instead of asking again at once.
+   */
+  readonly initialEtag?: string;
   /** Injected in tests; defaults to the global document (absent on the server). */
   readonly visibility?: PageVisibility;
 }
@@ -37,7 +42,7 @@ export function startPolling<T>(options: PollOptions<T>): () => void {
   const backoffMs = options.backoffMs ?? POLL_BACKOFF_MS;
   const page = options.visibility ?? (typeof document === "undefined" ? undefined : document);
 
-  let etag: string | undefined;
+  let etag: string | undefined = options.initialEtag;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let inFlight: AbortController | undefined;
   let stopped = false;
@@ -79,7 +84,8 @@ export function startPolling<T>(options: PollOptions<T>): () => void {
   };
 
   page?.addEventListener("visibilitychange", onVisibility);
-  void tick();
+  if (options.initialEtag === undefined) void tick();
+  else schedule(intervalMs);
 
   return () => {
     stopped = true;

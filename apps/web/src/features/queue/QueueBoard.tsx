@@ -215,6 +215,23 @@ export function QueueBoard({
     }
   }
 
+  /** M6b-P6 (R69): the patient's live token link, copied to send by WhatsApp or SMS. */
+  async function copyLiveLink(entry: QueueEntry) {
+    const who = entry.patient.full_name;
+    setActionError(undefined);
+    try {
+      const { url } = await api.liveLink(entry.id);
+      try {
+        await navigator.clipboard.writeText(url);
+        setMessage(`Live link for ${who} copied. It works until the session ends.`);
+      } catch {
+        setMessage(`Live link for ${who}: ${url}`);
+      }
+    } catch (failure) {
+      if (!endSession(failure)) setActionError(failure);
+    }
+  }
+
   const sessions = queue?.sessions ?? [];
   const isToday = date === today;
 
@@ -384,6 +401,7 @@ export function QueueBoard({
                         onOpen: (e) => void openFromRow(e),
                         canPrint,
                         onPrint: printer.print,
+                        ...(canManage && isToday ? { onCopyLiveLink: (e: QueueEntry) => void copyLiveLink(e) } : {}),
                       }}
                     />
                   ))}

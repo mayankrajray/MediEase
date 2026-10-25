@@ -596,6 +596,138 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/portal/notifications": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The account's notifications, newest first
+         * @description M6b-P6, R55, R60, R68. @patient. The newest 50 of the linked clinics (and the account's
+         *     own booking answers), never a suspended clinic's; titles in the account's language,
+         *     with no diagnosis, medicine, reason text, note or phone (R59). Not audited.
+         */
+        readonly get: operations["listPortalNotifications"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/notifications/summary": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The bell's unread count
+         * @description M6b-P6, R67. @patient. Strong ETag; If-None-Match answers 304 with no body while it
+         *     is unchanged. The portal polls it every 30 seconds while the tab is visible.
+         */
+        readonly get: operations["getPortalNotificationSummary"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/notifications/{notification_id}/read": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Mark one notification read
+         * @description M6b-P6, R68. @patient. Another account's (or a hidden) ID is 404 REQ_NOT_FOUND.
+         *     Needs X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly post: operations["readPortalNotification"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/notifications/read-all": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Mark every visible notification read
+         * @description M6b-P6, R68. @patient. Needs X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly post: operations["readAllPortalNotifications"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/notification-preferences": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The account's notification switches
+         * @description M6b-P6, R62, R63. @patient. Every kind with its in-app switch (on by default) and,
+         *     for the four booking answers only, its email switch (null where email is not offered).
+         */
+        readonly get: operations["listPortalNotificationPreferences"];
+        /**
+         * Turn one switch on or off
+         * @description M6b-P6, R62, R63. @patient. EMAIL for a kind other than the booking answers is 422.
+         *     Returns every switch. Logged, not audited. Needs X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly put: operations["setPortalNotificationPreference"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/appointments/{appointment_id}/live-link": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The live token link of the account's own appointment
+         * @description M6b-P6, R69, ADR-0019. @patient. Only for an appointment of a record linked to the
+         *     account (else 404). Valid from the start of the session's day until 2 hours after it
+         *     ends; 422 when the appointment is cancelled or has ended.
+         */
+        readonly get: operations["getPortalLiveLink"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/portal/prescriptions": {
         readonly parameters: {
             readonly query?: never;
@@ -959,6 +1091,51 @@ export interface paths {
          *     Records booking_request.proposed. Needs X-CSRF-Token.
          */
         readonly post: operations["proposeBookingTime"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/appointments/{appointment_id}/live-link": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The patient's live token link, to send by hand
+         * @description M6b-P6, R69, ADR-0019. Permission: APPOINTMENTS_MANAGE. Another clinic's appointment is
+         *     404; a cancelled or ended one is 422. Not audited.
+         */
+        readonly get: operations["getStaffLiveLink"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/public/queue/{token}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Where an appointment is in the queue (no sign-in)
+         * @description M6b-P6, R70, R71, ADR-0019. The clinic, the doctor, the patient's own token or slot, how
+         *     many BOOKED or ARRIVED entries are ahead, what is being seen and a state; never a name,
+         *     phone, reason or age, nor anything about other patients. Strong ETag (304 while
+         *     unchanged), never cached, noindex. 404 LINK_INVALID, 410 LINK_EXPIRED (outside the
+         *     session's day until 2 hours after it), 429 LINK_RATE_LIMITED with Retry-After.
+         */
+        readonly get: operations["getLiveQueue"];
+        readonly put?: never;
+        readonly post?: never;
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -3761,6 +3938,75 @@ export interface components {
             readonly until: string;
         };
         /**
+         * @description M6b-P6 (R57)
+         * @enum {string}
+         */
+        readonly PatientNotificationKind: "booking.accepted" | "booking.declined" | "booking.proposed" | "booking.expired" | "appointment.confirmed" | "appointment.moved" | "appointment.cancelled" | "prescription.ready" | "medicine.due";
+        readonly PortalNotification: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["PatientNotificationKind"];
+            /** @description In the account's language; no diagnosis, medicine, reason text, note or phone */
+            readonly title: string;
+            /** @description A portal path */
+            readonly link: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly read_at: string | null;
+        };
+        readonly PortalNotificationList: {
+            readonly items: readonly components["schemas"]["PortalNotification"][];
+        };
+        readonly PortalNotificationSummary: {
+            readonly unread: number;
+            /** Format: uuid */
+            readonly latest_id: string | null;
+        };
+        readonly PortalNotificationsMarked: {
+            readonly marked: number;
+        };
+        readonly PortalNotificationPreference: {
+            readonly kind: components["schemas"]["PatientNotificationKind"];
+            readonly in_app: boolean;
+            /** @description Null where email is not offered (only the four booking answers) */
+            readonly email: boolean | null;
+        };
+        readonly PortalNotificationPreferenceList: {
+            readonly items: readonly components["schemas"]["PortalNotificationPreference"][];
+        };
+        readonly PortalNotificationPreferenceChange: {
+            readonly kind: components["schemas"]["PatientNotificationKind"];
+            /** @enum {string} */
+            readonly channel: "IN_APP" | "EMAIL";
+            readonly enabled: boolean;
+        };
+        readonly LiveLink: {
+            /** @description PUBLIC_BASE_URL/q/<token> */
+            readonly url: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+        };
+        /** @description R70; the only fields the public page may carry (a test fails on any other) */
+        readonly LiveQueue: {
+            readonly clinic_name: string;
+            readonly doctor_name: string;
+            readonly timezone: string;
+            readonly mode: components["schemas"]["BookingMode"];
+            /** @enum {string} */
+            readonly state: "NOT_STARTED" | "WAITING" | "YOUR_TURN" | "DONE" | "CANCELLED";
+            readonly token_number: number | null;
+            /** Format: date-time */
+            readonly slot_start: string | null;
+            /** @description Only BOOKED or ARRIVED entries before this one in queue order */
+            readonly ahead: number;
+            readonly now_seeing_token: number | null;
+            /** Format: date-time */
+            readonly now_seeing_slot: string | null;
+            /** Format: date-time */
+            readonly session_starts_at: string;
+        };
+        /**
          * @description How a patient account was linked to a record (M6b-P1; BOOKING from P5)
          * @enum {string}
          */
@@ -6330,6 +6576,220 @@ export interface operations {
             readonly 409: components["responses"]["BookingRequestError"];
         };
     };
+    readonly listPortalNotifications: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The notifications */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalNotificationList"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly getPortalNotificationSummary: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                readonly "If-None-Match"?: string;
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The count */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly ETag: components["headers"]["ETag"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalNotificationSummary"];
+                };
+            };
+            /** @description Unchanged since the ETag sent */
+            readonly 304: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly readPortalNotification: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly notification_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Read */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalLinkingError"];
+        };
+    };
+    readonly readAllPortalNotifications: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description How many were marked */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalNotificationsMarked"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly listPortalNotificationPreferences: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The switches */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalNotificationPreferenceList"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly setPortalNotificationPreference: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PortalNotificationPreferenceChange"];
+            };
+        };
+        readonly responses: {
+            /** @description The switches */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalNotificationPreferenceList"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalLinkingError"];
+        };
+    };
+    readonly getPortalLiveLink: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly appointment_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The link */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["LiveLink"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalLinkingError"];
+            readonly 422: components["responses"]["PortalLinkingError"];
+        };
+    };
     readonly listPortalPrescriptions: {
         readonly parameters: {
             readonly query?: never;
@@ -6941,6 +7401,84 @@ export interface operations {
             readonly 409: components["responses"]["BookingRequestError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["BookingRequestError"];
+        };
+    };
+    readonly getStaffLiveLink: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description An appointment of the request's clinic. */
+                readonly appointment_id: components["parameters"]["AppointmentPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The link */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["LiveLink"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 422: components["responses"]["AppointmentError"];
+        };
+    };
+    readonly getLiveQueue: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                readonly "If-None-Match"?: string;
+            };
+            readonly path: {
+                readonly token: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The live view */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly ETag: components["headers"]["ETag"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["LiveQueue"];
+                };
+            };
+            /** @description Unchanged since the ETag sent */
+            readonly 304: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 404: components["responses"]["LinkError"];
+            readonly 410: components["responses"]["LinkError"];
+            readonly 429: components["responses"]["LinkRateLimited"];
         };
     };
     readonly getClinic: {

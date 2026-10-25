@@ -11,6 +11,7 @@ import { PORTAL_SIGN_IN_PATH, portalGet, portalPatch } from "@/lib/auth/portal-s
 import { parsePortalLanguage, type PortalLanguage, type PortalStrings, portalStrings } from "@/lib/i18n/portal";
 
 import { rememberPortalLanguage } from "./LanguageCookieSwitch";
+import { PortalBell } from "./PortalBell";
 import { portalReasonForEndedSession } from "./messages";
 
 export type PatientAccount = components["schemas"]["PatientAccount"];
@@ -22,6 +23,8 @@ interface Portal {
   readonly leave: (error: unknown) => boolean;
   readonly setLanguage: (language: PortalLanguage) => Promise<void>;
   readonly replaceAccount: (account: PatientAccount) => void;
+  /** M6b-P6: a screen marked notifications read; the bell asks for its count again at once. */
+  readonly refreshBell: () => void;
 }
 
 const PortalContext = createContext<Portal | null>(null);
@@ -62,6 +65,8 @@ export function PortalShell({ children }: Readonly<{ children: ReactNode }>) {
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [switching, setSwitching] = useState(false);
+  const [bellTick, setBellTick] = useState(0);
+  const refreshBell = useCallback(() => setBellTick((n) => n + 1), []);
 
   const leave = useCallback(
     (error: unknown): boolean => {
@@ -120,8 +125,9 @@ export function PortalShell({ children }: Readonly<{ children: ReactNode }>) {
             leave,
             setLanguage,
             replaceAccount: (next) => setLoad({ status: "ready", account: next }),
+            refreshBell,
           },
-    [account, s, leave, setLanguage],
+    [account, s, leave, setLanguage, refreshBell],
   );
 
   async function switchLanguage() {
@@ -149,6 +155,8 @@ export function PortalShell({ children }: Readonly<{ children: ReactNode }>) {
             MediEase
           </Link>
           {portal !== null && (
+            <div className="flex items-center gap-2">
+            <PortalBell language={language} tick={bellTick} onEnded={leave} />
             <button
               type="button"
               lang={language === "hi" ? "en" : "hi"}
@@ -159,6 +167,7 @@ export function PortalShell({ children }: Readonly<{ children: ReactNode }>) {
             >
               {s.switchLanguage}
             </button>
+            </div>
           )}
         </div>
         {portal !== null && (
