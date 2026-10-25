@@ -700,3 +700,55 @@ Built 26 Oct 2026 to the approved design and its two clarifications. Details set
 Differences from the design (all small): the staff-only note is shown on the *Answered* list;
 staff may decline a pending proposal (it withdraws the offer); the patient's confirmation after
 *Accept this time* is the appointment appearing under the clinic (the list reloads).
+
+---
+
+## M6b-P6 - Patient notifications and the live token link
+
+Proposed 26 Oct 2026, **awaiting the developer's approval**. The last phase of M6b. Covers
+FR-NTF-01 and FR-NTF-04/05 for patients, FR-REM-03 (medicine reminders, in the app) and
+FR-QUE-06. Rules: `docs/specs/patient-portal.md` section 13, R55-R74 (Draft); the live link's
+security choice is ADR-0019 (Proposed). Testing follows the 26 Oct rule (changed code only); the
+**full API and Playwright suites run once at the end of this phase, closing M6b**.
+
+Facts the design rests on (checked in the code):
+
+- The notification service (ADR-0017) writes **staff** in-app rows only (`notifications`,
+  recipient a user); titles are English strings built from typed values. Nothing addresses a
+  patient account.
+- Patients today get **WhatsApp** only, to the clinic record's phone and only with that record's
+  consent: booking confirmation, appointment reminders, cancellation notice, prescription link,
+  follow-up reminder. New WhatsApp templates need Meta approval (L-02, still pending).
+- P5's decline, propose and expiry write audit rows only; accept publishes `AppointmentBooked`.
+- `medicine_reminder_prefs` is stored ("P6 delivers"), with the account's slot times.
+- Reminder rows (appointment, follow-up) exist only for records with WhatsApp consent.
+- There is no web push, service worker or manifest; the portal polls nothing yet.
+- Signed public links (`domain/links/token.py`) have a purpose map holding only `RX_VIEW`.
+- The queue orders a session by token (or slot); no "position" is computed anywhere.
+
+| # | Decision | Recommended | Alternatives |
+|---|---|---|---|
+| 1 | Where patient notifications live | A new table **`patient_notifications`**: clinic, **account**, kind, `event_key` (unique per account), the entity and its link, `params` (IDs and a time only), `created_at`, `read_at`. The **title is rendered at read time** in the account's language (English or Hindi) from the kind and params, so a language switch changes past notices too and no text is stored. Read through a reviewed cross-clinic lookup by account, filtered by the portal scope (an unlinked or suspended clinic's notices disappear, as its records do). Kept 90 days, like staff notifications | B: reuse `notifications` with a nullable account recipient (mixes staff and patient rules; titles are stored English). C: store rendered text in both languages (duplication; no gain) |
+| 2 | Who receives them | The **account** a request belongs to (booking events), or the account **linked** to the appointment's or prescription's record in that clinic. A record with no linked account gets nothing in the app (WhatsApp is unchanged). Never by phone | B: every account whose email or phone matches (FR-PRT-06: never by phone alone) |
+| 3 | The patient event catalogue | **Booking:** accepted, declined (with the reason's words), another time suggested, expired. **Appointment:** confirmed (a staff booking, not one from an accepted request: that notice already says booked), moved, cancelled. **Prescription ready** (issued or revised: "New prescription from Dr X", no medicine). **Medicine due** (point 5). New events `BookingRequestAnswered(request_id)` and `BookingRequestExpired(request_id)` are published by P5's answers and the expiry job; the existing appointment and prescription events gain a patient recipient in the same service | B: also appointment-reminder and follow-up-due notices in the app now (those rows exist only for WhatsApp-consenting records; making them channel-independent is a reminders change: proposed for M7, see open question 3) |
+| 4 | Channels and preferences | **In the app:** every kind, on by default, each switchable under *Account -> Notifications*; in-app ignores quiet hours (FR-NTF-05). **Email (new, recommended):** only the four **booking outcomes**, to the account's **verified** email, English or Hindi, on by default and switchable; a link to the portal, no reason or note in the email. **WhatsApp:** unchanged (the clinic record's consent and approved templates). Preferences in `patient_notification_preferences` (account, kind, channel) | B: in-app only (a patient who asked for a time may not open the app for hours, so an answer or a proposal is missed). C: new WhatsApp templates (blocked on L-02 approval) |
+| 5 | Medicine due (FR-REM-03) | From the stored reminder choices: for each enabled line and slot of a **current** prescription inside its course, at the account's time (or the chosen `remind_at`), one in-app notice per account, slot and day: "Morning medicines · 08:00" -> `/portal/medicines` (never a medicine name, dose or count). A **sweep every 5 minutes** (the expiry pattern) creates those due since the last run, at most 30 minutes late; a missed day is not back-filled. In-app only. The portal shows a line under the plan that these appear when the app is open (no push yet) | B: phone push notifications now (needs a service worker, VAPID keys and a permission flow: a phase of its own). C: WhatsApp medicine reminders (template approval; FR-MSG-04 forbids medicine names anyway) |
+| 6 | The notification centre (FR-NTF-05) | A **bell** in the portal header with the unread count, polling a summary every 30 seconds with ETag only while the tab is visible (the staff bell's pattern); `/portal/notifications` lists the newest 50 with read state, *Mark all as read*, and each opens its item (the appointment's clinic group, the request, the prescription, the medicine plan). 360 px, English and Hindi, under 200 KB | B: a list only, no bell (FR-NTF-05 asks for a badge) |
+| 7 | The live token link (FR-QUE-06) | A **signed link per appointment**, `PUBLIC_BASE_URL/q/{token}` (purpose `QUEUE_VIEW`, valid from the session's day until 2 hours after it ends). The page, **without sign-in**, shows the clinic, the doctor, the patient's **token or slot time** and "**3 ahead of you**", "**Now seeing token 4**", or "It's your turn" / "Your visit is done" / "This appointment was cancelled"; **no name, phone or reason**. It refreshes every 20 seconds (ETag) and shows when it last updated. Rate limited like the prescription link. Patients reach it from *My appointments* (today's appointments) and staff can copy it from the queue row to send by hand. ADR-0019 explains why it needs no last-4 check | B: the last-4 check first (one more step for "am I next?", for no clinical data). C: only inside the signed-in portal (unlinked walk-ins could not use it) |
+| 8 | Position and words (FR-QUE-06) | Computed from the session's active appointments on each read: **ahead** = BOOKED or ARRIVED entries before this one in queue order (token, else slot), **now seeing** = the IN_CONSULTATION entry's token or slot; nothing about anyone else. Slot mode says "Your time 10:30 · 2 ahead of you" | B: an estimated wait in minutes (needs consultation-length data; misleading early) |
+| 9 | Privacy and safety | Titles, emails and the live page carry no diagnosis, medicine, reason, note, phone or age (FR-MSG-04, FR-NTF-06); logs carry IDs and counts. Notices are the account's alone (a cross-account tenancy case for every new ID route). Unlinking a clinic hides its notices and voids its live links for that account's view | — |
+| 10 | Storage and contract | Migration `0031`: `patient_notifications`, `patient_notification_preferences`, the link purpose and the medicine sweep job kinds. Contract 0.35.0: `GET /portal/notifications`, `GET /portal/notifications/summary` (ETag), `POST /portal/notifications/{id}/read`, `POST /portal/notifications/read-all`, `GET`/`PUT /portal/notification-preferences`, `GET /portal/appointments/{id}/live-link`, staff `GET /appointments/{id}/live-link`, public `GET /public/queue/{token}` | — |
+
+Testing for P6: unit and integration tests for the new code (recipients, rendering in both
+languages, idempotency, the medicine sweep's window, position words, the link's expiry), the
+contract and tenancy cases, the affected web tests, and two Playwright journeys at 360 px (a
+patient's bell after the desk accepts and proposes; the live link moving as the queue moves).
+Then the **full** API and Playwright suites, closing the milestone.
+
+Open questions for the developer:
+
+1. **Email for booking outcomes** (point 4): add it now (recommended), or in-app only?
+2. **The live link without a last-4 check** (point 7, ADR-0019): acceptable, given it shows only
+   a token number and a queue position?
+3. **Appointment-reminder and follow-up-due notices in the app** (point 3): leave for M7 as
+   proposed, or bring them into P6 (the reminders change makes the phase noticeably bigger)?

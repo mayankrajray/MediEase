@@ -302,3 +302,89 @@ account (FR-PRT-09); patient cancel or reschedule (FR-PRT-08); data export and d
 
 ## 12. Open questions
 None for P1 once the design is approved.
+
+## 13. M6b-P6 - Patient notifications and the live token link (Draft, 26 Oct 2026)
+
+Design: `docs/milestones/M6b-patient-portal-booking.md`, "M6b-P6" (10 decisions, 3 open
+questions); ADR-0019 (Proposed).
+
+### Notifications
+
+- **R55** A patient notification belongs to one **account** and one clinic: kind, `event_key`
+  (unique per account), the entity and its link, `params` (IDs and a time only), `created_at`,
+  `read_at`. No text is stored; the title is rendered on read in the account's language.
+- **R56** Recipients: the account a booking request belongs to; for an appointment or a
+  prescription, the account actively linked to that record in that clinic. Nothing is ever sent
+  to an account found by phone or email.
+- **R57** Kinds: `booking.accepted`, `booking.declined`, `booking.proposed`, `booking.expired`,
+  `appointment.confirmed` (a staff booking; an accepted request's appointment is told once, as
+  `booking.accepted`), `appointment.moved`, `appointment.cancelled`, `prescription.ready`,
+  `medicine.due`.
+- **R58** Delivery is idempotent: replaying an event writes nothing new (FR-NTF-06).
+- **R59** A title never contains a diagnosis, medicine, dose, reason, staff note, phone or age.
+  Allowed: the clinic's name, the doctor's display name, a day and time or token, the decline
+  reason's words.
+- **R60** The portal scope applies: notices of a clinic the account is no longer linked to, or of a
+  suspended clinic, are not listed or counted (booking notices of the account's own requests stay).
+- **R61** Kept 90 days, then deleted by the daily purge.
+
+### Channels and preferences
+
+- **R62** In the app: every kind, on by default; each kind can be turned off under *Account*.
+  In-app delivery ignores quiet hours.
+- **R63** Email (subject to open question 1): the four booking kinds only, to a **verified**
+  email, in the account's language, on by default and switchable; subject and body name the
+  clinic and the outcome and link to the portal; never the reason or note. Sent by a job, at most
+  once per notice.
+- **R64** WhatsApp and SMS are unchanged: the clinic record's consent and approved templates.
+
+### Medicine due
+
+- **R65** For each enabled reminder choice of a current prescription version, on each day of its
+  course, one `medicine.due` notice per account, slot and day at the chosen time (or the slot's).
+  The title names the slot and time only ("Morning medicines · 08:00").
+- **R66** A sweep every 5 minutes writes the notices due since its last run and at most 30
+  minutes ago; nothing older is back-filled. A revision's new version starts with its own choices.
+
+### The notification centre
+
+- **R67** `GET /portal/notifications/summary` returns the unread count with an ETag (304 when
+  unchanged); the portal's bell polls it every 30 seconds while the tab is visible.
+- **R68** `GET /portal/notifications` returns the newest 50; `POST .../{id}/read` and
+  `POST .../read-all` mark them read; each opens its item. Another account's ID is 404.
+
+### The live token link
+
+- **R69** `GET /portal/appointments/{id}/live-link` (the account's own appointment) and staff
+  `GET /appointments/{id}/live-link` return `{url, expires_at}` for an appointment today or later;
+  the link is valid from the start of its session's day until 2 hours after the session ends.
+- **R70** `GET /public/queue/{token}` (no sign-in, ADR-0019) returns the clinic name, the doctor's
+  display name, the mode, the token or slot time, `ahead` (BOOKED or ARRIVED entries before it
+  in queue order), `now_seeing` (the IN_CONSULTATION token or slot time, or null) and a state:
+  `NOT_STARTED`, `WAITING`, `YOUR_TURN` (IN_CONSULTATION), `DONE` (COMPLETED or NO_SHOW),
+  `CANCELLED`. Never a name, phone, reason or age, nor anything about other patients.
+- **R71** The public route has an ETag, `Cache-Control: no-store`, `noindex`, and the prescription
+  link's rate limits; an expired or invalid token is 410 / 404 with plain words.
+- **R72** `/q/{token}` shows the state in English or Hindi at 360 px, under 200 KB, refreshing
+  every 20 seconds while visible, with the time of the last update.
+
+### Storage and contract
+
+- **R73** Migration `0031`: `patient_notifications`, `patient_notification_preferences`, the
+  `QUEUE_VIEW` link purpose, the medicine sweep's job kinds.
+- **R74** Contract 0.35.0 with the routes above.
+
+### Acceptance criteria (P6)
+
+- **AC23 (R56, R57)** When the desk accepts a linked or new request, the requester's bell shows one
+  "booked" notice; when it proposes, one "another time suggested" notice; replays add nothing.
+- **AC24 (R60)** After unlinking a clinic, its appointment notices are gone from the list and the
+  count.
+- **AC25 (R59)** No title, email or live-page body contains a medicine name, reason, note or phone
+  (a test scans them).
+- **AC26 (R65, R66)** A morning reminder at 07:30 gives one notice at 07:30-08:00 that day, none for
+  a day outside the course, and none twice.
+- **AC27 (R70)** With tokens 3 (in consultation), 4 and 5 waiting, token 5's link says "1 ahead of
+  you · Now seeing token 3"; after token 5 is marked IN_CONSULTATION it says "It's your turn".
+- **AC28 (R69, R71)** A link from yesterday is refused; another account cannot fetch a live link
+  for an appointment that is not theirs (404).
