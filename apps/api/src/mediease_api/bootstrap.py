@@ -52,6 +52,7 @@ from mediease_api.adapters.security.jwt_flow import JwtFlowSealer
 from mediease_api.adapters.security.jwt_tokens import PORTAL_AUDIENCE, JwtAccessTokenIssuer
 from mediease_api.adapters.security.link_signer import HmacLinkSigner
 from mediease_api.adapters.security.phone_cipher import FernetPhoneCipher
+from mediease_api.adapters.security.proposal_signer import HmacProposalSigner
 from mediease_api.adapters.security.refresh_secrets import Sha256RefreshTokenSecrets
 from mediease_api.adapters.storage.local import LocalBlobStorage
 from mediease_api.adapters.storage.s3 import S3BlobStorage
@@ -67,6 +68,9 @@ from mediease_api.application.appointments.queries import GetAppointment, ListPa
 from mediease_api.application.appointments.queue import AddWalkIn, GetQueue, TransitionAppointment
 from mediease_api.application.appointments.reschedule import RescheduleAppointment
 from mediease_api.application.appointments.to_move import ListBookingsToMove
+from mediease_api.application.assistant.engine import AssistantEngine
+from mediease_api.application.assistant.patient import PatientAssistant
+from mediease_api.application.assistant.staff import StaffAssistant
 from mediease_api.application.audit_log.use_cases import ExportAuditEvents, ListAuditEvents
 from mediease_api.application.auth._session import SessionIssuer
 from mediease_api.application.auth.authenticate import AuthenticateRequest
@@ -299,6 +303,7 @@ from mediease_api.config.settings import AppEnv, AppSettings
 from mediease_api.delivery.errors import register_error_handlers
 from mediease_api.delivery.http.access import check_every_route_has_policy, register_access_control
 from mediease_api.delivery.http.appointments import create_appointments_blueprint
+from mediease_api.delivery.http.assistant import create_assistant_blueprint
 from mediease_api.delivery.http.attachments import create_attachments_blueprint
 from mediease_api.delivery.http.audit_log import create_audit_log_blueprint
 from mediease_api.delivery.http.auth import create_auth_blueprint
@@ -427,6 +432,27 @@ class _UseCases:
     phones: PhoneCipherPort | None = None
     # M6b-P6: the live token link's address (PUBLIC_BASE_URL/q/<token>).
     public_base_url: str = ""
+    # M7a (ADR-0013, ADR-0024): the assistant's model and its proposal signer.
+    llm: LlmPort | None = None
+    proposal_signer: HmacProposalSigner | None = None
+
+    # --- M7a: the assistant (spec assistant) -----------------------------------------------------
+    def _assistant_engine(self) -> AssistantEngine:
+        assert self.llm is not None and self.proposal_signer is not None
+        return AssistantEngine(
+            llm=self.llm,
+            signer=self.proposal_signer,
+            clock=self.clock,
+            ids=self.ids,
+            uow=self._uow(),
+        )
+
+    def patient_assistant(self) -> PatientAssistant:
+        return PatientAssistant(engine=self._assistant_engine(), use_cases=self, clock=self.clock)
+
+    def staff_assistant(self) -> StaffAssistant:
+        return StaffAssistant(engine=self._assistant_engine(), use_cases=self, clock=self.clock)
+
     # --- M6b-P6: patient notifications and the live token link ---------------------------------
     def list_patient_notifications(self) -> ListPatientNotifications:
         return ListPatientNotifications(uow=self._uow())
@@ -1495,6 +1521,7 @@ def create_app(
     pdf_renderer: PdfRendererPort | None = None,
     blob_storage: BlobStoragePort | None = None,
     oidc: OidcPort | None = None,
+    llm: LlmPort | None = None,
 ) -> Flask:
     """Build and wire the Flask application from validated settings.
 
@@ -1556,6 +1583,8 @@ def create_app(
         whatsapp_verify_token=settings.WHATSAPP_VERIFY_TOKEN.get_secret_value(),
         phones=FernetPhoneCipher(settings.messaging_phone_keys()),
         public_base_url=settings.PUBLIC_BASE_URL,
+        llm=llm or build_llm(settings),
+        proposal_signer=HmacProposalSigner(signing_key),
     )
 
     # static_folder=None: the API serves JSON only, so there is no static route
@@ -1624,6 +1653,8 @@ def create_app(
     app.register_blueprint(create_dashboard_blueprint(use_cases))
     app.register_blueprint(create_notifications_blueprint(use_cases))
     app.register_blueprint(create_audit_log_blueprint(use_cases))
+    # M7a (spec assistant): the patient and staff assistants.
+    app.register_blueprint(create_assistant_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

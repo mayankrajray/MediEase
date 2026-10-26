@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.49.0
+  version: 0.50.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -12,6 +12,11 @@ servers:
   - url: http://localhost:3000
     description: Local web origin (browser path, proxied to the API)
 tags:
+  - name: assistant
+    description: |
+      The assistant (M7a, FR-AI-01..04, ADR-0013, ADR-0024). The browser sends the visible
+      conversation (user and assistant text only); tool calls and results stay on the server.
+      Writes are proposals: a signed token the user confirms once, within 10 minutes.
   - name: patient-links
     description: |
       Public patient prescription links (M4-P5, FR-RX-07, FR-RX-08). No session: the
@@ -115,6 +120,193 @@ tags:
       must send X-CSRF-Token equal to me_pt_csrf. No clinic data until a clinic links the
       account (M6b).
 paths:
+  /api/v1/portal/assistant/turns:
+    post:
+      tags: [assistant]
+      operationId: patientAssistantTurn
+      summary: One patient assistant turn
+      description: |
+        Spec assistant R3-R12. @patient. A request for medical advice gets the fixed
+        referral (kind REFERRAL) without reaching the model. context names one chosen
+        prescription (an ISSUED version of a linked record) or one verified upload; anything
+        else is 404 REQ_NOT_FOUND. 12 turns a minute (429 AI_RATE_LIMITED). Needs
+        X-CSRF-Token equal to me_pt_csrf.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientAssistantTurn'
+      responses:
+        '200':
+          description: The assistant's reply
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantReply'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/AssistantError'
+        '409':
+          $ref: '#/components/responses/AssistantError'
+        '422':
+          $ref: '#/components/responses/AssistantError'
+        '429':
+          $ref: '#/components/responses/AssistantError'
+        '503':
+          $ref: '#/components/responses/AssistantError'
+  /api/v1/portal/assistant/confirm:
+    post:
+      tags: [assistant]
+      operationId: patientAssistantConfirm
+      summary: Confirm a patient assistant proposal
+      description: |
+        Spec assistant R8. @patient. Runs the proposed write once as this account: 404
+        AI_PROPOSAL_INVALID for another account's, an expired or an altered token; 409
+        AI_PROPOSAL_USED the second time. The action's own errors (for example 409
+        APT_SLOT_TAKEN) come back as they would from its endpoint.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantConfirm'
+      responses:
+        '200':
+          description: The assistant's reply
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantReply'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/AssistantError'
+        '409':
+          $ref: '#/components/responses/AssistantError'
+        '422':
+          $ref: '#/components/responses/AssistantError'
+        '429':
+          $ref: '#/components/responses/AssistantError'
+        '503':
+          $ref: '#/components/responses/AssistantError'
+  /api/v1/assistant/turns:
+    post:
+      tags: [assistant]
+      operationId: staffAssistantTurn
+      summary: One staff assistant turn
+      description: |
+        Spec assistant R3-R12. @clinic(APPOINTMENTS_MANAGE). The model is offered only the
+        tools the member's role allows; no clinical tools; phone numbers masked.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/ClinicId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffAssistantTurn'
+      responses:
+        '200':
+          description: The assistant's reply
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantReply'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/AssistantError'
+        '409':
+          $ref: '#/components/responses/AssistantError'
+        '422':
+          $ref: '#/components/responses/AssistantError'
+        '429':
+          $ref: '#/components/responses/AssistantError'
+        '503':
+          $ref: '#/components/responses/AssistantError'
+  /api/v1/assistant/confirm:
+    post:
+      tags: [assistant]
+      operationId: staffAssistantConfirm
+      summary: Confirm a staff assistant proposal
+      description: |
+        Spec assistant R8. @clinic(APPOINTMENTS_MANAGE). Bound to the user and the clinic
+        it was proposed in; the use case re-checks every permission and rule.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/ClinicId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantConfirm'
+      responses:
+        '200':
+          description: The assistant's reply
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantReply'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/AssistantError'
+        '409':
+          $ref: '#/components/responses/AssistantError'
+        '422':
+          $ref: '#/components/responses/AssistantError'
+        '429':
+          $ref: '#/components/responses/AssistantError'
+        '503':
+          $ref: '#/components/responses/AssistantError'
   /api/v1/auth/sign-in:
     post:
       tags: [auth]
@@ -7973,6 +8165,23 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/PatientSession'
+    AssistantError:
+      description: |
+        M7a. REQ_NOT_FOUND (404: a context that is not the caller's); AI_PROPOSAL_INVALID (404);
+        AI_PROPOSAL_USED (409); REQ_VALIDATION_FAILED (422); AI_RATE_LIMITED (429, Retry-After);
+        AI_UNAVAILABLE (503: the model timed out or failed); AI_PROVIDER_BUSY (503, Retry-After:
+        the provider's own limit); on confirm, the action's own codes.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+        Retry-After:
+          description: Seconds to wait (429 and AI_PROVIDER_BUSY only)
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
     PortalError:
       description: |
         PRT_INVALID_CREDENTIALS, AUTH_SESSION_EXPIRED, AUTH_REFRESH_REUSED (401);
@@ -8391,6 +8600,95 @@ components:
       schema:
         type: string
   schemas:
+    AssistantMessage:
+      type: object
+      additionalProperties: false
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+    AssistantContext:
+      type: object
+      additionalProperties: false
+      description: Exactly one of the two.
+      properties:
+        prescription_id:
+          type: [string, 'null']
+          format: uuid
+        upload_id:
+          type: [string, 'null']
+          format: uuid
+    StaffAssistantTurn:
+      type: object
+      additionalProperties: false
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/AssistantMessage'
+    PatientAssistantTurn:
+      type: object
+      additionalProperties: false
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/AssistantMessage'
+        language:
+          type: [string, 'null']
+          enum: [en, hi, null]
+        context:
+          oneOf:
+            - $ref: '#/components/schemas/AssistantContext'
+            - type: 'null'
+    AssistantConfirm:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 16
+          maxLength: 4096
+        language:
+          type: [string, 'null']
+          enum: [en, hi, null]
+    AssistantProposal:
+      type: object
+      required: [token, summary, expires_at]
+      properties:
+        token:
+          type: string
+          description: Signed; send it back to confirm
+        summary:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+    AssistantReply:
+      type: object
+      required: [kind, reply, proposal]
+      properties:
+        kind:
+          type: string
+          enum: [ANSWER, REFERRAL, CONFIRM, UNAVAILABLE, DONE]
+        reply:
+          type: string
+        proposal:
+          oneOf:
+            - $ref: '#/components/schemas/AssistantProposal'
+            - type: 'null'
     ReminderStatus:
       type: string
       description: FR-REM-05 (the message's status once sent, decision 3A)
