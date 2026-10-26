@@ -77,6 +77,8 @@ export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
     { href: "/settings/fees", label: "Fees", requires: "FEES_MANAGE" },
     // M6d-P7 (FR-SUB-01): the plan, its use and the trial, owners only.
     { href: "/settings/plan", label: "Plan", requires: "CLINIC_MANAGE" },
+    // M7a-P5 (spec assistant): the staff assistant, with the member's own permissions.
+    { href: "/assistant", label: "Assistant", requires: "APPOINTMENTS_MANAGE" },
     { href: "/settings/notifications", label: "Notifications" },
   ],
   DOCTOR: [
@@ -86,6 +88,8 @@ export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
     { href: "/follow-ups", label: "My follow-ups", requires: "REMINDERS_SCHEDULE" },
     { href: "/my-schedule", label: "My schedule", requires: "DOCTORS_VIEW" },
     { href: "/bills", label: "My bills", requires: "BILLING_MANAGE" },
+    // M7a-P5 (spec assistant): the staff assistant, with the member's own permissions.
+    { href: "/assistant", label: "Assistant", requires: "APPOINTMENTS_MANAGE" },
     { href: "/settings/notifications", label: "Notifications" },
   ],
   FRONT_DESK: [
@@ -97,6 +101,8 @@ export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
     { href: "/bills", label: "Bills", requires: "BILLING_MANAGE" },
     { href: "/dues", label: "Dues", requires: "COLLECTION_VIEW" },
     { href: "/collection", label: "Collection", requires: "COLLECTION_VIEW" },
+    // M7a-P5 (spec assistant): the staff assistant, with the member's own permissions.
+    { href: "/assistant", label: "Assistant", requires: "APPOINTMENTS_MANAGE" },
     { href: "/settings/notifications", label: "Notifications" },
   ],
 };

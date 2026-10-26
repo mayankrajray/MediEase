@@ -39,6 +39,7 @@ describe("each workspace's navigation (M6a-P6, decision 3A; FR-UX-04)", () => {
       "Team",
       "Schedule",
       "Audit log",
+      "Assistant",
       "Notifications",
     ]);
   });
@@ -61,6 +62,7 @@ describe("each workspace's navigation (M6a-P6, decision 3A; FR-UX-04)", () => {
       "Booking requests",
       "Patients",
       "Follow-ups",
+      "Assistant",
       "Notifications",
     ]);
   });

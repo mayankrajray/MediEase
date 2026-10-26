@@ -64,6 +64,14 @@ export function Home() {
       {home.status === "loading" && <ScreenLoading label={s.loading} />}
       {home.status === "failed" && <ErrorNotice error={home.error} onRetry={home.retry} />}
       {home.status === "ready" && (home.data.links.length === 0 ? <Fresh /> : <Overview data={home.data} />)}
+      {home.status === "ready" && (
+        <PortalCard id="assistant-heading" title={s.assistant.title}>
+          <p className="text-slate-800">{s.assistant.openHelp}</p>
+          <Link href="/portal/assistant" className={SECONDARY}>
+            {s.assistant.open}
+          </Link>
+        </PortalCard>
+      )}
     </div>
   );
 }

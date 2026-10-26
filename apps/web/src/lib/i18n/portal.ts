@@ -117,6 +117,29 @@ export interface PortalStrings {
     readonly visitOn: (date: string) => string;
     readonly open: string;
   };
+  /** M7a (spec assistant §6): the assistant page. */
+  readonly assistant: {
+    readonly title: string;
+    readonly intro: string;
+    readonly open: string;
+    readonly openHelp: string;
+    readonly choose: string;
+    readonly noChoice: string;
+    readonly noPrescriptions: string;
+    readonly option: (doctor: string, clinic: string, day: string) => string;
+    readonly message: string;
+    readonly placeholder: string;
+    readonly send: string;
+    readonly sending: string;
+    readonly you: string;
+    readonly bot: string;
+    readonly confirm: string;
+    readonly confirming: string;
+    readonly cancel: string;
+    readonly cancelled: string;
+    readonly conversation: string;
+    readonly empty: string;
+  };
   /** M6b-P3 (spec R36-R44): the planner's own words; the medicine's come from the API. */
   readonly medicines: {
     readonly title: string;
@@ -323,6 +346,29 @@ const EN: PortalStrings = {
     title: "Reports from your doctor",
     visitOn: (date) => `Visit on ${date}`,
     open: "Open",
+  },
+  assistant: {
+    title: "Assistant",
+    intro:
+      "Ask about your appointments, booking a visit, or a prescription. The assistant repeats what your doctor wrote; it cannot give medical advice.",
+    open: "Ask the assistant",
+    openHelp: "Questions about a prescription, your appointments or booking.",
+    choose: "Prescription to ask about",
+    noChoice: "None",
+    noPrescriptions: "No prescriptions in your account yet.",
+    option: (doctor, clinic, day) => `${doctor}, ${clinic} (${day})`,
+    message: "Your message",
+    placeholder: "For example: when do I take my medicine?",
+    send: "Send",
+    sending: "Sending…",
+    you: "You",
+    bot: "Assistant",
+    confirm: "Confirm",
+    confirming: "Confirming…",
+    cancel: "Cancel",
+    cancelled: "Nothing was changed.",
+    conversation: "Conversation",
+    empty: "Ask a question to start.",
   },
   medicines: {
     title: "My medicines",
@@ -543,6 +589,29 @@ const HI: PortalStrings = {
     title: "डॉक्टर की भेजी रिपोर्ट",
     visitOn: (date) => `मुलाक़ात: ${date}`,
     open: "खोलें",
+  },
+  assistant: {
+    title: "सहायक",
+    intro:
+      "अपनी अपॉइंटमेंट, बुकिंग या किसी पर्चे के बारे में पूछें। सहायक वही दोहराता है जो आपके डॉक्टर ने लिखा है; यह चिकित्सा सलाह नहीं दे सकता।",
+    open: "सहायक से पूछें",
+    openHelp: "पर्चे, अपॉइंटमेंट या बुकिंग के बारे में सवाल।",
+    choose: "किस पर्चे के बारे में पूछना है",
+    noChoice: "कोई नहीं",
+    noPrescriptions: "आपके खाते में अभी कोई पर्चा नहीं है।",
+    option: (doctor, clinic, day) => `${doctor}, ${clinic} (${day})`,
+    message: "आपका संदेश",
+    placeholder: "उदाहरण: मुझे दवा कब लेनी है?",
+    send: "भेजें",
+    sending: "भेजा जा रहा है…",
+    you: "आप",
+    bot: "सहायक",
+    confirm: "पुष्टि करें",
+    confirming: "पुष्टि हो रही है…",
+    cancel: "रद्द करें",
+    cancelled: "कुछ नहीं बदला गया।",
+    conversation: "बातचीत",
+    empty: "शुरू करने के लिए कोई सवाल पूछें।",
   },
   medicines: {
     title: "मेरी दवाइयाँ",
