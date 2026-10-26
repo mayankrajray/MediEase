@@ -35,6 +35,8 @@ const row = (overrides: Record<string, unknown> = {}) => ({
   pincode: null,
   specialties: [],
   onboarding: checklist(),
+  // M6d-P7: the plan and trial on each row.
+  subscription: { plan: "CLINIC", plan_name: "Clinic", trial_state: "ACTIVE", trial_ends_at: "2026-10-17T08:00:00+00:00", trial_days_left: 9 },
   ...overrides,
 });
 
@@ -98,8 +100,7 @@ describe("ClinicList", () => {
   it("offers Continue setup only for a clinic that is still being set up", async () => {
     mockApi({
       ...base,
-      "GET /api/v1/ops/clinics": () =>
-        json(200, { items: [row(), row({ id: CLINIC_B, name: "Beta Clinic", status: "ACTIVE" })] }),
+      "GET /api/v1/ops/clinics": () => json(200, { items: [row(), row({ id: CLINIC_B, name: "Beta Clinic", status: "ACTIVE" })] }),
     });
 
     renderList();
@@ -158,8 +159,47 @@ describe("ClinicList", () => {
 
     renderList();
 
-    await waitFor(() =>
-      expect(replace).toHaveBeenCalledWith("/sign-in?next=%2Fops&reason=account_disabled"),
-    );
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/sign-in?next=%2Fops&reason=account_disabled"));
+  });
+});
+
+describe("ClinicList plans (M6d-P7, FR-SUB-01)", () => {
+  it("R7, R8: shows each clinic's plan and an ended trial, and saves a new plan", async () => {
+    let plan = "SOLO";
+    const api = mockApi({
+      ...base,
+      "GET /api/v1/ops/clinics": () =>
+        json(200, {
+          items: [
+            row({
+              status: "ACTIVE",
+              subscription: { plan, plan_name: "Solo", trial_state: "ENDED", trial_ends_at: "2026-10-17T08:00:00+00:00", trial_days_left: 0 },
+            }),
+          ],
+        }),
+      [`PUT /api/v1/ops/clinics/${CLINIC_A}/plan`]: [
+        () => apiError(409, "SUB_PLAN_TOO_SMALL", "The clinic has 2 doctors; the Solo plan allows 1."),
+        () => {
+          plan = "PLUS";
+          return json(200, {});
+        },
+      ],
+    });
+    renderList();
+
+    const cell = await screen.findByText("Free trial ended");
+    expect(cell).toBeInTheDocument();
+    const picker = screen.getByLabelText("Plan for Alpha Clinic");
+    expect(picker).toHaveValue("SOLO");
+    expect(screen.getByRole("button", { name: "Save plan for Alpha Clinic" })).toBeDisabled();
+
+    fireEvent.change(picker, { target: { value: "CLINIC" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save plan for Alpha Clinic" }));
+    expect(await screen.findByText(/the Solo plan allows 1/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Plan for Alpha Clinic"), { target: { value: "PLUS" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save plan for Alpha Clinic" }));
+    expect(await screen.findByText("Alpha Clinic is now on the Clinic Plus plan.")).toBeInTheDocument();
+    expect(api.calls.filter((c) => c.method === "PUT").map((c) => c.body)).toEqual([{ plan: "CLINIC" }, { plan: "PLUS" }]);
   });
 });

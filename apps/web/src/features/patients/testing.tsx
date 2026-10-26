@@ -53,15 +53,25 @@ export const workspaceRoutes = {
   [`GET /api/v1/patients/${PATIENT_ID}/reminders`]: () => json(200, { items: [] }),
   [`GET /api/v1/patients/${PATIENT_ID}/messages`]: () => json(200, { items: [] }),
   // M6b-P1: the profile's Patient app card.
-  [`GET /api/v1/patients/${PATIENT_ID}/portal`]: () =>
-    json(200, { status: "NOT_LINKED", method: null, linked_at: null, invite_expires_at: null }),
-  [`GET /api/v1/patients/${OTHER_ID}/portal`]: () =>
-    json(200, { status: "NOT_LINKED", method: null, linked_at: null, invite_expires_at: null }),
+  [`GET /api/v1/patients/${PATIENT_ID}/portal`]: () => json(200, { status: "NOT_LINKED", method: null, linked_at: null, invite_expires_at: null }),
+  [`GET /api/v1/patients/${OTHER_ID}/portal`]: () => json(200, { status: "NOT_LINKED", method: null, linked_at: null, invite_expires_at: null }),
   "GET /api/v1/clinic/doctors": () => json(200, { items: [] }),
   // M6b-P5: the nav's open-request count.
   "GET /api/v1/booking-requests": () => json(200, { items: [], open_count: 0, expired_7d: 0 }),
   // M6a-P7: the header's notification bell.
   "GET /api/v1/notifications/summary": () => json(200, { unread: 0, latest_id: null }),
+  // M6d-P7: the owner's trial notice (a clinic from before plans has no trial).
+  "GET /api/v1/clinic/subscription": () =>
+    json(200, {
+      plan: "PLUS",
+      plan_name: "Clinic Plus",
+      trial_state: "NONE",
+      trial_ends_at: null,
+      trial_days_left: null,
+      trial_started_at: null,
+      limits: { doctors: 5, users: null },
+      usage: { doctors: 1, users: 3 },
+    }),
   "GET /api/v1/me": () => json(200, person([desk])),
   "GET /api/v1/clinic": () =>
     json(200, {

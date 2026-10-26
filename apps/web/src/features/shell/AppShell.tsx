@@ -10,10 +10,8 @@ import { useAppointmentApi } from "@/features/appointments/api";
 import { useSession } from "@/features/auth/SessionProvider";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { PatientSearch } from "@/features/patients/PatientSearch";
-import {
-  RegisterPatientProvider,
-  useRegisterPatient,
-} from "@/features/patients/RegisterPatientProvider";
+import { TrialNotice } from "@/features/plan/PlanPage";
+import { RegisterPatientProvider, useRegisterPatient } from "@/features/patients/RegisterPatientProvider";
 
 import { useOptionalClinic } from "./ClinicGate";
 import { ClinicSwitcher } from "./ClinicSwitcher";
@@ -50,11 +48,7 @@ export function AppShell({ membership, children }: { membership: Membership; chi
         identity={
           <>
             {identity.memberships.length > 1 ? (
-              <ClinicSwitcher
-                memberships={identity.memberships}
-                activeClinicId={membership.clinic_id}
-                onSelect={selectClinic}
-              />
+              <ClinicSwitcher memberships={identity.memberships} activeClinicId={membership.clinic_id} onSelect={selectClinic} />
             ) : (
               <span className="truncate font-medium">{membership.clinic_name}</span>
             )}
@@ -67,9 +61,10 @@ export function AppShell({ membership, children }: { membership: Membership; chi
         {...(clinicReady && managesPatients ? { tools: <PatientTools /> } : {})}
         notice={
           membership.clinic_status === "ONBOARDING" ? (
-            <p className="border-b border-amber-700 bg-amber-50 px-4 py-2 text-amber-950">
-              Setup for this clinic is still in progress.
-            </p>
+            <p className="border-b border-amber-700 bg-amber-50 px-4 py-2 text-amber-950">Setup for this clinic is still in progress.</p>
+          ) : clinicReady && membership.permissions.includes("CLINIC_MANAGE") ? (
+            // M6d-P7 (D5): an ended trial, said to owners only.
+            <TrialNotice />
           ) : undefined
         }
       >
