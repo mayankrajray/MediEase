@@ -61,6 +61,8 @@ export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
     { href: "/booking-requests", label: "Booking requests", requires: "APPOINTMENTS_MANAGE" },
     { href: "/patients", label: "Patients", requires: "PATIENTS_MANAGE" },
     { href: "/follow-ups", label: "Follow-ups", requires: "REMINDERS_SCHEDULE" },
+    // M6d-P2 (FR-BIL-02): bills; a doctor's list holds only their own.
+    { href: "/bills", label: "Bills", requires: "BILLING_MANAGE" },
     { href: "/team", label: "Team", requires: "STAFF_MANAGE" },
     { href: "/settings/schedule", label: "Schedule", requires: "SCHEDULES_MANAGE" },
     // M6a-P8 (FR-AUD-03): the clinic's audit log, owners only.
@@ -77,6 +79,7 @@ export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
     { href: "/my-patients", label: "My patients", requires: "CLINICAL_VIEW" },
     { href: "/follow-ups", label: "My follow-ups", requires: "REMINDERS_SCHEDULE" },
     { href: "/my-schedule", label: "My schedule", requires: "DOCTORS_VIEW" },
+    { href: "/bills", label: "My bills", requires: "BILLING_MANAGE" },
     { href: "/settings/notifications", label: "Notifications" },
   ],
   FRONT_DESK: [
@@ -85,6 +88,7 @@ export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
     { href: "/booking-requests", label: "Booking requests", requires: "APPOINTMENTS_MANAGE" },
     { href: "/patients", label: "Patients", requires: "PATIENTS_MANAGE" },
     { href: "/follow-ups", label: "Follow-ups", requires: "REMINDERS_SCHEDULE" },
+    { href: "/bills", label: "Bills", requires: "BILLING_MANAGE" },
     { href: "/settings/notifications", label: "Notifications" },
   ],
 };

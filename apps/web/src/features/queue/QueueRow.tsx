@@ -47,6 +47,8 @@ export interface RowActions {
   readonly onPrint?: (rxId: string) => void;
   /** M6b-P6 (R69): copy the live token link for the patient (APPOINTMENTS_MANAGE, the session's day). */
   readonly onCopyLiveLink?: (entry: QueueEntry) => void;
+  /** M6d-P2 (billing R13): bill a completed visit (BILLING_MANAGE). */
+  readonly onBill?: (entry: QueueEntry) => void;
 }
 
 /**
@@ -74,6 +76,9 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
   if (actions.canPrint === true && entry.prescription !== null && actions.onPrint !== undefined) {
     const rxId = entry.prescription.id;
     menu.push({ label: "Print prescription", onSelect: () => actions.onPrint?.(rxId) });
+  }
+  if (actions.onBill !== undefined && status === "COMPLETED" && entry.visit_id !== null) {
+    menu.push({ label: "Bill this visit", onSelect: () => actions.onBill?.(entry) });
   }
   if (actions.onCopyLiveLink !== undefined && (status === "BOOKED" || status === "ARRIVED" || status === "IN_CONSULTATION")) {
     menu.push({ label: "Copy live link", onSelect: () => actions.onCopyLiveLink?.(entry) });
