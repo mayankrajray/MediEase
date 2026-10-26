@@ -5,6 +5,8 @@
 | ``GET /api/v1/public/links/{token}`` | public |
 | ``POST /api/v1/public/links/{token}/verify`` | public (last 4 digits) |
 | ``GET /api/v1/public/links/{token}/prescription`` | public + ``X-Link-View`` from verify |
+| ``GET /api/v1/public/links/{token}/receipt`` (M6d-P4) | public + ``X-Link-View`` |
+| ``GET /api/v1/public/links/{token}/receipt.pdf`` (M6d-P4) | public + ``X-Link-View`` |
 
 No session and no cookie here: the patient page's server (apps/web) keeps the view token in its
 own HttpOnly cookie scoped to the page (decision 3A) and sends it as ``X-Link-View``. Responses
@@ -19,6 +21,11 @@ from typing import Protocol
 from flask import Blueprint, Response, jsonify, request
 from pydantic import BaseModel, ConfigDict, Field
 
+from mediease_api.application.billing.receipts import (
+    PDF_CONTENT_TYPE,
+    ReceiptPdfByLink,
+    ViewReceipt,
+)
 from mediease_api.application.links.use_cases import DescribeLink, VerifyChallenge, ViewPrescription
 from mediease_api.delivery.http.access import public
 from mediease_api.delivery.http.bodies import patient_view_body
@@ -34,6 +41,8 @@ class PublicLinkUseCases(Protocol):
     def describe_link(self) -> DescribeLink: ...
     def verify_link(self) -> VerifyChallenge: ...
     def view_link_prescription(self) -> ViewPrescription: ...
+    def view_link_receipt(self) -> ViewReceipt: ...
+    def link_receipt_pdf(self) -> ReceiptPdfByLink: ...
 
 
 class VerifyRequest(BaseModel):
@@ -71,6 +80,8 @@ def create_public_links_blueprint(use_cases: PublicLinkUseCases) -> Blueprint:
                 "clinic_name": summary.clinic_name,
                 "language": summary.language.value,
                 "locked": summary.locked,
+                # M6d-P4: RX_VIEW or RECEIPT, so the page shows the right document.
+                "purpose": summary.purpose.value,
                 "challenge_required": True,
             }
         )
@@ -91,5 +102,35 @@ def create_public_links_blueprint(use_cases: PublicLinkUseCases) -> Blueprint:
             token, request.headers.get(VIEW_HEADER), _language(), request_info()
         )
         return jsonify(patient_view_body(page))
+
+    @bp.get("/<token>/receipt")
+    @public
+    def view_link_receipt(token: str) -> Response:
+        r = use_cases.view_link_receipt().execute(
+            token, request.headers.get(VIEW_HEADER), request_info()
+        )
+        return jsonify(
+            {
+                "clinic_name": r.clinic_name,
+                "number": r.number,
+                "bill_date": r.bill_date.isoformat(),
+                "total_paise": r.total_paise,
+                "credited_paise": r.credited_paise,
+                "paid_paise": r.paid_paise,
+                "refunded_paise": r.refunded_paise,
+                "balance_paise": r.balance_paise,
+                "cancelled": r.cancelled,
+            }
+        )
+
+    @bp.get("/<token>/receipt.pdf")
+    @public
+    def link_receipt_pdf(token: str) -> Response:
+        pdf = use_cases.link_receipt_pdf().execute(
+            token, request.headers.get(VIEW_HEADER), request_info()
+        )
+        response = Response(pdf.data, mimetype=PDF_CONTENT_TYPE)
+        response.headers["Content-Disposition"] = f'inline; filename="{pdf.filename}"'
+        return response
 
     return bp

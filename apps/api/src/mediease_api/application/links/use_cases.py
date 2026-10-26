@@ -43,7 +43,7 @@ from mediease_api.domain.links.errors import (
     LinkLocked,
     LinkRateLimited,
 )
-from mediease_api.domain.links.link import PatientLink
+from mediease_api.domain.links.link import LinkPurpose, PatientLink
 from mediease_api.domain.links.token import Kind, LinkClaims, ViewClaims
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.prescriptions.errors import NotIssued
@@ -95,7 +95,7 @@ class LinkTokens:
         claims = LinkClaims(
             jti=link.id,
             cid=link.clinic_id,
-            rid=link.prescription_id,
+            rid=link.resource_id,
             purpose=link.purpose,
             exp=link.expires_at,
         )
@@ -141,6 +141,7 @@ class LinkSummary:
     clinic_name: str
     language: Language
     locked: bool
+    purpose: LinkPurpose = LinkPurpose.RX_VIEW
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,7 +296,7 @@ class _Public:
         link = tenant.patient_links.get(claims.jti, for_update=for_update)
         if (
             link is None
-            or link.prescription_id != claims.rid
+            or link.resource_id != claims.rid
             or link.purpose is not claims.purpose
             or link.expires_at != claims.exp
             or self._tokens.link_token(link) != token
@@ -317,7 +318,7 @@ class DescribeLink(_Public):
             patient = tenant.patients.get(link.patient_id)
             assert patient is not None
             clinic = load_clinic(uow, link.clinic_id)
-        return LinkSummary(clinic.name, patient.language, link.is_locked)
+        return LinkSummary(clinic.name, patient.language, link.is_locked, link.purpose)
 
 
 class VerifyChallenge(_Public):
@@ -341,18 +342,30 @@ class VerifyChallenge(_Public):
             )
             link.record_open(now)
             tenant.patient_links.update(link)
-            latest = latest_issued(_chain(tenant, _first(tenant, link)))
-            assert latest is not None
-            _patient_audit(
-                uow,
-                self._ids,
-                info,
-                AuditAction.PATIENT_LINK_OPENED,
-                link,
-                now,
-                version=str(latest.version),
-                prescription_id=str(latest.id),
-            )
+            if link.purpose is LinkPurpose.RECEIPT:
+                # M6d-P4 (billing R50): a receipt link opened; the bill, nothing else.
+                _patient_audit(
+                    uow,
+                    self._ids,
+                    info,
+                    AuditAction.RECEIPT_LINK_OPENED,
+                    link,
+                    now,
+                    bill_id=str(link.resource_id),
+                )
+            else:
+                latest = latest_issued(_chain(tenant, _first(tenant, link)))
+                assert latest is not None
+                _patient_audit(
+                    uow,
+                    self._ids,
+                    info,
+                    AuditAction.PATIENT_LINK_OPENED,
+                    link,
+                    now,
+                    version=str(latest.version),
+                    prescription_id=str(latest.id),
+                )
             uow.commit()
         logger.info("patient_link.opened", link_id=str(link.id))
         expires = link.view_expiry(now).replace(microsecond=0)
@@ -384,7 +397,7 @@ class ViewPrescription(_Public):
 
 
 def _first(tenant: TenantRepositories, link: PatientLink) -> Prescription:
-    rx = tenant.prescriptions.get(link.prescription_id)
+    rx = tenant.prescriptions.get(link.rx_id)
     assert rx is not None  # the foreign key keeps it
     return rx
 
@@ -409,6 +422,8 @@ class ProveWithLink(_Public):
         with self._uow as uow:
             tenant = uow.tenant(claims.cid)
             link = self._load(tenant, token, claims, for_update=True)
+            # Only a prescription link links an account (a receipt link does not, M6d-P4).
+            link.rx_id  # noqa: B018 - raises LinkInvalid for any other link
             now = self._clock.now()
             check_last4(
                 uow,
@@ -480,7 +495,7 @@ class _Staff:
             clinic_id=ctx.clinic_id,
             entity_type=ENTITY_TYPE,
             entity_id=link.id,
-            metadata={"prescription_id": str(link.prescription_id), **meta},
+            metadata={"prescription_id": str(link.rx_id), **meta},
         )
 
     def _new(

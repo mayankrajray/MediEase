@@ -220,6 +220,13 @@ EXPECTED_POLICIES = {
     "bills.record_payment": (Access.CLINIC, Permission.BILLING_MANAGE),
     "bills.void_payment": (Access.CLINIC, Permission.BILLING_MANAGE),
     "dues.list_dues": (Access.CLINIC, Permission.COLLECTION_VIEW),
+    "bills.download_receipt": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "bills.get_receipt_link": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "bills.reset_receipt_link": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "public_links.view_link_receipt": (Access.PUBLIC, None),
+    "public_links.link_receipt_pdf": (Access.PUBLIC, None),
+    "portal_records.list_bills": (Access.PATIENT, None),
+    "portal_records.bill_receipt_pdf": (Access.PATIENT, None),
     "public_sitemap.sitemap": (Access.PUBLIC, None),
     # M6c-P6 (discovery R1-R10): directory search.
     "public_search.clinics": (Access.PUBLIC, None),

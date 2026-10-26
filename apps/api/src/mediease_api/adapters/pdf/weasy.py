@@ -25,6 +25,7 @@ from weasyprint import CSS, HTML
 from weasyprint.text.fonts import FontConfiguration
 from weasyprint.urls import FatalURLFetchingError, URLFetcher, URLFetcherResponse
 
+from mediease_api.domain.billing.receipt import ReceiptDocument
 from mediease_api.domain.prescriptions.document import RxDocument
 
 ASSETS = Path(__file__).resolve().parent / "assets"
@@ -93,6 +94,11 @@ LAYOUTS: dict[int, Layout] = {
 }
 
 
+# M6d-P4 (billing R46): the printed bill. Edit only with the receipt's own state change in mind:
+# a stored receipt is never re-rendered, so old files keep the layout they had.
+RECEIPT = Layout(html="receipt.html.j2", css="receipt.css", page_css="page.css.j2")
+
+
 class WeasyPrintRenderer:
     """``PdfRendererPort`` with WeasyPrint. Thread-safe: every render has its own objects."""
 
@@ -109,6 +115,7 @@ class WeasyPrintRenderer:
             version: (ASSETS / layout.css).read_text(encoding="utf-8")
             for version, layout in LAYOUTS.items()
         }
+        self._receipt_css = (ASSETS / RECEIPT.css).read_text(encoding="utf-8")
         self.last_fetcher: AssetsOnlyFetcher | None = None
 
     @staticmethod
@@ -123,10 +130,27 @@ class WeasyPrintRenderer:
 
     def render(self, document: RxDocument) -> bytes:
         layout = self._layout(document)
+        return self._write(
+            self.html(document),
+            self._stylesheets[document.layout_version],
+            self._env.get_template(layout.page_css).render(doc=document),
+        )
+
+    def receipt_html(self, document: ReceiptDocument) -> str:
+        return self._env.get_template(RECEIPT.html).render(doc=document)
+
+    def render_receipt(self, document: ReceiptDocument) -> bytes:
+        """M6d-P4 (billing R46): the bill on the letterhead, the same fonts and fetcher."""
+        return self._write(
+            self.receipt_html(document),
+            self._receipt_css,
+            self._env.get_template(RECEIPT.page_css).render(doc=document),
+        )
+
+    def _write(self, html_text: str, css_text: str, page: str) -> bytes:
         fetcher = AssetsOnlyFetcher()
         self.last_fetcher = fetcher
         base_url = ASSETS.as_uri() + "/"
-        page = self._env.get_template(layout.page_css).render(doc=document)
         try:  # fonts are fetched while the stylesheets are parsed, so all of it is inside
             fonts = FontConfiguration()
             stylesheets = [
@@ -136,9 +160,9 @@ class WeasyPrintRenderer:
                     url_fetcher=fetcher,
                     font_config=fonts,
                 )
-                for css in (self._stylesheets[document.layout_version], page)
+                for css in (css_text, page)
             ]
-            html = HTML(string=self.html(document), base_url=base_url, url_fetcher=fetcher)
+            html = HTML(string=html_text, base_url=base_url, url_fetcher=fetcher)
             pdf: bytes = html.write_pdf(stylesheets=stylesheets, font_config=fonts)
         except FatalURLFetchingError as exc:  # a BaseException: keep it inside the adapter
             raise RuntimeError("the prescription renderer refused a resource") from exc

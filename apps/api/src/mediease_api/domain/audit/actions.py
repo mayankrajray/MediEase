@@ -162,6 +162,11 @@ class AuditAction(StrEnum):
     # M6d-P3 (FR-BIL-03): payments and refunds. IDs, the kind, mode and amount only.
     PAYMENT_RECORDED = "payment.recorded"
     PAYMENT_VOIDED = "payment.voided"
+    # M6d-P4 (FR-BIL-04): receipts and their patient links. IDs and the state only.
+    BILL_RECEIPT_DOWNLOADED = "bill.receipt_downloaded"
+    RECEIPT_LINK_CREATED = "receipt_link.created"
+    RECEIPT_LINK_OPENED = "receipt_link.opened"
+    RECEIPT_LINK_DOWNLOADED = "receipt_link.downloaded"
     # M6b-P5 (R34-R43, R32): the answers. IDs and the decline reason code only, never the note.
     BOOKING_REQUEST_ACCEPTED = "booking_request.accepted"
     BOOKING_REQUEST_DECLINED = "booking_request.declined"

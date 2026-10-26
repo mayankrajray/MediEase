@@ -60,6 +60,12 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/clinic/bills/<uuid:bill_id>/payments/<uuid:payment_id>/void": lambda w: _payment_of_b(
         w
     ),
+    # M6d-P4: clinic B's printed bill and its receipt link.
+    "/api/v1/clinic/bills/<uuid:bill_id>/receipt.pdf": lambda w: (
+        f"{_bill_of_b(w, issued=True)}/receipt.pdf"
+    ),
+    "/api/v1/clinic/bills/<uuid:bill_id>/link": lambda w: f"{_bill_of_b(w, issued=True)}/link",
+    "/api/v1/clinic/bills/<uuid:bill_id>/link/reset": lambda w: _locked_receipt_link(w),
     "/api/v1/clinic/staff/<uuid:membership_id>": lambda w: _staff_url(w),
     "/api/v1/clinic/staff/<uuid:membership_id>/resend": lambda w: _invited_staff_url(w),
     "/api/v1/patients/<uuid:patient_id>": lambda w: _patient_url(w),
@@ -167,6 +173,7 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
         "POST",
         {"reason": "Wrong amount"},
     ),
+    "/api/v1/clinic/bills/<uuid:bill_id>/link/reset": ("POST", {}),
     "/api/v1/clinic/fees/services/<uuid:service_id>/doctors/<uuid:doctor_id>": (
         "PUT",
         {"price_paise": 100},
@@ -313,6 +320,17 @@ def _payment_of_b(world: World) -> str:
     )
     assert paid.status_code == 201, paid.get_json()
     return f"{url}/payments/{paid.get_json()['payments'][0]['id']}/void"
+
+
+def _locked_receipt_link(world: World) -> str:
+    """M6d-P4: clinic B's receipt link after five wrong answers, so a reset is valid for B."""
+    client, _ = _owner_of_b(world)
+    url = f"{_bill_of_b(world, issued=True)}/link"
+    token = client.get(url).get_json()["url"].rsplit("/r/", 1)[1]
+    for _ in range(5):
+        world.anonymous().post(f"/api/v1/public/links/{token}/verify", json={"phone_last4": "0000"})
+    assert client.get(url).get_json()["locked"] is True
+    return f"{url}/reset"
 
 
 def _session_of_b(world: World, *, days: int) -> str:

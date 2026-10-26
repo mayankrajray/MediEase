@@ -728,6 +728,46 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/portal/bills": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The linked records' issued bills
+         * @description M6d-P4, spec billing R52. @patient. Numbers, dates and amounts; never a draft. Not audited.
+         */
+        readonly get: operations["listPortalBills"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/bills/{bill_id}/receipt.pdf": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * An issued bill's receipt PDF
+         * @description M6d-P4, spec billing R52. @patient. The same file the clinic prints. Out of scope is 404.
+         */
+        readonly get: operations["getPortalBillReceipt"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/portal/prescriptions": {
         readonly parameters: {
             readonly query?: never;
@@ -2702,6 +2742,70 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/clinic/bills/{bill_id}/receipt.pdf": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The bill and its receipts as a PDF on the clinic's letterhead
+         * @description M6d-P4, spec billing R43-R47. BILLING_MANAGE (a doctor their own bills). The bill as it
+         *     stands (lines, credit notes, payments, balance), rendered once per state and audited
+         *     (bill.receipt_downloaded). A draft is 409 BIL_RECEIPT_NOT_READY.
+         */
+        readonly get: operations["downloadBillReceipt"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/bills/{bill_id}/link": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The bill's receipt link, for the QR code at the desk
+         * @description M6d-P4, spec billing R48. BILLING_MANAGE. One link per bill, made on first ask
+         *     (receipt_link.created); its url is PUBLIC_BASE_URL/r/<token>. The patient opens it
+         *     with the last 4 digits of their phone, as for a prescription link.
+         */
+        readonly get: operations["getReceiptLink"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/bills/{bill_id}/link/reset": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Unlock a receipt link after five wrong answers
+         * @description M6d-P4, spec billing R51. BILLING_MANAGE. 409 LINK_NOT_LOCKED when it is not locked.
+         */
+        readonly post: operations["resetReceiptLink"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/ops/messaging-costs": {
         readonly parameters: {
             readonly query?: never;
@@ -3146,6 +3250,48 @@ export interface paths {
          *     exactly one of ours; 410 LINK_EXPIRED or LINK_REVOKED; 429 LINK_RATE_LIMITED.
          */
         readonly get: operations["describePatientLink"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/public/links/{token}/receipt": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A receipt link's bill summary, after the last-4 check
+         * @description M6d-P4, spec billing R49. Needs X-Link-View from verify (else 401
+         *     LINK_CHALLENGE_REQUIRED). A prescription link's token is 404 LINK_INVALID.
+         */
+        readonly get: operations["viewLinkedReceipt"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/public/links/{token}/receipt.pdf": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The receipt PDF through a receipt link
+         * @description M6d-P4, spec billing R50. The same file the clinic prints. Needs X-Link-View; audited
+         *     (receipt_link.downloaded).
+         */
+        readonly get: operations["downloadLinkedReceipt"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -4608,6 +4754,34 @@ export interface components {
                 readonly oldest_bill_date: string;
             }[];
         };
+        /** @description M6d-P4 (billing R49) - amounts and the number only */
+        readonly ReceiptSummary: {
+            readonly clinic_name: string;
+            readonly number: string;
+            /** Format: date */
+            readonly bill_date: string;
+            readonly total_paise: number;
+            readonly credited_paise: number;
+            readonly paid_paise: number;
+            readonly refunded_paise: number;
+            readonly balance_paise: number;
+            readonly cancelled: boolean;
+        };
+        readonly PortalBillList: {
+            readonly items: readonly {
+                /** Format: uuid */
+                readonly id: string;
+                /** Format: uuid */
+                readonly clinic_id: string;
+                readonly clinic_name: string;
+                readonly number: string;
+                /** Format: date */
+                readonly bill_date: string;
+                readonly total_paise: number;
+                readonly balance_paise: number;
+                readonly cancelled: boolean;
+            }[];
+        };
         /**
          * @description M6c-P4 (R56). Audited; never shown to patients
          * @enum {string}
@@ -5501,6 +5675,11 @@ export interface components {
             readonly last_opened_at: string | null;
         };
         readonly PatientLinkSummary: {
+            /**
+             * @description M6d-P4 - a prescription link or a receipt link (/r/<token>)
+             * @enum {string}
+             */
+            readonly purpose: "RX_VIEW" | "RECEIPT";
             readonly clinic_name: string;
             readonly language: components["schemas"]["Language"];
             readonly locked: boolean;
@@ -6606,7 +6785,8 @@ export interface components {
          *     BIL_TOO_MANY_SERVICES (a clinic has 100 services at most, M6d-P1),
          *     BIL_NOT_DRAFT, BIL_NOT_ISSUED, BIL_EMPTY, BIL_LINE_ALREADY_CREDITED, BIL_VISIT_BILLED,
          *     BIL_VISIT_NOT_COMPLETED (bills and credit notes, M6d-P2), BIL_PAYMENT_TOO_LARGE,
-         *     BIL_VOID_TOO_LATE, BIL_ALREADY_VOIDED, BIL_VOID_REFUNDED (payments, M6d-P3)
+         *     BIL_VOID_TOO_LATE, BIL_ALREADY_VOIDED, BIL_VOID_REFUNDED (payments, M6d-P3),
+         *     BIL_RECEIPT_NOT_READY (a draft has no receipt, M6d-P4)
          */
         readonly ConflictError: {
             headers: {
@@ -7985,6 +8165,59 @@ export interface operations {
             readonly 403: components["responses"]["PortalError"];
             readonly 404: components["responses"]["PortalLinkingError"];
             readonly 422: components["responses"]["PortalLinkingError"];
+        };
+    };
+    readonly listPortalBills: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The bills */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalBillList"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly getPortalBillReceipt: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly bill_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The PDF */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/pdf": unknown;
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalError"];
         };
     };
     readonly listPortalPrescriptions: {
@@ -11533,6 +11766,95 @@ export interface operations {
             readonly 404: components["responses"]["PermissionError"];
         };
     };
+    readonly downloadBillReceipt: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly bill_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The PDF */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/pdf": unknown;
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+        };
+    };
+    readonly getReceiptLink: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly bill_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The link */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientLinkInfo"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+        };
+    };
+    readonly resetReceiptLink: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly bill_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The link */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PatientLinkInfo"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["LinkError"];
+        };
+    };
     readonly getOpsMessagingCosts: {
         readonly parameters: {
             readonly query: {
@@ -12437,6 +12759,70 @@ export interface operations {
             };
             readonly 404: components["responses"]["LinkError"];
             readonly 410: components["responses"]["LinkError"];
+            readonly 429: components["responses"]["LinkRateLimited"];
+        };
+    };
+    readonly viewLinkedReceipt: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                readonly "X-Link-View"?: string;
+            };
+            readonly path: {
+                /** @description The patient link token (spec R9); never logged. */
+                readonly token: components["parameters"]["LinkToken"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The summary */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ReceiptSummary"];
+                };
+            };
+            readonly 401: components["responses"]["LinkError"];
+            readonly 404: components["responses"]["LinkError"];
+            readonly 410: components["responses"]["LinkError"];
+            readonly 423: components["responses"]["LinkError"];
+            readonly 429: components["responses"]["LinkRateLimited"];
+        };
+    };
+    readonly downloadLinkedReceipt: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                readonly "X-Link-View"?: string;
+            };
+            readonly path: {
+                /** @description The patient link token (spec R9); never logged. */
+                readonly token: components["parameters"]["LinkToken"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The PDF */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/pdf": unknown;
+                };
+            };
+            readonly 401: components["responses"]["LinkError"];
+            readonly 404: components["responses"]["LinkError"];
+            readonly 410: components["responses"]["LinkError"];
+            readonly 423: components["responses"]["LinkError"];
             readonly 429: components["responses"]["LinkRateLimited"];
         };
     };

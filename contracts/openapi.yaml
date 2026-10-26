@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.45.0
+  version: 0.46.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -1202,6 +1202,57 @@ paths:
         '401':
           $ref: '#/components/responses/PortalError'
         '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/bills:
+    get:
+      tags: [portal]
+      operationId: listPortalBills
+      summary: The linked records' issued bills
+      description: |
+        M6d-P4, spec billing R52. @patient. Numbers, dates and amounts; never a draft. Not audited.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The bills
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalBillList'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/bills/{bill_id}/receipt.pdf:
+    get:
+      tags: [portal]
+      operationId: getPortalBillReceipt
+      summary: An issued bill's receipt PDF
+      description: |
+        M6d-P4, spec billing R52. @patient. The same file the clinic prints. Out of scope is 404.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: bill_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The PDF
+          content:
+            application/pdf:
+              schema:
+                description: The PDF bytes (OpenAPI 3.1 binary content)
+                contentMediaType: application/pdf
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
           $ref: '#/components/responses/PortalError'
   /api/v1/portal/prescriptions:
     get:
@@ -5142,6 +5193,102 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '404':
           $ref: '#/components/responses/PermissionError'
+  /api/v1/clinic/bills/{bill_id}/receipt.pdf:
+    get:
+      tags: [clinic]
+      operationId: downloadBillReceipt
+      summary: The bill and its receipts as a PDF on the clinic's letterhead
+      description: |
+        M6d-P4, spec billing R43-R47. BILLING_MANAGE (a doctor their own bills). The bill as it
+        stands (lines, credit notes, payments, balance), rendered once per state and audited
+        (bill.receipt_downloaded). A draft is 409 BIL_RECEIPT_NOT_READY.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: bill_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The PDF
+          content:
+            application/pdf:
+              schema:
+                description: The PDF bytes (OpenAPI 3.1 binary content)
+                contentMediaType: application/pdf
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/bills/{bill_id}/link:
+    get:
+      tags: [clinic]
+      operationId: getReceiptLink
+      summary: The bill's receipt link, for the QR code at the desk
+      description: |
+        M6d-P4, spec billing R48. BILLING_MANAGE. One link per bill, made on first ask
+        (receipt_link.created); its url is PUBLIC_BASE_URL/r/<token>. The patient opens it
+        with the last 4 digits of their phone, as for a prescription link.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: bill_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkInfo'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/bills/{bill_id}/link/reset:
+    post:
+      tags: [clinic]
+      operationId: resetReceiptLink
+      summary: Unlock a receipt link after five wrong answers
+      description: |
+        M6d-P4, spec billing R51. BILLING_MANAGE. 409 LINK_NOT_LOCKED when it is not locked.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: bill_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: The link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkInfo'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/LinkError'
   /api/v1/ops/messaging-costs:
     get:
       tags: [ops]
@@ -6042,6 +6189,71 @@ paths:
         '404':
           $ref: '#/components/responses/LinkError'
         '410':
+          $ref: '#/components/responses/LinkError'
+        '429':
+          $ref: '#/components/responses/LinkRateLimited'
+  /api/v1/public/links/{token}/receipt:
+    get:
+      tags: [patient-links]
+      operationId: viewLinkedReceipt
+      summary: A receipt link's bill summary, after the last-4 check
+      description: |
+        M6d-P4, spec billing R49. Needs X-Link-View from verify (else 401
+        LINK_CHALLENGE_REQUIRED). A prescription link's token is 404 LINK_INVALID.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/LinkToken'
+        - name: X-Link-View
+          in: header
+          required: false
+          schema: {type: string, maxLength: 200}
+      responses:
+        '200':
+          description: The summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptSummary'
+        '401':
+          $ref: '#/components/responses/LinkError'
+        '404':
+          $ref: '#/components/responses/LinkError'
+        '410':
+          $ref: '#/components/responses/LinkError'
+        '423':
+          $ref: '#/components/responses/LinkError'
+        '429':
+          $ref: '#/components/responses/LinkRateLimited'
+  /api/v1/public/links/{token}/receipt.pdf:
+    get:
+      tags: [patient-links]
+      operationId: downloadLinkedReceipt
+      summary: The receipt PDF through a receipt link
+      description: |
+        M6d-P4, spec billing R50. The same file the clinic prints. Needs X-Link-View; audited
+        (receipt_link.downloaded).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/LinkToken'
+        - name: X-Link-View
+          in: header
+          required: false
+          schema: {type: string, maxLength: 200}
+      responses:
+        '200':
+          description: The PDF
+          content:
+            application/pdf:
+              schema:
+                description: The PDF bytes (OpenAPI 3.1 binary content)
+                contentMediaType: application/pdf
+        '401':
+          $ref: '#/components/responses/LinkError'
+        '404':
+          $ref: '#/components/responses/LinkError'
+        '410':
+          $ref: '#/components/responses/LinkError'
+        '423':
           $ref: '#/components/responses/LinkError'
         '429':
           $ref: '#/components/responses/LinkRateLimited'
@@ -7421,7 +7633,8 @@ components:
         BIL_TOO_MANY_SERVICES (a clinic has 100 services at most, M6d-P1),
         BIL_NOT_DRAFT, BIL_NOT_ISSUED, BIL_EMPTY, BIL_LINE_ALREADY_CREDITED, BIL_VISIT_BILLED,
         BIL_VISIT_NOT_COMPLETED (bills and credit notes, M6d-P2), BIL_PAYMENT_TOO_LARGE,
-        BIL_VOID_TOO_LATE, BIL_ALREADY_VOIDED, BIL_VOID_REFUNDED (payments, M6d-P3)
+        BIL_VOID_TOO_LATE, BIL_ALREADY_VOIDED, BIL_VOID_REFUNDED (payments, M6d-P3),
+        BIL_RECEIPT_NOT_READY (a draft has no receipt, M6d-P4)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -9198,6 +9411,43 @@ components:
               bills: {type: integer}
               due_paise: {type: integer}
               oldest_bill_date: {type: string, format: date}
+    ReceiptSummary:
+      type: object
+      additionalProperties: false
+      required: [clinic_name, number, bill_date, total_paise, credited_paise, paid_paise,
+                 refunded_paise, balance_paise, cancelled]
+      description: M6d-P4 (billing R49) - amounts and the number only
+      properties:
+        clinic_name: {type: string}
+        number: {type: string}
+        bill_date: {type: string, format: date}
+        total_paise: {type: integer}
+        credited_paise: {type: integer}
+        paid_paise: {type: integer}
+        refunded_paise: {type: integer}
+        balance_paise: {type: integer}
+        cancelled: {type: boolean}
+    PortalBillList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, clinic_id, clinic_name, number, bill_date, total_paise, balance_paise,
+                       cancelled]
+            properties:
+              id: {type: string, format: uuid}
+              clinic_id: {type: string, format: uuid}
+              clinic_name: {type: string}
+              number: {type: string}
+              bill_date: {type: string, format: date}
+              total_paise: {type: integer}
+              balance_paise: {type: integer}
+              cancelled: {type: boolean}
     SuspendReason:
       type: string
       enum: [VERIFICATION_PROBLEM, CLINIC_REQUEST, TERMS_BREACH, PAYMENT, OTHER]
@@ -10575,8 +10825,12 @@ components:
     PatientLinkSummary:
       type: object
       additionalProperties: false
-      required: [clinic_name, language, locked, challenge_required]
+      required: [clinic_name, language, locked, challenge_required, purpose]
       properties:
+        purpose:
+          type: string
+          enum: [RX_VIEW, RECEIPT]
+          description: M6d-P4 - a prescription link or a receipt link (/r/<token>)
         clinic_name:
           type: string
         language:

@@ -38,6 +38,7 @@ from flask import Blueprint, Response, jsonify, request
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from mediease_api.application.appointments.live import IssuePortalLiveLink
+from mediease_api.application.billing.receipts import ListPortalBills, PortalReceiptPdf
 from mediease_api.application.booking.answers import AcceptProposal, DeclineProposal
 from mediease_api.application.booking.requests import (
     BookingRequestCommand,
@@ -120,6 +121,8 @@ class PortalRecordUseCases(Protocol):
     def list_portal_prescriptions(self) -> ListPortalPrescriptions: ...
     def get_portal_prescription(self) -> GetPortalPrescription: ...
     def portal_prescription_pdf(self) -> PortalPrescriptionPdf: ...
+    def list_portal_bills(self) -> ListPortalBills: ...
+    def portal_receipt_pdf(self) -> PortalReceiptPdf: ...
     def list_portal_reminders(self) -> ListPortalReminders: ...
     def get_medicine_plan(self) -> GetMedicinePlan: ...
     def list_medicine_courses(self) -> ListMedicineCourses: ...
@@ -554,6 +557,32 @@ def create_portal_records_blueprint(use_cases: PortalRecordUseCases) -> Blueprin
     @patient
     def prescription_pdf(rx_id: UUID) -> Response:
         pdf = use_cases.portal_prescription_pdf().execute(current_patient(), rx_id)
+        response = Response(pdf.data, mimetype=PDF_CONTENT_TYPE)
+        response.headers["Content-Disposition"] = f'inline; filename="{pdf.filename}"'
+        return response
+
+    # M6d-P4 (billing R52): the linked records' issued bills and their receipts.
+    @bp.get("/bills")
+    @patient
+    def list_bills() -> Response:
+        return _items(
+            {
+                "id": str(b.id),
+                "clinic_id": str(b.clinic_id),
+                "clinic_name": b.clinic_name,
+                "number": b.number,
+                "bill_date": b.bill_date.isoformat(),
+                "total_paise": b.total_paise,
+                "balance_paise": b.balance_paise,
+                "cancelled": b.cancelled,
+            }
+            for b in use_cases.list_portal_bills().execute(current_patient())
+        )
+
+    @bp.get("/bills/<uuid:bill_id>/receipt.pdf")
+    @patient
+    def bill_receipt_pdf(bill_id: UUID) -> Response:
+        pdf = use_cases.portal_receipt_pdf().execute(current_patient(), bill_id)
         response = Response(pdf.data, mimetype=PDF_CONTENT_TYPE)
         response.headers["Content-Disposition"] = f'inline; filename="{pdf.filename}"'
         return response

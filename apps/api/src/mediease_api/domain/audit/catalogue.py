@@ -185,6 +185,10 @@ ACTIONS: dict[A, ActionInfo] = {
         (A.BILL_CREDITED, "Issued a credit note"),
         (A.PAYMENT_RECORDED, "Recorded a payment or refund"),
         (A.PAYMENT_VOIDED, "Voided a payment or refund"),
+        (A.BILL_RECEIPT_DOWNLOADED, "Downloaded or printed a bill"),
+        (A.RECEIPT_LINK_CREATED, "Created a receipt link"),
+        (A.RECEIPT_LINK_OPENED, "Patient opened a receipt link"),
+        (A.RECEIPT_LINK_DOWNLOADED, "Patient downloaded a receipt"),
     ),
 }
 

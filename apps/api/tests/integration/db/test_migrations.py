@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0038"
+HEAD = "0039"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -1141,3 +1141,22 @@ def test_0038_adds_payments_and_downgrades(
     assert _tables(scratch_database_url) == M6D_P3_TABLES
     command.downgrade(alembic_config, "0037")
     assert _tables(scratch_database_url) == M6D_P2_TABLES
+
+
+def test_0039_receipt_links_and_downgrades(
+    scratch_database_url: str, alembic_config: Config
+) -> None:
+    """M6d-P4 (billing R48): patient links name a bill for a receipt; downgrade restores 0038."""
+    command.upgrade(alembic_config, "0039")
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            columns = {c["name"]: c for c in inspect(conn).get_columns("patient_links")}
+            assert columns["prescription_id"]["nullable"] and "bill_id" in columns
+            assert "RECEIPT" in _check(conn, "ck_patient_links_purpose")
+        command.downgrade(alembic_config, "0038")
+        with engine.connect() as conn:
+            columns = {c["name"]: c for c in inspect(conn).get_columns("patient_links")}
+            assert not columns["prescription_id"]["nullable"] and "bill_id" not in columns
+    finally:
+        engine.dispose()

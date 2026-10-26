@@ -1990,6 +1990,7 @@ def _link_from_row(row: PatientLinkRow) -> PatientLink:
         created_by=row.created_by,
         created_at=_utc(row.created_at),
         updated_at=_utc(row.updated_at),
+        bill_id=row.bill_id,
     )
 
 
@@ -2013,6 +2014,7 @@ class SqlAlchemyPatientLinkRepository(TenantScopedRepository[PatientLinkRow]):
             clinic_id=self.clinic_id,
             patient_id=link.patient_id,
             prescription_id=link.prescription_id,
+            bill_id=link.bill_id,
             purpose=link.purpose.value,
             key_id=link.key_id,
             expires_at=link.expires_at,
@@ -2043,6 +2045,13 @@ class SqlAlchemyPatientLinkRepository(TenantScopedRepository[PatientLinkRow]):
         query = self._scoped_select().where(
             PatientLinkRow.prescription_id == prescription_id,
             PatientLinkRow.revoked_at.is_(None),
+        )
+        return self._one(query, for_update)
+
+    def active_for_bill(self, bill_id: UUID, *, for_update: bool = False) -> PatientLink | None:
+        """M6d-P4: the bill's live receipt link, if any."""
+        query = self._scoped_select().where(
+            PatientLinkRow.bill_id == bill_id, PatientLinkRow.revoked_at.is_(None)
         )
         return self._one(query, for_update)
 

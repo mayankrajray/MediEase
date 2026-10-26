@@ -78,6 +78,25 @@ def _bina_proposal(scene: Scene) -> str:
     return request_id
 
 
+def _bina_bill(scene: Scene) -> str:
+    """M6d-P4: the desk issues a bill for Bina's record."""
+    desk = scene.world.client_for(scene.world.a.desk)
+    drafted = _send(
+        desk,
+        "POST",
+        "/api/v1/clinic/bills",
+        {
+            "patient_id": scene.bina_record,
+            "lines": [{"description": "Consultation", "unit_price_paise": 50000}],
+        },
+    )
+    assert drafted.status_code == 201, drafted.get_json()
+    bill_id = str(drafted.get_json()["id"])
+    issued = _send(desk, "POST", f"/api/v1/clinic/bills/{bill_id}/issue")
+    assert issued.status_code == 200, issued.get_json()
+    return bill_id
+
+
 def _scene(world: World) -> Scene:
     _, visit, rx = _issued(world)
     owner_a = world.client_for(world.a.owner)
@@ -136,6 +155,12 @@ PORTAL_ID_CASES: dict[str, Case] = {
     "/api/v1/portal/prescriptions/<uuid:rx_id>/pdf": (
         "GET",
         lambda s: f"{PORTAL}/prescriptions/{s.rx_id}/pdf",
+        "REQ_NOT_FOUND",
+    ),
+    # M6d-P4 (billing R52): an issued bill of Bina's record.
+    "/api/v1/portal/bills/<uuid:bill_id>/receipt.pdf": (
+        "GET",
+        lambda s: f"{PORTAL}/bills/{_bina_bill(s)}/receipt.pdf",
         "REQ_NOT_FOUND",
     ),
     "/api/v1/portal/links/<uuid:link_id>": (

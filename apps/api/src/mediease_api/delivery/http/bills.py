@@ -12,6 +12,8 @@
 | ``POST /api/v1/clinic/bills/{bill_id}/payments`` (M6d-P3) | ``BILLING_MANAGE`` |
 | ``POST /api/v1/clinic/bills/{bill_id}/payments/{payment_id}/void`` | ``BILLING_MANAGE`` |
 | ``GET /api/v1/clinic/dues?patient_id`` (M6d-P3) | ``COLLECTION_VIEW`` |
+| ``GET /api/v1/clinic/bills/{bill_id}/receipt.pdf`` (M6d-P4) | ``BILLING_MANAGE`` |
+| ``GET /api/v1/clinic/bills/{bill_id}/link``, ``POST .../link/reset`` | ``BILLING_MANAGE`` |
 
 A doctor reaches only their own bills (R21; another's is 404). Amounts are paise.
 """
@@ -47,7 +49,15 @@ from mediease_api.application.billing.payments import (
     RecordPayment,
     VoidPayment,
 )
+from mediease_api.application.billing.receipts import (
+    PDF_CONTENT_TYPE,
+    DownloadReceipt,
+    GetReceiptLink,
+    ResetReceiptLink,
+)
+from mediease_api.application.links.use_cases import LinkInfo
 from mediease_api.delivery.http.access import clinic, current_context
+from mediease_api.delivery.http.bodies import patient_link_body
 from mediease_api.delivery.http.scheduling import _uuid_arg
 from mediease_api.delivery.http.validation import RequestValidationFailed, parse_json
 from mediease_api.domain.billing.bill import (
@@ -161,6 +171,9 @@ class BillUseCases(Protocol):
     def record_payment(self) -> RecordPayment: ...
     def void_payment(self) -> VoidPayment: ...
     def list_dues(self) -> ListDues: ...
+    def download_receipt(self) -> DownloadReceipt: ...
+    def get_receipt_link(self) -> GetReceiptLink: ...
+    def reset_receipt_link(self) -> ResetReceiptLink: ...
 
 
 def _command(body: _Content, lines: list[LineIn]) -> BillCommand:
@@ -322,7 +335,7 @@ def _status() -> BillStatus | None:
         ) from None
 
 
-def create_bills_blueprint(use_cases: BillUseCases) -> Blueprint:
+def create_bills_blueprint(use_cases: BillUseCases, *, public_base_url: str = "") -> Blueprint:
     bp = Blueprint("bills", __name__, url_prefix="/api/v1/clinic/bills")
 
     @bp.after_request
@@ -415,7 +428,35 @@ def create_bills_blueprint(use_cases: BillUseCases) -> Blueprint:
         )
         return jsonify(bill_body(view))
 
+    @bp.get("/<uuid:bill_id>/receipt.pdf")
+    @clinic(Permission.BILLING_MANAGE)
+    def download_receipt(bill_id: UUID) -> Response:
+        pdf = use_cases.download_receipt().execute(current_context(), bill_id)
+        response = Response(pdf.data, mimetype=PDF_CONTENT_TYPE)
+        response.headers["Content-Disposition"] = f'inline; filename="{pdf.filename}"'
+        return response
+
+    @bp.get("/<uuid:bill_id>/link")
+    @clinic(Permission.BILLING_MANAGE)
+    def get_receipt_link(bill_id: UUID) -> Response:
+        info = use_cases.get_receipt_link().execute(current_context(), bill_id)
+        return jsonify(receipt_link_body(info, public_base_url))
+
+    @bp.post("/<uuid:bill_id>/link/reset")
+    @clinic(Permission.BILLING_MANAGE)
+    def reset_receipt_link(bill_id: UUID) -> Response:
+        info = use_cases.reset_receipt_link().execute(current_context(), bill_id)
+        return jsonify(receipt_link_body(info, public_base_url))
+
     return bp
+
+
+def receipt_link_body(info: LinkInfo, public_base_url: str) -> dict[str, Any]:
+    """R48: the receipt page's address for the QR code (``/r/<token>``), no content."""
+    return {
+        **patient_link_body(info, public_base_url),
+        "url": f"{public_base_url}/r/{info.token}",
+    }
 
 
 def dues_body(view: DuesView) -> dict[str, Any]:
