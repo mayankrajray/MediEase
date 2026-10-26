@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0036"
+HEAD = "0037"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -53,6 +53,7 @@ M6B_P6_TABLES = sorted(
 M6C_P1_TABLES = sorted([*M6B_P6_TABLES, "clinic_application_doctors", "clinic_applications"])
 M6C_P2_TABLES = sorted([*M6C_P1_TABLES, "clinic_application_checks"])
 M6D_P1_TABLES = sorted([*M6C_P2_TABLES, "clinic_services", "doctor_service_prices"])
+M6D_P2_TABLES = sorted([*M6D_P1_TABLES, "bills", "bill_lines"])
 
 
 @pytest.fixture
@@ -660,7 +661,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6D_P1_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6D_P2_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -1115,3 +1116,17 @@ def test_0036_adds_the_fee_schedule_and_downgrades(
         engine.dispose()
     command.downgrade(alembic_config, "0035")
     assert _tables(scratch_database_url) == M6C_P2_TABLES
+
+
+def test_0037_adds_bills_and_downgrades(scratch_database_url: str, alembic_config: Config) -> None:
+    """M6d-P2 (billing R13-R30): bills and their lines; downgrade restores 0036."""
+    command.upgrade(alembic_config, "0037")
+    assert _tables(scratch_database_url) == M6D_P2_TABLES
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            assert "credits_line_id" in {c["name"] for c in inspect(conn).get_columns("bill_lines")}
+        command.downgrade(alembic_config, "0036")
+        assert _tables(scratch_database_url) == M6D_P1_TABLES
+    finally:
+        engine.dispose()

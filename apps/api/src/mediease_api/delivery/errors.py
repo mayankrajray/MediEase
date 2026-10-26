@@ -98,6 +98,14 @@ DOMAIN_ERROR_STATUS = {
     # M6d-P1 (R3): the fee schedule.
     "BIL_SERVICE_NAME_TAKEN": 409,
     "BIL_TOO_MANY_SERVICES": 409,
+    # M6d-P2 (R14-R26): bills and credit notes.
+    "BIL_NOT_DRAFT": 409,
+    "BIL_NOT_ISSUED": 409,
+    "BIL_EMPTY": 409,
+    "BIL_LINE_ALREADY_CREDITED": 409,
+    "BIL_VISIT_BILLED": 409,
+    "BIL_VISIT_NOT_COMPLETED": 409,
+    "BIL_NOT_YOURS": 403,
     # M6b-P3b (R46): a dose outside its marking window.
     "PRT_DOSE_NOT_MARKABLE": 409,
     # M6a-P4: emailed verification and reset links.

@@ -178,6 +178,11 @@ ACTIONS: dict[A, ActionInfo] = {
         (A.FEES_SERVICE_ADDED, "Added a service to the fees"),
         (A.FEES_SERVICE_CHANGED, "Changed a service's fee"),
         (A.FEES_DOCTOR_PRICE_SET, "Set a doctor's fee"),
+        (A.BILL_DRAFTED, "Started a bill"),
+        (A.BILL_CHANGED, "Changed a draft bill"),
+        (A.BILL_DISCARDED, "Discarded a draft bill"),
+        (A.BILL_ISSUED, "Issued a bill"),
+        (A.BILL_CREDITED, "Issued a credit note"),
     ),
 }
 

@@ -2534,6 +2534,108 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/clinic/bills": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The clinic's bills, newest first
+         * @description M6d-P2, spec billing R21, R22. BILLING_MANAGE. 50 at a time with next_cursor. A doctor
+         *     sees only their own bills (doctor_id of another doctor is 403 BIL_NOT_YOURS).
+         */
+        readonly get: operations["listBills"];
+        readonly put?: never;
+        /**
+         * Start a draft bill for a patient
+         * @description M6d-P2, spec billing R13-R16. BILLING_MANAGE. With visit_id (a completed visit of the
+         *     patient; 409 BIL_VISIT_NOT_COMPLETED, BIL_VISIT_BILLED) the bill is the visit's doctor's
+         *     and, without lines, starts with their consultation price. A doctor bills only
+         *     themselves (403 BIL_NOT_YOURS). A line with service_id takes the service's name and the
+         *     doctor's price unless given. Nothing clinical is copied.
+         */
+        readonly post: operations["draftBill"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/bills/{bill_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A bill with its lines and credit notes
+         * @description M6d-P2. BILLING_MANAGE. Another clinic's or another doctor's bill is 404 (R21).
+         */
+        readonly get: operations["getBill"];
+        /**
+         * Replace a draft's lines, discount and notes
+         * @description M6d-P2, spec billing R18. BILLING_MANAGE. Drafts only (409 BIL_NOT_DRAFT). A visit's
+         *     bill and a doctor's own bill keep their doctor (422).
+         */
+        readonly put: operations["changeBill"];
+        readonly post?: never;
+        /**
+         * Discard a draft
+         * @description M6d-P2, spec billing R19. BILLING_MANAGE. Drafts only (409 BIL_NOT_DRAFT).
+         */
+        readonly delete: operations["discardBill"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/bills/{bill_id}/issue": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Issue a draft, numbering and freezing it
+         * @description M6d-P2, spec billing R20; B5, D1. BILLING_MANAGE. The next number of the clinic's
+         *     financial year (PREFIX/26-27/0001). 409 BIL_NOT_DRAFT, BIL_EMPTY.
+         */
+        readonly post: operations["issueBill"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/bills/{bill_id}/credit-notes": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Issue a credit note for some or all of a bill's lines
+         * @description M6d-P2, spec billing R23-R26; B4. BILLING_MANAGE. Each line is credited at most once
+         *     (409 BIL_LINE_ALREADY_CREDITED); without line_ids every open line is credited and the
+         *     bill becomes CANCELLED. Only issued bills (409 BIL_NOT_ISSUED). Numbered
+         *     PREFIX/CN/26-27/0001.
+         */
+        readonly post: operations["creditBill"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/ops/messaging-costs": {
         readonly parameters: {
             readonly query?: never;
@@ -4261,6 +4363,137 @@ export interface components {
         };
         readonly DoctorPriceInput: {
             readonly price_paise: components["schemas"]["Paise"] | null;
+        };
+        /** @enum {string} */
+        readonly DiscountKind: "NONE" | "AMOUNT" | "PERCENT";
+        /** @description AMOUNT in paise; PERCENT in hundredths of a percent (1250 is 12.5%) */
+        readonly Discount: {
+            readonly kind: components["schemas"]["DiscountKind"];
+            readonly value: number;
+        };
+        /**
+         * @description M6d-P2 (B4) - CANCELLED once every line is credited
+         * @enum {string}
+         */
+        readonly BillStatus: "DRAFT" | "ISSUED" | "CANCELLED";
+        readonly BillLineInput: {
+            /** Format: uuid */
+            readonly service_id?: string | null;
+            readonly description?: string | null;
+            readonly unit_price_paise?: number | null;
+            /** @default 1 */
+            readonly quantity: number;
+            readonly discount?: components["schemas"]["Discount"] | null;
+        };
+        readonly NewBill: {
+            /** Format: uuid */
+            readonly patient_id: string;
+            /** Format: uuid */
+            readonly visit_id?: string | null;
+            /** Format: uuid */
+            readonly doctor_id?: string | null;
+            readonly lines?: readonly components["schemas"]["BillLineInput"][] | null;
+            readonly discount?: components["schemas"]["Discount"] | null;
+            readonly notes?: string | null;
+        };
+        readonly BillChange: {
+            readonly lines: readonly components["schemas"]["BillLineInput"][];
+            /** Format: uuid */
+            readonly doctor_id?: string | null;
+            readonly discount?: components["schemas"]["Discount"] | null;
+            readonly notes?: string | null;
+        };
+        readonly CreditNoteInput: {
+            /** @description Left out or null, every line not yet credited */
+            readonly line_ids?: readonly string[] | null;
+            readonly reason: string;
+        };
+        readonly BillPatientRef: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly code: string;
+            readonly full_name: string;
+        };
+        readonly BillDoctorRef: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly display_name: string;
+        };
+        /** @description A bill without its lines (Bill adds them, so no additionalProperties here) */
+        readonly BillSummary: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["BillStatus"];
+            /** @description Set at issue (B5) */
+            readonly number: string | null;
+            /** Format: date */
+            readonly bill_date: string | null;
+            readonly patient: components["schemas"]["BillPatientRef"] | null;
+            readonly doctor: components["schemas"]["BillDoctorRef"] | null;
+            /** Format: uuid */
+            readonly visit_id: string | null;
+            readonly total_paise: number;
+            readonly credited_paise: number;
+            readonly paid_paise: number;
+            readonly refunded_paise: number;
+            /** @description total - credited - paid + refunded; null for a draft; negative means owed back */
+            readonly balance_paise: number | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly issued_at: string | null;
+        };
+        readonly BillLine: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly position: number;
+            /** Format: uuid */
+            readonly service_id: string | null;
+            readonly description: string;
+            readonly unit_price_paise: number;
+            readonly quantity: number;
+            readonly discount: components["schemas"]["Discount"];
+            /** @description The line's own discount */
+            readonly discount_paise: number;
+            /** @description Its share of the bill's discount */
+            readonly bill_discount_paise: number;
+            /** @description What the line finally costs */
+            readonly amount_paise: number;
+            readonly credited: boolean;
+        };
+        readonly CreditNote: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly number: string | null;
+            /** Format: date */
+            readonly bill_date: string | null;
+            readonly reason: string | null;
+            readonly total_paise: number;
+            /** Format: date-time */
+            readonly issued_at: string | null;
+            readonly lines: readonly {
+                /** Format: uuid */
+                readonly id: string;
+                /** Format: uuid */
+                readonly credits_line_id: string;
+                readonly description: string;
+                readonly amount_paise: number;
+            }[];
+        };
+        /** @description M6d-P2, spec billing R13-R30. A snapshot; nothing clinical (B3) */
+        readonly Bill: components["schemas"]["BillSummary"] & {
+            readonly lines: readonly components["schemas"]["BillLine"][];
+            readonly discount: components["schemas"]["Discount"];
+            readonly subtotal_paise: number;
+            readonly discount_paise: number;
+            readonly notes: string | null;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly credit_notes: readonly components["schemas"]["CreditNote"][];
+        };
+        readonly BillPage: {
+            readonly items: readonly components["schemas"]["BillSummary"][];
+            readonly next_cursor: string | null;
         };
         /**
          * @description M6c-P4 (R56). Audited; never shown to patients
@@ -6255,7 +6488,9 @@ export interface components {
          *     CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here),
          *     CLN_NO_DOCTOR_PROFILE (a doctor's view without a doctor profile, M6a-P6),
          *     BIL_SERVICE_NAME_TAKEN (another active service has that name, M6d-P1),
-         *     BIL_TOO_MANY_SERVICES (a clinic has 100 services at most, M6d-P1)
+         *     BIL_TOO_MANY_SERVICES (a clinic has 100 services at most, M6d-P1),
+         *     BIL_NOT_DRAFT, BIL_NOT_ISSUED, BIL_EMPTY, BIL_LINE_ALREADY_CREDITED, BIL_VISIT_BILLED,
+         *     BIL_VISIT_NOT_COMPLETED (bills and credit notes, M6d-P2)
          */
         readonly ConflictError: {
             headers: {
@@ -10848,6 +11083,236 @@ export interface operations {
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["PermissionError"];
+            readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly listBills: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description Only this patient's bills */
+                readonly patient_id?: string;
+                /** @description Only this doctor's bills */
+                readonly doctor_id?: string;
+                /** @description Only bills in this state */
+                readonly status?: "DRAFT" | "ISSUED" | "CANCELLED";
+                /** @description next_cursor of the previous page */
+                readonly cursor?: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The bills */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["BillPage"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly draftBill: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewBill"];
+            };
+        };
+        readonly responses: {
+            /** @description The bill */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Bill"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly getBill: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly bill_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The bill */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Bill"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly changeBill: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly bill_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["BillChange"];
+            };
+        };
+        readonly responses: {
+            /** @description The bill */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Bill"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly discardBill: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly bill_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Discarded */
+            readonly 204: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+        };
+    };
+    readonly issueBill: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly bill_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The bill */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Bill"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+        };
+    };
+    readonly creditBill: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly bill_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["CreditNoteInput"];
+            };
+        };
+        readonly responses: {
+            /** @description The bill */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Bill"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
             readonly 422: components["responses"]["ConflictError"];
         };
     };

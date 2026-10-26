@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.43.0
+  version: 0.44.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -4774,6 +4774,258 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '422':
           $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/bills:
+    get:
+      tags: [clinic]
+      operationId: listBills
+      summary: The clinic's bills, newest first
+      description: |
+        M6d-P2, spec billing R21, R22. BILLING_MANAGE. 50 at a time with next_cursor. A doctor
+        sees only their own bills (doctor_id of another doctor is 403 BIL_NOT_YOURS).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: patient_id
+          in: query
+          required: false
+          schema: {type: string, format: uuid}
+          description: Only this patient's bills
+        - name: doctor_id
+          in: query
+          required: false
+          schema: {type: string, format: uuid}
+          description: Only this doctor's bills
+        - name: status
+          in: query
+          required: false
+          schema: {type: string, enum: [DRAFT, ISSUED, CANCELLED]}
+          description: Only bills in this state
+        - name: cursor
+          in: query
+          required: false
+          schema: {type: string}
+          description: next_cursor of the previous page
+      responses:
+        '200':
+          description: The bills
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPage'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+    post:
+      tags: [clinic]
+      operationId: draftBill
+      summary: Start a draft bill for a patient
+      description: |
+        M6d-P2, spec billing R13-R16. BILLING_MANAGE. With visit_id (a completed visit of the
+        patient; 409 BIL_VISIT_NOT_COMPLETED, BIL_VISIT_BILLED) the bill is the visit's doctor's
+        and, without lines, starts with their consultation price. A doctor bills only
+        themselves (403 BIL_NOT_YOURS). A line with service_id takes the service's name and the
+        doctor's price unless given. Nothing clinical is copied.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewBill'
+      responses:
+        '201':
+          description: The bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/bills/{bill_id}:
+    get:
+      tags: [clinic]
+      operationId: getBill
+      summary: A bill with its lines and credit notes
+      description: |
+        M6d-P2. BILLING_MANAGE. Another clinic's or another doctor's bill is 404 (R21).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: bill_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+    put:
+      tags: [clinic]
+      operationId: changeBill
+      summary: Replace a draft's lines, discount and notes
+      description: |
+        M6d-P2, spec billing R18. BILLING_MANAGE. Drafts only (409 BIL_NOT_DRAFT). A visit's
+        bill and a doctor's own bill keep their doctor (422).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: bill_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillChange'
+      responses:
+        '200':
+          description: The bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+    delete:
+      tags: [clinic]
+      operationId: discardBill
+      summary: Discard a draft
+      description: |
+        M6d-P2, spec billing R19. BILLING_MANAGE. Drafts only (409 BIL_NOT_DRAFT).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: bill_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Discarded
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/bills/{bill_id}/issue:
+    post:
+      tags: [clinic]
+      operationId: issueBill
+      summary: Issue a draft, numbering and freezing it
+      description: |
+        M6d-P2, spec billing R20; B5, D1. BILLING_MANAGE. The next number of the clinic's
+        financial year (PREFIX/26-27/0001). 409 BIL_NOT_DRAFT, BIL_EMPTY.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: bill_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: The bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/bills/{bill_id}/credit-notes:
+    post:
+      tags: [clinic]
+      operationId: creditBill
+      summary: Issue a credit note for some or all of a bill's lines
+      description: |
+        M6d-P2, spec billing R23-R26; B4. BILLING_MANAGE. Each line is credited at most once
+        (409 BIL_LINE_ALREADY_CREDITED); without line_ids every open line is credited and the
+        bill becomes CANCELLED. Only issued bills (409 BIL_NOT_ISSUED). Numbered
+        PREFIX/CN/26-27/0001.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: bill_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditNoteInput'
+      responses:
+        '201':
+          description: The bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
   /api/v1/ops/messaging-costs:
     get:
       tags: [ops]
@@ -7050,7 +7302,9 @@ components:
         CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here),
         CLN_NO_DOCTOR_PROFILE (a doctor's view without a doctor profile, M6a-P6),
         BIL_SERVICE_NAME_TAKEN (another active service has that name, M6d-P1),
-        BIL_TOO_MANY_SERVICES (a clinic has 100 services at most, M6d-P1)
+        BIL_TOO_MANY_SERVICES (a clinic has 100 services at most, M6d-P1),
+        BIL_NOT_DRAFT, BIL_NOT_ISSUED, BIL_EMPTY, BIL_LINE_ALREADY_CREDITED, BIL_VISIT_BILLED,
+        BIL_VISIT_NOT_COMPLETED (bills and credit notes, M6d-P2)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -8570,6 +8824,196 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Paise'
             - type: 'null'
+    DiscountKind:
+      type: string
+      enum: [NONE, AMOUNT, PERCENT]
+    Discount:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      description: AMOUNT in paise; PERCENT in hundredths of a percent (1250 is 12.5%)
+      properties:
+        kind:
+          $ref: '#/components/schemas/DiscountKind'
+        value: {type: integer, minimum: 0, maximum: 100000000}
+    BillStatus:
+      type: string
+      enum: [DRAFT, ISSUED, CANCELLED]
+      description: M6d-P2 (B4) - CANCELLED once every line is credited
+    BillLineInput:
+      type: object
+      additionalProperties: false
+      properties:
+        service_id: {type: [string, 'null'], format: uuid}
+        description: {type: [string, 'null'], minLength: 1, maxLength: 80}
+        unit_price_paise: {type: [integer, 'null'], minimum: 0, maximum: 10000000}
+        quantity: {type: integer, minimum: 1, maximum: 99, default: 1}
+        discount:
+          oneOf:
+            - $ref: '#/components/schemas/Discount'
+            - type: 'null'
+    NewBill:
+      type: object
+      additionalProperties: false
+      required: [patient_id]
+      properties:
+        patient_id: {type: string, format: uuid}
+        visit_id: {type: [string, 'null'], format: uuid}
+        doctor_id: {type: [string, 'null'], format: uuid}
+        lines:
+          type: [array, 'null']
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/BillLineInput'
+        discount:
+          oneOf:
+            - $ref: '#/components/schemas/Discount'
+            - type: 'null'
+        notes: {type: [string, 'null'], maxLength: 500}
+    BillChange:
+      type: object
+      additionalProperties: false
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/BillLineInput'
+        doctor_id: {type: [string, 'null'], format: uuid}
+        discount:
+          oneOf:
+            - $ref: '#/components/schemas/Discount'
+            - type: 'null'
+        notes: {type: [string, 'null'], maxLength: 500}
+    CreditNoteInput:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        line_ids:
+          type: [array, 'null']
+          minItems: 1
+          maxItems: 50
+          items: {type: string, format: uuid}
+          description: Left out or null, every line not yet credited
+        reason: {type: string, minLength: 1, maxLength: 200}
+    BillPatientRef:
+      type: object
+      additionalProperties: false
+      required: [id, code, full_name]
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string}
+        full_name: {type: string}
+    BillDoctorRef:
+      type: object
+      additionalProperties: false
+      required: [id, display_name]
+      properties:
+        id: {type: string, format: uuid}
+        display_name: {type: string}
+    BillSummary:
+      type: object
+      description: A bill without its lines (Bill adds them, so no additionalProperties here)
+      required: [id, status, number, bill_date, patient, doctor, visit_id, total_paise,
+                 credited_paise, paid_paise, refunded_paise, balance_paise, created_at, issued_at]
+      properties:
+        id: {type: string, format: uuid}
+        status:
+          $ref: '#/components/schemas/BillStatus'
+        number: {type: [string, 'null'], description: 'Set at issue (B5)'}
+        bill_date: {type: [string, 'null'], format: date}
+        patient:
+          oneOf:
+            - $ref: '#/components/schemas/BillPatientRef'
+            - type: 'null'
+        doctor:
+          oneOf:
+            - $ref: '#/components/schemas/BillDoctorRef'
+            - type: 'null'
+        visit_id: {type: [string, 'null'], format: uuid}
+        total_paise: {type: integer}
+        credited_paise: {type: integer}
+        paid_paise: {type: integer}
+        refunded_paise: {type: integer}
+        balance_paise:
+          type: [integer, 'null']
+          description: total - credited - paid + refunded; null for a draft; negative means owed back
+        created_at: {type: string, format: date-time}
+        issued_at: {type: [string, 'null'], format: date-time}
+    BillLine:
+      type: object
+      additionalProperties: false
+      required: [id, position, service_id, description, unit_price_paise, quantity, discount,
+                 discount_paise, bill_discount_paise, amount_paise, credited]
+      properties:
+        id: {type: string, format: uuid}
+        position: {type: integer}
+        service_id: {type: [string, 'null'], format: uuid}
+        description: {type: string}
+        unit_price_paise: {type: integer}
+        quantity: {type: integer}
+        discount:
+          $ref: '#/components/schemas/Discount'
+        discount_paise: {type: integer, description: The line's own discount}
+        bill_discount_paise: {type: integer, description: Its share of the bill's discount}
+        amount_paise: {type: integer, description: What the line finally costs}
+        credited: {type: boolean}
+    CreditNote:
+      type: object
+      additionalProperties: false
+      required: [id, number, bill_date, reason, total_paise, issued_at, lines]
+      properties:
+        id: {type: string, format: uuid}
+        number: {type: [string, 'null']}
+        bill_date: {type: [string, 'null'], format: date}
+        reason: {type: [string, 'null']}
+        total_paise: {type: integer}
+        issued_at: {type: [string, 'null'], format: date-time}
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, credits_line_id, description, amount_paise]
+            properties:
+              id: {type: string, format: uuid}
+              credits_line_id: {type: string, format: uuid}
+              description: {type: string}
+              amount_paise: {type: integer}
+    Bill:
+      description: M6d-P2, spec billing R13-R30. A snapshot; nothing clinical (B3)
+      allOf:
+        - $ref: '#/components/schemas/BillSummary'
+        - type: object
+          required: [lines, discount, subtotal_paise, discount_paise, notes, updated_at,
+                     credit_notes]
+          properties:
+            lines:
+              type: array
+              items:
+                $ref: '#/components/schemas/BillLine'
+            discount:
+              $ref: '#/components/schemas/Discount'
+            subtotal_paise: {type: integer}
+            discount_paise: {type: integer}
+            notes: {type: [string, 'null']}
+            updated_at: {type: string, format: date-time}
+            credit_notes:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreditNote'
+    BillPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillSummary'
+        next_cursor: {type: [string, 'null']}
     SuspendReason:
       type: string
       enum: [VERIFICATION_PROBLEM, CLINIC_REQUEST, TERMS_BREACH, PAYMENT, OTHER]

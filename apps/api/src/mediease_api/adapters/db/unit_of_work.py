@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from mediease_api.adapters.db.applications import SqlAlchemyApplicationRepository
 from mediease_api.adapters.db.audit import SqlAlchemyAuditReader, SqlAlchemyAuditWriter
+from mediease_api.adapters.db.bills import SqlAlchemyBillRepository
 from mediease_api.adapters.db.booking import (
     SqlAlchemyBookingRequestLookup,
     SqlAlchemyBookingRequestRepository,
@@ -127,6 +128,8 @@ class SqlAlchemyTenantRepositories:
         self._audit_log = SqlAlchemyAuditReader(session, clinic_id)
         # M6d-P1: the fee schedule.
         self._fees = SqlAlchemyFeeRepository(session, clinic_id)
+        # M6d-P2: bills and credit notes.
+        self._bills = SqlAlchemyBillRepository(session, clinic_id)
 
     @property
     def clinic_id(self) -> UUID:
@@ -187,6 +190,10 @@ class SqlAlchemyTenantRepositories:
     @property
     def fees(self) -> SqlAlchemyFeeRepository:
         return self._fees
+
+    @property
+    def bills(self) -> SqlAlchemyBillRepository:
+        return self._bills
 
     @property
     def rx_templates(self) -> SqlAlchemyRxTemplateRepository:

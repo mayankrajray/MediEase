@@ -12,7 +12,12 @@ from mediease_api.adapters.db.models.applications import (
 from mediease_api.adapters.db.models.appointments import AppointmentRow, AppointmentStatusHistoryRow
 from mediease_api.adapters.db.models.audit import AuditEventRow
 from mediease_api.adapters.db.models.base import Base
-from mediease_api.adapters.db.models.billing import ClinicServiceRow, DoctorServicePriceRow
+from mediease_api.adapters.db.models.billing import (
+    BillLineRow,
+    BillRow,
+    ClinicServiceRow,
+    DoctorServicePriceRow,
+)
 from mediease_api.adapters.db.models.booking import BookingRequestRow
 from mediease_api.adapters.db.models.clinics import ClinicRow, DoctorRow, OnboardingChecklistRow
 from mediease_api.adapters.db.models.identity import ClinicMembershipRow, RefreshTokenRow, UserRow
@@ -52,6 +57,8 @@ __all__ = [
     "AppointmentStatusHistoryRow",
     "AuditEventRow",
     "Base",
+    "BillLineRow",
+    "BillRow",
     "BookingRequestRow",
     "ClinicApplicationCheckRow",
     "ClinicApplicationDoctorRow",
