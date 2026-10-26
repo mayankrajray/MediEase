@@ -88,6 +88,7 @@ from mediease_api.application.billing.bills import (
     IssueBill,
     ListBills,
 )
+from mediease_api.application.billing.collection import ExportCollection, GetCollection
 from mediease_api.application.billing.fees import (
     AddService,
     ChangeService,
@@ -291,6 +292,7 @@ from mediease_api.delivery.http.auth import create_auth_blueprint
 from mediease_api.delivery.http.bills import create_bills_blueprint, create_dues_blueprint
 from mediease_api.delivery.http.booking_requests import create_booking_requests_blueprint
 from mediease_api.delivery.http.clinic import create_clinic_blueprint
+from mediease_api.delivery.http.collection import create_collection_blueprint
 from mediease_api.delivery.http.csrf import register_csrf_protection
 from mediease_api.delivery.http.dashboard import create_dashboard_blueprint
 from mediease_api.delivery.http.fees import create_fees_blueprint
@@ -1121,6 +1123,13 @@ class _UseCases:
             files=self._receipt_files(),
         )
 
+    # --- M6d-P5: the daily collection --------------------------------------------------------
+    def get_collection(self) -> GetCollection:
+        return GetCollection(uow=self._uow(), clock=self.clock)
+
+    def export_collection(self) -> ExportCollection:
+        return ExportCollection(uow=self._uow(), clock=self.clock, ids=self.ids)
+
     def list_portal_bills(self) -> ListPortalBills:
         return ListPortalBills(uow=self._uow())
 
@@ -1523,6 +1532,7 @@ def create_app(
         create_bills_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
     )
     app.register_blueprint(create_dues_blueprint(use_cases))
+    app.register_blueprint(create_collection_blueprint(use_cases))
     app.register_blueprint(create_public_search_blueprint(use_cases))
     app.register_blueprint(
         create_public_sitemap_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)

@@ -233,6 +233,12 @@ class SqlAlchemyBillRepository(TenantScopedRepository[BillRow]):
         self._lines.delete_for(bill_id)
         self._delete_row(bill_id)
 
+    def get_many(self, bill_ids: Collection[UUID]) -> Sequence[Bill]:
+        if not bill_ids:
+            return []
+        query = self._scoped_select().where(BillRow.id.in_(bill_ids))
+        return [_bill(row) for row in self._session.scalars(query)]
+
     def open_for_visit(self, visit_id: UUID) -> Bill | None:
         query = self._scoped_select().where(
             BillRow.visit_id == visit_id,

@@ -145,6 +145,8 @@ def test_adr_0008_the_bill_routes_match_the_contract(
         200,
     )
     _expect(openapi, _send(desk, "GET", "/api/v1/clinic/dues"), 200)
+    _expect(openapi, _send(desk, "GET", "/api/v1/clinic/collection"), 200)
+    _expect(openapi, _send(desk, "GET", "/api/v1/clinic/collection/export"), 200)
     _expect(openapi, _send(desk, "GET", "/api/v1/queue"), 200)
     _expect(openapi, _send(desk, "GET", url), 200)
     _expect(openapi, _send(desk, "GET", f"{url}/receipt.pdf"), 200)

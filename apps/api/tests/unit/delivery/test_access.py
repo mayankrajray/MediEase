@@ -220,6 +220,8 @@ EXPECTED_POLICIES = {
     "bills.record_payment": (Access.CLINIC, Permission.BILLING_MANAGE),
     "bills.void_payment": (Access.CLINIC, Permission.BILLING_MANAGE),
     "dues.list_dues": (Access.CLINIC, Permission.COLLECTION_VIEW),
+    "collection.get_collection": (Access.CLINIC, Permission.COLLECTION_VIEW),
+    "collection.export_collection": (Access.CLINIC, Permission.COLLECTION_VIEW),
     "bills.download_receipt": (Access.CLINIC, Permission.BILLING_MANAGE),
     "bills.get_receipt_link": (Access.CLINIC, Permission.BILLING_MANAGE),
     "bills.reset_receipt_link": (Access.CLINIC, Permission.BILLING_MANAGE),
