@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.38.0
+  version: 0.39.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -4247,6 +4247,190 @@ paths:
           $ref: '#/components/responses/ApplicationError'
         '422':
           $ref: '#/components/responses/ApplicationError'
+  /api/v1/clinic/listing:
+    get:
+      tags: [clinic]
+      operationId: getClinicListing
+      summary: The directory listing and what stands in its way
+      description: |
+        M6c-P4, spec R50, R51. CLINIC_VIEW.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The listing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicListing'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+    put:
+      tags: [clinic]
+      operationId: setClinicListing
+      summary: List or unlist the clinic in the MediEase directory
+      description: |
+        M6c-P4, spec R52. CLINIC_MANAGE (owners). Listing needs no problem (409
+        CLN_LISTING_BLOCKED with details.problems, comma-separated); unlisting always works.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [listed]
+              properties:
+                listed: {type: boolean}
+      responses:
+        '200':
+          description: The listing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicListing'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/listing/doctors/{doctor_id}:
+    put:
+      tags: [clinic]
+      operationId: setDoctorVisibility
+      summary: Show or hide a doctor on the public page and in the directory
+      description: |
+        M6c-P4, spec R53. CLINIC_MANAGE. Showing needs an active doctor verified by MediEase
+        (409 CLN_DOCTOR_NOT_VERIFIED). Another clinic's doctor is 404.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: doctor_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [visible]
+              properties:
+                visible: {type: boolean}
+      responses:
+        '200':
+          description: The listing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicListing'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/ops/clinics/{clinic_id}/suspend:
+    post:
+      tags: [ops]
+      operationId: suspendOpsClinic
+      summary: Suspend a clinic
+      description: |
+        M6c-P4, spec R56, R57 (FR-ONB-05). OPS_ADMIN. ACTIVE -> SUSPENDED (409 otherwise). In the
+        same transaction every open booking request is declined with CLINIC_UNAVAILABLE and its
+        patient told in the portal. The clinic leaves every public surface at once and its staff
+        are refused (CLN_SUSPENDED). OTHER needs a note (422); the note is not audited.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason:
+                  $ref: '#/components/schemas/SuspendReason'
+                note: {type: [string, 'null'], maxLength: 500}
+      responses:
+        '200':
+          description: Suspended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clinic, requests_withdrawn]
+                properties:
+                  clinic:
+                    $ref: '#/components/schemas/Clinic'
+                  requests_withdrawn: {type: integer, minimum: 0}
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/ops/clinics/{clinic_id}/reactivate:
+    post:
+      tags: [ops]
+      operationId: reactivateOpsClinic
+      summary: Reactivate a suspended clinic
+      description: |
+        M6c-P4, spec R58. OPS_ADMIN. SUSPENDED -> ACTIVE (422 otherwise; 409 CLN_OWNER_REQUIRED
+        without an active owner). The owner's listing choice is kept.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Reactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Clinic'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
   /api/v1/ops/messaging-costs:
     get:
       tags: [ops]
@@ -7822,6 +8006,49 @@ components:
           description: Active clinic memberships, ordered by clinic name
           items:
             $ref: '#/components/schemas/Membership'
+    ClinicListing:
+      type: object
+      description: |
+        M6c-P4, spec clinic-onboarding R50-R55. The listing, whether the clinic is discoverable,
+        what stands in the way, and each doctor's state, so the screen never computes a rule.
+      required: [listed, listed_at, verified, discoverable, problems, doctors]
+      properties:
+        listed: {type: boolean}
+        listed_at: {type: [string, 'null'], format: date-time}
+        verified: {type: boolean}
+        discoverable:
+          type: boolean
+          description: Listed and nothing in problems (the one discoverability rule, R55)
+        problems:
+          type: array
+          items:
+            type: string
+            enum: [NOT_ACTIVE, NOT_VERIFIED, ADDRESS_MISSING, NO_BOOKABLE_DOCTOR]
+        doctors:
+          type: array
+          items:
+            type: object
+            required: [id, display_name, is_active, verified, visible, has_schedule,
+                       can_be_visible, problems]
+            properties:
+              id: {type: string, format: uuid}
+              display_name: {type: string}
+              is_active: {type: boolean}
+              verified: {type: boolean}
+              visible: {type: boolean}
+              has_schedule: {type: boolean}
+              can_be_visible:
+                type: boolean
+                description: R53 - active and verified by MediEase
+              problems:
+                type: array
+                items:
+                  type: string
+                  enum: [INACTIVE, NOT_VERIFIED, NO_SCHEDULE, HIDDEN]
+    SuspendReason:
+      type: string
+      enum: [VERIFICATION_PROBLEM, CLINIC_REQUEST, TERMS_BREACH, PAYMENT, OTHER]
+      description: M6c-P4 (R56). Audited; never shown to patients
     SessionUser:
       type: object
       required: [id, full_name, email, phone_e164, is_platform_ops, ops_roles]
@@ -8262,8 +8489,10 @@ components:
     DeclineReason:
       type: string
       enum: [TIME_UNAVAILABLE, DOCTOR_UNAVAILABLE, PLEASE_CALL, NOT_ONLINE, DUPLICATE, OTHER,
-             PATIENT_DECLINED]
-      description: R39; PATIENT_DECLINED is the patient's No thanks to a proposal, never a staff choice
+             PATIENT_DECLINED, CLINIC_UNAVAILABLE]
+      description: |
+        R39; PATIENT_DECLINED is the patient's No thanks to a proposal, never a staff choice.
+        CLINIC_UNAVAILABLE (M6c-P4): withdrawn by the system when MediEase suspended the clinic.
     NewRequestRecord:
       type: object
       additionalProperties: false

@@ -48,6 +48,17 @@ class PaperSize(StrEnum):
 REMINDER_HOURS_MAX = 6
 
 
+class SuspendReason(StrEnum):
+    """M6c-P4 (FR-ONB-05, R56): why MediEase suspended a clinic (audited, never shown to
+    patients, who read only that the clinic is not taking requests)."""
+
+    VERIFICATION_PROBLEM = "VERIFICATION_PROBLEM"
+    CLINIC_REQUEST = "CLINIC_REQUEST"
+    TERMS_BREACH = "TERMS_BREACH"
+    PAYMENT = "PAYMENT"
+    OTHER = "OTHER"
+
+
 class ClinicOwnerRequired(DomainError):
     """I1: a clinic cannot be active without an active owner."""
 

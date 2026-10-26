@@ -92,6 +92,9 @@ DOMAIN_ERROR_STATUS = {
     # M6c-P2 (R27, R29, R33): the review.
     "ONB_ALREADY_TAKEN": 409,
     "ONB_NOT_UNDER_REVIEW": 409,
+    # M6c-P4 (R52, R53): the directory listing.
+    "CLN_LISTING_BLOCKED": 409,
+    "CLN_DOCTOR_NOT_VERIFIED": 409,
     # M6b-P3b (R46): a dose outside its marking window.
     "PRT_DOSE_NOT_MARKABLE": 409,
     # M6a-P4: emailed verification and reset links.

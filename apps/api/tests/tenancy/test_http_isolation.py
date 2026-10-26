@@ -33,6 +33,10 @@ _FAR_DATE = (date.today() + timedelta(days=30)).isoformat()
 # each must answer 404 as if it did not exist.
 CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/clinic/doctors/<uuid:doctor_id>": lambda w: f"/api/v1/clinic/doctors/{w.b.doctor.id}",
+    # M6c-P4 (R53): the owner's visibility switch.
+    "/api/v1/clinic/listing/doctors/<uuid:doctor_id>": lambda w: (
+        f"/api/v1/clinic/listing/doctors/{w.b.doctor.id}"
+    ),
     "/api/v1/clinic/staff/<uuid:membership_id>": lambda w: _staff_url(w),
     "/api/v1/clinic/staff/<uuid:membership_id>/resend": lambda w: _invited_staff_url(w),
     "/api/v1/patients/<uuid:patient_id>": lambda w: _patient_url(w),
@@ -127,6 +131,7 @@ AS_DOCTOR = {
 # from clinic B's data after the URL (a reschedule needs another of B's sessions).
 Body = dict[str, object] | Callable[[World], dict[str, object]]
 CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
+    "/api/v1/clinic/listing/doctors/<uuid:doctor_id>": ("PUT", {"visible": False}),
     "/api/v1/appointments/<uuid:appointment_id>/cancel": ("POST", {"reason": "PATIENT_REQUEST"}),
     "/api/v1/appointments/<uuid:appointment_id>/transitions": (
         "POST",
