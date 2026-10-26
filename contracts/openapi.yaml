@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.40.0
+  version: 0.41.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -4434,6 +4434,114 @@ paths:
           $ref: '#/components/responses/ConflictError'
         '422':
           $ref: '#/components/responses/ConflictError'
+  /api/v1/public/search/clinics:
+    get:
+      tags: [public]
+      operationId: searchClinics
+      summary: Find clinics in the MediEase directory
+      description: |
+        M6c-P6, spec discovery R1-R10 (FR-DIS-01, 02, 04, 05; ADR-0021). No session; rate
+        limited per caller (PRT_RATE_LIMITED). Only discoverable clinics and their public
+        doctors, ordered by relevance, then place, then the earliest free day. At most 20.
+        An allow-list body. A bad filter is 422 naming it.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: q
+          in: query
+          schema: {type: string, maxLength: 100}
+          description: Words to match a clinic's or doctor's name or a specialty (trigram similarity)
+        - name: city
+          in: query
+          schema: {type: string, maxLength: 100}
+        - name: pincode
+          in: query
+          schema: {type: string, pattern: '^[1-9][0-9]{5}$'}
+          description: Near this PIN - the same PIN, the same city, then the same PIN district
+        - name: specialty
+          in: query
+          schema: {type: string, maxLength: 100}
+        - name: language
+          in: query
+          schema: {type: string}
+          description: One of options.languages
+        - name: available
+          in: query
+          schema: {type: boolean, default: false}
+          description: Only those with a free time in the next 7 days
+      responses:
+        '200':
+          description: The results and the filter options
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, options]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ClinicSearchHit'
+                  options:
+                    $ref: '#/components/schemas/SearchOptions'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/public/search/doctors:
+    get:
+      tags: [public]
+      operationId: searchDoctors
+      summary: Find doctors in the MediEase directory
+      description: |
+        M6c-P6, spec discovery R1-R10 (FR-DIS-01, 02, 04, 05; ADR-0021). No session; rate
+        limited per caller (PRT_RATE_LIMITED). Only discoverable clinics and their public
+        doctors, ordered by relevance, then place, then the earliest free day. At most 20.
+        An allow-list body. A bad filter is 422 naming it.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: q
+          in: query
+          schema: {type: string, maxLength: 100}
+          description: Words to match a clinic's or doctor's name or a specialty (trigram similarity)
+        - name: city
+          in: query
+          schema: {type: string, maxLength: 100}
+        - name: pincode
+          in: query
+          schema: {type: string, pattern: '^[1-9][0-9]{5}$'}
+          description: Near this PIN - the same PIN, the same city, then the same PIN district
+        - name: specialty
+          in: query
+          schema: {type: string, maxLength: 100}
+        - name: language
+          in: query
+          schema: {type: string}
+          description: One of options.languages
+        - name: available
+          in: query
+          schema: {type: boolean, default: false}
+          description: Only those with a free time in the next 7 days
+      responses:
+        '200':
+          description: The results and the filter options
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, options]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DoctorSearchHit'
+                  options:
+                    $ref: '#/components/schemas/SearchOptions'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/ConflictError'
   /api/v1/public/sitemap:
     get:
       tags: [public]
@@ -8084,6 +8192,67 @@ components:
           description: Active clinic memberships, ordered by clinic name
           items:
             $ref: '#/components/schemas/Membership'
+    SearchOptions:
+      type: object
+      required: [specialties, languages]
+      properties:
+        specialties:
+          type: array
+          items: {type: string}
+        languages:
+          type: array
+          items: {type: string}
+    ClinicSearchHit:
+      type: object
+      description: M6c-P6 - what a clinic publishes, and nothing else (a test fails on any extra key)
+      required: [slug, name, address_line, city, state, pincode, specialties, doctors, next_available]
+      properties:
+        slug: {type: string}
+        name: {type: string}
+        address_line: {type: [string, 'null']}
+        city: {type: [string, 'null']}
+        state: {type: [string, 'null']}
+        pincode: {type: [string, 'null']}
+        specialties:
+          type: array
+          items: {type: string}
+        doctors:
+          type: array
+          items:
+            type: object
+            required: [id, display_name, specialty]
+            properties:
+              id: {type: string, format: uuid}
+              display_name: {type: string}
+              specialty: {type: [string, 'null']}
+        next_available:
+          type: [string, 'null']
+          format: date
+          description: The first day in the next 7 with a free time (clinic-local), or null
+    DoctorSearchHit:
+      type: object
+      description: M6c-P6 - a public doctor and their clinic's published place
+      required: [id, display_name, qualification, specialty, languages, fee_paise, next_available,
+                 clinic]
+      properties:
+        id: {type: string, format: uuid}
+        display_name: {type: string}
+        qualification: {type: string}
+        specialty: {type: [string, 'null']}
+        languages:
+          type: array
+          items: {type: string}
+        fee_paise: {type: [integer, 'null']}
+        next_available: {type: [string, 'null'], format: date}
+        clinic:
+          type: object
+          required: [slug, name, city, state, pincode]
+          properties:
+            slug: {type: string}
+            name: {type: string}
+            city: {type: [string, 'null']}
+            state: {type: [string, 'null']}
+            pincode: {type: [string, 'null']}
     ClinicListing:
       type: object
       description: |

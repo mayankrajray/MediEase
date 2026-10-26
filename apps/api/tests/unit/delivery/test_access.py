@@ -206,6 +206,9 @@ EXPECTED_POLICIES = {
     # M6c-P5 (R61, R63): a doctor's public profile and the sitemap.
     "listing.set_profile": (Access.CLINIC, Permission.CLINIC_MANAGE),
     "public_sitemap.sitemap": (Access.PUBLIC, None),
+    # M6c-P6 (discovery R1-R10): directory search.
+    "public_search.clinics": (Access.PUBLIC, None),
+    "public_search.doctors": (Access.PUBLIC, None),
     "public_applications.submit": (Access.PUBLIC, None),
     "public_applications.confirm": (Access.PUBLIC, None),
     # Ops imports patients but cannot browse them (spec patients §2, M2-P4).
