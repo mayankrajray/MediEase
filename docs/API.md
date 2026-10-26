@@ -319,6 +319,19 @@ for `show_fee`. Public `fee_paise` (clinic page, profile, doctor search) is the 
 price when `show_fee` is on, else null. Permissions gain `BILLING_MANAGE` and `FEES_MANAGE`;
 audit categories gain `BILLING`.
 
+M6d-P2 (spec billing R13-R30; ADR-0022; contract 0.44.0). `BILLING_MANAGE`; a doctor reaches only
+their own bills (another's is 404).
+
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| GET | `/api/v1/clinic/bills?patient_id&doctor_id&status&cursor` | Bills newest first, 50 a page | FR-BIL-02 | Implemented (M6d-P2) |
+| POST | `/api/v1/clinic/bills` | A draft for a patient, optionally from a completed visit (prefilled) | FR-BIL-02 | Implemented (M6d-P2) |
+| GET | `/api/v1/clinic/bills/{bill_id}` | The bill, its lines and credit notes | FR-BIL-02 | Implemented (M6d-P2) |
+| PUT | `/api/v1/clinic/bills/{bill_id}` | Replace a draft's lines, discount and notes | FR-BIL-02 | Implemented (M6d-P2) |
+| DELETE | `/api/v1/clinic/bills/{bill_id}` | Discard a draft | FR-BIL-02 | Implemented (M6d-P2) |
+| POST | `/api/v1/clinic/bills/{bill_id}/issue` | Number (per financial year) and freeze | FR-BIL-07 | Implemented (M6d-P2) |
+| POST | `/api/v1/clinic/bills/{bill_id}/credit-notes` | A numbered credit note for some or all lines | FR-BIL-07 | Implemented (M6d-P2) |
+
 ### Audit trail (M1-P4)
 
 Every audited action writes one row to `audit_events` in the same transaction as the change, so a

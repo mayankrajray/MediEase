@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-BIL-01 (P1); FR-BIL-02..07, FR-VIS-04, FR-SUB-01 in later phases |
 | Milestone / phases | M6d / P1–P7 (design: `docs/milestones/M6d-billing-and-documents.md`) |
-| Status | P1 (R1–R12, AC1–AC3) approved 26 Oct 2026 and built; P2–P7 to be specified per phase |
+| Status | P1 (R1–R12, AC1–AC3) and P2 (R13–R30, AC4–AC8) approved 26 Oct 2026 (P2–P7 in advance) and built; P3–P5 to be specified per phase |
 | Owner | Developer |
 | Last updated | 2026-10-26 |
 
@@ -63,6 +63,51 @@ also becomes the one source of the public profile fee (D8). Money is integer pai
   (left out keeps the doctor's); `fee_paise` is refused (422). The listing answers each doctor's
   effective consultation price (`fee_paise`) and `show_fee`.
 
+### Bills and credit notes (P2; ADR-0022)
+- **R13** A bill belongs to one patient of the clinic and, optionally, to one of their **completed**
+  visits (`BIL_VISIT_NOT_COMPLETED`, 409; another patient's visit is 422). A visit's bill is for
+  the visit's doctor. A bill without a visit names a doctor or none. Nothing clinical is copied
+  from the visit (B3).
+- **R14** A visit has at most one open bill, a draft or an issued one (`BIL_VISIT_BILLED`, 409,
+  with `details.bill_id`; a partial unique index). A cancelled bill frees the visit.
+- **R15** Drafted from a visit without lines, a bill starts with the clinic's first active
+  consultation service at the doctor's price (R4, R10), if it has one.
+- **R16** A line names a service of the fee schedule or is typed. A missing description is the
+  service's name, and a missing price is the bill doctor's price for it (no price: 422). A line is
+  `unit price × quantity` (1–99) less its own discount. The bill discount is shared across the
+  lines in proportion to their value by largest remainder, so the shares add up exactly. Each
+  line's `amount_paise` is what it finally costs, and the total is their sum.
+- **R17** Discounts are none, an amount in paise (at most what it applies to), or a percent in
+  hundredths (at most 100%, rounded half up to the paisa). A unit price is at most ₹1,00,000
+  (B1), a bill at most ₹10,00,000, 50 lines. Out of range is 422 naming the field.
+- **R18** A draft is replaced as a whole: lines, discount and notes (up to 500 characters, printed
+  on the bill, never clinical). A visit's bill and a doctor's own bill keep their doctor (422).
+- **R19** A draft can be discarded (deleted). An issued bill cannot (`BIL_NOT_DRAFT`, 409).
+- **R20** *Issue* gives the next number of the clinic's financial year (D1, B5) and freezes the
+  bill. An empty draft cannot be issued (`BIL_EMPTY`, 409), and nothing else can change it after
+  issue (`BIL_NOT_DRAFT`). The bill date is the clinic-local day of issue.
+- **R21** Every role holds `BILLING_MANAGE`, but a doctor reaches only bills with their own doctor
+  profile: another doctor's bill is 404. A doctor cannot draft for another doctor or list another
+  doctor's bills (`BIL_NOT_YOURS`, 403). Owners and the front desk reach every bill.
+- **R22** The list is newest first, 50 at a time (`next_cursor`), filtered by patient, doctor and
+  state. It holds bills only; credit notes are shown on their bill.
+- **R23** A credit note reverses chosen lines of an **issued** bill (`BIL_NOT_ISSUED`, 409), or
+  every open line when none are named, at their final amounts. It needs a reason (up to 200
+  characters).
+- **R24** A line is credited at most once (`BIL_LINE_ALREADY_CREDITED`, 409; a unique index).
+- **R25** A credit note is numbered in its own series, `<prefix>/CN/26-27/0001`, and is always
+  issued. The bill records `credited_paise`.
+- **R26** When every line is credited the bill is `CANCELLED`. Crediting every line gives back
+  exactly the total.
+- **R27** Issuing and crediting take the clinic row lock, then the bill row. Editing takes the
+  bill row only. Two issues at once get two consecutive numbers.
+- **R28** The balance is `total − credited − paid + refunded`. It is null for a draft, and
+  negative when the clinic owes the patient (refunds, P3).
+- **R29** Every change is audited (`bill.drafted`, `bill.changed`, `bill.discarded`,
+  `bill.issued`, `bill.credited`; category *Billing*) with IDs, numbers, counts and amounts only.
+- **R30** A bill's body names the patient (ID, code, name) and the doctor; it never carries a
+  diagnosis, a note from the visit or a medicine.
+
 ## 5. API surface
 | Method | Path | Request | Success | Errors |
 |---|---|---|---|---|
@@ -72,7 +117,13 @@ also becomes the one source of the public profile fee (D8). Money is integer pai
 | PUT | `/api/v1/clinic/fees/services/{service_id}/doctors/{doctor_id}` | `{price_paise}` | 200 `FeeSchedule` | 403, 404, 422 |
 | PUT | `/api/v1/clinic/listing/doctors/{doctor_id}/profile` | `{languages?, show_fee?}` | 200 `ClinicListing` | 403, 404, 422 |
 
-Contract 0.43.0.
+| GET | `/api/v1/clinic/bills?patient_id&doctor_id&status&cursor` | — | 200 `BillPage` | 403 `BIL_NOT_YOURS`, 422 |
+| POST | `/api/v1/clinic/bills` | `NewBill` | 201 `Bill` | 403, 404, 409 `BIL_VISIT_BILLED` / `BIL_VISIT_NOT_COMPLETED`, 422 |
+| GET, PUT, DELETE | `/api/v1/clinic/bills/{bill_id}` | —, `BillChange`, — | 200 `Bill`, 204 | 404, 409 `BIL_NOT_DRAFT`, 422 |
+| POST | `/api/v1/clinic/bills/{bill_id}/issue` | — | 200 `Bill` | 404, 409 `BIL_NOT_DRAFT` / `BIL_EMPTY` |
+| POST | `/api/v1/clinic/bills/{bill_id}/credit-notes` | `CreditNoteInput` | 201 `Bill` | 404, 409 `BIL_NOT_ISSUED` / `BIL_LINE_ALREADY_CREDITED`, 422 |
+
+Contract 0.43.0 (P1), 0.44.0 (P2).
 
 ## 6. UI notes
 *Settings → Fees* (`/settings/fees`, in the owner's menu): a table of prices by service and
@@ -83,12 +134,23 @@ allowed) and sent as paise; a bad amount is refused in the form before sending. 
 replaces the fee box with *Show the consultation fee publicly*, saying the price and linking to
 *Fees*.
 
+*Bills* (`/bills`, owner and front desk; *My bills* for a doctor): the list by state with
+balances and *New bill* (pick a patient). A patient's profile lists their bills with *New bill*,
+and a completed queue row has *Bill this visit*, which opens the visit's existing bill if it has one.
+The bill page edits a draft: lines from the fee schedule (the doctor's price filled in) or
+typed, rupees and percents, the bill discount and notes. It has *Save draft*, *Issue bill* and
+*Discard draft* (confirmed). An issued bill shows its lines, totals and credit notes. *Correct
+this bill* credits chosen lines or cancels the whole bill, with a reason.
+
 ## 7. Events and side effects
 | Trigger | Audit action | Job enqueued | Analytics event |
 |---|---|---|---|
 | Service added | `fees.service_added` | — | — |
 | Service changed, retired or restored | `fees.service_changed` | — | — |
 | Doctor price set or removed | `fees.doctor_price_set` | — | — |
+| Bill drafted, changed, discarded | `bill.drafted`, `bill.changed`, `bill.discarded` | — | — |
+| Bill issued | `bill.issued` | — | — |
+| Credit note issued | `bill.credited` | — | — |
 
 ## 8. Edge cases
 | Case | Expected outcome |
@@ -97,6 +159,10 @@ replaces the fee box with *Show the consultation fee publicly*, saying the price
 | No active consultation service | Every doctor's public fee is null |
 | An inactive doctor | Not in the schedule's doctors; their stored prices stay |
 | Two owners add the same name at once | One wins; the other gets `BIL_SERVICE_NAME_TAKEN` |
+| Two bills issued at the same moment | Consecutive numbers (the clinic row lock) |
+| The first bill after 31 March | Numbering restarts at 0001 in the new financial year |
+| A cancelled visit bill | The visit may be billed again |
+| A 100% bill discount | A total of ₹0; it can still be issued as a record |
 
 ## 9. Acceptance criteria
 - **AC1 (FR-BIL-01, R2)** — Given a clinic created through onboarding, when the owner opens
@@ -106,10 +172,24 @@ replaces the fee box with *Show the consultation fee publicly*, saying the price
   ₹1,00,000 is 422, and every change is in the audit log.
 - **AC3 (R7)** — Given a doctor or the front desk, when they read *Fees*, then they see the
   prices, and any change is 403; another clinic's schedule is never visible.
+- **AC4 (FR-BIL-02, R13–R15, R20)** — Given a completed visit and a priced consultation, when the
+  front desk bills the visit, then the draft holds the doctor's consultation. A second bill for
+  the visit is 409 with the first one's ID, and issuing numbers it `<prefix>/26-27/0001`, then 0002.
+- **AC5 (R16–R20)** — Given a draft, when its lines, discounts and notes are replaced, then the
+  totals follow R16. Once issued, any change, discard or second issue is 409 `BIL_NOT_DRAFT`.
+- **AC6 (FR-BIL-07, R23–R26)** — Given an issued bill, when one line is credited and then the
+  rest, then each credit note is numbered `<prefix>/CN/…`, a line cannot be credited twice, the
+  bill ends `CANCELLED` with a zero balance, and its visit can be billed again.
+- **AC7 (R21)** — Given two doctors, when one drafts and lists bills, then they see only their own.
+  Another doctor's bill is 404, and drafting for them is 403 `BIL_NOT_YOURS`.
+- **AC8 (R27)** — Given two drafts, when both are issued at once, then they get consecutive numbers.
 
 ## 10. Observability
-Log `fees.service_added` with the clinic ID and kind. Error codes: `BIL_SERVICE_NAME_TAKEN`,
-`BIL_TOO_MANY_SERVICES` (docs/ERRORS.md).
+Log `fees.service_added` with the clinic ID and kind; `bill.drafted` (from a visit or not),
+`bill.issued` and `bill.credited` with the clinic ID and amounts. Error codes:
+`BIL_SERVICE_NAME_TAKEN`, `BIL_TOO_MANY_SERVICES`, `BIL_NOT_DRAFT`, `BIL_NOT_ISSUED`, `BIL_EMPTY`,
+`BIL_LINE_ALREADY_CREDITED`, `BIL_VISIT_BILLED`, `BIL_VISIT_NOT_COMPLETED`, `BIL_NOT_YOURS`
+(docs/ERRORS.md).
 
 ## 11. Out of scope
 Tax (D3: no GST fields), price history, packages and per-patient discounts (bills, P2).

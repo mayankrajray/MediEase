@@ -26,6 +26,13 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6d-P2 (#63): bills and credit notes (FR-BIL-02, 07; spec billing R13-R30; ADR-0022). Drafts
+  for a patient or from a completed visit (the doctor's consultation filled in), lines from the
+  fee schedule or typed, line and bill discounts in rupees or percent, notes. *Issue* numbers a
+  bill per financial year (`<prefix>/26-27/0001`) and freezes it. Credit notes
+  (`<prefix>/CN/26-27/0001`) reverse chosen lines once and cancel a fully credited bill. Doctors
+  see only their own bills. Screens: *Bills*, the bill page, the patient's bills, *Bill this visit*
+  in the queue. Migration `0037`, contract 0.44.0, seven `BIL_` errors.
 - M6d-P1 (#63): the clinic's fee schedule (FR-BIL-01; spec billing R1-R12). Services
   (consultation, follow-up, procedure, other) with an optional default price and each doctor's
   own price, in paise (migration `0036`); every clinic starts with *Consultation* and
