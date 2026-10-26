@@ -9,6 +9,7 @@ import { useMemo } from "react";
 import { useSession } from "@/features/auth/SessionProvider";
 import type { RequestOptions } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
+import { fetchPdfAt } from "@/features/prescriptions/api";
 import { sessionDelete, sessionGet, sessionPost, sessionPut } from "@/lib/auth/refresh";
 
 export type Bill = components["schemas"]["Bill"];
@@ -23,6 +24,7 @@ export type Payment = components["schemas"]["Payment"];
 export type PaymentInput = components["schemas"]["PaymentInput"];
 export type PaymentMode = components["schemas"]["PaymentMode"];
 export type DuesList = components["schemas"]["DuesList"];
+export type ReceiptLink = components["schemas"]["PatientLinkInfo"];
 
 export const MODE_LABELS: Readonly<Record<PaymentMode, string>> = { CASH: "Cash", UPI: "UPI", CARD: "Card" };
 
@@ -57,6 +59,10 @@ export interface BillsApi {
   readonly voidPayment: (billId: string, paymentId: string, reason: string) => Promise<Bill>;
   /** M6d-P3: who owes the clinic (COLLECTION_VIEW). */
   readonly dues: (patientId?: string) => Promise<DuesList>;
+  /** M6d-P4: the printed bill (a PDF blob) and its receipt link for the QR code. */
+  readonly receipt: (billId: string) => Promise<Blob>;
+  readonly link: (billId: string) => Promise<ReceiptLink>;
+  readonly resetLink: (billId: string) => Promise<ReceiptLink>;
 }
 
 export function useBillsApi(): BillsApi {
@@ -93,6 +99,9 @@ export function useBillsApi(): BillsApi {
             { ...base, pathParams: { bill_id: billId, payment_id: paymentId } },
           )
         ).data,
+      receipt: (billId) => fetchPdfAt(`/api/v1/clinic/bills/${encodeURIComponent(billId)}/receipt.pdf`, clinicId),
+      link: async (billId) => (await sessionGet("/api/v1/clinic/bills/{bill_id}/link", one(billId))).data,
+      resetLink: async (billId) => (await sessionPost("/api/v1/clinic/bills/{bill_id}/link/reset", undefined, one(billId))).data,
       dues: async (patientId) => (await sessionGet("/api/v1/clinic/dues", { ...base, query: { patient_id: patientId } })).data,
     };
   }, [clinicId]);

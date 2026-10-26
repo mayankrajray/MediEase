@@ -118,11 +118,16 @@ const PDF_TIMEOUT_MS = 30_000;
  * every portal call, never a bare link that an expired access token would turn into a 401.
  */
 export function portalPdf(rxId: string, fetchImpl: typeof fetch = fetch): Promise<Blob> {
+  return portalPdfAt(`/api/v1/portal/prescriptions/${encodeURIComponent(rxId)}/pdf`, fetchImpl);
+}
+
+/** M6d-P4: any portal PDF (a bill's receipt too), refreshing the session once. */
+export function portalPdfAt(path: string, fetchImpl: typeof fetch = fetch): Promise<Blob> {
   const once = async (): Promise<Blob> => {
     const requestId = newRequestId();
     let response: Response;
     try {
-      response = await fetchImpl(`/api/v1/portal/prescriptions/${encodeURIComponent(rxId)}/pdf`, {
+      response = await fetchImpl(path, {
         headers: { [REQUEST_ID_HEADER]: requestId },
         credentials: "same-origin",
         cache: "no-store",

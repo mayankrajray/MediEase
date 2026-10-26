@@ -10,6 +10,13 @@ export function pagePath(token: string): string {
   return `/p/${encodeURIComponent(token)}`;
 }
 
+/** M6d-P4: a receipt link's page and its own view cookie (never sent to a prescription page). */
+export const RECEIPT_VIEW_COOKIE = "me_rcpt_view";
+
+export function receiptPath(token: string): string {
+  return `/r/${encodeURIComponent(token)}`;
+}
+
 /** Problems the challenge can report back to the page in its `?e=` query. */
 export type Problem = "failed" | "locked" | "rate" | "unavailable" | "invalid" | "expired" | "revoked";
 

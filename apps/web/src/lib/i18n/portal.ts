@@ -103,6 +103,14 @@ export interface PortalStrings {
     readonly downloading: string;
     readonly back: string;
   };
+  /** M6d-P4 (billing R52): the linked records' bills and their receipts. */
+  readonly bills: {
+    readonly title: string;
+    readonly due: (amount: string) => string;
+    readonly settled: string;
+    readonly cancelled: string;
+    readonly download: string;
+  };
   /** M6b-P3 (spec R36-R44): the planner's own words; the medicine's come from the API. */
   readonly medicines: {
     readonly title: string;
@@ -297,6 +305,13 @@ const EN: PortalStrings = {
     download: "Download PDF",
     downloading: "Downloading…",
     back: "All prescriptions",
+  },
+  bills: {
+    title: "Bills",
+    due: (amount) => `${amount} due`,
+    settled: "Paid",
+    cancelled: "Cancelled",
+    download: "Receipt (PDF)",
   },
   medicines: {
     title: "My medicines",
@@ -506,6 +521,13 @@ const HI: PortalStrings = {
     download: "PDF डाउनलोड करें",
     downloading: "डाउनलोड हो रहा है…",
     back: "सभी पर्चे",
+  },
+  bills: {
+    title: "बिल",
+    due: (amount) => `${amount} बाकी`,
+    settled: "भुगतान हो गया",
+    cancelled: "रद्द",
+    download: "रसीद (PDF)",
   },
   medicines: {
     title: "मेरी दवाइयाँ",
