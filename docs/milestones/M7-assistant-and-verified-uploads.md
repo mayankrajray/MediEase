@@ -45,7 +45,7 @@ verified prescription ID, then read the database.
 | M7a-P3 | Core | `domain/assistant/{guard_rails,explain,proposal}.py`, `application/assistant/{turn,tools,confirm}.py`, `adapters/security/proposal_signer.py` |
 | M7a-P4 | Patient | `delivery/http/assistant.py`, portal page `apps/web/src/app/(patient)/portal/(app)/assistant`, `features/assistant` |
 | M7a-P5 | Staff | the same blueprint (staff routes), clinic page `apps/web/src/app/(clinic)/assistant` |
-| M7b-P6 | Uploads | migration `0041`, `domain/uploads/`, `application/uploads/`, `delivery/http/prescription_uploads.py`, the web upload proxy (#30) |
+| M7b-P6 | Uploads | migration `0042`, `domain/uploads/`, `application/uploads/`, `delivery/http/prescription_uploads.py`, the web upload proxy (#30) |
 | M7b-P7 | Scanning | `ports/malware.py`, `adapters/malware/clamd.py`, `docker-compose.yml` (`clamav`, `upload-worker`), `WORKER_QUEUE` |
 | M7b-P8 | Extraction | `ports/extraction.py`, `adapters/extraction/identifier.py` |
 | M7b-P9 | Verification | `application/uploads/verify.py`, the reviewed `prescription_lookup` |
@@ -54,3 +54,28 @@ verified prescription ID, then read the database.
 The as-built record of each phase is appended below as it lands.
 
 ## As built
+
+### M7a (27 Oct 2026)
+
+- **P1 Layout 3.** `CURRENT_LAYOUT = 3`. The verification block and the MediEase mark are
+  running elements in the bottom margin boxes of every page (`page-3.css.j2`); the page number
+  moved to the top margin when it collided with the code at A5. The QR is inline SVG from
+  `segno` (error correction M, 4-module quiet zone, 17 mm): it decodes with zxing-cpp from a
+  144 dpi raster at A5 and 216 dpi at A4. The code is in the PDF text layer. Layouts 1 and 2 are
+  hash-frozen. The mark is a placeholder (`assets/SOURCES.md`).
+- **P2 Gateway.** `LlmPort`; `OpenAICompatibleLlm` (stdlib HTTP, Groq preset by default);
+  `ConsoleLlm` (keyword rules that repeat our tools' own summaries, including the booking
+  dialogue); `build_llm` with the production refusals. Settings `LLM_*`.
+- **P3 Core.** `AssistantEngine` (guard rails, at most 4 tool rounds, proposals, grounding);
+  `domain/assistant/{guard_rails,explain,proposal}.py`; `HmacProposalSigner` (a key derived from
+  the JWT key); single use through the rate-limit table (one bucket per proposal). No table, no
+  migration.
+- **P4, P5 Assistants.** `PatientAssistant` (tools over the portal and booking use cases; the
+  picker's prescription through `GetPortalPrescription`) and `StaffAssistant` (tools over the
+  clinic use cases, filtered by permission). Patient cancel and reschedule stay with the clinic
+  (no FR-PRT-08 use case yet). Web: `/portal/assistant` (picker, chat, confirmation card; Home
+  links to it; no sixth tab, which would overflow at 360 px) and `/assistant` in every workspace.
+- **Tests.** Guard-rail suite (31 advice and 17 restating questions, English and Hindi), adapter
+  tests (fake transport and real HTTP), 26 HTTP tests including booking by chat with
+  confirmation, bound and single-use tokens and the grounding replacement, a contract test, web
+  component tests and the Playwright journey 1 plus the staff journey.

@@ -770,3 +770,25 @@ that fails tells the owners and the front desk; an accepted invitation tells the
 member who made the change is never told. From M6a-P8 (contract 0.28.0) the kind
 `schedule.bookings_to_move` tells the active owners and front desk when a schedule change kept
 booked sessions (link `/bookings-to-move`).
+
+### The assistant (M7a)
+
+| Method | Path | Purpose | Req |
+|---|---|---|---|
+| POST | `/api/v1/portal/assistant/turns` | One patient turn: `{messages, language?, context?}` → `{kind, reply, proposal}` | FR-AI-01, 02, 04 |
+| POST | `/api/v1/portal/assistant/confirm` | Run a patient proposal once: `{token, language?}` | FR-AI-01 |
+| POST | `/api/v1/assistant/turns` | One staff turn (`APPOINTMENTS_MANAGE`, `X-Clinic-ID` with several clinics) | FR-AI-01, 02 |
+| POST | `/api/v1/assistant/confirm` | Run a staff proposal once | FR-AI-01 |
+
+Contract 0.50.0. `messages` is the visible conversation: 1–20 items `{role: user|assistant,
+content}` (1–2,000 characters, the last the user's); tool calls and results never come from the
+client. `context` is exactly one of `{prescription_id}` (an `ISSUED` version of one of the
+account's linked records) or `{upload_id}` (a verified upload, M7b), re-checked every turn.
+`kind` is `ANSWER`, `REFERRAL` (the fixed "ask your clinic" text, the model not called),
+`CONFIRM` (with `proposal: {token, summary, expires_at}`), `UNAVAILABLE` or, from confirm, `DONE`.
+Patient tools: `search_clinics`, `list_slots`, `request_booking` (write), `my_appointments`,
+`my_booking_requests`, `answer_proposal` (write), `my_prescriptions`, `explain_prescription`.
+Staff tools, offered by permission: `today_queue`, `list_sessions`, `find_patient`,
+`patient_appointments`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`
+(writes). 12 turns a minute per caller. `Cache-Control: no-store`. Errors: `docs/ERRORS.md` "The
+assistant".

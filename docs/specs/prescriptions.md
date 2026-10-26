@@ -146,6 +146,12 @@ Amends §3 and R1-R8 with the developer's decisions D1-D3 (design note
   the patient page (medicine, dose, a mark per slot or "As the doctor wrote", food timing, how to
   give, duration), built from the same engine and phrasebook; PDFs already stored are never
   re-rendered.
+- **R26** *The verification code (M7a-P1, FR-RX-11, ADR-0023; amendment approved 27 Oct 2026).*
+  Versions issued from M7a-P1 on print on layout 3: the bottom margin of every page carries the
+  MediEase mark with the footer, and the label "Verification code", the version's own ID as text
+  and a QR code holding only `MEDIEASE-RX:1:<id>`; the page number moves to the top margin. No
+  clinic or doctor text can move them. Layouts 1 and 2 are frozen; versions issued on them keep
+  printing without a code (spec assistant R13, R14).
 
 ## 5. API surface
 See API.md "Visits and prescriptions" and "Patient links". `GET /api/v1/prescriptions/{rx_id}/pdf`
