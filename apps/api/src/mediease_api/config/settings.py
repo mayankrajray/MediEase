@@ -71,6 +71,8 @@ SmsProvider = Literal["console"]
 OidcProvider = Literal["fake", "google"]
 # M6a-P4: email over SMTP, or the console for tests (ADR-0016).
 EmailProvider = Literal["console", "smtp"]
+# M7a-P2 (ADR-0013): the assistant's model.
+LlmProvider = Literal["console", "groq", "deepinfra", "openai"]
 SmtpSecurity = Literal["starttls", "tls", "none"]
 # M5-P3: Graph API v26.0 (released July 2026); overridable without a code change.
 _WHATSAPP_API_VERSION = "v26.0"
@@ -179,6 +181,38 @@ class AppSettings(BaseSettings):
     SMTP_SECURITY: SmtpSecurity = "starttls"
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: SecretStr = SecretStr("")
+    # The assistant's model (M7a-P2, ADR-0013, spec assistant R1). `console` answers by rules
+    # (offline; refused in production); the others share one OpenAI-compatible adapter. Empty
+    # LLM_BASE_URL / LLM_MODEL mean the provider's defaults (adapters/llm/openai_compatible.py).
+    LLM_PROVIDER: LlmProvider = "console"
+    LLM_BASE_URL: str = ""
+    LLM_MODEL: str = Field(default="", max_length=100)
+    LLM_API_KEY: SecretStr = SecretStr("")
+    LLM_TIMEOUT_SECONDS: int = Field(default=20, ge=1, le=60)
+    # ADR-0024: in staging and production a real provider is refused until this records that the
+    # provider contract and the privacy review are done (SECURITY_AND_COMPLIANCE.md §4).
+    LLM_PATIENT_DATA_ALLOWED: bool = False
+
+    @field_validator("LLM_API_KEY")
+    @classmethod
+    def _llm_api_key(cls, value: SecretStr, info: ValidationInfo) -> SecretStr:
+        raw = value.get_secret_value().strip()
+        if not raw and info.data.get("LLM_PROVIDER", "console") != "console":
+            raise ValueError("is required unless LLM_PROVIDER=console")
+        return SecretStr(raw)
+
+    @field_validator("LLM_BASE_URL")
+    @classmethod
+    def _llm_base_url(cls, value: str, info: ValidationInfo) -> str:
+        value = value.strip().rstrip("/")
+        if not value:
+            return value
+        env = _app_env(info)
+        if value.startswith("http://") and env is not None and env.is_deployed:
+            raise ValueError(f"must use https when APP_ENV={env.value}")
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("must be an absolute http(s) URL or empty")
+        return value
 
     @field_validator("EMAIL_FROM")
     @classmethod

@@ -31,6 +31,8 @@ from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork, build_se
 from mediease_api.adapters.email.console import ConsoleEmailAdapter
 from mediease_api.adapters.email.smtp import SmtpEmailAdapter
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
+from mediease_api.adapters.llm.console import ConsoleLlm
+from mediease_api.adapters.llm.openai_compatible import OpenAICompatibleLlm
 from mediease_api.adapters.messaging.catalog import YamlTemplateCatalog
 from mediease_api.adapters.messaging.console import ConsoleMessagingAdapter
 from mediease_api.adapters.messaging.console_sms import ConsoleSmsAdapter
@@ -374,6 +376,7 @@ from mediease_api.domain.messaging.jobs import (
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.email import EmailPort
 from mediease_api.ports.ids import IdPort
+from mediease_api.ports.llm import LlmPort
 from mediease_api.ports.messaging import MessagingPort, PhoneCipherPort
 from mediease_api.ports.oidc import OidcPort
 from mediease_api.ports.pdf import PdfRendererPort
@@ -424,7 +427,6 @@ class _UseCases:
     phones: PhoneCipherPort | None = None
     # M6b-P6: the live token link's address (PUBLIC_BASE_URL/q/<token>).
     public_base_url: str = ""
-
     # --- M6b-P6: patient notifications and the live token link ---------------------------------
     def list_patient_notifications(self) -> ListPatientNotifications:
         return ListPatientNotifications(uow=self._uow())
@@ -1266,6 +1268,30 @@ def _interruptible_sleep(stop: threading.Event) -> Callable[[float], None]:
         stop.wait(seconds)
 
     return sleep
+
+
+def build_llm(settings: AppSettings) -> LlmPort:
+    """The assistant's model (M7a-P2, ADR-0013, ADR-0024; spec assistant R1).
+
+    ``console`` answers by rules and is refused in production. A real provider in staging or
+    production also needs ``LLM_PATIENT_DATA_ALLOWED`` (the provider contract and privacy review).
+    """
+    if settings.LLM_PROVIDER == "console":
+        if settings.APP_ENV is AppEnv.PRODUCTION:
+            raise ValueError("LLM_PROVIDER=console answers by rules; refused in production")
+        return ConsoleLlm()
+    if settings.APP_ENV.is_deployed and not settings.LLM_PATIENT_DATA_ALLOWED:
+        raise ValueError(
+            "a real LLM_PROVIDER needs LLM_PATIENT_DATA_ALLOWED=true when deployed "
+            "(provider contract and privacy review, SECURITY_AND_COMPLIANCE.md §4)"
+        )
+    return OpenAICompatibleLlm(
+        provider=settings.LLM_PROVIDER,
+        api_key=settings.LLM_API_KEY.get_secret_value(),
+        base_url=settings.LLM_BASE_URL,
+        model=settings.LLM_MODEL,
+        timeout_seconds=float(settings.LLM_TIMEOUT_SECONDS),
+    )
 
 
 def build_messaging(settings: AppSettings) -> MessagingPort:
