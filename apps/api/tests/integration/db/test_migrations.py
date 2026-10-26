@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0034"
+HEAD = "0035"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -1006,6 +1006,32 @@ def test_0033_adds_ops_roles_and_review_and_downgrades(
         engine.dispose()
     command.downgrade(alembic_config, "0032")
     assert _tables(scratch_database_url) == M6C_P1_TABLES
+
+
+def test_0035_adds_pg_trgm_and_downgrades(
+    scratch_database_url: str, alembic_config: Config
+) -> None:
+    """M6c-P6 (ADR-0021): the trigram extension for directory search. Downgrade drops it."""
+    command.upgrade(alembic_config, "0035")
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            assert (
+                conn.execute(text("SELECT word_similarity('alpha', 'alpha clinic')")).scalar_one()
+                == 1
+            )
+    finally:
+        engine.dispose()
+    command.downgrade(alembic_config, "0034")
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            installed = conn.execute(
+                text("SELECT count(*) FROM pg_extension WHERE extname = 'pg_trgm'")
+            ).scalar_one()
+        assert installed == 0
+    finally:
+        engine.dispose()
 
 
 def test_0034_adds_verification_listing_and_profiles_and_downgrades(

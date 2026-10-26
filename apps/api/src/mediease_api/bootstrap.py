@@ -116,6 +116,7 @@ from mediease_api.application.clinics.onboard_clinic import (
 )
 from mediease_api.application.clinics.queries import GetClinic, GetDoctor, ListDoctors, ListStaff
 from mediease_api.application.dashboard.today import GetToday
+from mediease_api.application.discovery.search import SearchClinics, SearchDoctors
 from mediease_api.application.identity.accept_invite import AcceptInvite, DescribeInvite
 from mediease_api.application.jobs.purge import PurgeExpired
 from mediease_api.application.jobs.run import JobHandler, RunJob
@@ -294,6 +295,7 @@ from mediease_api.delivery.http.public_clinics import (
 )
 from mediease_api.delivery.http.public_links import create_public_links_blueprint
 from mediease_api.delivery.http.public_queue import create_public_queue_blueprint
+from mediease_api.delivery.http.public_search import create_public_search_blueprint
 from mediease_api.delivery.http.reminders import create_reminders_blueprint
 from mediease_api.delivery.http.request_info import register_request_info
 from mediease_api.delivery.http.rx_library import create_rx_library_blueprint
@@ -1000,6 +1002,13 @@ class _UseCases:
     def set_doctor_profile(self) -> SetDoctorProfile:
         return SetDoctorProfile(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    # --- M6c-P6: directory search -------------------------------------------------------------
+    def search_clinics(self) -> SearchClinics:
+        return SearchClinics(uow=self._uow(), clock=self.clock)
+
+    def search_doctors(self) -> SearchDoctors:
+        return SearchDoctors(uow=self._uow(), clock=self.clock)
+
     def get_sitemap(self) -> GetSitemap:
         return GetSitemap(uow=self._uow(), clock=self.clock)
 
@@ -1391,6 +1400,7 @@ def create_app(
     app.register_blueprint(create_ops_verification_blueprint(use_cases))
     app.register_blueprint(create_ops_suspension_blueprint(use_cases))
     app.register_blueprint(create_listing_blueprint(use_cases))
+    app.register_blueprint(create_public_search_blueprint(use_cases))
     app.register_blueprint(
         create_public_sitemap_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
     )

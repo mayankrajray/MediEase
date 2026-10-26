@@ -24,6 +24,7 @@ from mediease_api.adapters.db.booking import (
     SqlAlchemyBookingRequestRepository,
 )
 from mediease_api.adapters.db.dashboard import SqlAlchemyDashboardReads
+from mediease_api.adapters.db.directory import SqlAlchemyDirectoryReader
 from mediease_api.adapters.db.jobs import SqlAlchemyJobQueue, SqlAlchemyRetentionRepository
 from mediease_api.adapters.db.messages import (
     SqlAlchemyMessageCostReport,
@@ -263,6 +264,8 @@ class _OpenUnit:
         self.patient_notification_lookup = SqlAlchemyPatientNotificationLookup(session)
         self.patient_preferences = SqlAlchemyPatientPreferenceRepository(session)
         self.applications = SqlAlchemyApplicationRepository(session)
+        # M6c-P6 (ADR-0021): directory search candidates across clinics (IDs only).
+        self.directory = SqlAlchemyDirectoryReader(session)
         self.rate_limits = SqlAlchemyRateLimitRepository(session)
         # Shares the session, so an audit row commits with the change (R11).
         self.audit = SqlAlchemyAuditWriter(session)
@@ -361,6 +364,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def applications(self) -> SqlAlchemyApplicationRepository:
         return self._require_open().applications
+
+    @property
+    def directory(self) -> SqlAlchemyDirectoryReader:
+        return self._require_open().directory
 
     @property
     def dose_lifecycle(self) -> SqlAlchemyDoseLifecycle:

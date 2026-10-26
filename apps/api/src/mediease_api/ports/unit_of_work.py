@@ -24,6 +24,7 @@ from uuid import UUID
 from mediease_api.ports.audit import AuditReader, AuditWriter
 from mediease_api.ports.booking import BookingRequestLookup, BookingRequestRepository
 from mediease_api.ports.dashboard import DashboardReads
+from mediease_api.ports.directory import DirectoryReader
 from mediease_api.ports.jobs import JobQueue, RetentionRepository
 from mediease_api.ports.messaging import (
     MessageCostReport,
@@ -214,6 +215,11 @@ class UnitOfWork(Protocol):
     @property
     def applications(self) -> ApplicationRepository:
         """Clinic applications (M6c-P1, ADR-0020): platform data, no clinic until approval."""
+        ...
+
+    @property
+    def directory(self) -> DirectoryReader:
+        """Directory search candidates (M6c-P6, ADR-0021): a reviewed cross-clinic read."""
         ...
 
     @property
