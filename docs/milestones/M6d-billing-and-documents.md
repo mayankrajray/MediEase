@@ -180,3 +180,26 @@ Built as designed. Verified: domain tests (limits, refunds, voids, the refund gu
 (AC9–AC12, two payments at once, a doctor's own bills, a void on an earlier day), repository and
 HTTP cross-clinic cases, the permission matrix, route policies, the migration and the contract
 (payments, dues and the queue). Web: the payments panel, *Dues*, the queue and profile amounts.
+
+## M6d-P4 — Receipts
+
+Designed and approved in advance (26 Oct 2026). Rules: `docs/specs/billing.md` R43–R54.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | One document | The bill as it stands (lines, credit notes, payments, balance) is the receipt. Every payment shows on it, so no separate per-payment slip is printed | A slip per payment (more files, and the same numbers twice) |
+| 2 | Render once | The renderer gains `render_receipt` (the same WeasyPrint adapter, fonts and assets-only fetcher; `receipt.html.j2`, `receipt.css`, the shared page stylesheet). A state counter (credit notes + payments + voids) keys the stored file `receipt/<clinic>/<bill>/s<n>.pdf`, so no column is needed and old files never change. The bill row lock stops a double render | A column for the key (one more migration and its upkeep) |
+| 3 | Receipt link | Migration `0039`: `patient_links.bill_id` and purpose `RECEIPT` (token purpose code 2), `prescription_id` nullable, a CHECK tying each purpose to its column, one active receipt link per bill. The last-4 check, counting, lockout, rate limits and view token are reused unchanged. The receipt page is `/r/<token>` with its own cookie; a server route fetches the PDF with `X-Link-View` | A second link table (two copies of the challenge rules) |
+| 4 | Portal | `GET /api/v1/portal/bills` and `/bills/{id}/receipt.pdf` through `PortalScope`; a *Bills* card on *My prescriptions* (in both languages) | A new portal tab (the tab bar is full on a phone) |
+| 5 | WhatsApp (D6) | Not sent in M6d: no approved receipt template exists (L-02). Sending it later is one template plus one job on the messaging port | Sending without an approved template (Meta refuses it) |
+| 6 | API | Staff `GET /bills/{id}/receipt.pdf`, `GET /bills/{id}/link`, `POST /bills/{id}/link/reset`; public `/public/links/{token}/receipt` and `/receipt.pdf`; describe gains `purpose`; contract 0.46.0 | — |
+
+### P4 as built (26 Oct 2026)
+
+Built as designed. The receipt is English only at M6d (the receipt template's Hindi review comes
+with L-07). Verified with the real renderer: domain tests (rupee grouping, the document, the state
+key) and HTTP tests (AC13–AC15, lockout and reset, a doctor's scope, a receipt token refused on the
+prescription route). Also: the portal cross-account case, HTTP cross-clinic cases, route policies,
+the migration, the contract, and the existing prescription link, PDF and portal-linking suites,
+unchanged and green. Web: the receipt panel (print, QR), the `/r/` page, its verify and PDF routes,
+and the portal's *Bills*.

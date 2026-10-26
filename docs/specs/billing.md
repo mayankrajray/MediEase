@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-BIL-01 (P1); FR-BIL-02..07, FR-VIS-04, FR-SUB-01 in later phases |
 | Milestone / phases | M6d / P1–P7 (design: `docs/milestones/M6d-billing-and-documents.md`) |
-| Status | P1 (R1–R12, AC1–AC3), P2 (R13–R30, AC4–AC8) and P3 (R31–R42, AC9–AC12) approved 26 Oct 2026 (P2–P7 in advance) and built; P4, P5 to follow |
+| Status | P1 (R1–R12, AC1–AC3), P2 (R13–R30, AC4–AC8) and P3 (R31–R42, AC9–AC12), P4 (R43–R54, AC13–AC15) approved 26 Oct 2026 (P2–P7 in advance) and built; P5 to follow |
 | Owner | Developer |
 | Last updated | 2026-10-26 |
 
@@ -136,6 +136,41 @@ also becomes the one source of the public profile fee (D8). Money is integer pai
   ID, kind, mode and amount.
 - **R42** A doctor records payments on their own bills only (D2, R21); another doctor's bill is 404.
 
+### Receipts (P4; B7, D6)
+- **R43** An issued (or cancelled) bill prints as one PDF: the bill, its credit notes, payments and
+  balance. A draft has none (`BIL_RECEIPT_NOT_READY`, 409).
+- **R44** It is laid out on the clinic's letterhead (name, address, phone) and its prescription paper
+  size, in English at M6d, with the bill's doctor and the patient's name and code. It carries
+  nothing clinical.
+- **R45** A bill changes after issue only by credit notes, payments and voids, and each moves its
+  state forward (`state = credit notes + payments + voided payments`).
+- **R46** The PDF is rendered once per state with the prescription renderer (same fonts, same fetcher
+  that refuses every other resource). It is stored under `receipt/<clinic>/<bill>/s<state>.pdf`, and
+  every download of a state is that file. Rendering takes the bill row lock, so two first downloads
+  make one file. Staff downloads need `BILLING_MANAGE` (a doctor their own bills) and are audited
+  (`bill.receipt_downloaded`, with the state and whether it rendered).
+- **R47** Money prints in Indian grouping with two decimals (₹1,23,456.78). Voided payments are
+  struck through and credited lines marked.
+- **R48** A bill has one receipt link (`patient_links`, purpose `RECEIPT`, `bill_id`), made on first
+  ask by staff (`receipt_link.created`). Its address `/r/<token>` is shown as a QR code at the desk.
+  The token is signed like a prescription link's, with the same expiry.
+- **R49** Opening it asks for the last 4 digits of the patient's phone, with the prescription link's
+  counting, lockout and rate limits. The page then shows the clinic, number, date and amounts, and
+  the PDF.
+- **R50** The PDF through the link is the clinic's file, sent by the page's server with the view
+  token from its own cookie (`me_rcpt_view`, scoped to `/r/<token>`). Opening and downloading are
+  audited (`receipt_link.opened`, `receipt_link.downloaded`).
+- **R51** Staff unlock a locked receipt link (`LINK_NOT_LOCKED` otherwise). A receipt token opens no
+  prescription, a prescription token opens no receipt (`LINK_INVALID`), and a receipt link never
+  links a patient account.
+- **R52** The patient portal lists the issued bills of every linked record (number, date, total,
+  balance, cancelled; never a draft), each with its receipt PDF. Another record's bill is 404. Not
+  audited, like every portal read.
+- **R53** Receipts by WhatsApp wait for an approved template (D6, L-02). Until then the desk shares
+  the link or the QR code.
+- **R54** The public receipt routes are `no-store`, `noindex` and `no-referrer`, and `/r/` is
+  disallowed in `robots.txt`.
+
 ## 5. API surface
 | Method | Path | Request | Success | Errors |
 |---|---|---|---|---|
@@ -153,8 +188,15 @@ also becomes the one source of the public profile fee (D8). Money is integer pai
 | POST | `/api/v1/clinic/bills/{bill_id}/payments` | `PaymentInput` | 201 `Bill` | 404, 409 `BIL_PAYMENT_TOO_LARGE` / `BIL_NOT_ISSUED`, 422 |
 | POST | `/api/v1/clinic/bills/{bill_id}/payments/{payment_id}/void` | `VoidInput` | 200 `Bill` | 404, 409 `BIL_VOID_TOO_LATE` / `BIL_ALREADY_VOIDED` / `BIL_VOID_REFUNDED` |
 | GET | `/api/v1/clinic/dues?patient_id` | — | 200 `DuesList` | 403 (`COLLECTION_VIEW`) |
+| GET | `/api/v1/clinic/bills/{bill_id}/receipt.pdf` | — | 200 PDF | 404, 409 `BIL_RECEIPT_NOT_READY` |
+| GET | `/api/v1/clinic/bills/{bill_id}/link` | — | 200 `PatientLinkInfo` | 404, 409 |
+| POST | `/api/v1/clinic/bills/{bill_id}/link/reset` | — | 200 `PatientLinkInfo` | 404, 409 `LINK_NOT_LOCKED` |
+| GET | `/api/v1/public/links/{token}/receipt` (+ `X-Link-View`) | — | 200 `ReceiptSummary` | 401, 404, 410, 423, 429 |
+| GET | `/api/v1/public/links/{token}/receipt.pdf` (+ `X-Link-View`) | — | 200 PDF | as above |
+| GET | `/api/v1/portal/bills`, `/api/v1/portal/bills/{bill_id}/receipt.pdf` | — | 200 | 401, 404 |
 
-Contract 0.43.0 (P1), 0.44.0 (P2), 0.45.0 (P3; the queue entry gains `dues_paise`).
+Contract 0.43.0 (P1), 0.44.0 (P2), 0.45.0 (P3; the queue entry gains `dues_paise`), 0.46.0 (P4;
+the public link summary gains `purpose`).
 
 ## 6. UI notes
 *Settings → Fees* (`/settings/fees`, in the owner's menu): a table of prices by service and
@@ -178,6 +220,11 @@ It offers a refund when a credit note leaves the bill overpaid. Today's payments
 a reason. *Dues* (`/dues`, owner and front desk) lists who owes. Queue rows show "Dues ₹…", and the
 patient's bills show their dues.
 
+*Receipt* on an issued bill: *Print bill* opens the PDF in a new tab for the browser to print, and
+*Show QR for the patient* shows the receipt link as a QR code with *Copy link* and *Unlock link*. The
+patient's `/r/<token>` page asks for the last 4 digits, then shows the amounts and *Download the
+receipt (PDF)*. The portal's prescriptions page gains a *Bills* card with each receipt.
+
 ## 7. Events and side effects
 | Trigger | Audit action | Job enqueued | Analytics event |
 |---|---|---|---|
@@ -188,6 +235,8 @@ patient's bills show their dues.
 | Bill issued | `bill.issued` | — | — |
 | Credit note issued | `bill.credited` | — | — |
 | Payment or refund recorded, voided | `payment.recorded`, `payment.voided` | — | — |
+| Bill printed or downloaded by staff | `bill.receipt_downloaded` | — | — |
+| Receipt link made, opened, downloaded | `receipt_link.created`, `.opened`, `.downloaded` | — | — |
 
 ## 8. Edge cases
 | Case | Expected outcome |
@@ -203,6 +252,8 @@ patient's bills show their dues.
 | Two payments for the whole balance at once | One is recorded; the other is 409 (R34) |
 | A payment voided the next day | 409 `BIL_VOID_TOO_LATE`; use a credit note and a refund |
 | A bill fully credited after being paid | `CANCELLED` with a negative balance; refund it |
+| A payment after the receipt was printed | The next download renders the new state; the old file stays as it was |
+| Two first downloads at once | One render (the bill row lock); both get the same file |
 
 ## 9. Acceptance criteria
 - **AC1 (FR-BIL-01, R2)** — Given a clinic created through onboarding, when the owner opens
@@ -233,6 +284,14 @@ patient's bills show their dues.
 - **AC12 (FR-BIL-05, R39, R40)** — Given patients with partly paid bills, when the desk opens *Dues*,
   then each patient's total appears, largest first. Settled bills and drafts are not counted, a
   doctor is refused (403), another clinic sees none, and the queue row shows the same amount.
+- **AC13 (FR-BIL-04, R43–R47)** — Given an issued bill, when staff print it twice and again after a
+  payment, then the first two are the same file and the third shows the payment. Each download is
+  audited, and a draft cannot be printed.
+- **AC14 (R48–R51)** — Given an issued bill, when the desk shows its QR and the patient opens it with
+  the right last 4 digits, then they see the amounts and download the clinic's file. A wrong answer
+  counts, five lock it until staff unlock it, and the token opens no prescription.
+- **AC15 (R52)** — Given a patient account linked to a record, when it opens the portal, then it
+  lists that record's issued bills (not drafts) and their receipts. Another record's bill is 404.
 
 ## 10. Observability
 Log `fees.service_added` with the clinic ID and kind; `bill.drafted` (from a visit or not),

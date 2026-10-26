@@ -44,6 +44,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0036` | `clinic_services`, `doctor_service_prices`; `doctors.show_fee`; the starting services and the M6c fees carried over (`doctors.fee_paise` deprecated) | M6d-P1 |
 | `0037` | `bills` (bills and credit notes), `bill_lines` | M6d-P2 |
 | `0038` | `payments` (payments and refunds, voids) | M6d-P3 |
+| `0039` | `patient_links.bill_id` and purpose `RECEIPT`; `prescription_id` nullable | M6d-P4 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -1086,6 +1087,12 @@ bill's `paid_paise` and `refunded_paise` are updated in the same transaction und
 | voided_at, voided_by, void_reason | | All or none (CHECK `voided_together`); the reason up to 200 |
 
 Indexes: `bill_id`, `(clinic_id, local_date)`. Rows are never deleted.
+
+### `patient_links` (changes, migration `0039`, M6d-P4)
+`bill_id uuid FK bills null`; `purpose` adds `RECEIPT`; `prescription_id` becomes nullable; CHECK
+`resource_of_purpose` (`RX_VIEW` has a prescription, `RECEIPT` has a bill); partial unique index
+`uq_patient_links_bill_id_active` (one live receipt link per bill). Receipt PDFs are blobs under
+`receipt/<clinic>/<bill>/s<state>.pdf` (no column).
 
 ---
 

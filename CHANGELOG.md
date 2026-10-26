@@ -26,6 +26,11 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6d-P4 (#63): receipts (FR-BIL-04; spec billing R43-R54). *Print bill* gives the bill, credit
+  notes, payments and balance as a PDF on the letterhead, rendered once per state. The receipt link
+  `/r/<token>` (QR at the desk) works with the last 4 digits of the patient's phone and the
+  prescription link's lockout. The patient portal gains *Bills* with each receipt. Migration
+  `0039` (receipt links), contract 0.46.0. WhatsApp sending waits for an approved template (D6).
 - M6d-P3 (#63): payments, refunds and dues (FR-BIL-03, 05; spec billing R31-R42). Cash, UPI or
   card payments on issued bills, partial allowed, never more than the balance. A refund after
   a credit note leaves a bill overpaid. A void the same day with a reason. *Dues* for owners
