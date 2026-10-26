@@ -52,6 +52,12 @@ class Doctor:
     def is_verified(self) -> bool:
         return self.verified_at is not None
 
+    @property
+    def is_public(self) -> bool:
+        """M6c-P5 (R54, R59): on the public page, its availability and requests, and in the
+        directory: active, verified by MediEase and shown by the owner."""
+        return self.is_active and self.is_verified and self.visible
+
     def verify(self, *, by: UUID, source: VerificationSource, now: datetime) -> bool:
         """Record MediEase's check of this registration (R43, R45); False if already verified."""
         if self.is_verified:

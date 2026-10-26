@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.39.0
+  version: 0.40.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -4290,9 +4290,12 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [listed]
+              description: At least one of the two (422 otherwise)
               properties:
                 listed: {type: boolean}
+                search_indexing:
+                  type: boolean
+                  description: M6c-P5 (R62) - false keeps search engines away from the profiles
       responses:
         '200':
           description: The listing
@@ -4429,6 +4432,81 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '409':
           $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/public/sitemap:
+    get:
+      tags: [public]
+      operationId: getPublicSitemap
+      summary: The indexable public profiles, for sitemap.xml
+      description: |
+        M6c-P5, spec clinic-onboarding R63 (FR-DIS-06). No session. The clinic page and each shown
+        doctor's profile of every discoverable clinic that has not opted out of search engines, as
+        absolute URLs under PUBLIC_BASE_URL. Unlisted, unverified, suspended and opted-out clinics
+        are absent. Cacheable for an hour; the JSON itself is noindex.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The URLs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [base_url, items]
+                properties:
+                  base_url: {type: string}
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [loc, lastmod]
+                      properties:
+                        loc: {type: string}
+                        lastmod: {type: string, format: date-time}
+  /api/v1/clinic/listing/doctors/{doctor_id}/profile:
+    put:
+      tags: [clinic]
+      operationId: setDoctorProfile
+      summary: A doctor's published languages and fee
+      description: |
+        M6c-P5, spec R61. CLINIC_MANAGE. Languages from language_options (422 otherwise); the fee
+        in paise, 0 to 1 000 000, or null to show none. Another clinic's doctor is 404.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: doctor_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                languages:
+                  type: array
+                  items: {type: string}
+                fee_paise: {type: [integer, 'null'], minimum: 0, maximum: 1000000}
+      responses:
+        '200':
+          description: The listing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicListing'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
         '422':
           $ref: '#/components/responses/ConflictError'
   /api/v1/ops/messaging-costs:
@@ -8011,8 +8089,14 @@ components:
       description: |
         M6c-P4, spec clinic-onboarding R50-R55. The listing, whether the clinic is discoverable,
         what stands in the way, and each doctor's state, so the screen never computes a rule.
-      required: [listed, listed_at, verified, discoverable, problems, doctors]
+      required: [listed, listed_at, verified, discoverable, search_indexing, language_options,
+                 problems, doctors]
       properties:
+        search_indexing: {type: boolean}
+        language_options:
+          type: array
+          items: {type: string}
+          description: M6c-P5 - the languages a doctor's profile may name
         listed: {type: boolean}
         listed_at: {type: [string, 'null'], format: date-time}
         verified: {type: boolean}
@@ -8029,8 +8113,12 @@ components:
           items:
             type: object
             required: [id, display_name, is_active, verified, visible, has_schedule,
-                       can_be_visible, problems]
+                       can_be_visible, languages, fee_paise, problems]
             properties:
+              languages:
+                type: array
+                items: {type: string}
+              fee_paise: {type: [integer, 'null']}
               id: {type: string, format: uuid}
               display_name: {type: string}
               is_active: {type: boolean}
@@ -8223,7 +8311,8 @@ components:
         end: {type: string, description: 'Clinic-local HH:MM'}
     PublicDoctor:
       type: object
-      required: [id, display_name, qualification, specialty, hours]
+      description: M6c-P5 (R59) - only active doctors verified by MediEase and shown by the owner
+      required: [id, display_name, qualification, specialty, hours, languages, fee_paise]
       properties:
         id: {type: string, format: uuid}
         display_name: {type: string}
@@ -8233,6 +8322,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PublicHours'
+        languages:
+          type: array
+          items: {type: string}
+          description: M6c-P5 (R61)
+        fee_paise:
+          type: [integer, 'null']
+          description: M6c-P5 (R61) - the consultation fee in paise, if the clinic publishes one
     PublicClinic:
       type: object
       description: What a clinic publishes, and nothing else (NFR-17; a test fails on any extra field)
@@ -8249,7 +8345,17 @@ components:
         - map_url
         - requires_age_sex
         - doctors
+        - specialties
+        - indexable
       properties:
+        specialties:
+          type: array
+          items: {type: string}
+        indexable:
+          type: boolean
+          description: |
+            M6c-P5 (R62, FR-DIS-06): search engines may index the page - discoverable and not
+            opted out. Otherwise the page is noindex.
         name: {type: string}
         slug: {type: string}
         address_line: {type: [string, 'null']}

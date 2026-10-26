@@ -83,11 +83,29 @@ class SetListing:
         self._clock = clock
         self._ids = ids
 
-    def execute(self, ctx: RequestContext, listed: bool) -> Listing:
+    def execute(
+        self, ctx: RequestContext, listed: bool | None, search_indexing: bool | None = None
+    ) -> Listing:
         with self._uow as uow:
             now = self._clock.now()
             clinic = _clinic(uow, ctx.clinic_id, lock=True)
             listing = load_listing(uow, clinic, now)
+            if search_indexing is not None and search_indexing != clinic.search_indexing:
+                # M6c-P5 (R62): the owner's opt-out of search engines.
+                clinic.set_search_indexing(search_indexing, now=now)
+                uow.clinics.update(clinic)
+                record_event(
+                    uow,
+                    event_id=self._ids.new_id(),
+                    action=AuditAction.CLINIC_LISTING_CHANGED,
+                    actor=Actor.staff(ctx),
+                    now=now,
+                    clinic_id=clinic.id,
+                    metadata={"search_indexing": str(search_indexing).lower()},
+                )
+            if listed is None:
+                uow.commit()
+                return load_listing(uow, clinic, now)
             if listed and listing.problems:
                 raise ListingBlocked(listing.problems)
             if clinic.set_listed(listed, now=now):
@@ -136,5 +154,46 @@ class SetDoctorVisibility:
                     entity_id=doctor.id,
                     metadata={"visible": str(visible).lower()},
                 )
+            uow.commit()
+            return load_listing(uow, clinic, now)
+
+
+class SetDoctorProfile:
+    """M6c-P5 (R61): the languages a doctor speaks (from the published list) and an optional
+    consultation fee, shown on the public profile. Owners only (``CLINIC_MANAGE``)."""
+
+    def __init__(self, *, uow: UnitOfWork, clock: ClockPort, ids: IdPort) -> None:
+        self._uow = uow
+        self._clock = clock
+        self._ids = ids
+
+    def execute(
+        self,
+        ctx: RequestContext,
+        doctor_id: UUID,
+        *,
+        languages: tuple[str, ...],
+        fee_paise: int | None,
+    ) -> Listing:
+        with self._uow as uow:
+            now = self._clock.now()
+            clinic = _clinic(uow, ctx.clinic_id)
+            doctors = uow.tenant(clinic.id).doctors
+            doctor = doctors.get(doctor_id)
+            if doctor is None:
+                raise NotFound("doctor")
+            doctor.set_profile(languages=languages, fee_paise=fee_paise, now=now)
+            doctors.update(doctor)
+            record_event(
+                uow,
+                event_id=self._ids.new_id(),
+                action=AuditAction.DOCTOR_VISIBILITY_CHANGED,
+                actor=Actor.staff(ctx),
+                now=now,
+                clinic_id=clinic.id,
+                entity_type="doctor",
+                entity_id=doctor.id,
+                metadata={"profile": "updated", "languages": str(len(doctor.languages))},
+            )
             uow.commit()
             return load_listing(uow, clinic, now)

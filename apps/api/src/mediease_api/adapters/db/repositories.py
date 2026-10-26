@@ -200,6 +200,20 @@ class SqlAlchemyClinicRepository:
         row = self._session.scalars(select(ClinicRow).where(ClinicRow.slug == slug)).one_or_none()
         return _clinic_from_row(row) if row else None
 
+    def list_listed(self, *, limit: int) -> Sequence[Clinic]:
+        # M6c-P5: the candidates for the sitemap (the listing rule is applied by the caller).
+        query = (
+            select(ClinicRow)
+            .where(
+                ClinicRow.listed,
+                ClinicRow.status == ClinicStatus.ACTIVE.value,
+                ClinicRow.verified_at.is_not(None),
+            )
+            .order_by(ClinicRow.slug)
+            .limit(limit)
+        )
+        return [_clinic_from_row(row) for row in self._session.scalars(query)]
+
     def update(self, clinic: Clinic) -> None:
         row = self._session.get(ClinicRow, clinic.id)
         if row is None:

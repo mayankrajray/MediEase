@@ -141,6 +141,9 @@ class ApproveApplication:
                     now=now,
                 )
                 doctor.verify(by=actor.user_id, source=VerificationSource.APPLICATION, now=now)
+                # M6c-P5 (R60): an applicant asked to be on MediEase, so its doctors are shown;
+                # the owner may hide any of them.
+                doctor.set_visible(True, now=now)
                 doctors.update(doctor)
                 record_event(
                     uow,

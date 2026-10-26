@@ -203,6 +203,9 @@ EXPECTED_POLICIES = {
     "listing.get_listing": (Access.CLINIC, Permission.CLINIC_VIEW),
     "listing.set_listing": (Access.CLINIC, Permission.CLINIC_MANAGE),
     "listing.set_visibility": (Access.CLINIC, Permission.CLINIC_MANAGE),
+    # M6c-P5 (R61, R63): a doctor's public profile and the sitemap.
+    "listing.set_profile": (Access.CLINIC, Permission.CLINIC_MANAGE),
+    "public_sitemap.sitemap": (Access.PUBLIC, None),
     "public_applications.submit": (Access.PUBLIC, None),
     "public_applications.confirm": (Access.PUBLIC, None),
     # Ops imports patients but cannot browse them (spec patients §2, M2-P4).

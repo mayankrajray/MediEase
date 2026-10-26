@@ -116,6 +116,13 @@ def test_r45_a_reviewer_verifies_an_ops_created_clinic(
             ),
             {"c": clinic.id},
         )
+        conn.execute(
+            text(
+                "UPDATE doctors SET verified_at = NULL, verified_by = NULL,"
+                " verification_source = NULL WHERE id = :d"
+            ),
+            {"d": doctor.id},
+        )
     public = world.anonymous()
     slug = clinic.slug
     assert public.get(f"/api/v1/public/clinics/{slug}").status_code == 404  # FR-ONB-06

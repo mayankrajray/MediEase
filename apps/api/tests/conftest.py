@@ -398,6 +398,9 @@ def _seed_tenant(uow: SqlAlchemyUnitOfWork, label: str) -> Tenant:
         uow.users.add(user)
         staff.memberships.add(a_membership(clinic.id, user.id, role))
     doctor = a_doctor(clinic.id, user_id=users[Role.DOCTOR].id, display_name=f"Dr. {label} Sample")
+    # M6c-P5: the world's doctors are verified and shown, so they appear on the public page.
+    doctor.verify(by=users[Role.OWNER].id, source=VerificationSource.OPS_CHECK, now=NOW)
+    doctor.set_visible(True, now=NOW)
     staff.doctors.add(doctor)
     clinic.activate(active_owner_count=1, now=NOW)
     # M6c-P3: the world's clinics are verified, so their public pages exist (FR-PUB-01).
