@@ -46,6 +46,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0038` | `payments` (payments and refunds, voids) | M6d-P3 |
 | `0039` | `patient_links.bill_id` and purpose `RECEIPT`; `prescription_id` nullable | M6d-P4 |
 | `0040` | `visit_attachments` (reports on visits) | M6d-P6 |
+| `0041` | `clinic_subscriptions` (plans and trials); every existing clinic on `PLUS` with no trial | M6d-P7 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -1141,3 +1142,19 @@ never deleted. The file name is clinical: shown, never logged.
 Indexes: `(visit_id, uploaded_at)` for the visit's list; partial `(clinic_id, patient_id, shared_at)`
 `WHERE shared_at IS NOT NULL AND deleted_at IS NULL` for the portal. At most 20 rows per visit that are
 not deleted, checked under the visit row lock.
+
+## M6d — Plans and trials (migration `0041`, M6d-P7)
+
+Spec `docs/specs/plans-and-trial.md` R1–R10. **Platform data**, one row per clinic
+(`SqlAlchemySubscriptionRepository`, `uow.subscriptions`; a reviewed exception in
+`tests/tenancy/test_repository_scoping.py`). Every limit check locks the clinic's row.
+
+### `clinic_subscriptions`
+| Column | Type | Notes |
+|---|---|---|
+| clinic_id | uuid PK, FK clinics | One row per clinic |
+| plan | text not null | `SOLO` \| `CLINIC` \| `PLUS` (CHECK) |
+| has_trial | boolean not null, default true | False for the clinics that existed before plans |
+| trial_started_at, trial_ends_at | timestamptz null | Both or neither; exactly 14 days apart (CHECKs); set when the clinic first becomes active |
+| plan_changed_at, plan_changed_by | timestamptz, uuid FK users null | The last change by ops |
+| created_at, updated_at | timestamptz not null | |

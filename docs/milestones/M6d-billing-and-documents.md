@@ -247,3 +247,29 @@ portal cross-account case, the repository scoping test, route policies, the perm
 migration `0040` round trip and models-match, the contract, and the onboarding certificate suites
 (unchanged and green after the sniffer moved). Web: the attach form, the *Reports* panel, the queue
 dialog and the portal card, with tests.
+
+## M6d-P7 — Plans, trial and limits
+
+Designed and approved in advance (26 Oct 2026; B9, D4, D5). Rules: `docs/specs/plans-and-trial.md`
+R1–R10.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | Where | `clinic_subscriptions`, platform data keyed by the clinic (a reviewed tenancy exception), created with the clinic in `CreateClinic.in_transaction` | Columns on `clinics` (mixes billing state into the tenant's own row) |
+| 2 | Counting | Doctors: active profiles. Users: invited or active memberships, so an invitation holds its seat (the owner counts) | Active only (invites could overshoot the plan when accepted) |
+| 3 | One check | `require_room` locks the subscription row and is called in `AddDoctor.in_transaction`, doctor reactivation, `InviteStaff.in_transaction` (new or returning member) and `AcceptInvite` (re-check); approval and the ops wizard go through these | A check per route (one would be missed) |
+| 4 | Doctor reactivation | New: `is_active: true` on the owner's doctor PATCH brings a doctor back, within the plan | Leave it impossible (the plan would have nothing to check) |
+| 5 | Plans at creation | Ops choose (Clinic by default); an approved application: Solo for a solo doctor, else the smallest that fits | Always Solo (approved clinics with two doctors would fail) |
+| 6 | Existing clinics | Migration 0041: Plus, no trial; a clinic without a row is treated the same | Trial for everyone (pilot clinics would see an ended trial) |
+| 7 | Trial | Starts when the clinic first becomes active (the owner accepts); 14 days; never restarts. Its end: an owner notice and an ops flag only (D5) | Start at creation (an unaccepted clinic would burn its days) |
+| 8 | Changing the plan | Ops only, never below the use (`SUB_PLAN_TOO_SMALL`), audited | Allow and leave the clinic over its limit |
+| 9 | API and screens | `GET /api/v1/clinic/subscription`, `PUT /api/v1/ops/clinics/{id}/plan`; *Settings → Plan*, the trial notice, the ops *Plan* column; contract 0.49.0 | — |
+
+### P7 as built (26 Oct 2026)
+
+Built as designed. Verified: domain tests (limits, the trial, plan changes, the application's plan),
+HTTP tests (AC1–AC8: limits from ops and the owner, plan changes and their audit, doctor
+reactivation, the acceptance re-check, the ended trial, a clinic from before plans, who may read),
+the approval test (a two-doctor application on Clinic), migration `0041` backfill and round trip,
+route policies, the tenancy exception, the contract, and the whole API suite. Web: the *Plan* page,
+the owner's trial notice and the ops *Plan* column, with tests; the e2e owner menu gains *Plan*.
