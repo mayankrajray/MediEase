@@ -38,6 +38,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 25. Clinic applications (M6c-P1)
 26. Fees and the public fee (M6d-P1)
 27. Bills and credit notes (M6d-P2)
+28. Payments, refunds and dues (M6d-P3)
 
 ---
 
@@ -739,3 +740,21 @@ Check `SELECT number, kind, financial_year, seq FROM bills WHERE clinic_id = '<i
 
 **"A doctor cannot see a bill."** Doctors see only bills with their own doctor profile. The front
 desk or the owner can open it. Audit: `bill.*` actions, category *Billing* (RUNBOOK 18).
+
+### 28. Payments, refunds and dues (M6d-P3)
+
+Payments are taken on the bill page (cash, UPI or card, partial allowed, never more than the
+balance). *Dues* (`/dues`) lists who owes, and queue rows show "Dues ₹…".
+
+**"We took the wrong amount."** On the same day, *Void* it on the bill with a reason and take the
+right amount. On a later day the payment stays (the day's collection is closed). Issue a credit
+note for what was wrong, then a refund (`BIL_VOID_TOO_LATE` says so). "Void the refund first"
+means a refund was paid out of that payment.
+
+**"The patient paid too much."** A bill cannot take more than its balance. A credit note leaves it
+overpaid (a negative balance shown as "to refund"), and the bill page then offers *Record refund*.
+
+**"Dues look wrong."** Dues are issued bills only: drafts and cancelled bills never count. Check
+`SELECT number, total_paise, credited_paise, paid_paise, refunded_paise FROM bills WHERE clinic_id =
+'<id>' AND patient_id = '<id>' AND status = 'ISSUED';` and the payments (`SELECT kind, amount_paise,
+voided_at FROM payments WHERE bill_id = '<id>';`). Never edit these rows. Audit: `payment.*`.
