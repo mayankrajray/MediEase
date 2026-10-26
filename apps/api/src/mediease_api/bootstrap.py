@@ -98,6 +98,7 @@ from mediease_api.application.clinics.change_staff_role import ChangeStaffRole
 from mediease_api.application.clinics.deactivate_staff import DeactivateStaff
 from mediease_api.application.clinics.invite_email import SendStaffInvite
 from mediease_api.application.clinics.invite_staff import InviteStaff, ResendStaffInvite
+from mediease_api.application.clinics.listing import GetListing, SetDoctorVisibility, SetListing
 from mediease_api.application.clinics.onboard_clinic import (
     AddDoctor,
     CreateClinic,
@@ -155,6 +156,7 @@ from mediease_api.application.onboarding.review import (
 )
 from mediease_api.application.onboarding.submit import ConfirmApplication, SubmitApplication
 from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics, MessagingCosts
+from mediease_api.application.ops.suspension import ReactivateClinic, SuspendClinic
 from mediease_api.application.patients.consent import OptIn, OptOut, RecordConsent
 from mediease_api.application.patients.import_patients import ImportPatients
 from mediease_api.application.patients.my_patients import ListMyPatients
@@ -256,6 +258,7 @@ from mediease_api.delivery.http.csrf import register_csrf_protection
 from mediease_api.delivery.http.dashboard import create_dashboard_blueprint
 from mediease_api.delivery.http.google import create_google_blueprint
 from mediease_api.delivery.http.invites import create_invite_blueprint
+from mediease_api.delivery.http.listing import create_listing_blueprint
 from mediease_api.delivery.http.me import create_me_blueprint
 from mediease_api.delivery.http.notifications import create_notifications_blueprint
 from mediease_api.delivery.http.ops import create_ops_blueprint
@@ -263,6 +266,7 @@ from mediease_api.delivery.http.ops_applications import (
     create_ops_applications_blueprint,
     create_ops_verification_blueprint,
 )
+from mediease_api.delivery.http.ops_suspension import create_ops_suspension_blueprint
 from mediease_api.delivery.http.patient_portal import (
     create_patient_portal_blueprint,
     create_portal_records_blueprint,
@@ -968,6 +972,22 @@ class _UseCases:
     def verify_clinic(self) -> VerifyClinic:
         return VerifyClinic(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    # --- M6c-P4: suspension and the listing ---------------------------------------------------
+    def suspend_clinic(self) -> SuspendClinic:
+        return SuspendClinic(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def reactivate_clinic(self) -> ReactivateClinic:
+        return ReactivateClinic(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def get_listing(self) -> GetListing:
+        return GetListing(uow=self._uow(), clock=self.clock)
+
+    def set_listing(self) -> SetListing:
+        return SetListing(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def set_doctor_visibility(self) -> SetDoctorVisibility:
+        return SetDoctorVisibility(uow=self._uow(), clock=self.clock, ids=self.ids)
+
     def _uow(self) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(self.session_factory)
 
@@ -1351,6 +1371,8 @@ def create_app(
     app.register_blueprint(create_public_applications_blueprint(use_cases))
     app.register_blueprint(create_ops_applications_blueprint(use_cases))
     app.register_blueprint(create_ops_verification_blueprint(use_cases))
+    app.register_blueprint(create_ops_suspension_blueprint(use_cases))
+    app.register_blueprint(create_listing_blueprint(use_cases))
     app.register_blueprint(create_public_queue_blueprint(use_cases))
     app.register_blueprint(create_booking_requests_blueprint(use_cases))
     app.register_blueprint(create_rx_library_blueprint(use_cases))

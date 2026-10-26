@@ -197,6 +197,12 @@ EXPECTED_POLICIES = {
     "ops_applications.approve": (Access.OPS, None),
     "ops_verification.verify_doctor": (Access.OPS, None),
     "ops_verification.verify_clinic": (Access.OPS, None),
+    # M6c-P4 (R50-R58): suspension (OPS_ADMIN) and the owner's listing.
+    "ops_suspension.suspend": (Access.OPS, None),
+    "ops_suspension.reactivate": (Access.OPS, None),
+    "listing.get_listing": (Access.CLINIC, Permission.CLINIC_VIEW),
+    "listing.set_listing": (Access.CLINIC, Permission.CLINIC_MANAGE),
+    "listing.set_visibility": (Access.CLINIC, Permission.CLINIC_MANAGE),
     "public_applications.submit": (Access.PUBLIC, None),
     "public_applications.confirm": (Access.PUBLIC, None),
     # Ops imports patients but cannot browse them (spec patients §2, M2-P4).

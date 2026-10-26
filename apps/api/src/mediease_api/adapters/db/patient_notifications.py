@@ -3,7 +3,8 @@
 ``SqlAlchemyPatientNotificationRepository`` is tenant-scoped (the service writes in a clinic's
 context). ``SqlAlchemyPatientNotificationLookup`` is a reviewed cross-clinic exception: it reads
 one account's notices by account, limited to the clinics the caller passes as linked (plus the
-account's own booking notices), never a suspended clinic's. The preferences belong to the account.
+account's own booking notices), never a suspended clinic's other than its booking answers (M6c-P4).
+The preferences belong to the account.
 """
 
 from __future__ import annotations
@@ -31,6 +32,12 @@ from mediease_api.domain.portal.notifications import (
 from mediease_api.ports.patient_notifications import PatientPreference
 
 _BOOKING = sorted(k.value for k in BOOKING_KINDS)
+
+
+def _not_suspended() -> ColumnElement[bool]:
+    """A suspended clinic's notices disappear, except the booking answers: M6c-P4 (R57) tells the
+    patient that a suspended clinic cannot take their request."""
+    return or_(ClinicRow.status != "SUSPENDED", PatientNotificationRow.kind.in_(_BOOKING))
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -105,7 +112,7 @@ class SqlAlchemyPatientNotificationLookup:
         return (
             select(PatientNotificationRow)
             .join(ClinicRow, ClinicRow.id == PatientNotificationRow.clinic_id)
-            .where(self._visible(account_id, linked), ClinicRow.status != "SUSPENDED")
+            .where(self._visible(account_id, linked), _not_suspended())
         )
 
     def list_for(
@@ -125,7 +132,7 @@ class SqlAlchemyPatientNotificationLookup:
             .join(ClinicRow, ClinicRow.id == PatientNotificationRow.clinic_id)
             .where(
                 self._visible(account_id, linked),
-                ClinicRow.status != "SUSPENDED",
+                _not_suspended(),
                 PatientNotificationRow.read_at.is_(None),
             )
         )

@@ -346,6 +346,17 @@ class BookingRequest:
         self._answer(user_id, now)
         self.updated_at = now
 
+    def withdraw(self, now: datetime) -> bool:
+        """M6c-P4 (R57): the clinic was suspended, so an open request is declined by the system
+        with ``CLINIC_UNAVAILABLE``. False if it was already final."""
+        now = require_utc(now, "now")
+        if self.status not in OPEN_STATUSES:
+            return False
+        self.decline_reason = DeclineReason.CLINIC_UNAVAILABLE
+        self.decline_note = None
+        self._finish(RequestStatus.DECLINED, DecidedBy.SYSTEM, now)
+        return True
+
     def expire(self, now: datetime) -> bool:
         """R32: the sweep writes what ``effective_status`` already says. False if not due."""
         now = require_utc(now, "now")
