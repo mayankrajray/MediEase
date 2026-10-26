@@ -11,14 +11,14 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M6d — Billing and documents** (issue #63, branch `m6d/63-billing-and-documents` from `main` at `ec721e6`, one PR for the milestone). M6c merged in PR #54 on 26 Oct 2026 (#53 closed) |
-| Active phase | **M6d — milestone verification** (full suites, Playwright, PR #64 ready for review). P1–P7 built 26 Oct 2026 (specs `docs/specs/billing.md`, `visit-attachments.md`, `plans-and-trial.md`); the developer approved every P2–P7 design in advance |
-| Design notes | `docs/milestones/M6d-billing-and-documents.md` (M6d); M6c in `docs/milestones/M6c-onboarding-verification-discovery.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
-| Approved plan | `NEXT_STEPS_PLAN.md` (M6d phases, workflow, progress log) |
+| Active milestone | **M7 — AI assistant (M7a) and verified prescription uploads (M7b)** (issue #65, branch `m7/65-assistant-and-verified-uploads` from `main` at `d53f53d`, one PR for the milestone). M6d merged in PR #64 on 26 Oct 2026 (#63 closed) |
+| Active phase | **M7a-P1 — Layout 3** (then P2–P10 in order; the developer approved every phase design in advance on 27 Oct 2026) |
+| Design notes | `docs/milestones/M7-assistant-and-verified-uploads.md` and the review `docs/milestones/M7-architecture-review.md`; specs `docs/specs/assistant.md`, `docs/specs/prescription-uploads.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
+| Approved plan | `NEXT_STEPS_PLAN.md` (M7 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
 | Open decisions | Real email delivery needs L-11 (Brevo account, verified sending domain); locally Mailpit covers it. Real Google sign-in needs L-09 (the fake provider covers local use). The issue #49 title still says "MVP demo" (rename on GitHub by the developer). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test is flaky on CI (150 ms bound) |
-| Last updated | 23 Oct 2026 |
+| Last updated | 27 Oct 2026 |
 
 
 ---
@@ -201,7 +201,7 @@ will reply within 2 working days; **D4** issue #53, branch from the latest `main
 | M6c-P7 | Discovery to booking (FR-DIS-08) | ✅ (built 26 Oct 2026, pushed) |
 | M6c-P8 | Landing page v1 (FR-LND-01..03) | ✅ (built 26 Oct 2026, pushed) |
 
-## M6d — Billing and documents  `▶ ACTIVE`
+## M6d — Billing and documents  `✅` (merged in PR #64, 26 Oct 2026)
 
 **Covers:** FR-BIL-01..07, FR-VIS-04, FR-SUB-01 (PRD v1.2). Issue #63, branch
 `m6d/63-billing-and-documents`, one PR. Design notes `docs/milestones/M6d-billing-and-documents.md`
@@ -224,13 +224,33 @@ reports it cannot open; **D8** the public fee is the consultation price; **D9** 
 | M6d-P6 | Report attachments on visits (FR-VIS-04) | ✅ (built 26 Oct 2026) |
 | M6d-P7 | Plans, trial and limits (FR-SUB-01) | ✅ (built 26 Oct 2026) |
 
-## M7 — AI assistant and pitch  `☐`
+## M7 — AI assistant (M7a) and verified prescription uploads (M7b)  `▶ ACTIVE`
 
-**Covers:** FR-AI-01..03 (PRD v1.1). **ADR:** 0013. **Exit:** booking by chat works through tools
-with a confirmation step; the guard-rail tests (no medical advice) pass; the provider switches by
-settings only; the animated landing page tells the story. About 5 phases: the LLM gateway (Groq
-first), tools and guard rails, the patient assistant, the staff assistant, the landing page and
-demo rehearsal.
+**Covers:** FR-AI-01..04, FR-RX-11, FR-UPL-01..05, NFR-20 (PRD v1.3 C15, C16). Issue #65, branch
+`m7/65-assistant-and-verified-uploads`, one PR. **ADRs:** 0013, 0023, 0024. **Exit:** booking by
+chat works through tools with a confirmation step; the guard-rail tests pass; the provider
+switches by settings only; new prescriptions print the verification code and QR; an uploaded
+MediEase prescription is scanned, identified and verified before the assistant may use it, and the
+assistant reads only the database record; uploads are deleted after their outcome; `make e2e`
+green. The animated landing-page polish moved to the backlog (PRD C15).
+
+Locked decisions (27 Oct 2026): **D1** split into M7a and M7b on one branch; **D2** QR payload
+`MEDIEASE-RX:1:<uuid>`; **D3** superseded uploads are chosen explicitly; **D4** no OCR; **D5** clinic
+logos deferred; **D6** uploads never shown to staff, deleted after the outcome; **D7** the picker for
+linked patients.
+
+| Phase | Scope | Status |
+|---|---|---|
+| M7a-P1 | Layout 3: MediEase mark, verification code and QR (FR-RX-11) | ▶ ACTIVE |
+| M7a-P2 | LLM gateway, Groq first, console adapter (FR-AI-03) | ☐ |
+| M7a-P3 | Assistant core: tools as the caller, signed confirmations, guard rails, explanation (FR-AI-01, 02, 04) | ☐ |
+| M7a-P4 | Patient assistant and the prescription picker (FR-AI-01, 04) | ☐ |
+| M7a-P5 | Staff assistant (FR-AI-01) | ☐ |
+| M7b-P6 | Upload and quarantine; #30 (FR-UPL-01, NFR-20) | ☐ |
+| M7b-P7 | ClamAV on a separate upload worker (FR-UPL-02) | ☐ |
+| M7b-P8 | Identifier extraction, no OCR (FR-UPL-03) | ☐ |
+| M7b-P9 | Verification: own, representative, superseded (FR-UPL-04) | ☐ |
+| M7b-P10 | Handoff to the assistant, cleanup, portal UI, journeys (FR-UPL-05) | ☐ |
 
 ## M8 — Multi-clinic WhatsApp and consolidated billing  `☐ (designed)`
 
@@ -263,6 +283,8 @@ drill completed; security checklist signed; two pilot clinics onboarded. (Was M6
 | — | Appointment reminders, SMS fallback on by default, patient live token link | FR-APT-08, FR-REM-06, FR-QUE-06 | — |
 | — | Analytics dashboard | FR-ANL | — |
 | — | Pharmacy and clinic drug inventory (PRD v1.1 C6) | — | Developer's request |
+| — | Animated landing-page polish and demo rehearsal (moved out of M7, PRD v1.3 C15) | FR-LND | — |
+| — | OCR of the printed verification code (Tesseract first), only if the pilot's "no identifier" rate shows a need (ADR-0023) | FR-UPL-03 | — |
 | — | ABDM / ABHA integration | — | Open question (PRD §14.3) |
 
 The public booking page moved into M6-P8 and billing into M8 (PRD v1.1).

@@ -24,6 +24,8 @@
 | [0020](0020-clinic-applications-as-platform-data.md) | Clinic applications are platform data; the applicant has no account until approval | Accepted (M6c) |
 | [0021](0021-directory-search-in-postgresql.md) | Directory search in PostgreSQL over the live tables, behind the one discoverability rule | Accepted (M6c-P6) |
 | [0022](0022-immutable-bills-and-credit-notes.md) | Bills are immutable snapshots, numbered per financial year, corrected only by credit notes | Accepted (M6d-P2) |
+| [0023](0023-printed-verification-code-and-verified-uploads.md) | A printed verification code, and uploads that only point to the database record | Accepted (M7) |
+| [0024](0024-assistant-turns-confirmations-and-guard-rails.md) | Stateless assistant turns, signed confirmations, and guard rails on both sides | Accepted (M7a) |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, and add a row here.
 Accepted ADRs are never edited; supersede them with a new ADR.

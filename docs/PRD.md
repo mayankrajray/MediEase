@@ -4,8 +4,8 @@
 |---|---|
 | Product | MediEase (working name) |
 | Document owner | Product team (Sitare University Startup Program, Group 1) |
-| Status | v1.2 — product direction extended by the developer on 22 Oct 2026 (§0) |
-| Last updated | 22 October 2026 |
+| Status | v1.3 — M7 split into the assistant and verified uploads, approved by the developer on 27 Oct 2026 (§0.0) |
+| Last updated | 27 October 2026 |
 | Target segment | Small clinics with 2–5 doctors and staff (solo practitioners supported), India; medical stores later |
 | Related documents | [ARCHITECTURE.md](ARCHITECTURE.md) · [DATA_MODEL.md](DATA_MODEL.md) · [API.md](API.md) · [../SPECS.md](../SPECS.md) · [../TASKS.md](../TASKS.md) · [SECURITY_AND_COMPLIANCE.md](SECURITY_AND_COMPLIANCE.md) |
 
@@ -13,6 +13,22 @@
 > Sections 6–9 define *what* it must do, with stable requirement IDs (`FR-…`, `NFR-…`) that specs,
 > tasks, tests and commits reference. Sections 10–14 cover *how we will know it works* and *how it
 > ships*. Anything describing *how the code is built* lives in the architecture documents, not here.
+
+---
+
+## 0.0 Changes in v1.3 (27 October 2026)
+
+Approved by the developer after the M7 architecture review
+(`docs/milestones/M7-architecture-review.md`, decisions D1–D7). Wins over §0 and §0.1 where they
+differ.
+
+| # | Change | Replaces | Built in |
+|---|---|---|---|
+| C15 | **M7a: the assistant.** C4 as designed, plus FR-AI-04: the assistant explains only a prescription the user picked, by restating its database record. New prescriptions print the MediEase mark, a verification code and a QR code (FR-RX-11, ADR-0023) | M7 "AI assistant and pitch"; the animated landing-page polish moves to the backlog | M7a |
+| C16 | **M7b: verified prescription uploads.** A patient, family member or representative can upload a MediEase prescription (or type its code) so the assistant can explain it. The file is scanned (ClamAV), only its identifier is read, the identifier is verified against the database and the uploader's own access (a representative passes the prescription's last-4 check and gets that one prescription only), and the file is deleted. Arbitrary external prescriptions are never accepted, and nothing read from a file is used as clinical information (FR-UPL, NFR-20, ADR-0023) | Spec visit-attachments §11 "patients uploading, OCR, virus scanning" out of scope (now in, for this one purpose; OCR stays out) | M7b |
+
+Principle 6 and the §6.3 non-goal on clinical decision support are unchanged: the assistant
+restates the doctor's record and never interprets or advises.
 
 ---
 
@@ -594,6 +610,21 @@ Three things are modelled separately and never inferred from each other:
 | FR-QUE-06 | (existing) Live token status link: scheduled for M6b. | P1 |
 | FR-VIS-04 | (existing) Report attachments and patient-visible documents where the clinic allows: scheduled for M6d. | P1 |
 
+### 8.15 v1.3 additions — `FR-AI-04`, `FR-RX-11`, `FR-UPL` (C15, C16)
+
+Specs: `docs/specs/assistant.md` (M7a) and `docs/specs/prescription-uploads.md` (M7b); ADR-0023,
+ADR-0024.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-AI-04 | **Prescription explanation from the record.** The assistant explains only a prescription the user explicitly chose (the portal picker, or a verified upload, FR-UPL-04) and only by restating that version's database record in plain words: what was prescribed, when, how much, how long, and the doctor's own advice. It never reads an uploaded file's content, never fills a gap, and never changes or adds an instruction. | P0 for FR-AI |
+| FR-RX-11 | **Printed verification code.** Every prescription version issued from M7 prints, in a fixed block outside the clinic's content and on every page, the MediEase mark, its own ID as a human-readable *verification code* and a QR code holding only `MEDIEASE-RX:1:<id>`. No personal or clinical data is encoded. Versions issued earlier keep their layout. | P0 |
+| FR-UPL-01 | A signed-in patient account can upload a photo (JPEG, PNG) or PDF of a MediEase prescription, at most 10 MB, or type its verification code. Files are recognised by their bytes, held in quarantine and never shown to clinic staff. | P1 |
+| FR-UPL-02 | Every uploaded file is scanned for malware (ClamAV) before anything reads it; an infected file, or one that cannot be scanned after retries, is rejected and deleted. | P0 for FR-UPL |
+| FR-UPL-03 | Only the MediEase identifier is read from a clean file: the QR code, else the PDF's text layer. No OCR; when nothing is found the user is asked to retake the photo or type the code. Nothing else read from a file is kept or used. | P1 |
+| FR-UPL-04 | **Verification against the database and the uploader's access.** The identifier must name an issued (or superseded) MediEase version that is either one of the account's own linked records, or, for a family member or representative, passes that prescription's last-4-digit check from a verified account, which grants access to that one prescription only, for 24 hours, never to the patient's record. A superseded version is shown as historical and the user chooses it or the latest explicitly; nothing is substituted silently. | P0 for FR-UPL |
+| FR-UPL-05 | Only a verified upload reaches the assistant, and only as the database record (FR-AI-04). The file is deleted once identified or rejected; abandoned uploads are rejected and deleted after an hour; upload rows are deleted 30 days after their outcome. | P0 for FR-UPL |
+
 ## 9. Non-functional requirements
 
 | ID | Category | Requirement |
@@ -617,6 +648,7 @@ Three things are modelled separately and never inferred from each other:
 | NFR-17 | Privacy | Public discovery and profile endpoints return only fields the clinic published; automated tests prove no patient, clinical or staff-private data can appear there. |
 | NFR-18 | Multi-tenancy | A global patient account never gives access to a clinic's data except through a link created under FR-PRT-06; tests prove an account cannot read a clinic it is not linked to. |
 | NFR-19 | Abuse | Public endpoints (application, search, booking request) are rate-limited and require a verified identity where a patient or applicant acts; response for a clinic that is not discoverable (directory and profiles), or not `ACTIVE` and verified (own link and booking requests), is identical to "not found". |
+| NFR-20 | Upload safety | Uploaded files are untrusted: type allow-list by content, 10 MB, page and pixel caps before decoding, a malware scan before any parsing, processing on a separate worker so reminders are never delayed, no upload content in logs, audit metadata or any model, deletion after the outcome, and rate limits per account and caller. |
 
 ## 10. Compliance and clinical safety (requirements view)
 
@@ -719,7 +751,8 @@ Detailed task breakdown: [TASKS.md](../TASKS.md).
 | **M6b Patient identity, portal and booking requests** (v1.1/v1.2) | Linking an account to a clinic's record (invite, prescription link, accepted request); patient portal with the fresh dashboard and *Find a doctor* entry, My Appointments by clinic, prescriptions and reminders; medicine planner; per-clinic public page `/c/{slug}`; booking requests from a verified account with soft hold; front-desk inbox (accept / decline / propose / expire); patient notifications; live token link | FR-PRT-02..07, FR-BKG, FR-PUB, FR-REM-03, FR-QUE-06 | Patient requests on `/c/{slug}`, front desk accepts, appointment appears under the right clinic; cross-clinic isolation tests pass |
 | **M6c SaaS clinic onboarding, verification and discovery** (v1.2) | (1) Self-service clinic and solo-doctor application; (2) application lifecycle `PENDING → UNDER_REVIEW → APPROVED \| REJECTED`, kept apart from clinic status; (3) MediEase reviewer workflow: queue, manual registration checks per doctor, decision with reason, audit; (4) approved clinic onboarding through the pre-filled Create-clinic wizard, owner as Doctor 1, owner invitation; (5) verification and listing modelled separately, with listing requirements; (6) public clinic and doctor profiles; (7) clinic search and doctor search with filters; (8) discovery-to-booking into the M6b request flow; (9) landing page v1 | FR-ONB-01..10, FR-DIS-01..08, FR-LND, NFR-17, NFR-19 | A pending, approved-but-unlisted or suspended clinic is invisible in discovery; an `ACTIVE`, verified and listed clinic is found by clinic and by doctor search and requested within one session |
 | **M6d Billing and documents** (v1.2) | Fee schedule, bills, receipts, dues, daily collection, report attachments, plan limits and trial | FR-BIL-01..07, FR-VIS-04, FR-SUB-01 | Daily collection matches recorded payments; plan limits enforced |
-| **M7 AI assistant and pitch** (v1.1) | LLM gateway (Groq first), patient and staff assistant with tools, animated landing page polish (first landing page ships in M6c) | FR-AI | Booking by chat and the guard-rail tests pass |
+| **M7a AI assistant** (v1.3, C15; issue #65) | LLM gateway (Groq first, console adapter), patient and staff assistants with tools under the caller's permissions, signed confirmations, guard rails, prescription explanation from the record, layout 3 with the verification code | FR-AI-01..04, FR-RX-11 | Booking by chat with a confirmation, the guard-rail tests and the provider switch by settings pass; new prescriptions print a code and QR that decode to their ID |
+| **M7b Verified prescription uploads** (v1.3, C16; issue #65, same branch and PR) | Upload and quarantine, ClamAV on a separate worker, identifier extraction (no OCR), verification for own records and representatives, superseded choice, handoff to the assistant, deletion | FR-UPL-01..05, NFR-20 | An edited upload with a genuine QR is explained only from the record; EICAR is rejected and deleted; another account's prescription is refused without the last-4 proof |
 | **M8 Multi-clinic WhatsApp and consolidated billing** (v1.1) | Embedded Signup per clinic, per-clinic templates and webhooks, usage ledger, one MediEase invoice | FR-BIL-WA | Two clinics' usage billed separately with no mixing |
 | **M9 Pilot hardening** | Backups, monitoring, ops health view, security review, deploy | NFR-03..07, FR-OPS-03 | Restore drill done; security checklist signed |
 | **— Pilot launch —** | Two clinics live | G1–G5 | Scorecard §11.2 tracked weekly |
