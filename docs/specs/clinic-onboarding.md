@@ -2,9 +2,9 @@
 
 | Field | Value |
 |---|---|
-| Requirements | FR-ONB-01, 02, 07 (P1); FR-ONB-03, 05 (P2); FR-ONB-04, 06, 08 (P3); FR-ONB-05, 09, 10 (P4); NFR-19 |
-| Milestone / phases | M6c / P1–P4 |
-| Status | P1 (R1–R23, AC1–AC9) **Approved** 26 Oct 2026 (developer decisions D1–D3) and built (as-built notes in the M6c design note); P2 (R24–R40, AC10, AC14) and P3 (R41–R49, AC11–AC13) P4 (R50–R58, AC15–AC16) and P5 (R59–R64, AC17) approved in advance by the developer 26 Oct 2026 and built |
+| Requirements | FR-ONB-01, 02, 07 (P1); FR-ONB-03, 05 (P2); FR-ONB-04, 06, 08 (P3); FR-ONB-05, 09, 10 (P4); FR-DIS-03, 06, 07 (P5); NFR-17, NFR-19 |
+| Milestone / phases | M6c / P1–P5 (search and booking from search: `docs/specs/discovery.md`) |
+| Status | P1 (R1–R23, AC1–AC9) **Approved** 26 Oct 2026 (developer decisions D1–D3) and built (as-built notes in the M6c design note); P2 (R24–R40, AC10, AC14) P3 (R41–R49, AC11–AC13), P4 (R50–R58, AC15–AC16) and P5 (R59–R64, AC17) approved in advance by the developer 26 Oct 2026 and built |
 | Owner | Developer |
 | Last updated | 2026-10-26 |
 

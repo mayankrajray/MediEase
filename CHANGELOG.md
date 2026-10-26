@@ -21,6 +21,11 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6c-P6 (#53): directory search (FR-DIS-01, 02, 04, 05; spec discovery R1-R10; ADR-0021). `/find`
+  searches doctors and clinics by name or specialty, city or PIN, specialty, language and "free in
+  the next 7 days", ordered by relevance, then place (same PIN, same city, same PIN district), then
+  the first free day. Only discoverable clinics and public doctors are ever returned. English and
+  Hindi; works without JavaScript. Migration `0035` (`pg_trgm`); contract 0.41.0.
 - M6c-P5 (#53): public profiles (FR-DIS-03, 06, 07; spec clinic-onboarding R59-R64). A clinic's
   page shows its specialties and each doctor's languages and fee; each doctor has a profile at
   `/c/{slug}/doctors/{id}`. Only doctors who are active, verified and shown appear. Pages are

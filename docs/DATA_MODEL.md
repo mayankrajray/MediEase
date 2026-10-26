@@ -39,6 +39,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0013` | `patient_links`, `public_rate_limits`; `prescriptions.layout_version` (1 for existing rows) | M4-P5 |
 | `0032` | `clinic_applications`, `clinic_application_doctors`, the reference sequence; actor `APPLICANT`; two system job kinds | M6c-P1 |
 | `0033` | `users.ops_roles`; the review columns on `clinic_applications`; `clinic_application_checks` | M6c-P2 |
+| `0035` | The `pg_trgm` extension (directory search, ADR-0021) | M6c-P6 |
 | `0034` | Verification on `clinics` and `doctors`; `clinics.listed`, `listed_at`, `search_indexing`; `doctors.visible`, `languages`, `fee_paise`; decline reason `CLINIC_UNAVAILABLE` | M6c-P3..P5 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
@@ -972,6 +973,11 @@ rows stay unverified. Also (used from P4 and P5): `clinics.listed` (default fals
 listed OR verified_at IS NOT NULL`), `listed_at`, `search_indexing` (default true);
 `doctors.visible` (default false), `languages text[]`, `fee_paise` (0 to 1 000 000, CHECK).
 `booking_requests.decline_reason` gains `CLINIC_UNAVAILABLE` (P4).
+
+### Search (migration `0035`, M6c-P6)
+`CREATE EXTENSION pg_trgm` only. Search reads the live `clinics` and `doctors` tables through the
+reviewed `SqlAlchemyDirectoryReader` (published columns, IDs out); no read model and no trigram
+index yet (ADR-0021 says when to add them).
 
 ---
 

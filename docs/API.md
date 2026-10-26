@@ -285,6 +285,13 @@ M6c-P5 (spec R59-R64; contract 0.40.0): `PUT /api/v1/clinic/listing` also takes
 indexable profile URLs. The public clinic body adds `specialties`, `indexable` and each doctor's
 `languages` and `fee_paise`, and lists only doctors who are active, verified and shown.
 
+M6c-P6 (spec discovery R1-R10; ADR-0021; contract 0.41.0):
+
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| GET | `/api/v1/public/search/clinics?q=&city=&pincode=&specialty=&language=&available=` | Discoverable clinics by relevance, place and first free day (at most 20) | FR-DIS-01, 04, 05 | Implemented (M6c-P6), public, rate limited |
+| GET | `/api/v1/public/search/doctors?...` | Public doctors of discoverable clinics, the same filters | FR-DIS-02, 04, 05 | Implemented (M6c-P6), public, rate limited |
+
 `Clinic` and `Doctor` bodies gain `verified_at` and `verification_source` (and the P4/P5 fields
 `listed`, `search_indexing`, `visible`, `languages`, `fee_paise`). The public clinic page and
 booking requests need the clinic `ACTIVE` and verified (one 404 otherwise).
