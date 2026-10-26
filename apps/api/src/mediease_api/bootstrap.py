@@ -94,6 +94,7 @@ from mediease_api.application.billing.fees import (
     GetFees,
     SetDoctorPrice,
 )
+from mediease_api.application.billing.payments import ListDues, RecordPayment, VoidPayment
 from mediease_api.application.booking.answers import (
     AcceptBookingRequest,
     AcceptProposal,
@@ -277,7 +278,7 @@ from mediease_api.delivery.http.access import check_every_route_has_policy, regi
 from mediease_api.delivery.http.appointments import create_appointments_blueprint
 from mediease_api.delivery.http.audit_log import create_audit_log_blueprint
 from mediease_api.delivery.http.auth import create_auth_blueprint
-from mediease_api.delivery.http.bills import create_bills_blueprint
+from mediease_api.delivery.http.bills import create_bills_blueprint, create_dues_blueprint
 from mediease_api.delivery.http.booking_requests import create_booking_requests_blueprint
 from mediease_api.delivery.http.clinic import create_clinic_blueprint
 from mediease_api.delivery.http.csrf import register_csrf_protection
@@ -1061,6 +1062,16 @@ class _UseCases:
     def credit_bill(self) -> CreditBill:
         return CreditBill(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    # --- M6d-P3: payments, refunds and dues --------------------------------------------------
+    def record_payment(self) -> RecordPayment:
+        return RecordPayment(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def void_payment(self) -> VoidPayment:
+        return VoidPayment(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def list_dues(self) -> ListDues:
+        return ListDues(uow=self._uow())
+
     def get_sitemap(self) -> GetSitemap:
         return GetSitemap(uow=self._uow(), clock=self.clock)
 
@@ -1454,6 +1465,7 @@ def create_app(
     app.register_blueprint(create_listing_blueprint(use_cases))
     app.register_blueprint(create_fees_blueprint(use_cases))
     app.register_blueprint(create_bills_blueprint(use_cases))
+    app.register_blueprint(create_dues_blueprint(use_cases))
     app.register_blueprint(create_public_search_blueprint(use_cases))
     app.register_blueprint(
         create_public_sitemap_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)

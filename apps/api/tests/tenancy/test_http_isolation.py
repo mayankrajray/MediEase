@@ -53,6 +53,13 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/clinic/bills/<uuid:bill_id>/credit-notes": lambda w: (
         f"{_bill_of_b(w, issued=True)}/credit-notes"
     ),
+    # M6d-P3: payments on clinic B's bill.
+    "/api/v1/clinic/bills/<uuid:bill_id>/payments": lambda w: (
+        f"{_bill_of_b(w, issued=True)}/payments"
+    ),
+    "/api/v1/clinic/bills/<uuid:bill_id>/payments/<uuid:payment_id>/void": lambda w: _payment_of_b(
+        w
+    ),
     "/api/v1/clinic/staff/<uuid:membership_id>": lambda w: _staff_url(w),
     "/api/v1/clinic/staff/<uuid:membership_id>/resend": lambda w: _invited_staff_url(w),
     "/api/v1/patients/<uuid:patient_id>": lambda w: _patient_url(w),
@@ -152,6 +159,14 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
     "/api/v1/clinic/fees/services/<uuid:service_id>": ("PATCH", {"default_price_paise": 100}),
     "/api/v1/clinic/bills/<uuid:bill_id>/issue": ("POST", {}),
     "/api/v1/clinic/bills/<uuid:bill_id>/credit-notes": ("POST", {"reason": "Wrong line"}),
+    "/api/v1/clinic/bills/<uuid:bill_id>/payments": (
+        "POST",
+        {"mode": "CASH", "amount_paise": 100},
+    ),
+    "/api/v1/clinic/bills/<uuid:bill_id>/payments/<uuid:payment_id>/void": (
+        "POST",
+        {"reason": "Wrong amount"},
+    ),
     "/api/v1/clinic/fees/services/<uuid:service_id>/doctors/<uuid:doctor_id>": (
         "PUT",
         {"price_paise": 100},
@@ -287,6 +302,17 @@ def _bill_of_b(world: World, *, issued: bool = False) -> str:
     if issued:
         assert client.post(f"{url}/issue", headers=headers).status_code == 200
     return url
+
+
+def _payment_of_b(world: World) -> str:
+    """M6d-P3: a cash payment on clinic B's issued bill, by B's owner."""
+    client, headers = _owner_of_b(world)
+    url = _bill_of_b(world, issued=True)
+    paid = client.post(
+        f"{url}/payments", json={"mode": "CASH", "amount_paise": 500}, headers=headers
+    )
+    assert paid.status_code == 201, paid.get_json()
+    return f"{url}/payments/{paid.get_json()['payments'][0]['id']}/void"
 
 
 def _session_of_b(world: World, *, days: int) -> str:

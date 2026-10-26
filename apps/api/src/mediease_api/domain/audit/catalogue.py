@@ -183,6 +183,8 @@ ACTIONS: dict[A, ActionInfo] = {
         (A.BILL_DISCARDED, "Discarded a draft bill"),
         (A.BILL_ISSUED, "Issued a bill"),
         (A.BILL_CREDITED, "Issued a credit note"),
+        (A.PAYMENT_RECORDED, "Recorded a payment or refund"),
+        (A.PAYMENT_VOIDED, "Voided a payment or refund"),
     ),
 }
 

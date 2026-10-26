@@ -2636,6 +2636,72 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/clinic/bills/{bill_id}/payments": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Record a payment or a refund on an issued bill
+         * @description M6d-P3, spec billing R31-R34; B6, D2. BILLING_MANAGE (a doctor on their own bills). A
+         *     payment never exceeds the balance; a refund never exceeds what is owed back after a
+         *     credit note (409 BIL_PAYMENT_TOO_LARGE with details.most_paise). Only issued bills (a
+         *     cancelled bill takes refunds only; 409 BIL_NOT_ISSUED).
+         */
+        readonly post: operations["recordPayment"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/bills/{bill_id}/payments/{payment_id}/void": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Void a payment or refund recorded today
+         * @description M6d-P3, spec billing R35, R36. BILLING_MANAGE. The same clinic-local day only (409
+         *     BIL_VOID_TOO_LATE), once (BIL_ALREADY_VOIDED), and never a payment a refund came out of
+         *     (BIL_VOID_REFUNDED: void the refund first).
+         */
+        readonly post: operations["voidPayment"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/dues": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Patients who owe the clinic, the largest first
+         * @description M6d-P3, spec billing R39. COLLECTION_VIEW (owners and the front desk). Positive balances
+         *     on issued bills, 200 patients at most.
+         */
+        readonly get: operations["listDues"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/ops/messaging-costs": {
         readonly parameters: {
             readonly query?: never;
@@ -4490,10 +4556,57 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
             readonly credit_notes: readonly components["schemas"]["CreditNote"][];
+            /** @description M6d-P3 - payments and refunds, oldest first, voided ones included */
+            readonly payments: readonly components["schemas"]["Payment"][];
         };
         readonly BillPage: {
             readonly items: readonly components["schemas"]["BillSummary"][];
             readonly next_cursor: string | null;
+        };
+        /** @enum {string} */
+        readonly PaymentKind: "PAYMENT" | "REFUND";
+        /** @enum {string} */
+        readonly PaymentMode: "CASH" | "UPI" | "CARD";
+        readonly PaymentInput: {
+            readonly kind?: components["schemas"]["PaymentKind"];
+            readonly mode: components["schemas"]["PaymentMode"];
+            readonly amount_paise: number;
+            /** @description A UPI or card reference */
+            readonly reference?: string | null;
+        };
+        readonly VoidInput: {
+            readonly reason: string;
+        };
+        readonly Payment: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["PaymentKind"];
+            readonly mode: components["schemas"]["PaymentMode"];
+            readonly amount_paise: number;
+            readonly reference: string | null;
+            /** Format: date-time */
+            readonly received_at: string;
+            /**
+             * Format: date
+             * @description The clinic day it belongs to
+             */
+            readonly local_date: string;
+            /** @description The team member's name */
+            readonly received_by: string | null;
+            /** Format: date-time */
+            readonly voided_at: string | null;
+            readonly voided_by: string | null;
+            readonly void_reason: string | null;
+        };
+        readonly DuesList: {
+            readonly total_paise: number;
+            readonly items: readonly {
+                readonly patient: components["schemas"]["BillPatientRef"] | null;
+                readonly bills: number;
+                readonly due_paise: number;
+                /** Format: date */
+                readonly oldest_bill_date: string;
+            }[];
         };
         /**
          * @description M6c-P4 (R56). Audited; never shown to patients
@@ -4534,7 +4647,7 @@ export interface components {
         /** @enum {string} */
         readonly MembershipStatus: "INVITED" | "ACTIVE" | "DEACTIVATED";
         /** @enum {string} */
-        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "SCHEDULES_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW" | "RX_PRINT" | "AUDIT_VIEW" | "BILLING_MANAGE" | "FEES_MANAGE";
+        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "SCHEDULES_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW" | "RX_PRINT" | "AUDIT_VIEW" | "BILLING_MANAGE" | "FEES_MANAGE" | "COLLECTION_VIEW";
         readonly Clinic: {
             /** @description M6b-P4 how long an online request holds its slot (default 120) */
             readonly request_hold_minutes: number;
@@ -6269,6 +6382,8 @@ export interface components {
              * @description The appointment's visit, once the doctor started it (M4-P6)
              */
             readonly visit_id: string | null;
+            /** @description M6d-P3 (billing R40) - what the patient owes on issued bills; 0 when nothing */
+            readonly dues_paise: number;
             /**
              * @description The visit's current issued prescription, IDs and time only (M4-P6 decision 4A),
              *     so front desk can print from the row; null while there is none.
@@ -6490,7 +6605,8 @@ export interface components {
          *     BIL_SERVICE_NAME_TAKEN (another active service has that name, M6d-P1),
          *     BIL_TOO_MANY_SERVICES (a clinic has 100 services at most, M6d-P1),
          *     BIL_NOT_DRAFT, BIL_NOT_ISSUED, BIL_EMPTY, BIL_LINE_ALREADY_CREDITED, BIL_VISIT_BILLED,
-         *     BIL_VISIT_NOT_COMPLETED (bills and credit notes, M6d-P2)
+         *     BIL_VISIT_NOT_COMPLETED (bills and credit notes, M6d-P2), BIL_PAYMENT_TOO_LARGE,
+         *     BIL_VOID_TOO_LATE, BIL_ALREADY_VOIDED, BIL_VOID_REFUNDED (payments, M6d-P3)
          */
         readonly ConflictError: {
             headers: {
@@ -11314,6 +11430,107 @@ export interface operations {
             readonly 404: components["responses"]["PermissionError"];
             readonly 409: components["responses"]["ConflictError"];
             readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly recordPayment: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly bill_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PaymentInput"];
+            };
+        };
+        readonly responses: {
+            /** @description The result */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Bill"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly voidPayment: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly bill_id: string;
+                readonly payment_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["VoidInput"];
+            };
+        };
+        readonly responses: {
+            /** @description The result */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Bill"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly listDues: {
+        readonly parameters: {
+            readonly query?: {
+                readonly patient_id?: string;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The result */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["DuesList"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
         };
     };
     readonly getOpsMessagingCosts: {

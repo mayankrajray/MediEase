@@ -272,6 +272,8 @@ class QueueEntry:
     wait_minutes: int | None
     visit_id: UUID | None = None
     prescription: IssuedVersion | None = None
+    # M6d-P3 (billing R40): what the patient owes on issued bills, for the desk.
+    dues_paise: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,6 +323,7 @@ class GetQueue:
             # M4-P6 decision 4A: which rows have a visit and an issued prescription; IDs only.
             visits = tenant.visits.ids_for_appointments([a.id for a in appointments])
             issued = tenant.prescriptions.issued_for_visits(visits.values())
+            dues = tenant.bills.dues_for(list(patients))
             uow.commit()
 
         by_session: dict[UUID, list[QueueEntry]] = {s.id: [] for s in sessions}
@@ -334,6 +337,7 @@ class GetQueue:
                     wait_minutes(a, now),
                     visit_id,
                     issued.get(visit_id) if visit_id else None,
+                    dues.get(a.patient_id, 0),
                 )
             )
         ordered = tuple(

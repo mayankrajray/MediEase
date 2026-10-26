@@ -21,6 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from mediease_api.adapters.db.models.base import Base, TenantOwned, Timestamps, enum_check
 from mediease_api.domain.billing.bill import BillKind, BillStatus, DiscountKind
 from mediease_api.domain.billing.fees import ServiceKind
+from mediease_api.domain.billing.payment import PaymentKind, PaymentMode
 
 _PRICE = "BETWEEN 0 AND 10000000"  # B1: ₹1,00,000 at most
 
@@ -187,3 +188,43 @@ class BillLineRow(TenantOwned, Base):
     bill_discount_paise: Mapped[int] = mapped_column(Integer)
     amount_paise: Mapped[int] = mapped_column(Integer)
     credits_line_id: Mapped[UUID | None] = mapped_column(ForeignKey("bill_lines.id"))
+
+
+class PaymentRow(TenantOwned, Base):
+    """A payment or refund on a bill (M6d-P3, spec billing R31-R42)."""
+
+    __tablename__ = "payments"
+    __table_args__ = (
+        enum_check("kind", PaymentKind),
+        enum_check("mode", PaymentMode),
+        CheckConstraint("amount_paise BETWEEN 1 AND 100000000", name="amount_range"),
+        CheckConstraint(
+            "reference IS NULL OR char_length(reference) <= 40", name="reference_length"
+        ),
+        # R35: a void has its time, its author and its reason, or none of them.
+        CheckConstraint(
+            "(voided_at IS NULL) = (voided_by IS NULL)"
+            " AND (voided_at IS NULL) = (void_reason IS NULL)",
+            name="voided_together",
+        ),
+        CheckConstraint(
+            "void_reason IS NULL OR char_length(void_reason) <= 200", name="void_reason_length"
+        ),
+        Index("ix_payments_bill_id", "bill_id"),
+        # P5: the day's collection.
+        Index("ix_payments_clinic_id_local_date", "clinic_id", "local_date"),
+    )
+
+    bill_id: Mapped[UUID] = mapped_column(ForeignKey("bills.id"))
+    patient_id: Mapped[UUID] = mapped_column(ForeignKey("patients.id"))
+    doctor_id: Mapped[UUID | None] = mapped_column(ForeignKey("doctors.id"))
+    kind: Mapped[str] = mapped_column(Text)
+    mode: Mapped[str] = mapped_column(Text)
+    amount_paise: Mapped[int] = mapped_column(Integer)
+    reference: Mapped[str | None] = mapped_column(Text)
+    received_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    local_date: Mapped[date] = mapped_column(Date)
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    voided_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    void_reason: Mapped[str | None] = mapped_column(Text)

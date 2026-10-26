@@ -30,6 +30,7 @@ from mediease_api.adapters.db.notifications import (
     SqlAlchemyPreferenceRepository,
 )
 from mediease_api.adapters.db.patient_notifications import SqlAlchemyPatientNotificationRepository
+from mediease_api.adapters.db.payments import SqlAlchemyPaymentRepository
 from mediease_api.adapters.db.portal_links import (
     SqlAlchemyDoseRecordRepository,
     SqlAlchemyPortalInviteRepository,
@@ -59,6 +60,7 @@ from mediease_api.adapters.db.tenancy import TenancyViolation, TenantScopedRepos
 from mediease_api.domain.appointments.appointment import Appointment, history_entry
 from mediease_api.domain.billing.bill import NO_DISCOUNT, Bill, LineInput, price_lines
 from mediease_api.domain.billing.fees import ClinicService, DoctorPrice, ServiceKind
+from mediease_api.domain.billing.payment import Payment, PaymentKind, PaymentMode
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
 from mediease_api.domain.links.link import PatientLink
@@ -660,6 +662,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "doctor_service_prices",
             "bills",
             "bill_lines",
+            "payments",
             "audit_events",
             "jobs",
         }
@@ -695,6 +698,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyDoctorPriceRepository,
         SqlAlchemyBillRepository,
         SqlAlchemyBillLineRepository,
+        SqlAlchemyPaymentRepository,
     } == set(TenantScopedRepository.__subclasses__())
 
 
@@ -742,6 +746,39 @@ def test_m6d_p2_bills_are_scoped_to_their_clinic(
         assert kept is not None and [line.id for line in kept.lines] == [
             line.id for line in bill.lines
         ]
+
+    # M6d-P3: B's payment on that bill is invisible to A, and A cannot write it.
+    payment = Payment(
+        id=new_id(),
+        clinic_id=b.clinic_id,
+        bill_id=bill.id,
+        patient_id=b.patient.id,
+        doctor_id=b.doctor.id,
+        kind=PaymentKind.PAYMENT,
+        mode=PaymentMode.CASH,
+        amount_paise=100,
+        reference=None,
+        received_by=b.owner.user_id,
+        received_at=NOW,
+        local_date=NOW.date(),
+    )
+    with uow_factory() as uow:
+        uow.tenant(b.clinic_id).payments.add(payment)
+        uow.commit()
+    with uow_factory() as uow:
+        payments_a = uow.tenant(a.clinic_id).payments
+        assert payments_a.get(payment.id) is None
+        assert payments_a.list_for_bill(bill.id) == []
+        assert payments_a.list_on(NOW.date()) == []
+        assert uow.tenant(a.clinic_id).bills.dues() == []
+        assert uow.tenant(a.clinic_id).bills.dues_for([b.patient.id]) == {}
+        with pytest.raises(TenancyViolation):
+            payments_a.add(payment)
+        with pytest.raises(TenancyViolation):
+            payments_a.update(payment)
+        forged = Payment(**{**_fields(payment), "clinic_id": a.clinic_id})
+        with pytest.raises(NotFound):
+            payments_a.update(forged)
 
 
 def test_m6d_p1_fee_schedule_is_scoped_to_its_clinic(

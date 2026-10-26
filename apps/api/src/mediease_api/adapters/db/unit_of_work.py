@@ -44,6 +44,7 @@ from mediease_api.adapters.db.patient_notifications import (
     SqlAlchemyPatientNotificationRepository,
     SqlAlchemyPatientPreferenceRepository,
 )
+from mediease_api.adapters.db.payments import SqlAlchemyPaymentRepository
 from mediease_api.adapters.db.portal import (
     SqlAlchemyEmailTokenRepository,
     SqlAlchemyExternalIdentityRepository,
@@ -130,6 +131,8 @@ class SqlAlchemyTenantRepositories:
         self._fees = SqlAlchemyFeeRepository(session, clinic_id)
         # M6d-P2: bills and credit notes.
         self._bills = SqlAlchemyBillRepository(session, clinic_id)
+        # M6d-P3: payments and refunds.
+        self._payments = SqlAlchemyPaymentRepository(session, clinic_id)
 
     @property
     def clinic_id(self) -> UUID:
@@ -194,6 +197,10 @@ class SqlAlchemyTenantRepositories:
     @property
     def bills(self) -> SqlAlchemyBillRepository:
         return self._bills
+
+    @property
+    def payments(self) -> SqlAlchemyPaymentRepository:
+        return self._payments
 
     @property
     def rx_templates(self) -> SqlAlchemyRxTemplateRepository:

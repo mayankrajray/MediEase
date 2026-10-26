@@ -12,7 +12,7 @@ from collections.abc import Collection, Sequence
 from datetime import UTC
 from uuid import UUID
 
-from sqlalchemy import delete, func, or_, select, tuple_
+from sqlalchemy import ColumnElement, delete, func, or_, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -28,7 +28,7 @@ from mediease_api.domain.billing.bill import (
     VisitAlreadyBilled,
 )
 from mediease_api.domain.shared.errors import NotFound
-from mediease_api.ports.billing import BillQuery
+from mediease_api.ports.billing import BillQuery, PatientDues
 
 _VISIT_INDEX = "uq_bills_visit_id"
 
@@ -276,3 +276,43 @@ class SqlAlchemyBillRepository(TenantScopedRepository[BillRow]):
             )
         stmt = stmt.order_by(BillRow.created_at.desc(), BillRow.id.desc()).limit(query.limit)
         return [_bill(row) for row in self._session.scalars(stmt)]
+
+    def _owing(self) -> tuple[ColumnElement[int], tuple[ColumnElement[bool], ...]]:
+        balance = (
+            BillRow.total_paise
+            - BillRow.credited_paise
+            - BillRow.paid_paise
+            + BillRow.refunded_paise
+        )
+        return balance, (
+            BillRow.clinic_id == self.clinic_id,
+            BillRow.kind == BillKind.BILL.value,
+            BillRow.status == BillStatus.ISSUED.value,
+            balance > 0,
+        )
+
+    def dues(self, *, patient_id: UUID | None = None, limit: int = 200) -> Sequence[PatientDues]:
+        balance, where = self._owing()
+        due = func.sum(balance)
+        query = select(BillRow.patient_id, func.count(), due, func.min(BillRow.bill_date)).where(
+            *where
+        )
+        if patient_id is not None:
+            query = query.where(BillRow.patient_id == patient_id)
+        query = query.group_by(BillRow.patient_id).order_by(due.desc(), BillRow.patient_id)
+        return [
+            # Issued bills always have a bill date (CHECK numbered_when_issued).
+            PatientDues(row[0], int(row[1]), int(row[2]), row[3])  # type: ignore[arg-type]
+            for row in self._session.execute(query.limit(limit))
+        ]
+
+    def dues_for(self, patient_ids: Sequence[UUID]) -> dict[UUID, int]:
+        if not patient_ids:
+            return {}
+        balance, where = self._owing()
+        query = (
+            select(BillRow.patient_id, func.sum(balance))
+            .where(*where, BillRow.patient_id.in_(patient_ids))
+            .group_by(BillRow.patient_id)
+        )
+        return {row[0]: int(row[1]) for row in self._session.execute(query)}

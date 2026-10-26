@@ -159,6 +159,9 @@ class AuditAction(StrEnum):
     BILL_DISCARDED = "bill.discarded"
     BILL_ISSUED = "bill.issued"
     BILL_CREDITED = "bill.credited"
+    # M6d-P3 (FR-BIL-03): payments and refunds. IDs, the kind, mode and amount only.
+    PAYMENT_RECORDED = "payment.recorded"
+    PAYMENT_VOIDED = "payment.voided"
     # M6b-P5 (R34-R43, R32): the answers. IDs and the decline reason code only, never the note.
     BOOKING_REQUEST_ACCEPTED = "booking_request.accepted"
     BOOKING_REQUEST_DECLINED = "booking_request.declined"

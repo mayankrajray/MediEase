@@ -22,7 +22,7 @@ from typing import Protocol, Self
 from uuid import UUID
 
 from mediease_api.ports.audit import AuditReader, AuditWriter
-from mediease_api.ports.billing import BillRepository, FeeRepository
+from mediease_api.ports.billing import BillRepository, FeeRepository, PaymentRepository
 from mediease_api.ports.booking import BookingRequestLookup, BookingRequestRepository
 from mediease_api.ports.dashboard import DashboardReads
 from mediease_api.ports.directory import DirectoryReader
@@ -117,6 +117,11 @@ class TenantRepositories(Protocol):
     @property
     def bills(self) -> BillRepository:
         """Bills and credit notes (M6d-P2, FR-BIL-02, 07)."""
+        ...
+
+    @property
+    def payments(self) -> PaymentRepository:
+        """Payments and refunds on bills (M6d-P3, FR-BIL-03)."""
         ...
 
     @property

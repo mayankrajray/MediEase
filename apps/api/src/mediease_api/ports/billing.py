@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID
 
 from mediease_api.domain.billing.bill import Bill, BillKind, BillStatus
 from mediease_api.domain.billing.fees import ClinicService, DoctorPrice
+from mediease_api.domain.billing.payment import Payment
 
 
 class FeeRepository(Protocol):
@@ -57,6 +58,16 @@ class BillQuery:
     limit: int = 50
 
 
+@dataclass(frozen=True, slots=True)
+class PatientDues:
+    """What one patient owes across their issued bills (P3, R39)."""
+
+    patient_id: UUID
+    bills: int
+    due_paise: int
+    oldest_bill_date: date
+
+
 class BillRepository(Protocol):
     """``bills`` and ``bill_lines`` of one clinic (M6d-P2)."""
 
@@ -89,4 +100,30 @@ class BillRepository(Protocol):
 
     def list(self, query: BillQuery) -> Sequence[Bill]:
         """Bills (never credit notes), newest first, without their lines."""
+        ...
+
+    def dues(self, *, patient_id: UUID | None = None, limit: int = 200) -> Sequence[PatientDues]:
+        """Patients with a positive balance on issued bills, the largest first (R39)."""
+        ...
+
+    def dues_for(self, patient_ids: Sequence[UUID]) -> dict[UUID, int]:
+        """What each of these patients owes; patients who owe nothing are left out (R40)."""
+        ...
+
+
+class PaymentRepository(Protocol):
+    """``payments`` of one clinic (M6d-P3)."""
+
+    def add(self, payment: Payment) -> None: ...
+    def update(self, payment: Payment) -> None:
+        """Only a void changes a payment."""
+        ...
+
+    def get(self, payment_id: UUID, *, for_update: bool = False) -> Payment | None: ...
+    def list_for_bill(self, bill_id: UUID) -> Sequence[Payment]:
+        """Oldest first, voided ones included."""
+        ...
+
+    def list_on(self, day: date) -> Sequence[Payment]:
+        """Every payment and refund of one clinic-local day, voided ones included (P5)."""
         ...

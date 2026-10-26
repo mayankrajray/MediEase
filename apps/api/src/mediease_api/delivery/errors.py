@@ -106,6 +106,11 @@ DOMAIN_ERROR_STATUS = {
     "BIL_VISIT_BILLED": 409,
     "BIL_VISIT_NOT_COMPLETED": 409,
     "BIL_NOT_YOURS": 403,
+    # M6d-P3 (R32-R36): payments and refunds.
+    "BIL_PAYMENT_TOO_LARGE": 409,
+    "BIL_VOID_TOO_LATE": 409,
+    "BIL_ALREADY_VOIDED": 409,
+    "BIL_VOID_REFUNDED": 409,
     # M6b-P3b (R46): a dose outside its marking window.
     "PRT_DOSE_NOT_MARKABLE": 409,
     # M6a-P4: emailed verification and reset links.
