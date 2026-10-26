@@ -10,6 +10,8 @@ import type { GetResponse } from "@/lib/api/client";
 import { sessionGet } from "@/lib/auth/refresh";
 import { formatDateTime, formatDuration, minutesBetween } from "@/lib/format/time";
 
+import { ClinicStatusAction } from "./ClinicStatusAction";
+
 type Clinics = GetResponse<"/api/v1/ops/clinics">["items"];
 type Row = Clinics[number];
 
@@ -34,6 +36,7 @@ export function ClinicList() {
   const { endSession } = useSession();
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const [status, setStatus] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +67,10 @@ export function ClinicList() {
           Create clinic
         </Link>
       </div>
+
+      <p role="status" className="min-h-6 font-medium text-emerald-900">
+        {status}
+      </p>
 
       {load.status === "loading" && (
         <p role="status" className="text-slate-700">
@@ -105,7 +112,14 @@ export function ClinicList() {
             </thead>
             <tbody role="rowgroup">
               {load.items.map((clinic) => (
-                <ClinicRow key={clinic.id} clinic={clinic} />
+                <ClinicRow
+                  key={clinic.id}
+                  clinic={clinic}
+                  onChanged={(text) => {
+                    setStatus(text);
+                    setAttempt((n) => n + 1);
+                  }}
+                />
               ))}
             </tbody>
           </table>
@@ -115,7 +129,7 @@ export function ClinicList() {
   );
 }
 
-function ClinicRow({ clinic }: { clinic: Row }) {
+function ClinicRow({ clinic, onChanged }: { clinic: Row; onChanged: (text: string) => void }) {
   const checklist = clinic.onboarding;
   const toInvite =
     checklist?.staff_invited_at != null
@@ -156,6 +170,8 @@ function ClinicRow({ clinic }: { clinic: Row }) {
             <span className="sr-only">for {clinic.name}</span>
           </Link>
         )}
+        {/* M6c-P4 (R56, R58): suspend or reactivate. */}
+        <ClinicStatusAction clinic={clinic} onChanged={onChanged} />
       </td>
     </tr>
   );

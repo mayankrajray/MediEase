@@ -2266,6 +2266,96 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/clinic/listing": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The directory listing and what stands in its way
+         * @description M6c-P4, spec R50, R51. CLINIC_VIEW.
+         */
+        readonly get: operations["getClinicListing"];
+        /**
+         * List or unlist the clinic in the MediEase directory
+         * @description M6c-P4, spec R52. CLINIC_MANAGE (owners). Listing needs no problem (409
+         *     CLN_LISTING_BLOCKED with details.problems, comma-separated); unlisting always works.
+         */
+        readonly put: operations["setClinicListing"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/listing/doctors/{doctor_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * Show or hide a doctor on the public page and in the directory
+         * @description M6c-P4, spec R53. CLINIC_MANAGE. Showing needs an active doctor verified by MediEase
+         *     (409 CLN_DOCTOR_NOT_VERIFIED). Another clinic's doctor is 404.
+         */
+        readonly put: operations["setDoctorVisibility"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/clinics/{clinic_id}/suspend": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Suspend a clinic
+         * @description M6c-P4, spec R56, R57 (FR-ONB-05). OPS_ADMIN. ACTIVE -> SUSPENDED (409 otherwise). In the
+         *     same transaction every open booking request is declined with CLINIC_UNAVAILABLE and its
+         *     patient told in the portal. The clinic leaves every public surface at once and its staff
+         *     are refused (CLN_SUSPENDED). OTHER needs a note (422); the note is not audited.
+         */
+        readonly post: operations["suspendOpsClinic"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/clinics/{clinic_id}/reactivate": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Reactivate a suspended clinic
+         * @description M6c-P4, spec R58. OPS_ADMIN. SUSPENDED -> ACTIVE (422 otherwise; 409 CLN_OWNER_REQUIRED
+         *     without an active owner). The owner's listing choice is kept.
+         */
+        readonly post: operations["reactivateOpsClinic"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/ops/messaging-costs": {
         readonly parameters: {
             readonly query?: never;
@@ -3863,6 +3953,36 @@ export interface components {
             /** @description Active clinic memberships, ordered by clinic name */
             readonly memberships: readonly components["schemas"]["Membership"][];
         };
+        /**
+         * @description M6c-P4, spec clinic-onboarding R50-R55. The listing, whether the clinic is discoverable,
+         *     what stands in the way, and each doctor's state, so the screen never computes a rule.
+         */
+        readonly ClinicListing: {
+            readonly listed: boolean;
+            /** Format: date-time */
+            readonly listed_at: string | null;
+            readonly verified: boolean;
+            /** @description Listed and nothing in problems (the one discoverability rule, R55) */
+            readonly discoverable: boolean;
+            readonly problems: readonly ("NOT_ACTIVE" | "NOT_VERIFIED" | "ADDRESS_MISSING" | "NO_BOOKABLE_DOCTOR")[];
+            readonly doctors: readonly {
+                /** Format: uuid */
+                readonly id: string;
+                readonly display_name: string;
+                readonly is_active: boolean;
+                readonly verified: boolean;
+                readonly visible: boolean;
+                readonly has_schedule: boolean;
+                /** @description R53 - active and verified by MediEase */
+                readonly can_be_visible: boolean;
+                readonly problems: readonly ("INACTIVE" | "NOT_VERIFIED" | "NO_SCHEDULE" | "HIDDEN")[];
+            }[];
+        };
+        /**
+         * @description M6c-P4 (R56). Audited; never shown to patients
+         * @enum {string}
+         */
+        readonly SuspendReason: "VERIFICATION_PROBLEM" | "CLINIC_REQUEST" | "TERMS_BREACH" | "PAYMENT" | "OTHER";
         readonly SessionUser: {
             /** Format: uuid */
             readonly id: string;
@@ -4118,10 +4238,11 @@ export interface components {
          */
         readonly BookingRequestStatus: "PENDING" | "PROPOSED" | "ACCEPTED" | "DECLINED" | "EXPIRED";
         /**
-         * @description R39; PATIENT_DECLINED is the patient's No thanks to a proposal, never a staff choice
+         * @description R39; PATIENT_DECLINED is the patient's No thanks to a proposal, never a staff choice.
+         *     CLINIC_UNAVAILABLE (M6c-P4): withdrawn by the system when MediEase suspended the clinic.
          * @enum {string}
          */
-        readonly DeclineReason: "TIME_UNAVAILABLE" | "DOCTOR_UNAVAILABLE" | "PLEASE_CALL" | "NOT_ONLINE" | "DUPLICATE" | "OTHER" | "PATIENT_DECLINED";
+        readonly DeclineReason: "TIME_UNAVAILABLE" | "DOCTOR_UNAVAILABLE" | "PLEASE_CALL" | "NOT_ONLINE" | "DUPLICATE" | "OTHER" | "PATIENT_DECLINED" | "CLINIC_UNAVAILABLE";
         /**
          * @description R37: a new clinic record from the request. The name defaults to the account's; sex is
          *     required when the patient gave none; an age (default the request's) or a date of birth.
@@ -9963,6 +10084,180 @@ export interface operations {
             readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["ApplicationError"];
             readonly 422: components["responses"]["ApplicationError"];
+        };
+    };
+    readonly getClinicListing: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The listing */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ClinicListing"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly setClinicListing: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": {
+                    readonly listed: boolean;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description The listing */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ClinicListing"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+        };
+    };
+    readonly setDoctorVisibility: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly doctor_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": {
+                    readonly visible: boolean;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description The listing */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ClinicListing"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+        };
+    };
+    readonly suspendOpsClinic: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description The clinic an ops request is about (ops users have no membership to infer). */
+                readonly clinic_id: components["parameters"]["ClinicPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": {
+                    readonly reason: components["schemas"]["SuspendReason"];
+                    readonly note?: string | null;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description Suspended */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": {
+                        readonly clinic: components["schemas"]["Clinic"];
+                        readonly requests_withdrawn: number;
+                    };
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly reactivateOpsClinic: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description The clinic an ops request is about (ops users have no membership to infer). */
+                readonly clinic_id: components["parameters"]["ClinicPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Reactivated */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Clinic"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 422: components["responses"]["ConflictError"];
         };
     };
     readonly getOpsMessagingCosts: {
