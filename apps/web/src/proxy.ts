@@ -53,6 +53,8 @@ const PUBLIC_PREFIXES: readonly string[] = [
   "/c/",
   // M6b-P6: the live token page; the signed token in the path is the authority (ADR-0019).
   "/q/",
+  // M6d-P4: a bill's receipt page; the token and the last-4 check guard it, like /p/.
+  "/r/",
   // M6c-P1: the application's emailed confirmation link; the token in the path is the authority.
   "/apply/confirm/",
   "/reset-password/",

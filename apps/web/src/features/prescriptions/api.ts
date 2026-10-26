@@ -77,13 +77,18 @@ const PDF_TIMEOUT_MS = 30_000;
  * after the `Retry-After` the API gives.
  */
 export async function fetchPdf(rxId: string, clinicId: string | undefined, fetchImpl: typeof fetch = fetch): Promise<Blob> {
+  return fetchPdfAt(`/api/v1/prescriptions/${encodeURIComponent(rxId)}/pdf`, clinicId, fetchImpl);
+}
+
+/** M6d-P4: any staff PDF route (a bill's receipt too), with the clinic named and one retry when busy. */
+export async function fetchPdfAt(path: string, clinicId: string | undefined, fetchImpl: typeof fetch = fetch): Promise<Blob> {
   const once = async (): Promise<Blob> => {
     const requestId = newRequestId();
     const headers: Record<string, string> = { Accept: "application/pdf, application/json", [REQUEST_ID_HEADER]: requestId };
     if (clinicId !== undefined) headers[CLINIC_HEADER] = clinicId;
     let response: Response;
     try {
-      response = await fetchImpl(`/api/v1/prescriptions/${encodeURIComponent(rxId)}/pdf`, {
+      response = await fetchImpl(path, {
         headers,
         credentials: "same-origin",
         cache: "no-store",

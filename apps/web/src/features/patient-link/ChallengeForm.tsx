@@ -12,6 +12,8 @@ export function ChallengeForm({
   problem,
   locked,
   switchHref,
+  base = "/p",
+  title,
 }: Readonly<{
   token: string;
   clinicName: string;
@@ -20,6 +22,9 @@ export function ChallengeForm({
   problem?: string;
   locked: boolean;
   switchHref: string;
+  /** M6d-P4: `/r` for a receipt link; the form posts to `<base>/<token>/verify`. */
+  base?: string;
+  title?: string;
 }>) {
   return (
     <main lang={language} className="mx-auto max-w-md px-4 pb-10 pt-4 text-base leading-relaxed text-slate-900">
@@ -28,7 +33,7 @@ export function ChallengeForm({
           {strings.switchTo}
         </a>
       </p>
-      <h1 className="mt-2 text-xl font-bold">{strings.title}</h1>
+      <h1 className="mt-2 text-xl font-bold">{title ?? strings.title}</h1>
       <p>{strings.from(clinicName)}</p>
       {problem !== undefined && (
         <p role="alert" id="challenge-problem" className="mt-3 rounded border border-red-700 bg-red-50 p-2 font-semibold text-red-900">
@@ -36,7 +41,7 @@ export function ChallengeForm({
         </p>
       )}
       {!locked && (
-        <form method="post" action={`/p/${encodeURIComponent(token)}/verify`} className="mt-4">
+        <form method="post" action={`${base}/${encodeURIComponent(token)}/verify`} className="mt-4">
           <h2 className="text-lg font-bold">{strings.challengeHeading}</h2>
           <p id="last4-help">{strings.challengeHelp}</p>
           <label htmlFor="phone_last4" className="mt-3 block font-semibold">

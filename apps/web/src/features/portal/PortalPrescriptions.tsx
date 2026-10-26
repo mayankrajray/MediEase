@@ -8,7 +8,8 @@ import { PrescriptionView } from "@/features/patient-link/PrescriptionView";
 import { stringsFor } from "@/features/patient-link/strings";
 import { ApiError } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
-import { portalGet, portalPdf } from "@/lib/auth/portal-session";
+import { portalGet, portalPdf, portalPdfAt } from "@/lib/auth/portal-session";
+import { formatPaise } from "@/lib/format/money";
 import { type PortalLanguage, portalDate } from "@/lib/i18n/portal";
 
 import { DEFAULT_ZONE, type PortalPrescription, portalErrorText, usePortalLoad, zonesOf } from "./data";
@@ -17,8 +18,16 @@ import { PortalCard, ScreenLoading, usePortal } from "./PortalShell";
 type Page = components["schemas"]["PatientPrescriptionPage"];
 
 async function loadList() {
-  const [links, items] = await Promise.all([portalGet("/api/v1/portal/links"), portalGet("/api/v1/portal/prescriptions")]);
-  return { zones: zonesOf(links.data.items), items: items.data.items };
+  const [links, items, bills] = await Promise.all([
+    portalGet("/api/v1/portal/links"),
+    portalGet("/api/v1/portal/prescriptions"),
+    // M6d-P4: the bills card is extra; a failure there must not hide the prescriptions.
+    portalGet("/api/v1/portal/bills").then(
+      (r) => r.data,
+      () => ({ items: [] as PortalBill[] }),
+    ),
+  ]);
+  return { zones: zonesOf(links.data.items), items: items.data.items, bills: bills.items };
 }
 
 /** *My prescriptions* (M6b-P2; spec R19): each linked clinic's current prescriptions, by clinic. */
@@ -57,7 +66,54 @@ export function PortalPrescriptions() {
             </ul>
           </PortalCard>
         ))}
+      {loaded.status === "ready" && loaded.data.bills.length > 0 && <PortalBills bills={loaded.data.bills} />}
     </div>
+  );
+}
+
+type PortalBill = components["schemas"]["PortalBillList"]["items"][number];
+
+/** M6d-P4 (billing R52): the linked records' issued bills, each with its receipt. */
+function PortalBills({ bills }: Readonly<{ bills: readonly PortalBill[] }>) {
+  const { s, leave } = usePortal();
+  const [error, setError] = useState<unknown>(null);
+
+  async function download(bill: PortalBill) {
+    setError(null);
+    try {
+      const url = URL.createObjectURL(await portalPdfAt(`/api/v1/portal/bills/${encodeURIComponent(bill.id)}/receipt.pdf`));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `bill-${bill.number.replaceAll("/", "-")}.pdf`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (failure) {
+      if (!leave(failure)) setError(failure);
+    }
+  }
+
+  return (
+    <PortalCard id="bills" title={s.bills.title}>
+      {error !== null && <ErrorNotice error={error} />}
+      <ul>
+        {bills.map((b) => (
+          <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 py-2 first:border-t-0">
+            <span>
+              <span className="block font-semibold">
+                {b.clinic_name} · {b.number}
+              </span>
+              <span className="text-sm text-slate-700">
+                {b.bill_date} · {formatPaise(b.total_paise)} ·{" "}
+                {b.cancelled ? s.bills.cancelled : b.balance_paise > 0 ? s.bills.due(formatPaise(b.balance_paise)) : s.bills.settled}
+              </span>
+            </span>
+            <button type="button" onClick={() => void download(b)} className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+              {s.bills.download} <span className="sr-only">{b.number}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </PortalCard>
   );
 }
 

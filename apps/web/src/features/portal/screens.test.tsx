@@ -191,6 +191,7 @@ describe("Prescriptions (R19, AC9)", () => {
       ...me(),
       "GET /api/v1/portal/links": () => json(200, { items: [link()] }),
       "GET /api/v1/portal/prescriptions": () => json(200, { items: [RX] }),
+      "GET /api/v1/portal/bills": () => json(200, { items: [] }),
     });
     await renderPortal(<PortalPrescriptions />);
     const clinic = await screen.findByRole("region", { name: "Sample Clinic" });
