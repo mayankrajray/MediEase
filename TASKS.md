@@ -11,10 +11,10 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M6c — SaaS clinic onboarding, verification and discovery** (issue #53, branch `m6c/53-onboarding-discovery` from `main` at `9df830b`, one PR for the milestone). M6b merged in PR #52 on 26 Oct 2026 (#51 closed) |
-| Active phase | **M6c done; PR #54 awaits the developer's merge approval.** P1–P8 built, pushed and verified (full API and web suites, smoke, Playwright; see NEXT_STEPS_PLAN progress log) (specs `docs/specs/clinic-onboarding.md` R1–R64, AC1–AC17; `docs/specs/discovery.md` R1–R10, AC1–AC4; ADR-0021). The developer approved every design decision for P2–P8 in advance (26 Oct 2026); phases are built in order and pushed, the full API and Playwright suites run once after P8, and the PR waits for the developer's merge approval |
-| Design notes | `docs/milestones/M6c-onboarding-verification-discovery.md` (M6c); M6b in `docs/milestones/M6b-patient-portal-booking.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
-| Approved plan | `NEXT_STEPS_PLAN.md` (M6c phases, workflow, progress log) |
+| Active milestone | **M6d — Billing and documents** (issue #63, branch `m6d/63-billing-and-documents` from `main` at `ec721e6`, one PR for the milestone). M6c merged in PR #54 on 26 Oct 2026 (#53 closed) |
+| Active phase | **M6d-P1 — Fee schedule** (FR-BIL-01): approved 26 Oct 2026 and being built. Spec `docs/specs/billing.md` written with P1 |
+| Design notes | `docs/milestones/M6d-billing-and-documents.md` (M6d); M6c in `docs/milestones/M6c-onboarding-verification-discovery.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
+| Approved plan | `NEXT_STEPS_PLAN.md` (M6d phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
 | Open decisions | Real email delivery needs L-11 (Brevo account, verified sending domain); locally Mailpit covers it. Real Google sign-in needs L-09 (the fake provider covers local use). The issue #49 title still says "MVP demo" (rename on GitHub by the developer). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test is flaky on CI (150 ms bound) |
@@ -176,7 +176,7 @@ tests pass. Issue #51, branch `m6b/51-patient-portal-booking`; design notes
 | M6b-P5 | Front-desk inbox: accept with linking, decline, propose, expiry (FR-BKG-04..06, 08, FR-PRT-06 a) | ✅ (pushed 26 Oct 2026, PR #52) |
 | M6b-P6 | Patient notifications and the live token link (FR-NTF-04, 05 for patients, FR-REM-03, FR-QUE-06) | ✅ (pushed 26 Oct 2026; PR #52 merged 26 Oct 2026) |
 
-## M6c — SaaS clinic onboarding, verification and discovery  `▶ ACTIVE`
+## M6c — SaaS clinic onboarding, verification and discovery  `✅ (PR #54, merged 26 Oct 2026)`
 
 **Covers:** FR-ONB-01..10, FR-DIS-01..08, FR-LND-01..03, NFR-17, NFR-19 (PRD v1.2). Issue #53,
 branch `m6c/53-onboarding-discovery`, one PR. Design notes
@@ -201,10 +201,28 @@ will reply within 2 working days; **D4** issue #53, branch from the latest `main
 | M6c-P7 | Discovery to booking (FR-DIS-08) | ✅ (built 26 Oct 2026, pushed) |
 | M6c-P8 | Landing page v1 (FR-LND-01..03) | ✅ (built 26 Oct 2026, pushed) |
 
-## M6d — Billing and documents  `☐`
+## M6d — Billing and documents  `▶ ACTIVE`
 
-**Covers:** FR-BIL-01..07, FR-VIS-04, FR-SUB-01 (PRD v1.2). Own issue, branch and PR. **Exit:** the
-daily collection matches recorded payments; plan limits are enforced.
+**Covers:** FR-BIL-01..07, FR-VIS-04, FR-SUB-01 (PRD v1.2). Issue #63, branch
+`m6d/63-billing-and-documents`, one PR. Design notes `docs/milestones/M6d-billing-and-documents.md`
+(approved 26 Oct 2026). **Exit:** the daily collection matches recorded payments; plan limits are
+enforced on every path that adds a doctor or a user; `make e2e` green.
+
+Locked decisions (26 Oct 2026, all on the recommendations): **D1** bill numbers per financial
+year; **D2** doctors record payments on their own bills; **D3** no GST fields; **D4** Solo = 1
+doctor and 2 users counting the owner; **D5** the trial starts at `ACTIVE`, its end only flags;
+**D6** receipts by link and QR, WhatsApp once a template is approved; **D7** front desk may upload
+reports it cannot open; **D8** the public fee is the consultation price; **D9** issue #63.
+
+| Phase | Scope | Status |
+|---|---|---|
+| M6d-P1 | Fee schedule: services, default and per-doctor prices, *Fees* page, the public fee from it (FR-BIL-01) | ▶ (approved 26 Oct 2026) |
+| M6d-P2 | Bills from a visit or for a patient; discounts; issue with a number; credit notes (FR-BIL-02, 07) | ☐ |
+| M6d-P3 | Payments (cash, UPI, card; partial), refunds, dues (FR-BIL-03, 05) | ☐ |
+| M6d-P4 | Receipt PDFs, the receipt link, bills in the portal (FR-BIL-04) | ☐ |
+| M6d-P5 | Daily collection by mode and doctor, CSV (FR-BIL-06) | ☐ |
+| M6d-P6 | Report attachments on visits (FR-VIS-04) | ☐ |
+| M6d-P7 | Plans, trial and limits (FR-SUB-01) | ☐ |
 
 ## M7 — AI assistant and pitch  `☐`
 
