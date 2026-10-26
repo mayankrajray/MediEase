@@ -88,7 +88,11 @@ from mediease_api.application.booking.answers import (
     ProposeBookingTime,
 )
 from mediease_api.application.booking.expiry import ExpireBookingRequests, SweepRequestExpiry
-from mediease_api.application.booking.public import GetAvailability, GetPublicClinic
+from mediease_api.application.booking.public import (
+    GetAvailability,
+    GetPublicClinic,
+    GetSitemap,
+)
 from mediease_api.application.booking.requests import (
     CreateBookingRequest,
     ListBookingRequests,
@@ -98,7 +102,12 @@ from mediease_api.application.clinics.change_staff_role import ChangeStaffRole
 from mediease_api.application.clinics.deactivate_staff import DeactivateStaff
 from mediease_api.application.clinics.invite_email import SendStaffInvite
 from mediease_api.application.clinics.invite_staff import InviteStaff, ResendStaffInvite
-from mediease_api.application.clinics.listing import GetListing, SetDoctorVisibility, SetListing
+from mediease_api.application.clinics.listing import (
+    GetListing,
+    SetDoctorProfile,
+    SetDoctorVisibility,
+    SetListing,
+)
 from mediease_api.application.clinics.onboard_clinic import (
     AddDoctor,
     CreateClinic,
@@ -279,7 +288,10 @@ from mediease_api.delivery.http.platform import create_platform_blueprint
 from mediease_api.delivery.http.portal import create_portal_blueprint
 from mediease_api.delivery.http.prescriptions import create_prescriptions_blueprint
 from mediease_api.delivery.http.public_applications import create_public_applications_blueprint
-from mediease_api.delivery.http.public_clinics import create_public_clinics_blueprint
+from mediease_api.delivery.http.public_clinics import (
+    create_public_clinics_blueprint,
+    create_public_sitemap_blueprint,
+)
 from mediease_api.delivery.http.public_links import create_public_links_blueprint
 from mediease_api.delivery.http.public_queue import create_public_queue_blueprint
 from mediease_api.delivery.http.reminders import create_reminders_blueprint
@@ -985,6 +997,12 @@ class _UseCases:
     def set_listing(self) -> SetListing:
         return SetListing(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    def set_doctor_profile(self) -> SetDoctorProfile:
+        return SetDoctorProfile(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def get_sitemap(self) -> GetSitemap:
+        return GetSitemap(uow=self._uow(), clock=self.clock)
+
     def set_doctor_visibility(self) -> SetDoctorVisibility:
         return SetDoctorVisibility(uow=self._uow(), clock=self.clock, ids=self.ids)
 
@@ -1373,6 +1391,9 @@ def create_app(
     app.register_blueprint(create_ops_verification_blueprint(use_cases))
     app.register_blueprint(create_ops_suspension_blueprint(use_cases))
     app.register_blueprint(create_listing_blueprint(use_cases))
+    app.register_blueprint(
+        create_public_sitemap_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
+    )
     app.register_blueprint(create_public_queue_blueprint(use_cases))
     app.register_blueprint(create_booking_requests_blueprint(use_cases))
     app.register_blueprint(create_rx_library_blueprint(use_cases))

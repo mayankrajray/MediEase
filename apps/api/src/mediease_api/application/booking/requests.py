@@ -159,7 +159,7 @@ class CreateBookingRequest:
             clinic = find_public_clinic(uow, cmd.clinic_slug)
             tenant = uow.tenant(clinic.id)
             doctor = load_doctor(tenant, clinic.id, cmd.doctor_id, lock=RowLock.SHARE)
-            if not doctor.is_active:
+            if not doctor.is_public:  # M6c-P5 (R59): hidden or unverified doctors too
                 raise SessionClosed()
             on_date = local_date(cmd.session_start, clinic.timezone)
             today = local_date(now, clinic.timezone)

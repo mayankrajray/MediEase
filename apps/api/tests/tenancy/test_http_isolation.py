@@ -37,6 +37,9 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/clinic/listing/doctors/<uuid:doctor_id>": lambda w: (
         f"/api/v1/clinic/listing/doctors/{w.b.doctor.id}"
     ),
+    "/api/v1/clinic/listing/doctors/<uuid:doctor_id>/profile": lambda w: (
+        f"/api/v1/clinic/listing/doctors/{w.b.doctor.id}/profile"
+    ),
     "/api/v1/clinic/staff/<uuid:membership_id>": lambda w: _staff_url(w),
     "/api/v1/clinic/staff/<uuid:membership_id>/resend": lambda w: _invited_staff_url(w),
     "/api/v1/patients/<uuid:patient_id>": lambda w: _patient_url(w),
@@ -132,6 +135,7 @@ AS_DOCTOR = {
 Body = dict[str, object] | Callable[[World], dict[str, object]]
 CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
     "/api/v1/clinic/listing/doctors/<uuid:doctor_id>": ("PUT", {"visible": False}),
+    "/api/v1/clinic/listing/doctors/<uuid:doctor_id>/profile": ("PUT", {"languages": []}),
     "/api/v1/appointments/<uuid:appointment_id>/cancel": ("POST", {"reason": "PATIENT_REQUEST"}),
     "/api/v1/appointments/<uuid:appointment_id>/transitions": (
         "POST",

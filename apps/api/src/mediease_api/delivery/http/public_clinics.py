@@ -4,10 +4,12 @@
 |---|---|
 | ``GET /api/v1/public/clinics/{slug}`` | public |
 | ``GET /api/v1/public/clinics/{slug}/availability?doctor_id=&from=`` | public |
+| ``GET /api/v1/public/sitemap`` (M6c-P5) | public |
 
 No session. A clinic that is not ``has_public_page`` is exactly an unknown slug: the same 404. The
 body is an **allow-list**: nothing but what a clinic publishes (a test fails on any other field).
-Never cached, and ``noindex`` until M6c (FR-DIS-06).
+Never cached. The JSON is ``noindex``; the web page is indexable only when ``indexable`` is
+true (M6c-P5, FR-DIS-06: discoverable and not opted out).
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from mediease_api.application.booking.public import (
     DayOffer,
     GetAvailability,
     GetPublicClinic,
+    GetSitemap,
     PublicClinic,
 )
 from mediease_api.delivery.http.access import public
@@ -43,14 +46,20 @@ CLINIC_FIELDS = frozenset(
         "map_url",
         "requires_age_sex",
         "doctors",
+        # M6c-P5 (FR-DIS-03, 06).
+        "specialties",
+        "indexable",
     }
 )
-DOCTOR_FIELDS = frozenset({"id", "display_name", "qualification", "specialty", "hours"})
+DOCTOR_FIELDS = frozenset(
+    {"id", "display_name", "qualification", "specialty", "hours", "languages", "fee_paise"}
+)
 
 
 class PublicClinicUseCases(Protocol):
     def get_public_clinic(self) -> GetPublicClinic: ...
     def get_availability(self) -> GetAvailability: ...
+    def get_sitemap(self) -> GetSitemap: ...
 
 
 def _hhmm(value: Any) -> str:
@@ -71,6 +80,8 @@ def public_clinic_body(view: PublicClinic) -> dict[str, Any]:
         "booking_mode": c.booking_mode.value,
         "map_url": view.map_url,
         "requires_age_sex": c.request_requires_age_sex,
+        "specialties": list(c.specialties),
+        "indexable": view.indexable,
         "doctors": [
             {
                 "id": str(d.id),
@@ -81,6 +92,8 @@ def public_clinic_body(view: PublicClinic) -> dict[str, Any]:
                     {"weekday": h.weekday, "start": _hhmm(h.start), "end": _hhmm(h.end)}
                     for h in d.hours
                 ],
+                "languages": list(d.languages),
+                "fee_paise": d.fee_paise,
             }
             for d in view.doctors
         ],
@@ -141,5 +154,34 @@ def create_public_clinics_blueprint(use_cases: PublicClinicUseCases) -> Blueprin
             raise InvalidValue("from", "must be a date as YYYY-MM-DD") from None
         days = use_cases.get_availability().execute(slug, doctor_id, first, request_info())
         return jsonify(availability_body(list(days)))
+
+    return bp
+
+
+def create_public_sitemap_blueprint(
+    use_cases: PublicClinicUseCases, *, public_base_url: str
+) -> Blueprint:
+    """M6c-P5 (R63): the indexable profiles as absolute URLs, for the web app's sitemap.xml."""
+    bp = Blueprint("public_sitemap", __name__, url_prefix="/api/v1/public/sitemap")
+    base = public_base_url.rstrip("/")
+
+    @bp.after_request
+    def _private(response: Response) -> Response:
+        response.headers["Cache-Control"] = "public, max-age=3600"
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response
+
+    @bp.get("")
+    @public
+    def sitemap() -> Response:
+        items = []
+        for entry in use_cases.get_sitemap().execute():
+            clinic_url = f"{base}/c/{entry.slug}"
+            items.append({"loc": clinic_url, "lastmod": entry.updated_at.isoformat()})
+            items.extend(
+                {"loc": f"{clinic_url}/doctors/{d}", "lastmod": entry.updated_at.isoformat()}
+                for d in entry.doctor_ids
+            )
+        return jsonify({"base_url": base, "items": items})
 
     return bp

@@ -64,6 +64,14 @@ def test_r51_r52_listing_needs_every_requirement_and_reports_what_is_missing(
         conn.execute(
             text("UPDATE clinics SET address_line = NULL WHERE id = :c"), {"c": world.a.clinic.id}
         )
+        # The world's doctors are verified and shown (M6c-P5); start from a new doctor's state.
+        conn.execute(
+            text(
+                "UPDATE doctors SET verified_at = NULL, verified_by = NULL,"
+                " verification_source = NULL, visible = false WHERE id = :d"
+            ),
+            {"d": world.a.doctor.id},
+        )
     state = owner.get(LISTING).get_json()
     assert state["listed"] is False and state["discoverable"] is False
     assert state["problems"] == ["ADDRESS_MISSING", "NO_BOOKABLE_DOCTOR"]

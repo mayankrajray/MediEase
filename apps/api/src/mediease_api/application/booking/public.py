@@ -21,6 +21,7 @@ from uuid import UUID
 import structlog
 
 from mediease_api.application.booking.limits import limit_reads
+from mediease_api.application.clinics.listing import load_listing
 from mediease_api.application.context import RequestInfo
 from mediease_api.domain.booking.request import HORIZON_DAYS, MIN_LEAD
 from mediease_api.domain.clinics.clinic import Clinic
@@ -49,6 +50,9 @@ class PublicDoctor:
     qualification: str
     specialty: str | None
     hours: tuple[PublicHours, ...]
+    # M6c-P5 (FR-DIS-03): the published profile.
+    languages: tuple[str, ...] = ()
+    fee_paise: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +60,15 @@ class PublicClinic:
     clinic: Clinic
     map_url: str
     doctors: tuple[PublicDoctor, ...]
+    # M6c-P5 (FR-DIS-06, R62): search engines may index it: discoverable and not opted out.
+    indexable: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SitemapEntry:
+    slug: str
+    updated_at: datetime
+    doctor_ids: tuple[UUID, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,7 +122,7 @@ class GetPublicClinic:
             today = local_date(self._clock.now(), clinic.timezone)
             doctors = []
             for doctor in tenant.doctors.list():
-                if not doctor.is_active:
+                if not doctor.is_public:  # M6c-P5 (R59): active, verified and shown
                     continue
                 blocks = tenant.schedules.list_for_doctor(doctor.id, valid_since=today)
                 hours = sorted(
@@ -123,9 +136,13 @@ class GetPublicClinic:
                         doctor.qualification,
                         doctor.specialty,
                         tuple(hours),
+                        doctor.languages,
+                        doctor.fee_paise,
                     )
                 )
-        return PublicClinic(clinic, map_link(clinic), tuple(doctors))
+            listing = load_listing(uow, clinic, self._clock.now())
+            indexable = listing.discoverable and clinic.search_indexing
+        return PublicClinic(clinic, map_link(clinic), tuple(doctors), indexable)
 
 
 def build_offers(
@@ -206,10 +223,37 @@ class GetAvailability:
             clinic = find_public_clinic(uow, slug)
             tenant = uow.tenant(clinic.id)
             doctor = tenant.doctors.get(doctor_id)
-            if doctor is None or not doctor.is_active:
+            if doctor is None or not doctor.is_public:
                 raise NotFound("doctor")
             today = local_date(now, clinic.timezone)
             start = first or today
             if start < today or start > horizon(today) - timedelta(days=HORIZON_DAYS):
                 raise InvalidValue("from", "must be today or a day within the next 180 days")
             return build_offers(tenant, clinic, doctor, start, now)
+
+
+# M6c-P5 (FR-DIS-06, R62, R63): at most this many clinics in the sitemap (pilot scale; one file).
+SITEMAP_LIMIT = 5_000
+
+
+class GetSitemap:
+    """The indexable profiles: discoverable clinics that have not opted out, with their shown
+    doctors. Unlisted, unverified, suspended and opted-out clinics are simply absent."""
+
+    def __init__(self, *, uow: UnitOfWork, clock: ClockPort) -> None:
+        self._uow = uow
+        self._clock = clock
+
+    def execute(self) -> list[SitemapEntry]:
+        now = self._clock.now()
+        entries: list[SitemapEntry] = []
+        with self._uow as uow:
+            for clinic in uow.clinics.list_listed(limit=SITEMAP_LIMIT):
+                if not clinic.search_indexing:
+                    continue
+                listing = load_listing(uow, clinic, now)
+                if not listing.discoverable:
+                    continue
+                shown = tuple(d.doctor.id for d in listing.doctors if d.is_shown)
+                entries.append(SitemapEntry(clinic.slug, clinic.updated_at, shown))
+        return entries
