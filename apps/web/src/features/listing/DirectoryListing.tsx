@@ -1,12 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/Button";
-import { CheckboxField, TextField } from "@/components/ui/Field";
+import { CheckboxField } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
+import { formatPaise } from "@/lib/format/money";
 
 import { DOCTOR_PROBLEM_WORDS, LISTING_PROBLEM_WORDS, useListingApi, type ClinicListing, type DoctorListing } from "./api";
 
@@ -129,9 +131,9 @@ export function DirectoryListing() {
                 doctor={d}
                 options={listing.language_options}
                 busy={busy}
-                onSave={(languages, fee) =>
+                onSave={(languages, showFee) =>
                   void change(
-                    () => api.setProfile(d.id, languages, fee),
+                    () => api.setProfile(d.id, languages, showFee),
                     () => `${d.display_name}'s profile saved.`,
                   )
                 }
@@ -144,7 +146,10 @@ export function DirectoryListing() {
   );
 }
 
-/** M6c-P5 (R61): the languages a doctor speaks and an optional fee in rupees, for their profile. */
+/**
+ * M6c-P5 (R61): the languages a doctor speaks, for their profile. M6d-P1 (D8): whether the
+ * profile shows their consultation price, which is set on *Fees*.
+ */
 function DoctorProfileForm({
   doctor,
   options,
@@ -154,18 +159,18 @@ function DoctorProfileForm({
   doctor: DoctorListing;
   options: readonly string[];
   busy: boolean;
-  onSave: (languages: readonly string[], feePaise: number | null) => void;
+  onSave: (languages: readonly string[], showFee: boolean) => void;
 }>) {
   const [languages, setLanguages] = useState<readonly string[]>(doctor.languages);
-  const [fee, setFee] = useState(doctor.fee_paise === null ? "" : String(doctor.fee_paise / 100));
-  const trimmed = fee.trim();
-  const rupees = trimmed === "" ? null : Number(trimmed);
-  const feeError = rupees !== null && (!Number.isInteger(rupees) || rupees < 0 || rupees > 10000) ? "Enter whole rupees from 0 to 10000." : undefined;
+  const [showFee, setShowFee] = useState(doctor.show_fee);
+  const feeHint =
+    doctor.fee_paise === null
+      ? "No consultation price is set yet, so none is shown. Set it on Fees."
+      : `Their consultation price is ${formatPaise(doctor.fee_paise)}. Change it on Fees.`;
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (feeError !== undefined) return;
-    onSave(languages, rupees === null ? null : Math.round(rupees * 100));
+    onSave(languages, showFee);
   }
 
   return (
@@ -184,16 +189,19 @@ function DoctorProfileForm({
           ))}
         </div>
       </fieldset>
-      <TextField
+      <CheckboxField
         id={`fee-${doctor.id}`}
-        label="Consultation fee in whole rupees (optional)"
-        inputMode="numeric"
-        value={fee}
-        onChange={setFee}
-        hint="Shown on the profile. Leave empty to show no fee."
-        {...(feeError !== undefined ? { error: feeError } : {})}
+        label="Show the consultation fee publicly"
+        checked={showFee}
+        onChange={setShowFee}
+        hint={feeHint}
       />
-      <Button type="submit" size="sm" disabled={busy || feeError !== undefined}>
+      <p className="text-sm">
+        <Link href="/settings/fees" className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+          Set prices on Fees
+        </Link>
+      </p>
+      <Button type="submit" size="sm" disabled={busy}>
         Save profile <span className="sr-only">for {doctor.display_name}</span>
       </Button>
     </form>

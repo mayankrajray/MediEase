@@ -67,6 +67,8 @@ export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
     { href: "/settings/audit", label: "Audit log", requires: "AUDIT_VIEW" },
     // M6c-P4 (FR-ONB-10): the directory listing and doctor visibility, owners only.
     { href: "/settings/listing", label: "Directory", requires: "CLINIC_MANAGE" },
+    // M6d-P1 (FR-BIL-01): the fee schedule, owners only (others reach it by URL to read it).
+    { href: "/settings/fees", label: "Fees", requires: "FEES_MANAGE" },
     { href: "/settings/notifications", label: "Notifications" },
   ],
   DOCTOR: [

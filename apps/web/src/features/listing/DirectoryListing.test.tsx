@@ -32,6 +32,7 @@ const listing = (overrides: Record<string, unknown> = {}, doctor: Record<string,
       can_be_visible: true,
       languages: [],
       fee_paise: null,
+      show_fee: false,
       problems: ["HIDDEN"],
       ...doctor,
     },
@@ -93,5 +94,23 @@ describe("the directory listing (M6c-P4, clinic-onboarding R50-R55)", () => {
     renderInWorkspace(<DirectoryListing />);
     fireEvent.click(await screen.findByLabelText("Listed in the MediEase directory"));
     expect(await screen.findByText(/The clinic cannot be listed yet/)).toBeInTheDocument();
+  });
+
+  it("M6d-P1 (D8): shows the consultation price from Fees and sends only whether to show it", async () => {
+    const api = mockApi({
+      ...workspaceRoutes,
+      "GET /api/v1/me": () => json(200, owner()),
+      "GET /api/v1/clinic/listing": () => json(200, listing({}, { fee_paise: 50000 })),
+      [`PUT /api/v1/clinic/listing/doctors/${DOCTOR}/profile`]: () => json(200, listing({}, { fee_paise: 50000, show_fee: true, languages: ["Hindi"] })),
+    });
+    renderInWorkspace(<DirectoryListing />);
+    const show = await screen.findByLabelText("Show the consultation fee publicly");
+    expect(screen.getByText("Their consultation price is ₹500.00. Change it on Fees.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Set prices on Fees" })).toHaveAttribute("href", "/settings/fees");
+    fireEvent.click(screen.getByLabelText("Hindi"));
+    fireEvent.click(show);
+    fireEvent.click(screen.getByRole("button", { name: /Save profile/ }));
+    expect(await screen.findByText("Dr. Sample Doctor's profile saved.")).toBeInTheDocument();
+    expect(api.calls.find((c) => c.method === "PUT" && c.path.endsWith("/profile"))?.body).toEqual({ languages: ["Hindi"], show_fee: true });
   });
 });
