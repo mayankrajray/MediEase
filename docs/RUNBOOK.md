@@ -679,3 +679,9 @@ suspension will last past them. *Reactivate* restores everything, including the 
 **"Why is our clinic not in search?"** The owner's *Directory* page (`/settings/listing`) lists
 what is missing: verification, the address, or a verified, visible doctor with weekly hours.
 A doctor whose registration number or council was edited needs to be verified again.
+
+**"Our page is not on Google."** Search engines may index a clinic's pages only while it is
+discoverable and the owner has left *Let search engines show our pages* on (*Directory*). Check
+`GET /api/v1/public/clinics/<slug>` for `"indexable": true` and that the clinic is in
+`/sitemap.xml`; crawlers take days to weeks. A doctor missing from the page is hidden, inactive or
+not verified.

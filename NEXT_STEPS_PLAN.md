@@ -63,7 +63,7 @@ Milestone issue #53 → branch m6c/53-onboarding-discovery (from origin/main at 
 ## 4. Phase breakdown
 
 Details, file lists and test plans per phase are in the design notes; each phase is designed at
-its start. P1-P4 are built and pushed; the developer approved every design decision for P2-P8 in
+its start. P1-P5 are built and pushed; the developer approved every design decision for P2-P8 in
 advance (26 Oct 2026).
 
 | Phase | Objective | Requirements | Verify |
@@ -199,3 +199,4 @@ advance (26 Oct 2026).
 | 26 Oct 2026 | P1 pushed and draft PR #54 opened. The developer approved every design decision for P2-P8 in advance, asked for the phases to be built and pushed with the docs kept current, the full end-to-end run once at the end, and the merge to wait for their approval | #53 | P2-P8 approved |
 | 26 Oct 2026 | M6c-P2 and P3 built: ops roles (`0033`), the reviewer queue and detail with audited certificate viewing, take, per-doctor checks, rejection with an emailed reason, the 180-day purge; approval through `in_transaction` versions of the creation use cases in one transaction, clinic and doctor verification (`0034`), `has_public_page` = `ACTIVE` and verified, ops verification of ops-created clinics; `/ops/applications` screens and role-aware ops navigation; contract 0.37.0, 0.38.0. Changed-code tests: 1,454 API (unit, contract, tenancy, migrations, review, approval, booking, portal, seed), web ops and shell suites | #53 | P2, P3 built and pushed |
 | 26 Oct 2026 | M6c-P4 built: the listing rule (`listing_problems`, `is_discoverable`), the owner's *Directory* page with the listing and doctor-visibility switches, ops suspension (open requests declined with `CLINIC_UNAVAILABLE` and patients told in the portal in the same transaction) and reactivation; contract 0.39.0. Changed-code tests green (domain, HTTP, policies, tenancy, notifications; web listing, ops, shell, appointments) | #53 | P4 built and pushed |
+| 26 Oct 2026 | M6c-P5 built: only active, verified and shown doctors are public; specialties, languages and fees published; doctor profiles at `/c/{slug}/doctors/{id}`; `indexable` (discoverable and not opted out) drives the page's robots; the sitemap API with `sitemap.xml` and `robots.txt`; the owner's languages, fee and search-engine switches; contract 0.40.0. Changed-code tests green | #53 | P5 built and pushed |

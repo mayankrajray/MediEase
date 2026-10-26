@@ -279,6 +279,12 @@ M6c-P4 (spec R50-R58; contract 0.39.0):
 | POST | `/api/v1/ops/clinics/{id}/suspend` | Suspend with a reason; open booking requests are declined (`CLINIC_UNAVAILABLE`) and their patients told | FR-ONB-05 | Implemented (M6c-P4), `@ops` (`OPS_ADMIN`) |
 | POST | `/api/v1/ops/clinics/{id}/reactivate` | Reactivate (needs an active owner); the listing is kept | FR-ONB-05 | Implemented (M6c-P4), `@ops` |
 
+M6c-P5 (spec R59-R64; contract 0.40.0): `PUT /api/v1/clinic/listing` also takes
+`search_indexing`; `PUT /api/v1/clinic/listing/doctors/{doctor_id}/profile {languages, fee_paise}`
+(`CLINIC_MANAGE`) sets the published profile; `GET /api/v1/public/sitemap` (public) lists the
+indexable profile URLs. The public clinic body adds `specialties`, `indexable` and each doctor's
+`languages` and `fee_paise`, and lists only doctors who are active, verified and shown.
+
 `Clinic` and `Doctor` bodies gain `verified_at` and `verification_source` (and the P4/P5 fields
 `listed`, `search_indexing`, `visible`, `languages`, `fee_paise`). The public clinic page and
 booking requests need the clinic `ACTIVE` and verified (one 404 otherwise).

@@ -323,3 +323,36 @@ Tests: `test_listing.py` (domain), `test_listing_suspension_http.py` (AC15, AC16
 cross-clinic doctor), route policies and the cross-tenant case; the unit, tenancy and patient
 notification suites (941 passed); web `DirectoryListing.test.tsx` and the ops, shell and
 appointments suites.
+
+---
+
+## M6c-P5 - Public profiles
+
+Designed 26 Oct 2026; **approved in advance** (as P2). Covers FR-DIS-03, FR-DIS-06, FR-DIS-07.
+Rules: spec clinic-onboarding R59-R64.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | Which doctors are public | Active, verified and shown (`Doctor.is_public`), on the page, its availability and new requests. Approval shows the applicant's doctors; ops-created doctors are shown by the owner once verified | Every active doctor (unverified doctors in public) |
+| 2 | The doctor profile | `/c/{slug}/doctors/{id}` renders the clinic page for that doctor alone from the same public body: no second endpoint or allow-list | A separate profile endpoint (a second body to keep in step) |
+| 3 | Published fields | The clinic's specialties; each doctor's languages (from a fixed list) and an optional fee in paise. No ratings, counts or registration numbers | Free-text languages (unsearchable in P6) |
+| 4 | Indexing (FR-DIS-06) | Indexable only when discoverable and not opted out (`search_indexing`, default on, owner's switch on *Directory*); the page sets `robots` and a canonical URL from `indexable` | Index every public page (FR-DIS-06 forbids indexing undiscoverable clinics) |
+| 5 | Sitemap | The API lists indexable URLs (`GET /public/sitemap`); Next serves `sitemap.xml` and `robots.txt` from it, revalidated hourly | Next queries clinics itself (the web has no database) |
+
+No migration (`0034` holds the columns). Contract 0.40.0.
+
+### As built (M6c-P5)
+
+Built 26 Oct 2026 as designed. `Doctor.is_public`; `GetPublicClinic` filters to public doctors
+and computes `indexable` with `load_listing`; `GetAvailability` and `CreateBookingRequest` refuse a
+doctor who is not public; `ClinicRepository.list_listed` and `GetSitemap`;
+`create_public_sitemap_blueprint`; `SetListing` takes `search_indexing`; `SetDoctorProfile`.
+The test world's doctors are verified and shown. Web: specialties, languages, fee and *Doctor's
+profile* links on `/c/{slug}` (English and Hindi), the profile route, `sitemap.ts`, `robots.ts`
+(both public paths in the proxy), and on *Directory* the search-engine switch and a languages
+and fee form per doctor (whole rupees).
+
+Tests: `test_public_profiles_http.py` (AC17, R59, R61, the opt-out, the hidden doctor's request),
+the P4 tests adjusted to the verified world, route policies and the cross-tenant case for the
+profile route; unit, contract, tenancy, booking, portal, notification and link suites (1,282 and
+206 passed); web public page (the profile), listing and i18n suites.
