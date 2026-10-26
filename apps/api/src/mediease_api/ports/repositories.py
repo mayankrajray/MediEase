@@ -45,6 +45,7 @@ from mediease_api.domain.scheduling.exceptions import ScheduleException
 from mediease_api.domain.scheduling.sessions import Session
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.domain.visits.attachment import VisitAttachment
 from mediease_api.domain.visits.visit import Visit, VisitAddendum
 
 
@@ -455,6 +456,32 @@ class VisitAddendumRepository(Protocol):
 
     def list_for_visit(self, visit_id: UUID) -> Sequence[VisitAddendum]:
         """Oldest first."""
+        ...
+
+
+class VisitAttachmentRepository(Protocol):
+    """M6d-P6: reports on visits. A delete or share is a column change; rows are never removed."""
+
+    def add(self, attachment: VisitAttachment) -> None: ...
+
+    def update(self, attachment: VisitAttachment) -> None:
+        """Save the share and delete columns."""
+        ...
+
+    def get(self, attachment_id: UUID) -> VisitAttachment | None:
+        """Deleted ones too (the caller decides)."""
+        ...
+
+    def list_for_visit(self, visit_id: UUID) -> Sequence[VisitAttachment]:
+        """Not deleted, oldest first."""
+        ...
+
+    def count_for_visit(self, visit_id: UUID) -> int:
+        """Not deleted."""
+        ...
+
+    def list_shared_for_patient(self, patient_id: UUID, *, limit: int) -> Sequence[VisitAttachment]:
+        """Shared and not deleted, newest share first."""
         ...
 
 

@@ -113,6 +113,12 @@ ACTIONS: dict[A, ActionInfo] = {
         (A.VISIT_ADDENDUM_ADDED, "Added an addendum"),
         (A.VISIT_VIEWED, "Viewed a consultation"),
         (A.PATIENT_VISITS_VIEWED, "Viewed a patient's visits"),
+        # M6d-P6 (FR-VIS-04): reports on visits.
+        (A.VISIT_ATTACHMENT_ADDED, "Attached a report"),
+        (A.VISIT_ATTACHMENT_OPENED, "Opened a report"),
+        (A.VISIT_ATTACHMENT_DELETED, "Deleted a report"),
+        (A.VISIT_ATTACHMENT_SHARED, "Shared a report with the patient"),
+        (A.VISIT_ATTACHMENT_UNSHARED, "Stopped sharing a report"),
     ),
     **_c(
         AuditCategory.PRESCRIPTIONS,

@@ -728,6 +728,48 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/portal/attachments": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Reports the doctor shared with the linked records
+         * @description M6d-P6, spec visit-attachments R11. @patient. Newest share first, 50 per clinic; the
+         *     name, type, size, clinic and the visit's day. Not audited (portal reads, decision 7A).
+         */
+        readonly get: operations["listPortalAttachments"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/attachments/{attachment_id}/file": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Open a shared report
+         * @description M6d-P6, spec visit-attachments R12. @patient. Served as the clinic's is (inline, nosniff,
+         *     sandbox CSP). Not shared, deleted or out of scope is 404.
+         */
+        readonly get: operations["getPortalAttachmentFile"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/portal/bills": {
         readonly parameters: {
             readonly query?: never;
@@ -3014,6 +3056,105 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/visits/{visit_id}/attachments": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * A visit's reports, oldest first
+         * @description M6d-P6, spec visit-attachments R6. Permission CLINICAL_VIEW. Deleted ones are not
+         *     listed. can_delete is for the caller (the uploader, within 24 hours).
+         */
+        readonly get: operations["listVisitAttachments"];
+        readonly put?: never;
+        /**
+         * Attach a report (PDF, JPEG or PNG) to a visit
+         * @description M6d-P6, FR-VIS-04; spec visit-attachments R1-R5, D7. Permission ATTACHMENTS_ADD (every
+         *     role: the front desk scans at the counter, without being able to open it afterwards).
+         *     multipart/form-data with one part `file`: a PDF, JPEG or PNG recognised by its first
+         *     bytes (never its name or declared type), at most 10 MB (422 VIS_FILE_REJECTED,
+         *     details.reason type, size or missing; a request much larger is 413 unread). At most 20
+         *     per visit (409 VIS_ATTACHMENT_LIMIT). Any visit status. The name is cleaned (last path
+         *     segment, no control characters, the real type's extension). Records
+         *     visit.attachment_added (IDs, type and size; never the name). Needs X-CSRF-Token.
+         */
+        readonly post: operations["addVisitAttachment"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/visits/{visit_id}/attachments/{attachment_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        /**
+         * Delete a report you attached in the last 24 hours
+         * @description M6d-P6, spec visit-attachments R8. Permission ATTACHMENTS_ADD and the uploader (403
+         *     VIS_ATTACHMENT_NOT_YOURS); within 24 hours of upload (409 VIS_ATTACHMENT_LOCKED). The
+         *     row stays with the time and author; the file is removed. Records
+         *     visit.attachment_deleted. Needs X-CSRF-Token.
+         */
+        readonly delete: operations["deleteVisitAttachment"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/visits/{visit_id}/attachments/{attachment_id}/file": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Open a report (audited)
+         * @description M6d-P6, spec visit-attachments R7, R13. Permission CLINICAL_VIEW. The stored file with
+         *     its recognised type, inline, nosniff and a sandboxing CSP, never cached. Each open is
+         *     audited (visit.attachment_opened).
+         */
+        readonly get: operations["getVisitAttachmentFile"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/visits/{visit_id}/attachments/{attachment_id}/share": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * Show a report in the patient's portal, or stop showing it
+         * @description M6d-P6, spec visit-attachments R10. Permission CLINICAL_WRITE, the visit's doctor (403
+         *     VIS_NOT_YOURS). Repeating the current state changes nothing. Records
+         *     visit.attachment_shared or visit.attachment_unshared. Needs X-CSRF-Token.
+         */
+        readonly put: operations["shareVisitAttachment"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/patients/{patient_id}/visits": {
         readonly parameters: {
             readonly query?: never;
@@ -4291,6 +4432,54 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        readonly VisitAttachment: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly visit_id: string;
+            /** @description Cleaned; clinical, never logged */
+            readonly filename: string;
+            /** @enum {string} */
+            readonly content_type: "application/pdf" | "image/jpeg" | "image/png";
+            readonly size_bytes: number;
+            /** Format: date-time */
+            readonly uploaded_at: string;
+            /** Format: uuid */
+            readonly uploaded_by_user_id: string;
+            readonly shared_with_patient: boolean;
+            /** Format: date-time */
+            readonly shared_at: string | null;
+            /** @description The caller attached it and 24 hours have not passed */
+            readonly can_delete: boolean;
+            /** Format: date-time */
+            readonly deletable_until: string;
+        };
+        readonly VisitAttachmentList: {
+            readonly items: readonly components["schemas"]["VisitAttachment"][];
+        };
+        readonly AttachmentShare: {
+            readonly shared: boolean;
+        };
+        readonly PortalAttachmentList: {
+            readonly items: readonly {
+                /** Format: uuid */
+                readonly id: string;
+                /** Format: uuid */
+                readonly clinic_id: string;
+                readonly clinic_name: string;
+                readonly filename: string;
+                /** @enum {string} */
+                readonly content_type: "application/pdf" | "image/jpeg" | "image/png";
+                readonly size_bytes: number;
+                /**
+                 * Format: date-time
+                 * @description When the visit started
+                 */
+                readonly visit_date: string;
+                /** Format: date-time */
+                readonly shared_at: string | null;
+            }[];
+        };
         /** @enum {string} */
         readonly VisitStatus: "OPEN" | "COMPLETED";
         /** @description Clinical content (C3). Never cached, never logged. */
@@ -4901,7 +5090,7 @@ export interface components {
         /** @enum {string} */
         readonly MembershipStatus: "INVITED" | "ACTIVE" | "DEACTIVATED";
         /** @enum {string} */
-        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "SCHEDULES_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW" | "RX_PRINT" | "AUDIT_VIEW" | "BILLING_MANAGE" | "FEES_MANAGE" | "COLLECTION_VIEW";
+        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "SCHEDULES_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW" | "RX_PRINT" | "AUDIT_VIEW" | "BILLING_MANAGE" | "FEES_MANAGE" | "COLLECTION_VIEW" | "ATTACHMENTS_ADD";
         readonly Clinic: {
             /** @description M6b-P4 how long an online request holds its slot (default 120) */
             readonly request_hold_minutes: number;
@@ -7078,6 +7267,23 @@ export interface components {
             };
         };
         /**
+         * @description M6d-P6 reports: VIS_FILE_REJECTED (422, details.reason type, size or missing);
+         *     REQ_VALIDATION_FAILED (422); VIS_ATTACHMENT_LIMIT (409, 20 per visit);
+         *     VIS_ATTACHMENT_LOCKED (409, details.locked_at: more than 24 hours old);
+         *     VIS_ATTACHMENT_NOT_YOURS (403, not the uploader); PERM_DENIED (403);
+         *     REQ_REQUEST_ENTITY_TOO_LARGE (413); REQ_UNSUPPORTED_MEDIA_TYPE (415, not multipart);
+         *     VIS_UPLOAD_FAILED (503, nothing kept)
+         */
+        readonly AttachmentError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
          * @description PERM_DENIED (403: front desk, or an owner who is not a doctor writing); VIS_NOT_YOURS (403:
          *     a doctor writing another doctor's visit); CLN_SUSPENDED (403)
          */
@@ -7224,6 +7430,7 @@ export interface components {
         readonly DoctorPath: string;
         /** @description An appointment of the request's clinic. */
         readonly AppointmentPath: string;
+        readonly AttachmentPath: string;
         /** @description A visit of the request's clinic. */
         readonly VisitPath: string;
         /** @description A prescription version of the request's clinic. */
@@ -8245,6 +8452,61 @@ export interface operations {
             readonly 403: components["responses"]["PortalError"];
             readonly 404: components["responses"]["PortalLinkingError"];
             readonly 422: components["responses"]["PortalLinkingError"];
+        };
+    };
+    readonly listPortalAttachments: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The shared reports */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PortalAttachmentList"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly getPortalAttachmentFile: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly attachment_id: components["parameters"]["AttachmentPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The file */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/pdf": unknown;
+                    readonly "image/jpeg": unknown;
+                    readonly "image/png": unknown;
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PortalError"];
         };
     };
     readonly listPortalBills: {
@@ -12303,6 +12565,224 @@ export interface operations {
             readonly 403: components["responses"]["VisitPermissionError"];
             readonly 404: components["responses"]["PermissionError"];
             readonly 409: components["responses"]["VisitError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["VisitError"];
+        };
+    };
+    readonly listVisitAttachments: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description A visit of the request's clinic. */
+                readonly visit_id: components["parameters"]["VisitPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The reports */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["VisitAttachmentList"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly addVisitAttachment: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A visit of the request's clinic. */
+                readonly visit_id: components["parameters"]["VisitPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "multipart/form-data": {
+                    /** Format: binary */
+                    readonly file: string;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description Attached */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["VisitAttachment"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["AttachmentError"];
+            readonly 413: components["responses"]["AttachmentError"];
+            readonly 415: components["responses"]["AttachmentError"];
+            readonly 422: components["responses"]["AttachmentError"];
+            readonly 503: components["responses"]["AttachmentError"];
+        };
+    };
+    readonly deleteVisitAttachment: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A visit of the request's clinic. */
+                readonly visit_id: components["parameters"]["VisitPath"];
+                readonly attachment_id: components["parameters"]["AttachmentPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Deleted */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["AttachmentError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["AttachmentError"];
+        };
+    };
+    readonly getVisitAttachmentFile: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path: {
+                /** @description A visit of the request's clinic. */
+                readonly visit_id: components["parameters"]["VisitPath"];
+                readonly attachment_id: components["parameters"]["AttachmentPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The file */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    /** @description inline, with the cleaned name (filename and filename*) */
+                    readonly "Content-Disposition"?: string;
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/pdf": unknown;
+                    readonly "image/jpeg": unknown;
+                    readonly "image/png": unknown;
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly shareVisitAttachment: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description A visit of the request's clinic. */
+                readonly visit_id: components["parameters"]["VisitPath"];
+                readonly attachment_id: components["parameters"]["AttachmentPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["AttachmentShare"];
+            };
+        };
+        readonly responses: {
+            /** @description The report as it now is */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["VisitAttachment"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["VisitPermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["VisitError"];
         };

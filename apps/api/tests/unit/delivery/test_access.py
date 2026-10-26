@@ -117,6 +117,12 @@ EXPECTED_POLICIES = {
     "visits.complete_visit": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "visits.add_addendum": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "visits.list_patient_visits": (Access.CLINIC, Permission.CLINICAL_VIEW),
+    # M6d-P6 (visit-attachments R1-R10; D7): the desk attaches, only clinical roles open.
+    "attachments.add_attachment": (Access.CLINIC, Permission.ATTACHMENTS_ADD),
+    "attachments.list_attachments": (Access.CLINIC, Permission.CLINICAL_VIEW),
+    "attachments.attachment_file": (Access.CLINIC, Permission.CLINICAL_VIEW),
+    "attachments.delete_attachment": (Access.CLINIC, Permission.ATTACHMENTS_ADD),
+    "attachments.share_attachment": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "prescriptions.create_prescription": (Access.CLINIC, Permission.CLINICAL_WRITE),
     "prescriptions.get_prescription": (Access.CLINIC, Permission.CLINICAL_VIEW),
     "prescriptions.replace_prescription": (Access.CLINIC, Permission.CLINICAL_WRITE),
@@ -229,6 +235,8 @@ EXPECTED_POLICIES = {
     "public_links.link_receipt_pdf": (Access.PUBLIC, None),
     "portal_records.list_bills": (Access.PATIENT, None),
     "portal_records.bill_receipt_pdf": (Access.PATIENT, None),
+    "portal_records.list_attachments": (Access.PATIENT, None),
+    "portal_records.attachment_file": (Access.PATIENT, None),
     "public_sitemap.sitemap": (Access.PUBLIC, None),
     # M6c-P6 (discovery R1-R10): directory search.
     "public_search.clinics": (Access.PUBLIC, None),

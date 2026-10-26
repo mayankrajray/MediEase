@@ -8,12 +8,13 @@ belongs to B. From M1-P3 the same isolation is proved again at the HTTP level.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, time
 from uuid import UUID, uuid4
 
 import pytest
 
+from mediease_api.adapters.db.attachments import SqlAlchemyVisitAttachmentRepository
 from mediease_api.adapters.db.bills import (
     SqlAlchemyBillLineRepository,
     SqlAlchemyBillRepository,
@@ -83,6 +84,7 @@ from mediease_api.domain.scheduling.sessions import Session, SessionStatus, plan
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.domain.visits.attachment import VisitAttachment
 from mediease_api.domain.visits.visit import Visit, VisitStatus
 from mediease_api.domain.visits.vitals import Vitals
 from mediease_api.ports.billing import BillQuery
@@ -554,6 +556,19 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
         staff_b.patient_links.add(link)
         message = _a_message(b, appointment.id)
         staff_b.messages.add(message)
+        # M6d-P6: a report on B's visit, shared with the patient.
+        report = VisitAttachment.upload(
+            id=new_id(),
+            clinic_id=b.clinic_id,
+            visit_id=visit.id,
+            patient_id=b.patient.id,
+            data=b"%PDF-1.7 synthetic",
+            filename="cbc.pdf",
+            by=b.owner.user_id,
+            now=NOW,
+        ).share(True, by=b.owner.user_id, now=NOW)
+        staff_b.visit_attachments.add(report)
+        staff_b.visit_attachments.update(report)
         uow.commit()
 
     with uow_factory() as uow:
@@ -563,6 +578,16 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
         assert staff_a.visits.get_for_appointment(appointment.id) is None
         assert staff_a.visits.list_for_patient(b.patient.id, limit=10) == []
         assert staff_a.visit_addenda.list_for_visit(visit.id) == []
+        assert staff_a.visit_attachments.get(report.id) is None
+        assert staff_a.visit_attachments.list_for_visit(visit.id) == []
+        assert staff_a.visit_attachments.count_for_visit(visit.id) == 0
+        assert staff_a.visit_attachments.list_shared_for_patient(b.patient.id, limit=10) == []
+        with pytest.raises(TenancyViolation):
+            staff_a.visit_attachments.add(report)
+        with pytest.raises(TenancyViolation):
+            staff_a.visit_attachments.update(report)
+        with pytest.raises(NotFound):
+            staff_a.visit_attachments.update(replace(report, clinic_id=a.clinic_id))
         with pytest.raises(TenancyViolation):
             staff_a.visits.add(visit)
         with pytest.raises(TenancyViolation):
@@ -612,6 +637,7 @@ def test_nfr_08_clinic_a_cannot_reach_clinic_b_visits_or_addenda(
         assert staff_b.visits.get_for_appointment(appointment.id) == visit
         assert staff_b.visits.list_for_patient(b.patient.id, limit=10) == [visit]
         assert staff_b.visit_addenda.list_for_visit(visit.id) == [addendum]
+        assert staff_b.visit_attachments.list_shared_for_patient(b.patient.id, limit=10) == [report]
         assert staff_b.prescriptions.get(rx.id) == rx
         assert staff_b.messages.get_by_key(message.idempotency_key) is not None
         assert staff_b.prescriptions.list_for_visit(visit.id) == [rx]
@@ -663,6 +689,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "bills",
             "bill_lines",
             "payments",
+            "visit_attachments",
             "audit_events",
             "jobs",
         }
@@ -699,6 +726,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyBillRepository,
         SqlAlchemyBillLineRepository,
         SqlAlchemyPaymentRepository,
+        SqlAlchemyVisitAttachmentRepository,
     } == set(TenantScopedRepository.__subclasses__())
 
 

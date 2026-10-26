@@ -97,7 +97,9 @@ from mediease_api.application.portal.records import (
     PortalPrescriptionPdf,
 )
 from mediease_api.application.prescriptions.pdf import PDF_CONTENT_TYPE
+from mediease_api.application.visits.attachments import ListPortalAttachments, PortalAttachmentFile
 from mediease_api.delivery.http.access import clinic, current_context, current_patient, patient
+from mediease_api.delivery.http.attachments import file_response, portal_attachment_body
 from mediease_api.delivery.http.bodies import items_body, patient_view_body
 from mediease_api.delivery.http.etag import conditional_json
 from mediease_api.delivery.http.request_info import request_info
@@ -123,6 +125,8 @@ class PortalRecordUseCases(Protocol):
     def portal_prescription_pdf(self) -> PortalPrescriptionPdf: ...
     def list_portal_bills(self) -> ListPortalBills: ...
     def portal_receipt_pdf(self) -> PortalReceiptPdf: ...
+    def list_portal_attachments(self) -> ListPortalAttachments: ...
+    def portal_attachment_file(self) -> PortalAttachmentFile: ...
     def list_portal_reminders(self) -> ListPortalReminders: ...
     def get_medicine_plan(self) -> GetMedicinePlan: ...
     def list_medicine_courses(self) -> ListMedicineCourses: ...
@@ -586,6 +590,22 @@ def create_portal_records_blueprint(use_cases: PortalRecordUseCases) -> Blueprin
         response = Response(pdf.data, mimetype=PDF_CONTENT_TYPE)
         response.headers["Content-Disposition"] = f'inline; filename="{pdf.filename}"'
         return response
+
+    # M6d-P6 (visit-attachments R11, R12): reports the doctor shared, served like the clinic's.
+    @bp.get("/attachments")
+    @patient
+    def list_attachments() -> Response:
+        return _items(
+            portal_attachment_body(a)
+            for a in use_cases.list_portal_attachments().execute(current_patient())
+        )
+
+    @bp.get("/attachments/<uuid:attachment_id>/file")
+    @patient
+    def attachment_file(attachment_id: UUID) -> Response:
+        return file_response(
+            use_cases.portal_attachment_file().execute(current_patient(), attachment_id)
+        )
 
     @bp.get("/reminders")
     @patient

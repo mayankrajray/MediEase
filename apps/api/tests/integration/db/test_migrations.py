@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0039"
+HEAD = "0040"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -55,6 +55,7 @@ M6C_P2_TABLES = sorted([*M6C_P1_TABLES, "clinic_application_checks"])
 M6D_P1_TABLES = sorted([*M6C_P2_TABLES, "clinic_services", "doctor_service_prices"])
 M6D_P2_TABLES = sorted([*M6D_P1_TABLES, "bills", "bill_lines"])
 M6D_P3_TABLES = sorted([*M6D_P2_TABLES, "payments"])
+M6D_P6_TABLES = sorted([*M6D_P3_TABLES, "visit_attachments"])
 
 
 @pytest.fixture
@@ -662,7 +663,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6D_P3_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6D_P6_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -1160,3 +1161,20 @@ def test_0039_receipt_links_and_downgrades(
             assert not columns["prescription_id"]["nullable"] and "bill_id" not in columns
     finally:
         engine.dispose()
+
+
+def test_0040_visit_attachments_round_trip(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    """M6d-P6 (visit-attachments R1-R10): reports on visits; downgrade restores 0039."""
+    command.upgrade(alembic_config, "0040")
+    assert _tables(scratch_database_url) == M6D_P6_TABLES
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            assert "image/png" in _check(conn, "ck_visit_attachments_content_type")
+            assert "10485760" in _check(conn, "ck_visit_attachments_size_bytes_range")
+    finally:
+        engine.dispose()
+    command.downgrade(alembic_config, "0039")
+    assert _tables(scratch_database_url) == M6D_P3_TABLES

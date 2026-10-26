@@ -10,6 +10,7 @@ permanent test suite").
 
 from __future__ import annotations
 
+import io
 from collections.abc import Callable
 from datetime import date, timedelta
 from uuid import uuid4
@@ -27,6 +28,11 @@ from tests.sessions_now import running_session
 
 # A date well inside the 180-day horizon whatever day the suite runs (M3-P1 exceptions).
 _FAR_DATE = (date.today() + timedelta(days=30)).isoformat()
+
+
+# M6d-P6: a body that _call sends as a multipart upload of a small synthetic PDF.
+UPLOAD: dict[str, object] = {"file": "<multipart>"}
+_PDF = b"%PDF-1.7 synthetic report"
 
 
 # Rule -> a URL naming a resource of clinic B. Requested by clinic A's owner,
@@ -93,6 +99,17 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/visits/<uuid:visit_id>": lambda w: _visit_url(w),
     "/api/v1/visits/<uuid:visit_id>/complete": lambda w: f"{_visit_url(w)}/complete",
     "/api/v1/visits/<uuid:visit_id>/addenda": lambda w: f"{_visit_url(w, completed=True)}/addenda",
+    # M6d-P6 (visit-attachments R1-R10): B's visit and a report B's owner attached to it.
+    "/api/v1/visits/<uuid:visit_id>/attachments": lambda w: f"{_visit_url(w)}/attachments",
+    "/api/v1/visits/<uuid:visit_id>/attachments/<uuid:attachment_id>": lambda w: _attachment_of_b(
+        w
+    ),
+    "/api/v1/visits/<uuid:visit_id>/attachments/<uuid:attachment_id>/file": lambda w: (
+        f"{_attachment_of_b(w)}/file"
+    ),
+    "/api/v1/visits/<uuid:visit_id>/attachments/<uuid:attachment_id>/share": lambda w: (
+        f"{_attachment_of_b(w)}/share"
+    ),
     "/api/v1/patients/<uuid:patient_id>/visits": lambda w: f"{_patient_url(w)}/visits",
     "/api/v1/visits/<uuid:visit_id>/prescriptions": lambda w: f"{_visit_url(w)}/prescriptions",
     "/api/v1/prescriptions/<uuid:rx_id>": lambda w: _prescription_url(w),
@@ -147,6 +164,7 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
 AS_DOCTOR = {
     "/api/v1/visits/<uuid:visit_id>/complete",
     "/api/v1/visits/<uuid:visit_id>/addenda",
+    "/api/v1/visits/<uuid:visit_id>/attachments/<uuid:attachment_id>/share",
     "/api/v1/visits/<uuid:visit_id>/prescriptions",
     "/api/v1/prescriptions/<uuid:rx_id>/issue",
     "/api/v1/prescriptions/<uuid:rx_id>/revise",
@@ -191,6 +209,12 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
     "/api/v1/clinic/staff/<uuid:membership_id>/resend": ("POST", {}),
     "/api/v1/visits/<uuid:visit_id>/complete": ("POST", {}),
     "/api/v1/visits/<uuid:visit_id>/addenda": ("POST", {"body": "seen again"}),
+    "/api/v1/visits/<uuid:visit_id>/attachments": ("POST", UPLOAD),
+    "/api/v1/visits/<uuid:visit_id>/attachments/<uuid:attachment_id>": ("DELETE", {}),
+    "/api/v1/visits/<uuid:visit_id>/attachments/<uuid:attachment_id>/share": (
+        "PUT",
+        {"shared": True},
+    ),
     "/api/v1/visits/<uuid:visit_id>/prescriptions": ("POST", {}),
     "/api/v1/prescriptions/<uuid:rx_id>/issue": ("POST", {"revision": 2}),
     "/api/v1/prescriptions/<uuid:rx_id>/revise": ("POST", {}),
@@ -320,6 +344,20 @@ def _payment_of_b(world: World) -> str:
     )
     assert paid.status_code == 201, paid.get_json()
     return f"{url}/payments/{paid.get_json()['payments'][0]['id']}/void"
+
+
+def _attachment_of_b(world: World) -> str:
+    """M6d-P6: a report B's owner attached to B's visit (so B's owner may delete it)."""
+    client, headers = _owner_of_b(world)
+    visit = _visit_url(world)
+    added = client.post(
+        f"{visit}/attachments",
+        data={"file": (io.BytesIO(_PDF), "report.pdf")},
+        content_type="multipart/form-data",
+        headers=headers,
+    )
+    assert added.status_code == 201, added.get_json()
+    return f"{visit}/attachments/{added.get_json()['id']}"
 
 
 def _locked_receipt_link(world: World) -> str:
@@ -559,7 +597,7 @@ def test_ac3_nfr_08_another_clinics_resource_is_404(world: World, rule: str) -> 
     assert resp.get_json()["error"]["code"] == "REQ_NOT_FOUND"
     # The same URL works for its own clinic, so the 404 is the scope, not the route.
     own = world.client_for(world.b.doctor_user if doctor else world.b.owner)
-    assert _call(own, method, url, body).status_code in (200, 201)
+    assert _call(own, method, url, body).status_code in (200, 201, 204)
 
 
 def _call(client: FlaskClient, method: str, url: str, body: dict[str, object]) -> TestResponse:
@@ -567,6 +605,13 @@ def _call(client: FlaskClient, method: str, url: str, body: dict[str, object]) -
         return client.get(url)
     csrf = client.get_cookie("me_csrf", path="/")
     assert csrf is not None
+    if body is UPLOAD:
+        return client.post(
+            url,
+            data={"file": (io.BytesIO(_PDF), "report.pdf")},
+            content_type="multipart/form-data",
+            headers={"X-CSRF-Token": csrf.value},
+        )
     return client.open(url, method=method, json=body, headers={"X-CSRF-Token": csrf.value})
 
 

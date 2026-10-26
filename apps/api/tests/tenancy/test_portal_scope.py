@@ -11,6 +11,7 @@ route takes an ID or token without a case here, so the guard cannot be forgotten
 
 from __future__ import annotations
 
+import io
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -46,6 +47,7 @@ class Scene:
     world: World
     bina_record: str
     bina_appointment: str
+    bina_visit: str
 
 
 def _bina_notice(scene: Scene) -> str:
@@ -97,6 +99,25 @@ def _bina_bill(scene: Scene) -> str:
     return bill_id
 
 
+def _bina_report(scene: Scene) -> str:
+    """M6d-P6: the doctor attaches a report to Bina's visit and shares it with her portal."""
+    doctor = scene.world.client_for(scene.world.a.doctor_user)
+    csrf = doctor.get_cookie("me_csrf", path="/")
+    assert csrf is not None
+    url = f"/api/v1/visits/{scene.bina_visit}/attachments"
+    added = doctor.post(
+        url,
+        data={"file": (io.BytesIO(b"%PDF-1.7 synthetic report"), "cbc.pdf")},
+        content_type="multipart/form-data",
+        headers={"X-CSRF-Token": csrf.value},
+    )
+    assert added.status_code == 201, added.get_json()
+    report = str(added.get_json()["id"])
+    shared = _send(doctor, "PUT", f"{url}/{report}/share", {"shared": True})
+    assert shared.status_code == 200, shared.get_json()
+    return report
+
+
 def _scene(world: World) -> Scene:
     _, visit, rx = _issued(world)
     owner_a = world.client_for(world.a.owner)
@@ -140,6 +161,7 @@ def _scene(world: World) -> Scene:
         world,
         bina_record,
         str(visit["appointment_id"]),
+        str(visit["id"]),
     )
 
 
@@ -161,6 +183,12 @@ PORTAL_ID_CASES: dict[str, Case] = {
     "/api/v1/portal/bills/<uuid:bill_id>/receipt.pdf": (
         "GET",
         lambda s: f"{PORTAL}/bills/{_bina_bill(s)}/receipt.pdf",
+        "REQ_NOT_FOUND",
+    ),
+    # M6d-P6 (visit-attachments R12): a report shared with Bina.
+    "/api/v1/portal/attachments/<uuid:attachment_id>/file": (
+        "GET",
+        lambda s: f"{PORTAL}/attachments/{_bina_report(s)}/file",
         "REQ_NOT_FOUND",
     ),
     "/api/v1/portal/links/<uuid:link_id>": (

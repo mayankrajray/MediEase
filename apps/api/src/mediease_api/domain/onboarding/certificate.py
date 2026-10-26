@@ -1,32 +1,31 @@
 """A doctor's registration certificate as uploaded (M6c-P1; spec clinic-onboarding R7).
 
 The type is decided by the file's first bytes only, never by its name or the declared content
-type, and nothing is parsed: a PDF, JPEG or PNG signature, 1 byte to 5 MB. The stored object is
-private (``applications/{id}/doctor-{n}``) and read only by reviewers (P2).
+type, and nothing is parsed: a PDF, JPEG or PNG signature, 1 byte to 5 MB (the sniffer is shared
+with visit attachments, ``domain/shared/files.py``, M6d-P6). The stored object is private
+(``applications/{id}/doctor-{n}``) and read only by reviewers (P2).
 """
 
 from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from enum import StrEnum
 from uuid import UUID
 
+from mediease_api.domain.shared import files
 from mediease_api.domain.shared.errors import DomainError
+from mediease_api.domain.shared.files import FileProblem
 
 MAX_CERTIFICATE_BYTES = 5 * 1024 * 1024
 
-_SIGNATURES: tuple[tuple[bytes, str], ...] = (
-    (b"%PDF-", "application/pdf"),
-    (b"\xff\xd8\xff", "image/jpeg"),
-    (b"\x89PNG\r\n\x1a\n", "image/png"),
-)
-
-
-class FileProblem(StrEnum):
-    TYPE = "type"
-    SIZE = "size"
-    MISSING = "missing"
+__all__ = [
+    "MAX_CERTIFICATE_BYTES",
+    "Certificate",
+    "FileProblem",
+    "FileRejected",
+    "certificate_key",
+    "sniff",
+]
 
 
 class FileRejected(DomainError):
@@ -51,14 +50,10 @@ class FileRejected(DomainError):
 
 def sniff(data: bytes | None, position: int) -> str:
     """The content type the bytes are, or ``FileRejected`` naming the doctor's position."""
-    if not data:
-        raise FileRejected(position, FileProblem.MISSING)
-    if len(data) > MAX_CERTIFICATE_BYTES:
-        raise FileRejected(position, FileProblem.SIZE)
-    for signature, content_type in _SIGNATURES:
-        if data.startswith(signature):
-            return content_type
-    raise FileRejected(position, FileProblem.TYPE)
+    found = files.sniff(data, max_bytes=MAX_CERTIFICATE_BYTES)
+    if isinstance(found, FileProblem):
+        raise FileRejected(position, found)
+    return found
 
 
 @dataclass(frozen=True, slots=True)

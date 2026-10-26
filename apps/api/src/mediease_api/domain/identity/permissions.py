@@ -41,6 +41,9 @@ class Permission(StrEnum):
     FEES_MANAGE = "FEES_MANAGE"
     # M6d-P3, P5 (B2): the clinic's dues list and daily collection. Owners and the front desk.
     COLLECTION_VIEW = "COLLECTION_VIEW"
+    # M6d-P6 (FR-VIS-04, decisions B8, D7): attach a report to a visit. Every role, so the front
+    # desk can scan one at the counter; opening it still needs CLINICAL_VIEW.
+    ATTACHMENTS_ADD = "ATTACHMENTS_ADD"
 
 
 _EVERY_ROLE = frozenset(
@@ -53,6 +56,7 @@ _EVERY_ROLE = frozenset(
         Permission.REMINDERS_SCHEDULE,
         Permission.RX_PRINT,
         Permission.BILLING_MANAGE,
+        Permission.ATTACHMENTS_ADD,
     }
 )
 
