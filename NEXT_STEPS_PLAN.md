@@ -1,90 +1,85 @@
-# NEXT_STEPS_PLAN.md — Plan for M6c (SaaS clinic onboarding, verification and discovery)
+# NEXT_STEPS_PLAN.md — Plan for M6d (Billing and documents)
 
 | Field | Value |
 |---|---|
-| Status | **M6c opened and approved 26 Oct 2026** after M6b merged (PR #52, #51 closed). Phase plan, milestone decisions and the P1 design approved with D1–D4; P1 is next to build |
-| Scope | Milestone 6c in phase detail; M6d and M7–M9 as a roadmap. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39), M5 (PR #41), M6a (PR #50), M6b (PR #52, merged 26 Oct 2026) |
+| Status | **M6d opened and approved 26 Oct 2026** after M6c merged (PR #54, #53 closed). Phase plan, milestone decisions B1–B9, D1–D9 and the P1 design approved on the recommendations; P1 is being built |
+| Scope | Milestone 6d in phase detail; M7–M9 as a roadmap. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39), M5 (PR #41), M6a (PR #50), M6b (PR #52), M6c (PR #54, merged 26 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
-| Design notes | `docs/milestones/M6c-onboarding-verification-discovery.md`; M6b: `docs/milestones/M6b-patient-portal-booking.md`; M8: `docs/milestones/M8-multi-clinic-whatsapp.md` |
+| Design notes | `docs/milestones/M6d-billing-and-documents.md`; M6c: `docs/milestones/M6c-onboarding-verification-discovery.md`; M8: `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Workflow rules | `CLAUDE.md` → "Git Workflow"; `CONTRIBUTING.md`; ADR-0010, ADR-0011 |
 
 ---
 
 ## 1. Problem statement
 
-M6b lets a patient ask a clinic for a time on its own page, but only clinics MediEase set up by
-hand exist, nobody has checked their doctors, and a patient cannot find a clinic they do not
-already know. M6c lets a clinic or a solo doctor apply, has MediEase check every doctor's
-registration by hand, creates the approved clinic through the one existing creation path, and
-then lets patients find verified, listed clinics and doctors and request a time (PRD v1.2 C7, C8,
-C14).
+Clinics on MediEase book, see and prescribe, but still take money on paper: fees are remembered,
+bills are handwritten, dues are lost and the day's cash is counted by hand. Reports patients bring
+are not kept with the visit, and every clinic gets the whole product whatever its size. M6d adds
+the clinic's fee schedule, bills that cannot be altered once issued, recorded payments and dues,
+receipts on the letterhead, the daily collection, report attachments, and plans with a trial and
+limits (PRD v1.2 C12, C14).
 
 ## 2. Requirements
 
-- PRD v1.2 §8.14: FR-ONB-01..10, FR-DIS-01..08, FR-LND-01..03; NFR-17, NFR-19.
-- Application status, clinic status, verification and listing are four separate things, never
-  inferred from each other (PRD §8.14).
-- No clinic, user or membership exists before approval (FR-ONB-02, ADR-0020).
-- Discoverable = `ACTIVE` ∧ verified ∧ listed, decided by one domain rule used by every public
-  endpoint (FR-ONB-09); a non-discoverable profile answers exactly like not found (NFR-19).
-- Public bodies are allow-lists proven by tests (NFR-17); no ratings, ads or paid ranking.
-- The developer's decisions: **D1** a clinic becomes `ACTIVE` when the owner accepts the
-  invitation; **D2** `/apply` is English-only in M6c; **D3** the application says MediEase will
-  reply within 2 working days; **D4** issue #53, branch from the latest `main`.
-- Each phase gets its design and spec rules approved before code. Coverage gates stay
-  (≥ 90% package, ≥ 80% `domain/` + `application/`). Per phase: tests for changed code plus lint
-  and typecheck; full API and Playwright suites once, at the end of P8.
+- PRD v1.2 §8.14: FR-BIL-01..07, FR-SUB-01; §8.5: FR-VIS-04; §8.1 permission matrix; §12 plans.
+- Money in integer paise (AGENTS.md); bills snapshot what they charge and never copy clinical
+  content; issued bills are immutable and corrected by credit notes (FR-BIL-07).
+- Front desk creates bills and records payments but never sees clinical content (§8.1).
+- No payment gateway, GST or subscription lifecycle in M6d (D3, D5).
+- The developer's decisions: **D1** numbers per financial year (`SC/26-27/0001`); **D2** doctors
+  record payments on their own bills; **D3** no GST fields; **D4** Solo = 1 doctor, 2 users with
+  the owner; **D5** the trial starts at `ACTIVE`, its end only flags; **D6** receipts by link and QR
+  now, WhatsApp once a template is approved; **D7** front desk may upload reports it cannot open;
+  **D8** the public fee is the consultation price behind *Show fee publicly*; **D9** issue #63.
+- Coverage gates stay (≥ 90% package, ≥ 80% `domain/` + `application/`). Per phase: tests for
+  changed code plus lint and typecheck; full API and Playwright suites once, at the end of P7.
 
 ## 3. Delivery workflow (ADR-0011)
 
 ```
-Milestone issue #53 → branch m6c/53-onboarding-discovery (from origin/main at 9df830b)
+Milestone issue #63 → branch m6d/63-billing-and-documents (from origin/main at ec721e6)
   → per phase: design → approval → logical commits → make lint typecheck test (changed code)
     → developer confirms → push (with permission) to the same branch
-  → one PR for the milestone: draft after P1, ready when P8 is done and the exit criteria hold
+  → one PR for the milestone: draft after P1, ready when P7 is done and the exit criteria hold
   → CI green → review → maintainer merges
 ```
 
-- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #53`; the last
-  commit of M6c carries `Closes #53`.
+- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #63`.
 - Agents never push to `main`, push to the milestone branch only with permission, and never merge.
 
 ### 3.1 Open prerequisites
 
 | # | Needed | State |
 |---|---|---|
-| L-11 | A free-tier transactional email account (application emails and the owner's invitation) | Open; Mailpit covers local use |
-| L-09 | A Google Cloud OAuth client for Google sign-in | Open; the fake provider covers local use |
-| L-04 | Counsel: MediEase as data fiduciary; doctor-listing wording before profiles are indexed (FR-DIS-06) | Open; before any public launch |
-| L-01, L-02 | Meta account and approved templates | Pending |
+| L-02 | An approved WhatsApp receipt template (D6) | Pending; the send stays off until then |
+| L-04 | Counsel: GST on clinic services if a clinic asks (D3); report attachments as health data | Open; before any public launch |
+| L-11 | A transactional email account | Open; Mailpit covers local use |
 | W-5 | Branch protection on `main` | Open (GitHub Free) |
-| — | #30: an import over 2 MB through the web origin can answer 500 instead of 413 (the same proxy limit applies to certificate uploads, P1) | Open |
+| — | #30: an upload over 2 MB through the web origin can answer 500 instead of 413 (matters for 10 MB attachments, P6) | Open |
 
 ## 4. Phase breakdown
 
 Details, file lists and test plans per phase are in the design notes; each phase is designed at
-its start. P1-P8 are built and pushed; the developer approved every design decision for P2-P8 in
-advance (26 Oct 2026).
+its start.
 
 | Phase | Objective | Requirements | Verify |
 |---|---|---|---|
-| P1 | `/apply`: application, certificates, verified email, lifecycle states, limits, duplicate flag | FR-ONB-01, 02, 07 | No clinic or user before approval; a renamed non-PDF refused; unconfirmed applications purged |
-| P2 | Reviewer workflow: ops roles, queue, per-doctor checks, decision with a reason, applicant emails | FR-ONB-03, 05 | Every transition audited with reviewer, time and reason; no clinical content visible |
-| P3 | Approval into the pre-filled ops wizard; clinic and doctor verification; `has_public_page` = `ACTIVE` ∧ verified | FR-ONB-04, 06, 08 | Self-service and ops-created clinics made by the same code; ops-created start unverified |
-| P4 | Suspension and listing; the one discoverability rule | FR-ONB-05, 09, 10 | A suspended clinic leaves discovery at once and its open requests are withdrawn with patients told |
-| P5 | Public clinic and doctor profiles | FR-DIS-03, 06, 07 | Allow-list bodies; indexable only when discoverable |
-| P6 | Clinic and doctor search | FR-DIS-01, 02, 04, 05 | Only discoverable results; < 500 ms at pilot scale |
-| P7 | Discovery to booking | FR-DIS-08 | Search → profile → slot → sign-in → request lands in that clinic's inbox |
-| P8 | Landing page v1 | FR-LND-01..03 | LCP < 2.5 s on 4G; WCAG 2.1 AA; no PII in analytics |
+| P1 | Fee schedule: services, default and per-doctor prices, the owner's *Fees* page, the public fee from it | FR-BIL-01 | Prices change only from now on; owners only edit; public fee follows the consultation price |
+| P2 | Bills from a visit or for a patient; discounts; issue; credit notes | FR-BIL-02, 07 | An issued bill never changes; numbers without gaps; nothing clinical on a bill |
+| P3 | Payments (cash, UPI, card; partial), refunds, dues | FR-BIL-03, 05 | Never more than the balance; dues per patient and per clinic |
+| P4 | Receipt PDFs, the patient link, bills in the portal | FR-BIL-04 | Rendered once; last-4 check; portal scope |
+| P5 | Daily collection by mode and doctor, CSV | FR-BIL-06 | The collection equals the recorded payments less refunds (exit test) |
+| P6 | Report attachments on visits | FR-VIS-04 | First-bytes check, 10 MB, private, audited, clinical-only viewing |
+| P7 | Plans, trial and limits | FR-SUB-01 | Every path that adds a doctor or user is limited |
 
-## 5. Roadmap after M6c
+## 5. Roadmap after M6d
 
-- **M6d Billing and documents** — fees, bills, receipts, dues, daily collection, attachments,
-  plan limits.
 - **M7 AI assistant and pitch** — LLM gateway (Groq first, ADR-0013), tools with the user's own
   permissions, guard rails, assistant, animated landing page.
 - **M8 Multi-clinic WhatsApp and consolidated billing** — designed (ADR-0014).
 - **M9 Pilot hardening** — deployment, backups, alerts, security review.
+- **M10+** — inventory, the subscription lifecycle and data export (FR-SUB-02, 03), medical stores.
+
 ## 6. Progress log
 
 | Date | Task | Issue / PR | State |
@@ -204,3 +199,4 @@ advance (26 Oct 2026).
 | 26 Oct 2026 | M6c-P7 built: `via=directory` on the public page and availability (a clinic that left the directory answers like an unknown one; its own link keeps working), carried through the profile, the chosen time and the request form; the portal's *Find a doctor* opens `/find`; contract 0.42.0. Changed-code tests green; the search-to-request journey joins the Playwright suite at the end | #53 | P7 built and pushed |
 | 26 Oct 2026 | M6c-P8 built: the landing page at `/` (clinic and patient paths, pilot pricing from PRD §12 to be confirmed before deployment, privacy and FAQ, English and Hindi, PII-free events queued in the page), `/` public in the proxy, signed-in visitors sent on by the page. Changed-code tests green. Next: the full suites and Playwright once | #53 | P8 built and pushed |
 | 26 Oct 2026 | M6c final verification: `make lint typecheck contract-check test` green (API with its coverage gates; web 668 tests); images rebuilt, migrations to `0035`, `make seed`, `make smoke` green; Playwright, 45 tests including the new `discovery` journeys and the reviewer's approval in `clinic-application`: 44 pass, the exception being `patient-notifications` AC23, whose `lonelySession` helper finds no free hour in the local database after many runs today (70 leftover e2e extras; CI starts empty). Two fixes from the run: the language-switch labels now start with their visible text (axe), and the owner's expected menu includes *Directory*. The developer's merge review confirmed the PRD §12 prices, search over the live tables with ADR-0021 superseding milestone decision M6's read model for M6c (thresholds: about 2,000 clinics or p95 over 300 ms), the emailed owner invitation (no link shown to the reviewer) and activation on acceptance | #53 | Ready for the developer's merge approval |
+| 26 Oct 2026 | M6c merged by the developer (PR #54, `ec721e6`; #53 closed). M6d designed and **approved** on every recommendation: 7 phases (fee schedule; bills and credit notes; payments and dues; receipts; daily collection; report attachments; plans, trial and limits), milestone decisions B1–B9, D1–D9 and the P1 design. Issue #63 and branch `m6d/63-billing-and-documents` opened from `main` | #63 | P1 being built |
