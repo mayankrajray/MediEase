@@ -848,3 +848,20 @@ allows (`details.used`). Deactivate doctors or members first.
 nothing stops: the owner sees a notice and the ops list says *Free trial ended*. Payment collection
 is not built yet; agree the plan with the clinic and set it. To check by hand: `SELECT plan,
 has_trial, trial_ends_at FROM clinic_subscriptions WHERE clinic_id = '<id>';`
+
+### 33. The assistant's model (M7a, ADR-0013, ADR-0024)
+
+- **Which model answers.** `LLM_PROVIDER=console` (the default) answers by rules from the tools'
+  own summaries: no key, no network, refused in production. To try Groq locally: set
+  `LLM_PROVIDER=groq` and `LLM_API_KEY` (L-10) in `.env`, then `make up`. `LLM_BASE_URL` and
+  `LLM_MODEL` override the provider's defaults; `deepinfra` and `openai` work the same way.
+- **Staging or production** refuse a real provider until `LLM_PATIENT_DATA_ALLOWED=true`. Set it
+  only after the provider contract and the privacy review (SECURITY_AND_COMPLIANCE.md §4) are
+  signed off, and add the provider to the sub-processor list. The API fails at start-up with a
+  plain `ValueError` naming the setting otherwise.
+- **"The assistant is not available"** (`AI_UNAVAILABLE`): find `assistant.llm_failed` for the
+  request ID; `status=401` is a wrong key, `kind=TimeoutError` a slow provider (raise
+  `LLM_TIMEOUT_SECONDS`, at most 60), other statuses the provider's own outage.
+  `AI_PROVIDER_BUSY` is the provider's rate limit: wait, or move to a paid plan.
+- **Nothing is stored.** Conversations live in the browser tab; logs never carry their text, so
+  a complaint about an answer needs the person's own screenshot (synthetic data only in tickets).

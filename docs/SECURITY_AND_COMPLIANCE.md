@@ -113,3 +113,19 @@ Use this list in the M6 security review. Each row names where it is implemented.
   an ADR and a privacy review before design starts. PRD v1.1 (C4) and ADR-0013 cover the M7
   assistant: no medical advice, tools limited to the user's own permissions, synthetic data only
   until a provider contract and a privacy review allow real patient data.
+- **M7 privacy review (27 Oct 2026, PRD v1.3 C15, C16; ADR-0023, ADR-0024).** What can reach a
+  model, and what never can:
+  - [x] The model gets our system prompt, the visible conversation and tool results built by our
+    code from use cases run as the caller. Staff tool results mask phone numbers; there are no
+    clinical tools for staff. A patient's prescription reaches the model only when the patient
+    chose it (or verified an upload) and only as its database record (FR-AI-04).
+  - [x] Requests for diagnosis, interpretation, dose or drug changes, treatment or emergencies are
+    referred before the model and never sent to it; advice-like or ungrounded replies are
+    replaced (guard-rail suite in CI, FR-AI-02).
+  - [x] Writes need an explicit *Confirm* of an HMAC-signed proposal bound to the caller, the
+    clinic, the action and 10 minutes, used once (ADR-0024).
+  - [x] No conversation is stored; logs carry kinds, tool names, IDs and token counts, never text.
+  - [x] Local, CI and demos use the console model (no provider). A real provider is refused in
+    staging and production until `LLM_PATIENT_DATA_ALLOWED=true`, which may be set only after a
+    provider contract with suitable data terms and this review's counsel sign-off (*Counsel*,
+    L-04, L-10); the provider then joins the sub-processor list.

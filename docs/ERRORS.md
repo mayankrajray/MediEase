@@ -19,7 +19,7 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | `PAT_` | Patients | | `MSG_` / `WH_` / `JOB_` | Messaging, webhooks, jobs |
 | `PRT_` | Patient portal accounts (M6a-P3) | | `AUD_` | Audit log (M6a-P8) |
 | `SYS_` | Unexpected server errors | | `WEB_` | Web app → API (raised in the browser/web server, never by the API) |
-| `SUB_` | Plans and limits (M6d-P7) | | | |
+| `SUB_` | Plans and limits (M6d-P7) | | `AI_` | The assistant (M7a) |
 
 ## Platform
 
@@ -347,3 +347,18 @@ Patient notifications reuse `REQ_NOT_FOUND` (another account's notice) and `REQ_
 | Code | HTTP | Meaning | Likely cause | Where to look |
 |---|---|---|---|---|
 | `AUD_RANGE_TOO_LONG` | 422 | Choose a shorter range | `GET /audit-events` or its export over more than 92 days, or an export of more than 20,000 rows (FR-AUD-03) | The request's `from` and `to` (clinic calendar days, both included); export a shorter range |
+
+## The assistant (M7a)
+
+Spec `assistant.md` R2, R8, R11. A context that is not the caller's (another account's
+prescription or upload) is the generic `REQ_NOT_FOUND` (404); a malformed conversation is
+`REQ_VALIDATION_FAILED` (422). On confirm, the action's own codes come back as from its endpoint
+(for example `APT_SLOT_TAKEN`, `PRT_UNVERIFIED_ACCOUNT`).
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `AI_UNAVAILABLE` | 503 | The assistant is not available right now | The model timed out (`LLM_TIMEOUT_SECONDS`), the provider failed or answered something unreadable, or the key is wrong (401 from the provider) | `assistant.llm_failed` with `status` or `kind`; the provider's status page; `LLM_*` settings |
+| `AI_PROVIDER_BUSY` | 503 (Retry-After) | The assistant is busy; try in a minute | The provider's own rate limit (Groq's free tier allows about 30 requests a minute) | `assistant.llm_failed status=429`; the provider plan |
+| `AI_RATE_LIMITED` | 429 (Retry-After) | Too many messages | More than 12 turns a minute from one account or staff user | `public_rate_limits` bucket `assistant:<caller>:<id>` |
+| `AI_PROPOSAL_INVALID` | 404 | This confirmation is no longer valid | The token expired (10 minutes), was altered, belongs to another account, user or clinic, or names an action the caller no longer has | `assistant.proposal_refused` with `reason` |
+| `AI_PROPOSAL_USED` | 409 | This was already confirmed | The same proposal confirmed twice (a double click, a replay) | `public_rate_limits` bucket `assistant-proposal:<jti>` |

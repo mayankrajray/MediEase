@@ -6,6 +6,17 @@ first production release.
 
 ## [Unreleased]
 
+### Added
+- M7a (#65): the assistant (FR-AI-01..04; spec assistant; ADR-0013, ADR-0024). A patient
+  assistant at `/portal/assistant` (booking requests by chat, appointments, the chosen
+  prescription restated from its record) and a staff assistant at `/assistant` (queue, sessions,
+  patients, book, cancel, move), both acting with the caller's own permissions; writes need an
+  explicit Confirm of a signed, single-use proposal; advice questions get a fixed referral before
+  the model. The model sits behind `LlmPort`: the console rules by default, Groq, DeepInfra or
+  OpenAI by settings (`LLM_*`). Contract 0.50.0.
+- M7a-P1 (#65): prescriptions issued from now on print layout 3 with the MediEase mark, a
+  verification code and a QR code holding only `MEDIEASE-RX:1:<id>` on every page (FR-RX-11).
+
 ### Security
 - Next.js 16.4.0 → 16.4.3 (#49): the October 2026 out-of-band release fixing GHSA-2464-fhr4-w9xw
   (critical: remote code execution in the Image Optimization API with SVG files), GHSA-673q-mjm6-r5xr
