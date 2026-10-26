@@ -41,6 +41,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 28. Payments, refunds and dues (M6d-P3)
 29. Receipts and receipt links (M6d-P4)
 30. The daily collection (M6d-P5)
+31. Reports attached to visits (M6d-P6)
 
 ---
 
@@ -797,3 +798,32 @@ clinic's local day.
 **Checking the figure by hand.** `SELECT sum(CASE kind WHEN 'PAYMENT' THEN amount_paise ELSE
 -amount_paise END) FROM payments WHERE clinic_id = '<id>' AND local_date = '<YYYY-MM-DD>' AND voided_at
 IS NULL;` gives the day's net in paise.
+
+### 31. Reports attached to visits (M6d-P6)
+
+A visit's reports are on the consultation screen (*Reports*); the front desk attaches one from the
+queue row's menu (*Attach report…*) but cannot open it. PDF, JPEG or PNG only, at most 10 MB, 20 per
+visit (spec visit-attachments).
+
+**"The file was refused."** `VIS_FILE_REJECTED` with `reason`: `type` (not a real PDF, JPEG or
+PNG, whatever its name; a Word file or a HEIC photo from an iPhone must be saved as PDF or JPEG
+first), `size` (over 10 MB: scan at a lower resolution) or `missing`. 413 means far larger than
+10 MB.
+
+**"I attached the wrong file."** Its uploader deletes it within 24 hours (*Delete*). After that it
+stays, like an addendum; attach the right one beside it. A deletion is audited
+(`visit.attachment_deleted`).
+
+**"The patient cannot see the report."** Only the visit's doctor shares it (*Share with patient*),
+and the patient's portal account must be linked to that record. A deleted report leaves the portal.
+
+**"Who opened this report?"** Every staff open is audited: *Audit log*, or `SELECT occurred_at,
+actor_user_id FROM audit_events WHERE action = 'visit.attachment_opened' AND metadata->>'attachment_id'
+= '<id>';`. Portal opens are not audited (portal reads, decision 7A).
+
+**Storage.** Files are private blobs under `attachments/<clinic_id>/<visit_id>/<attachment_id>`, served
+only through the API (ADR-0012), backed up with the prescriptions. `visit.attachment_upload_failed`
+(503) means storage refused the write: nothing was kept, try again. `visit.attachment_file_kept`
+means a deleted report's file could not be removed; the row says deleted so it is never served —
+remove the object by hand. `visit.attachment_missing` (error) is a row whose file is gone: restore
+it from the backup.
