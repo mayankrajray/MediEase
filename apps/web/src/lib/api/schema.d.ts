@@ -4,6 +4,95 @@
  */
 
 export interface paths {
+    readonly "/api/v1/portal/assistant/turns": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * One patient assistant turn
+         * @description Spec assistant R3-R12. @patient. A request for medical advice gets the fixed
+         *     referral (kind REFERRAL) without reaching the model. context names one chosen
+         *     prescription (an ISSUED version of a linked record) or one verified upload; anything
+         *     else is 404 REQ_NOT_FOUND. 12 turns a minute (429 AI_RATE_LIMITED). Needs
+         *     X-CSRF-Token equal to me_pt_csrf.
+         */
+        readonly post: operations["patientAssistantTurn"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/assistant/confirm": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Confirm a patient assistant proposal
+         * @description Spec assistant R8. @patient. Runs the proposed write once as this account: 404
+         *     AI_PROPOSAL_INVALID for another account's, an expired or an altered token; 409
+         *     AI_PROPOSAL_USED the second time. The action's own errors (for example 409
+         *     APT_SLOT_TAKEN) come back as they would from its endpoint.
+         */
+        readonly post: operations["patientAssistantConfirm"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/assistant/turns": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * One staff assistant turn
+         * @description Spec assistant R3-R12. @clinic(APPOINTMENTS_MANAGE). The model is offered only the
+         *     tools the member's role allows; no clinical tools; phone numbers masked.
+         */
+        readonly post: operations["staffAssistantTurn"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/assistant/confirm": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Confirm a staff assistant proposal
+         * @description Spec assistant R8. @clinic(APPOINTMENTS_MANAGE). Bound to the user and the clinic
+         *     it was proposed in; the use case re-checks every permission and rule.
+         */
+        readonly post: operations["staffAssistantConfirm"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/auth/sign-in": {
         readonly parameters: {
             readonly query?: never;
@@ -4026,6 +4115,45 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        readonly AssistantMessage: {
+            /** @enum {string} */
+            readonly role: "user" | "assistant";
+            readonly content: string;
+        };
+        /** @description Exactly one of the two. */
+        readonly AssistantContext: {
+            /** Format: uuid */
+            readonly prescription_id?: string | null;
+            /** Format: uuid */
+            readonly upload_id?: string | null;
+        };
+        readonly StaffAssistantTurn: {
+            readonly messages: readonly components["schemas"]["AssistantMessage"][];
+        };
+        readonly PatientAssistantTurn: {
+            readonly messages: readonly components["schemas"]["AssistantMessage"][];
+            /** @enum {string|null} */
+            readonly language?: "en" | "hi" | null;
+            readonly context?: components["schemas"]["AssistantContext"] | null;
+        };
+        readonly AssistantConfirm: {
+            readonly token: string;
+            /** @enum {string|null} */
+            readonly language?: "en" | "hi" | null;
+        };
+        readonly AssistantProposal: {
+            /** @description Signed; send it back to confirm */
+            readonly token: string;
+            readonly summary: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+        };
+        readonly AssistantReply: {
+            /** @enum {string} */
+            readonly kind: "ANSWER" | "REFERRAL" | "CONFIRM" | "UNAVAILABLE" | "DONE";
+            readonly reply: string;
+            readonly proposal: components["schemas"]["AssistantProposal"] | null;
+        };
         /**
          * @description FR-REM-05 (the message's status once sent, decision 3A)
          * @enum {string}
@@ -7065,6 +7193,23 @@ export interface components {
             };
         };
         /**
+         * @description M7a. REQ_NOT_FOUND (404: a context that is not the caller's); AI_PROPOSAL_INVALID (404);
+         *     AI_PROPOSAL_USED (409); REQ_VALIDATION_FAILED (422); AI_RATE_LIMITED (429, Retry-After);
+         *     AI_UNAVAILABLE (503: the model timed out or failed); AI_PROVIDER_BUSY (503, Retry-After:
+         *     the provider's own limit); on confirm, the action's own codes.
+         */
+        readonly AssistantError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                /** @description Seconds to wait (429 and AI_PROVIDER_BUSY only) */
+                readonly "Retry-After"?: string;
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
          * @description PRT_INVALID_CREDENTIALS, AUTH_SESSION_EXPIRED, AUTH_REFRESH_REUSED (401);
          *     AUTH_ACCOUNT_DISABLED, AUTH_CSRF_INVALID (403); AUTH_TOKEN_INVALID (404);
          *     PRT_EMAIL_TAKEN (409); AUTH_TOKEN_EXPIRED (410);
@@ -7554,6 +7699,170 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    readonly patientAssistantTurn: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PatientAssistantTurn"];
+            };
+        };
+        readonly responses: {
+            /** @description The assistant's reply */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["AssistantReply"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["AssistantError"];
+            readonly 409: components["responses"]["AssistantError"];
+            readonly 422: components["responses"]["AssistantError"];
+            readonly 429: components["responses"]["AssistantError"];
+            readonly 503: components["responses"]["AssistantError"];
+        };
+    };
+    readonly patientAssistantConfirm: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["AssistantConfirm"];
+            };
+        };
+        readonly responses: {
+            /** @description The assistant's reply */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["AssistantReply"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["AssistantError"];
+            readonly 409: components["responses"]["AssistantError"];
+            readonly 422: components["responses"]["AssistantError"];
+            readonly 429: components["responses"]["AssistantError"];
+            readonly 503: components["responses"]["AssistantError"];
+        };
+    };
+    readonly staffAssistantTurn: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["StaffAssistantTurn"];
+            };
+        };
+        readonly responses: {
+            /** @description The assistant's reply */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["AssistantReply"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["AuthError"];
+            readonly 404: components["responses"]["AssistantError"];
+            readonly 409: components["responses"]["AssistantError"];
+            readonly 422: components["responses"]["AssistantError"];
+            readonly 429: components["responses"]["AssistantError"];
+            readonly 503: components["responses"]["AssistantError"];
+        };
+    };
+    readonly staffAssistantConfirm: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["AssistantConfirm"];
+            };
+        };
+        readonly responses: {
+            /** @description The assistant's reply */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["AssistantReply"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["AuthError"];
+            readonly 404: components["responses"]["AssistantError"];
+            readonly 409: components["responses"]["AssistantError"];
+            readonly 422: components["responses"]["AssistantError"];
+            readonly 429: components["responses"]["AssistantError"];
+            readonly 503: components["responses"]["AssistantError"];
+        };
+    };
     readonly signIn: {
         readonly parameters: {
             readonly query?: never;
