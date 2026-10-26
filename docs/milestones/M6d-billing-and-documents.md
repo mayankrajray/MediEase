@@ -110,3 +110,28 @@ price, the permission matrix and a cross-clinic case), the migration test, contr
 the field.
 
 Open questions for P1: none beyond D8.
+
+### P1 as built (26 Oct 2026)
+
+Built as approved, with these refinements (rules in `docs/specs/billing.md` R1–R12):
+
+- The starting *Consultation* and *Follow-up* are **active** (without a price), not inactive, so
+  the schedule is usable at once and the public fee (D8) has its consultation service.
+- A duplicate active name is **409 `BIL_SERVICE_NAME_TAKEN`** (a rule conflict, like the other
+  `CLN_` conflicts), not 422; a price out of range stays 422. A clinic has at most 100 services
+  (`BIL_TOO_MANY_SERVICES`).
+- The public fee is the price for the first active `CONSULTATION` service in position order.
+  `doctors.show_fee` (default false) is the *Show the consultation fee publicly* switch on
+  *Directory*; the profile `PUT` takes `languages?` and `show_fee?` and refuses `fee_paise`.
+- `doctors.fee_paise` is kept (expand-only) and deprecated; 0036 copies it into the doctor's own
+  *Consultation* price and sets `show_fee` where it was set.
+- Retiring is allowed whether or not a bill uses the service (there are no bills before P2);
+  deletion does not exist.
+- Web: `/settings/fees` in the owner's menu (*Fees*): a read-only price table for every billing
+  role, and for owners a card per service, *Add a service* and *Restore*. Rupees are parsed with
+  at most two decimals (`lib/format/money.ts` `parseRupees`).
+
+Verified: changed-code API tests (1452 passed, including the repository and HTTP cross-clinic
+cases, the permission matrix, the migration test and the contract), web tests for the touched
+areas (73), ruff, mypy, import-linter, tsc, ESLint, `make contract-check`, `make up` to `0036`,
+`make smoke`, and the workspaces and discovery journeys.

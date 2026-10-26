@@ -234,6 +234,16 @@ The listing (M6c-P4; spec R52, R53):
 A booking request withdrawn by a suspension is `DECLINED` with `decline_reason`
 `CLINIC_UNAVAILABLE` and `decided_by` `SYSTEM`.
 
+## Billing (M6d)
+
+The fee schedule (M6d-P1; spec billing R1, R3). A price outside 0 to 10 000 000 paise is
+`REQ_VALIDATION_FAILED` (422) naming the field.
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `BIL_SERVICE_NAME_TAKEN` | 409 | Another active service already has this name (ignoring case); `field` is `name` | A duplicate, or restoring a retired service whose name was reused | The owner's *Fees* page lists the active names |
+| `BIL_TOO_MANY_SERVICES` | 409 | A clinic has 100 services at most, retired ones included | A clinic adding a service per patient or per test | Retire and reuse services; RUNBOOK 26 |
+
 ## Patient links (M4)
 
 | Code | HTTP | Meaning | Likely cause | Where to look |
