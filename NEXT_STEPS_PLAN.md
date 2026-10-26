@@ -1,84 +1,77 @@
-# NEXT_STEPS_PLAN.md — Plan for M6d (Billing and documents)
+# NEXT_STEPS_PLAN.md — Plan for M7 (AI assistant and verified prescription uploads)
 
 | Field | Value |
 |---|---|
-| Status | **M6d opened and approved 26 Oct 2026** after M6c merged (PR #54, #53 closed). Phase plan, milestone decisions B1–B9, D1–D9 and the P1 design approved on the recommendations; P1 built; P2 to be designed |
-| Scope | Milestone 6d in phase detail; M7–M9 as a roadmap. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39), M5 (PR #41), M6a (PR #50), M6b (PR #52), M6c (PR #54, merged 26 Oct 2026) |
+| Status | **M7 opened 27 Oct 2026** after M6d merged (PR #64, #63 closed). Architecture review approved with decisions D1–D7; the developer approved every phase design in advance and asked for the whole milestone to be built without stopping between M7a and M7b |
+| Scope | Milestone 7 (M7a P1–P5, M7b P6–P10) in phase detail; M8–M9 as a roadmap. Earlier plans are in git history: M0 (PRs #5–#15), M1 (PR #20), M2 (PR #22), M3 (PR #37), M4 (PR #39), M5 (PR #41), M6a (PR #50), M6b (PR #52), M6c (PR #54), M6d (PR #64, merged 26 Oct 2026) |
 | Live status | `TASKS.md` is authoritative for what is active. This plan is updated in the same PR as any change to scope, order or approach |
-| Design notes | `docs/milestones/M6d-billing-and-documents.md`; M6c: `docs/milestones/M6c-onboarding-verification-discovery.md`; M8: `docs/milestones/M8-multi-clinic-whatsapp.md` |
+| Design notes | `docs/milestones/M7-assistant-and-verified-uploads.md` and the review `docs/milestones/M7-architecture-review.md`; M8: `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Workflow rules | `CLAUDE.md` → "Git Workflow"; `CONTRIBUTING.md`; ADR-0010, ADR-0011 |
 
 ---
 
 ## 1. Problem statement
 
-Clinics on MediEase book, see and prescribe, but still take money on paper: fees are remembered,
-bills are handwritten, dues are lost and the day's cash is counted by hand. Reports patients bring
-are not kept with the visit, and every clinic gets the whole product whatever its size. M6d adds
-the clinic's fee schedule, bills that cannot be altered once issued, recorded payments and dues,
-receipts on the letterhead, the daily collection, report attachments, and plans with a trial and
-limits (PRD v1.2 C12, C14).
+Patients re-read their prescription but still phone the clinic to ask when to take a medicine or
+to book; staff switch screens to find a patient or a free slot. M7 adds an assistant that answers
+through the existing use cases with the caller's own permissions and never gives medical advice
+(M7a). Family members and carers often hold a patient's paper prescription but have no portal
+access to it; M7b lets them (and anyone) upload a MediEase prescription, which is scanned, reduced
+to its printed identifier, verified against the database and the uploader's access, and explained
+only from the database record.
 
 ## 2. Requirements
 
-- PRD v1.2 §8.14: FR-BIL-01..07, FR-SUB-01; §8.5: FR-VIS-04; §8.1 permission matrix; §12 plans.
-- Money in integer paise (AGENTS.md); bills snapshot what they charge and never copy clinical
-  content; issued bills are immutable and corrected by credit notes (FR-BIL-07).
-- Front desk creates bills and records payments but never sees clinical content (§8.1).
-- No payment gateway, GST or subscription lifecycle in M6d (D3, D5).
-- The developer's decisions: **D1** numbers per financial year (`SC/26-27/0001`); **D2** doctors
-  record payments on their own bills; **D3** no GST fields; **D4** Solo = 1 doctor, 2 users with
-  the owner; **D5** the trial starts at `ACTIVE`, its end only flags; **D6** receipts by link and QR
-  now, WhatsApp once a template is approved; **D7** front desk may upload reports it cannot open;
-  **D8** the public fee is the consultation price behind *Show fee publicly*; **D9** issue #63.
-- Coverage gates stay (≥ 90% package, ≥ 80% `domain/` + `application/`). Per phase: tests for
-  changed code plus lint and typecheck; full API and Playwright suites once, at the end of P7.
+- PRD v1.3 §0.0 C15, C16; §8.13 FR-AI-01..03; §8.15 FR-AI-04, FR-RX-11, FR-UPL-01..05; §9 NFR-20.
+- ADR-0013 (gateway), ADR-0023 (verification code and uploads), ADR-0024 (assistant turns).
+- Specs `docs/specs/assistant.md` (M7a) and `docs/specs/prescription-uploads.md` (M7b).
+- The developer's decisions (27 Oct 2026): **D1** split M7 into M7a and M7b on one issue, branch
+  and PR; **D2** QR payload `MEDIEASE-RX:1:<uuid>`, no signature; **D3** a superseded upload is
+  shown as historical and the user chooses; **D4** no OCR in the first release; **D5** clinic logos
+  deferred; **D6** uploads never shown to staff and deleted after the outcome; **D7** linked
+  patients use the prescription picker, uploads are for representatives and new users.
+- The animated landing-page polish leaves M7 (not in the approved structure): backlog.
+- Coverage gates stay (≥ 90% package, ≥ 80% `domain/` + `application/`).
 
 ## 3. Delivery workflow (ADR-0011)
 
 ```
-Milestone issue #63 → branch m6d/63-billing-and-documents (from origin/main at ec721e6)
-  → per phase: design → approval → logical commits → make lint typecheck test (changed code)
-    → developer confirms → push (with permission) to the same branch
-  → one PR for the milestone: draft after P1, ready when P7 is done and the exit criteria hold
-  → CI green → review → maintainer merges
+Milestone issue #65 → branch m7/65-assistant-and-verified-uploads (from origin/main at d53f53d)
+  → per phase: logical commits with tests → make lint typecheck test
+  → push (only with the developer's permission) → one PR for the milestone → CI → review → merge
 ```
-
-- Every commit has a Conventional Commits subject, a body (what + why) and `Refs #63`.
-- Agents never push to `main`, push to the milestone branch only with permission, and never merge.
 
 ### 3.1 Open prerequisites
 
 | # | Needed | State |
 |---|---|---|
-| L-02 | An approved WhatsApp receipt template (D6) | Pending; the send stays off until then |
-| L-04 | Counsel: GST on clinic services if a clinic asks (D3); report attachments as health data | Open; before any public launch |
-| L-11 | A transactional email account | Open; Mailpit covers local use |
-| W-5 | Branch protection on `main` | Open (GitHub Free) |
-| — | #30: an upload over 2 MB through the web origin can answer 500 instead of 413 (matters for 10 MB attachments, P6) | Open |
+| L-10 | A Groq API key for the real provider | Open; the console adapter covers local, CI and demos |
+| L-04 | Counsel and the privacy review before real patient data reaches a model (`LLM_PATIENT_DATA_ALLOWED`); upload retention | Open; before any production use |
+| — | The official MediEase logo (the PDF mark is a placeholder) | Open (founder) |
+| #30 | Uploads over 2 MB through the web origin | Fixed in M7b-P6 |
 
 ## 4. Phase breakdown
 
-Details, file lists and test plans per phase are in the design notes; each phase is designed at
-its start.
-
 | Phase | Objective | Requirements | Verify |
 |---|---|---|---|
-| P1 | Fee schedule: services, default and per-doctor prices, the owner's *Fees* page, the public fee from it | FR-BIL-01 | Prices change only from now on; owners only edit; public fee follows the consultation price |
-| P2 | Bills from a visit or for a patient; discounts; issue; credit notes | FR-BIL-02, 07 | An issued bill never changes; numbers without gaps; nothing clinical on a bill |
-| P3 | Payments (cash, UPI, card; partial), refunds, dues | FR-BIL-03, 05 | Never more than the balance; dues per patient and per clinic |
-| P4 | Receipt PDFs, the patient link, bills in the portal | FR-BIL-04 | Rendered once; last-4 check; portal scope |
-| P5 | Daily collection by mode and doctor, CSV | FR-BIL-06 | The collection equals the recorded payments less refunds (exit test) |
-| P6 | Report attachments on visits | FR-VIS-04 | First-bytes check, 10 MB, private, audited, clinical-only viewing |
-| P7 | Plans, trial and limits | FR-SUB-01 | Every path that adds a doctor or user is limited |
+| **M7a-P1** | Layout 3: MediEase mark, verification code and QR | FR-RX-11 | QR decodes to the ID on every page, A5/A4, en/hi; layouts 1–2 frozen |
+| **M7a-P2** | LLM gateway: port, OpenAI-compatible adapter (Groq first), console adapter, settings | FR-AI-03 | Fake-server adapter tests; production refusals |
+| **M7a-P3** | Assistant core: turns, tools as the caller, signed proposals, guard rails, explanation from the record | FR-AI-01, 02, 04 | Guard-rail suite; proposals bound and single use; grounding check |
+| **M7a-P4** | Patient assistant API and portal page with the prescription picker | FR-AI-01, 04 | Booking request by chat with confirm; Playwright journey 1 |
+| **M7a-P5** | Staff assistant API and clinic page | FR-AI-01 | Book, cancel, reschedule with confirm; tools filtered by permission |
+| **M7b-P6** | Uploads table, upload and typed-code endpoints, quarantine; #30 | FR-UPL-01, NFR-20 | Type, size, rate limits; 413 through the web origin |
+| **M7b-P7** | ClamAV service, scanner port and adapter, the upload worker queue | FR-UPL-02, NFR-20 | EICAR rejected by real clamd; reminders unaffected |
+| **M7b-P8** | Identifier extraction: QR, PDF text layer, limits | FR-UPL-03 | Round trips; ambiguous and unreadable files |
+| **M7b-P9** | Verification: own, representative (last-4), superseded choice | FR-UPL-04 | No existence oracle; grant opens one chain only |
+| **M7b-P10** | Handoff to the assistant, deletion and sweep, portal UI, journeys 2–5 | FR-UPL-05, FR-AI-04 | The edited-upload security test; full suites and `make e2e` |
 
-## 5. Roadmap after M6d
+## 5. Roadmap after M7
 
-- **M7 AI assistant and pitch** — LLM gateway (Groq first, ADR-0013), tools with the user's own
-  permissions, guard rails, assistant, animated landing page.
 - **M8 Multi-clinic WhatsApp and consolidated billing** — designed (ADR-0014).
-- **M9 Pilot hardening** — deployment, backups, alerts, security review.
-- **M10+** — inventory, the subscription lifecycle and data export (FR-SUB-02, 03), medical stores.
+- **M9 Pilot hardening** — deployment, backups, alerts, security review, upload-worker egress
+  restrictions.
+- **M10+** — inventory, the subscription lifecycle and data export (FR-SUB-02, 03), medical stores,
+  the animated landing page.
 
 ## 6. Progress log
 
