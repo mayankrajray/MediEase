@@ -36,6 +36,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 23. Patient app links (M6b-P1)
 24. The public clinic page and booking requests (M6b-P4)
 25. Clinic applications (M6c-P1)
+26. Fees and the public fee (M6d-P1)
 
 ---
 
@@ -692,3 +693,29 @@ city and the same PIN district (first three digits) only. A doctor result needs 
 Search logs `search.clinics` / `search.doctors` with result counts only (never the words). If
 `/public/search/*` gets slow (p95 above 300 ms) or listed clinics pass about 2,000, ADR-0021 says
 to add the read model.
+
+### 26. Fees and the public fee (M6d-P1)
+
+The owner keeps the clinic's prices on *Settings → Fees* (`/settings/fees`): services with an
+optional default price, and a doctor's own price where it differs (spec billing R1-R12). Doctors
+and the front desk can read the page but not change it. Every clinic starts with *Consultation*
+and *Follow-up* without prices. Prices are stored in paise; a change applies from now on.
+
+**"The fee on our page is wrong" or "there is no fee".** The public fee is the doctor's price for
+the clinic's first active *Consultation* service (their own price, else the default), and it is
+shown only while *Show the consultation fee publicly* is on for that doctor (*Directory*). Check
+`GET /api/v1/clinic/fees` for the doctor's `price_paise` on the consultation service and
+`GET /api/v1/clinic/listing` for `show_fee`. A retired consultation service or no price means no
+fee is shown.
+
+**The old fee column.** Migration `0036` copied each doctor's M6c fee (`doctors.fee_paise`) into
+their own *Consultation* price and turned `show_fee` on where there was one. `doctors.fee_paise`
+is deprecated: nothing writes or reads it, so do not edit it to fix a fee.
+
+**"Another active service already has this name."** Names are unique among active services,
+ignoring case. To bring back a retired service whose name has been reused, rename one of them
+first. A clinic has at most 100 services (retired ones count): retire and reuse rather than add
+one per patient. Audit: `fees.*` actions, category *Billing* (RUNBOOK 18).
+
+There are no tax fields (D3): if a clinic needs GST on its bills, raise it with the developer and
+counsel before changing anything.

@@ -300,6 +300,25 @@ clinic must also be discoverable, otherwise the same 404 as an unknown slug.
 `listed`, `search_indexing`, `visible`, `languages`, `fee_paise`). The public clinic page and
 booking requests need the clinic `ACTIVE` and verified (one 404 otherwise).
 
+### Billing (M6d)
+
+M6d-P1 (spec billing R1-R12; contract 0.43.0). Every answer is the whole `FeeSchedule`; amounts
+are integer paise; `no-store`.
+
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| GET | `/api/v1/clinic/fees` | The services in order, each active doctor's own and effective price, the active doctors | FR-BIL-01 | Implemented (M6d-P1), `BILLING_MANAGE` |
+| POST | `/api/v1/clinic/fees/services` | Add a service (409 `BIL_SERVICE_NAME_TAKEN`, `BIL_TOO_MANY_SERVICES`) | FR-BIL-01 | Implemented (M6d-P1), `FEES_MANAGE` |
+| PATCH | `/api/v1/clinic/fees/services/{service_id}` | Rename, reprice (`null` removes the default), reorder, retire or restore | FR-BIL-01 | Implemented (M6d-P1), `FEES_MANAGE` |
+| PUT | `/api/v1/clinic/fees/services/{service_id}/doctors/{doctor_id}` | Set a doctor's own price (`null` removes it) | FR-BIL-01 | Implemented (M6d-P1), `FEES_MANAGE` |
+
+M6d-P1 (D8) also changes the M6c profile: `PUT /api/v1/clinic/listing/doctors/{doctor_id}/profile`
+takes `{languages?, show_fee?}` and refuses `fee_paise` (422); the listing's doctors carry the
+effective consultation price as `fee_paise` and `show_fee`; the `Doctor` body drops `fee_paise`
+for `show_fee`. Public `fee_paise` (clinic page, profile, doctor search) is the consultation
+price when `show_fee` is on, else null. Permissions gain `BILLING_MANAGE` and `FEES_MANAGE`;
+audit categories gain `BILLING`.
+
 ### Audit trail (M1-P4)
 
 Every audited action writes one row to `audit_events` in the same transaction as the change, so a

@@ -41,6 +41,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0033` | `users.ops_roles`; the review columns on `clinic_applications`; `clinic_application_checks` | M6c-P2 |
 | `0035` | The `pg_trgm` extension (directory search, ADR-0021) | M6c-P6 |
 | `0034` | Verification on `clinics` and `doctors`; `clinics.listed`, `listed_at`, `search_indexing`; `doctors.visible`, `languages`, `fee_paise`; decline reason `CLINIC_UNAVAILABLE` | M6c-P3..P5 |
+| `0036` | `clinic_services`, `doctor_service_prices`; `doctors.show_fee`; the starting services and the M6c fees carried over (`doctors.fee_paise` deprecated) | M6d-P1 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -978,6 +979,47 @@ listed OR verified_at IS NOT NULL`), `listed_at`, `search_indexing` (default tru
 `CREATE EXTENSION pg_trgm` only. Search reads the live `clinics` and `doctors` tables through the
 reviewed `SqlAlchemyDirectoryReader` (published columns, IDs out); no read model and no trigram
 index yet (ADR-0021 says when to add them).
+
+---
+
+## M6d — Fee schedule (migration `0036`, M6d-P1)
+
+Spec `docs/specs/billing.md` R1–R12. **Tenant data** (`SqlAlchemyFeeRepository`, `tenant.fees`;
+the prices through `SqlAlchemyDoctorPriceRepository` inside it). Money is integer paise (B1).
+
+### `clinic_services`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | |
+| name | text not null | 1–80 characters (CHECK) |
+| kind | text not null | `CONSULTATION` \| `FOLLOW_UP` \| `PROCEDURE` \| `OTHER` (CHECK) |
+| default_price_paise | integer null | 0 to 10 000 000 (CHECK); null: no default price |
+| active | boolean not null | Default true; a retired service is never deleted |
+| position | smallint not null | 1–100 (CHECK); the schedule's order |
+| created_at, updated_at | timestamptz | |
+
+Unique partial index `uq_clinic_services_clinic_id_name (clinic_id, lower(name)) WHERE active`.
+The migration gives every existing clinic *Consultation* and *Follow-up* without prices (R2).
+
+### `doctor_service_prices`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | |
+| service_id | uuid FK clinic_services not null | |
+| doctor_id | uuid FK doctors not null | |
+| price_paise | integer not null | 0 to 10 000 000 (CHECK) |
+| created_at, updated_at | timestamptz | |
+
+Unique `uq_doctor_service_prices_service_id_doctor_id`. Removing a doctor's own price deletes the
+row (the default applies).
+
+### `doctors` (additions)
+`show_fee boolean not null default false` (D8): the public profile shows the doctor's
+consultation price. The migration copies each `doctors.fee_paise` into a *Consultation* price
+and sets `show_fee` where there was one. **`doctors.fee_paise` is deprecated** from 0036: kept
+(expand-only), never written or read; a later contract migration may drop it.
 
 ---
 

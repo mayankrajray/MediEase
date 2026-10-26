@@ -14,6 +14,11 @@ first production release.
   stays at 16.3.8 (dev only).
 
 ### Changed
+- M6d-P1 (#63, D8): the public doctor fee is now the consultation price from the fee schedule,
+  shown only when the owner turns on *Show the consultation fee publicly* (*Directory*). The
+  profile `PUT` takes `show_fee` and refuses `fee_paise`; the `Doctor` body has `show_fee`
+  instead of `fee_paise`. Migration `0036` carries each M6c fee over, so public pages show the
+  same fee; `doctors.fee_paise` is deprecated (kept, unused).
 - CI (#19): web `npm audit` now blocks on production dependencies only (`--omit=dev`); the
   full-tree audit still runs but is non-blocking. Reason: braces advisory GHSA-vfj7-8cjw-p6xm
   (CVE-2026-93687, braces ≤ 3.0.3) has no patched version and is reachable only through
@@ -21,6 +26,12 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6d-P1 (#63): the clinic's fee schedule (FR-BIL-01; spec billing R1-R12). Services
+  (consultation, follow-up, procedure, other) with an optional default price and each doctor's
+  own price, in paise (migration `0036`); every clinic starts with *Consultation* and
+  *Follow-up*. The owner's *Settings → Fees* page (amounts typed in rupees); doctors and the
+  front desk read it. New permissions `BILLING_MANAGE` and `FEES_MANAGE`, audit category
+  *Billing*, errors `BIL_SERVICE_NAME_TAKEN` and `BIL_TOO_MANY_SERVICES`; contract 0.43.0.
 - M6c-P8 (#53): the landing page at `/` for signed-out visitors (FR-LND-01..03): the clinic path
   (problem, features, a screen per role, the 5-minute set-up promise, pilot pricing from PRD §12,
   privacy and safety, FAQ, *Apply to join MediEase*) and the patient path (*Find a doctor*, the
