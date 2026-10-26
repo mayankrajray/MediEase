@@ -45,6 +45,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0037` | `bills` (bills and credit notes), `bill_lines` | M6d-P2 |
 | `0038` | `payments` (payments and refunds, voids) | M6d-P3 |
 | `0039` | `patient_links.bill_id` and purpose `RECEIPT`; `prescription_id` nullable | M6d-P4 |
+| `0040` | `visit_attachments` (reports on visits) | M6d-P6 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -1114,3 +1115,29 @@ Indexes: `bill_id`, `(clinic_id, local_date)`. Rows are never deleted.
 
 Erasure requests are executed by a reviewed, audited procedure (`scripts/erase_patient.py`, M6)
 that respects legally required clinical retention — confirm with counsel (L-04).
+
+## M6d — Reports on visits (migration `0040`, M6d-P6)
+
+Spec `docs/specs/visit-attachments.md` R1–R13. **Tenant data** (`SqlAlchemyVisitAttachmentRepository`,
+`tenant.visit_attachments`). The file is a private blob under `storage_key` (ADR-0012); the row is
+never deleted. The file name is clinical: shown, never logged.
+
+### `visit_attachments`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | UUIDv7 |
+| clinic_id | uuid FK clinics not null | Tenancy |
+| visit_id | uuid FK visits not null | |
+| patient_id | uuid FK patients not null | The visit's patient (the portal's scope) |
+| storage_key | text not null, unique | `attachments/{clinic}/{visit}/{id}` |
+| content_type | text not null | `application/pdf` \| `image/jpeg` \| `image/png` (CHECK), decided by the first bytes |
+| size_bytes | integer not null | 1 to 10,485,760 (CHECK) |
+| filename | text not null | Cleaned, 1–120 characters (CHECK) |
+| uploaded_by | uuid FK users not null | May delete within 24 hours |
+| uploaded_at | timestamptz not null | |
+| shared_at, shared_by | timestamptz, uuid FK users null | Shown in the patient's portal; both or neither (CHECK `shared_together`) |
+| deleted_at, deleted_by | timestamptz, uuid FK users null | A delete; both or neither (CHECK `deleted_together`) |
+
+Indexes: `(visit_id, uploaded_at)` for the visit's list; partial `(clinic_id, patient_id, shared_at)`
+`WHERE shared_at IS NOT NULL AND deleted_at IS NULL` for the portal. At most 20 rows per visit that are
+not deleted, checked under the visit row lock.

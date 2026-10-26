@@ -182,6 +182,11 @@ only in the log (`auth.password_reset_requested` `sent=true|false`).
 | `VIS_NOT_YOURS` | 403 | Only the visit's doctor can change it | A doctor (or owner-doctor) writing another doctor's visit, or a caller with no active doctor profile (spec §2, 3A) | `doctors.user_id`; the visit's `doctor_id` |
 | `VIS_STALE` | 409 | This visit was changed elsewhere; reload it and try again | The `PATCH` sent an older `revision`: another tab saved first (4A); `details.revision` is the current one | Reload the visit |
 | `VIS_NOT_COMPLETED` | 409 | Edit the visit directly until it is completed | An addendum on an open visit (R3) | `visits.status` |
+| `VIS_FILE_REJECTED` | 422 | The report is missing, over 10 MB, or not a PDF, JPEG or PNG; `details.reason` is `type`, `size` or `missing` (M6d-P6) | A Word file or HEIC photo, a renamed file (the type is read from the bytes), a large scan | The file the person chose; nothing is stored |
+| `VIS_ATTACHMENT_LIMIT` | 409 | A visit holds at most 20 reports (M6d-P6, R3) | Many pages scanned one by one | Combine pages into one PDF, or delete wrong ones |
+| `VIS_ATTACHMENT_NOT_YOURS` | 403 | Only the person who attached a report may delete it (R8) | Someone else tried *Delete* | `visit_attachments.uploaded_by` |
+| `VIS_ATTACHMENT_LOCKED` | 409 | More than 24 hours after upload a report cannot be deleted; `details.locked_at` (R8) | A late correction | Attach the right report beside it |
+| `VIS_UPLOAD_FAILED` | 503 | Blob storage refused the file; nothing was kept (R4) | Storage down or full | API log `visit.attachment_upload_failed`; RUNBOOK §31 |
 | `VIS_ADDENDUM_APPEND_ONLY` | — (database) | — | An `UPDATE`, `DELETE` or `TRUNCATE` of `visit_addenda` (migration 0009); never from the app | The statement's author; RUNBOOK for deliberate corrections |
 | `RX_NOT_DRAFT` | 409 | This prescription is already issued; revise it instead | A save, issue or discard of an issued or superseded version (FR-RX-09, AC1); `details.status`. Also raised by the database triggers (migration 0010) for any direct change | `prescriptions.status`; revise from the latest version |
 | `RX_EMPTY` | 422 | Add at least one medicine or advice | Issuing a draft with no items and no advice (R4) | The draft's `items`, `advice` |

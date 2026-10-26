@@ -359,6 +359,17 @@ M6d-P5 (spec billing R55-R62; contract 0.47.0):
 | GET | `/api/v1/clinic/collection?date` | One clinic-local day by mode and doctor, voids apart | FR-BIL-06 | Implemented (M6d-P5), `COLLECTION_VIEW` |
 | GET | `/api/v1/clinic/collection/export?date` | The same list as CSV, audited | FR-BIL-06 | Implemented (M6d-P5), `COLLECTION_VIEW` |
 
+M6d-P6 (spec visit-attachments R1-R13; contract 0.48.0; permissions gain `ATTACHMENTS_ADD`, every role):
+
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| POST | `/api/v1/visits/{visit_id}/attachments` | Attach a PDF, JPEG or PNG (multipart `file`, 10 MB, first bytes) | FR-VIS-04 | Implemented (M6d-P6), `ATTACHMENTS_ADD` |
+| GET | `/api/v1/visits/{visit_id}/attachments` | The visit's reports | FR-VIS-04 | Implemented (M6d-P6), `CLINICAL_VIEW` |
+| GET | `/api/v1/visits/{visit_id}/attachments/{attachment_id}/file` | Open one (inline, nosniff, sandbox CSP), audited | FR-VIS-04 | Implemented (M6d-P6), `CLINICAL_VIEW` |
+| DELETE | `/api/v1/visits/{visit_id}/attachments/{attachment_id}` | The uploader, within 24 hours | FR-VIS-04 | Implemented (M6d-P6), `ATTACHMENTS_ADD` |
+| PUT | `/api/v1/visits/{visit_id}/attachments/{attachment_id}/share` | Show in the patient's portal, or stop | FR-VIS-04 | Implemented (M6d-P6), `CLINICAL_WRITE`, the visit's doctor |
+| GET | `/api/v1/portal/attachments` | The linked records' shared reports | FR-VIS-04 | Implemented (M6d-P6), `@patient` |
+| GET | `/api/v1/portal/attachments/{attachment_id}/file` | Open a shared report | FR-VIS-04 | Implemented (M6d-P6), `@patient` |
 ### Audit trail (M1-P4)
 
 Every audited action writes one row to `audit_events` in the same transaction as the change, so a

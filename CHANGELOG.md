@@ -26,6 +26,13 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6d-P6 (#63): report attachments on visits (FR-VIS-04; spec visit-attachments). A PDF, JPEG or
+  PNG of at most 10 MB, recognised by its first bytes, attached from the consultation screen or, by
+  the front desk, from the queue row (*Attach report…*, D7: the desk cannot open it). Opening needs
+  `CLINICAL_VIEW` and is audited; the uploader may delete within 24 hours; the visit's doctor shares
+  a report with the patient's portal (*Reports from your doctor*). New permission `ATTACHMENTS_ADD`,
+  migration `0040`, contract 0.48.0, five `VIS_` errors. The file sniffer moved to
+  `domain/shared/files.py` (certificates unchanged).
 - M6d-P5 (#63): the daily collection (FR-BIL-06; spec billing R55-R62). *Collection* for owners
   and the front desk shows one clinic-local day's payments and refunds by mode and by doctor, the
   net and the entries (voids listed, not counted), with an audited, formula-safe CSV export. The

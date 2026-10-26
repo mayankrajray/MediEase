@@ -223,3 +223,27 @@ Built as designed. AC16 is the milestone's reconciliation test: the day's net ch
 payments table and the bills' own paid and refunded amounts. Verified: domain sums, HTTP tests
 (AC16–AC18, CSV injection, the audit, days, access, tenancy), route policies and the contract.
 Web: the *Collection* page and its test.
+
+## M6d-P6 — Report attachments
+
+Designed and approved in advance (26 Oct 2026; B8, D7). Rules: `docs/specs/visit-attachments.md`
+R1–R13.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | Who adds | New `ATTACHMENTS_ADD` for every role, so the front desk attaches a scanned report from the queue row (D7) without `CLINICAL_VIEW`; B8's "adding needs `CLINICAL_WRITE`" would have shut the desk out | `CLINICAL_WRITE` only (no counter scanning) |
+| 2 | Who opens | `CLINICAL_VIEW` (owners and doctors); each open audited (`visit.attachment_opened`); the list is metadata and is not audited (the consultation read is) | Audit the list too (one row per screen load, no added safety) |
+| 3 | Files | The M6c sniffer moved to `domain/shared/files.py` with a per-caller limit; 10 MB; at most 20 per visit under the visit row lock; the name cleaned and given the real type's extension | Trust the declared type or extension |
+| 4 | Storage | Private blob `attachments/{clinic}/{visit}/{id}`, written before the row and removed if the row fails; served only through the API with `inline`, `nosniff`, `sandbox; default-src 'none'`, `private, no-store` | Pre-signed URLs (ADR-0012 says no) |
+| 5 | Delete | The uploader, within 24 hours; the row keeps `deleted_at`/`deleted_by`, the file is removed | Hard delete (no trail) |
+| 6 | Portal | `shared_at`/`shared_by` set by the visit's doctor (`CLINICAL_WRITE` and the visit's doctor profile); the portal lists and opens shared reports through `PortalScope`, not audited (decision 7A) | Every report visible to the patient (the doctor decides, PRD "where the clinic allows") |
+| 7 | API and screens | Five routes under `/api/v1/visits/{visit_id}/attachments` and two portal routes; *Reports* on the consultation screen, *Attach report…* on queue rows, *Reports from your doctor* in the portal; contract 0.48.0 | — |
+
+### P6 as built (26 Oct 2026)
+
+Built as designed. Verified: domain tests (sniffer, names, the 24-hour window, sharing), HTTP tests
+(AC1–AC9 including a failing store), the NFR-08 cross-clinic cases for every new route and the
+portal cross-account case, the repository scoping test, route policies, the permission matrix,
+migration `0040` round trip and models-match, the contract, and the onboarding certificate suites
+(unchanged and green after the sniffer moved). Web: the attach form, the *Reports* panel, the queue
+dialog and the portal card, with tests.
