@@ -28,7 +28,8 @@ def new_id() -> UUID:
     return _ids.new_id()
 
 
-_counter = iter(range(10, 10_000))
+# Shared by the whole run; five digits fit the synthetic phone numbers below.
+_counter = iter(range(10, 99_999))
 
 
 def _n() -> int:
