@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, inspect, text
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0035"
+HEAD = "0036"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -52,6 +52,7 @@ M6B_P6_TABLES = sorted(
 )
 M6C_P1_TABLES = sorted([*M6B_P6_TABLES, "clinic_application_doctors", "clinic_applications"])
 M6C_P2_TABLES = sorted([*M6C_P1_TABLES, "clinic_application_checks"])
+M6D_P1_TABLES = sorted([*M6C_P2_TABLES, "clinic_services", "doctor_service_prices"])
 
 
 @pytest.fixture
@@ -659,7 +660,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6C_P2_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M6D_P1_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -1068,3 +1069,49 @@ def test_0034_adds_verification_listing_and_profiles_and_downgrades(
         assert "listed" not in clinic
     finally:
         engine.dispose()
+
+
+def test_0036_adds_the_fee_schedule_and_downgrades(
+    scratch_database_url: str, alembic_config: Config
+) -> None:
+    """M6d-P1 (billing R1, R2; D8): two tenant tables; every clinic gets Consultation and
+    Follow-up; a doctor's M6c public fee becomes their own consultation price and is shown.
+    Downgrade restores 0035."""
+    command.upgrade(alembic_config, "0035")
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.begin() as conn:
+            clinic = conn.execute(
+                text(
+                    "INSERT INTO clinics (id, name, slug, timezone, status, specialties,"
+                    " patient_code_prefix, created_at, updated_at) VALUES (gen_random_uuid(),"
+                    " 'Sample Clinic', 'fee-clinic', 'Asia/Kolkata', 'ACTIVE', '{}', 'SC',"
+                    " now(), now()) RETURNING id"
+                )
+            ).scalar_one()
+            conn.execute(
+                text(
+                    "INSERT INTO doctors (id, clinic_id, display_name, qualification,"
+                    " registration_number, registration_council, is_active, fee_paise,"
+                    " created_at, updated_at) VALUES (gen_random_uuid(), :c, 'Dr. Sample',"
+                    " 'MBBS', 'R-1', 'Sample Council', true, 40000, now(), now())"
+                ),
+                {"c": clinic},
+            )
+        command.upgrade(alembic_config, "0036")
+        assert _tables(scratch_database_url) == M6D_P1_TABLES
+        with engine.connect() as conn:
+            services = conn.execute(
+                text("SELECT name, kind FROM clinic_services ORDER BY position")
+            ).all()
+            price = conn.execute(text("SELECT price_paise FROM doctor_service_prices")).one()
+            shown = conn.execute(text("SELECT show_fee FROM doctors")).scalar_one()
+        assert [tuple(s) for s in services] == [
+            ("Consultation", "CONSULTATION"),
+            ("Follow-up", "FOLLOW_UP"),
+        ]
+        assert price.price_paise == 40000 and shown is True
+    finally:
+        engine.dispose()
+    command.downgrade(alembic_config, "0035")
+    assert _tables(scratch_database_url) == M6C_P2_TABLES

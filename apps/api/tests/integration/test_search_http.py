@@ -26,6 +26,13 @@ LISTING = "/api/v1/clinic/listing"
 def _discoverable_a(world: World) -> FlaskClient:
     owner = world.client_for(world.a.owner)
     ensure_schedule(world, world.a)
+    # M6d-P1 (D8): the published fee comes from the fee schedule.
+    priced = owner.post(
+        "/api/v1/clinic/fees/services",
+        json={"name": "Consultation", "kind": "CONSULTATION", "default_price_paise": 40000},
+        headers=staff_csrf(owner),
+    )
+    assert priced.status_code == 201, priced.get_json()
     resp = owner.patch(
         "/api/v1/clinic",
         json={
@@ -40,7 +47,7 @@ def _discoverable_a(world: World) -> FlaskClient:
     assert resp.status_code == 200, resp.get_json()
     owner.put(
         f"{LISTING}/doctors/{world.a.doctor.id}/profile",
-        json={"languages": ["Hindi", "English"], "fee_paise": 40000},
+        json={"languages": ["Hindi", "English"], "show_fee": True},
         headers=staff_csrf(owner),
     )
     listed = owner.put(LISTING, json={"listed": True}, headers=staff_csrf(owner))

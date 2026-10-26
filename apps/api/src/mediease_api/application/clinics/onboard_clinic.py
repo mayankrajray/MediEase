@@ -28,6 +28,7 @@ from uuid import UUID
 import structlog
 
 from mediease_api.application.audit import record_event
+from mediease_api.application.billing.fees import add_default_services
 from mediease_api.application.context import Actor
 from mediease_api.application.scheduling.booking_mode import check_mode_supported, reconcile_clinic
 from mediease_api.domain.audit.actions import AuditAction
@@ -141,6 +142,8 @@ class CreateClinic:
         checklist = OnboardingChecklist.start(id=self._ids.new_id(), clinic_id=clinic.id, now=now)
         checklist.record(OnboardingStep.CLINIC_CREATED, now=now)
         uow.tenant(clinic.id).checklist.add(checklist)
+        # M6d-P1 (R2): every clinic starts with Consultation and Follow-up.
+        add_default_services(uow.tenant(clinic.id), clinic.id, self._ids, now)
 
         record_event(
             uow,

@@ -2435,11 +2435,98 @@ export interface paths {
         };
         readonly get?: never;
         /**
-         * A doctor's published languages and fee
-         * @description M6c-P5, spec R61. CLINIC_MANAGE. Languages from language_options (422 otherwise); the fee
-         *     in paise, 0 to 1 000 000, or null to show none. Another clinic's doctor is 404.
+         * A doctor's published languages and whether the fee is shown
+         * @description M6c-P5, spec R61; M6d-P1 (D8). CLINIC_MANAGE. Only the fields sent change. Languages
+         *     from language_options (422 otherwise). show_fee publishes the doctor's consultation
+         *     price from the fee schedule (GET /api/v1/clinic/fees); the fee itself is set there, so
+         *     fee_paise is refused (422). Another clinic's doctor is 404.
          */
         readonly put: operations["setDoctorProfile"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/fees": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The clinic's fee schedule
+         * @description M6d-P1, FR-BIL-01, spec billing R1-R4. BILLING_MANAGE (every role). Every service, active
+         *     or retired, in schedule order, with each active doctor's own and effective price in paise.
+         */
+        readonly get: operations["getFees"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/fees/services": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Add a service to the fee schedule
+         * @description M6d-P1, spec billing R1, R3. FEES_MANAGE (owners). 409 BIL_SERVICE_NAME_TAKEN (another
+         *     active service has the name, ignoring case) or BIL_TOO_MANY_SERVICES (100 at most).
+         */
+        readonly post: operations["addService"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/fees/services/{service_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        /**
+         * Rename, reprice, reorder, retire or restore a service
+         * @description M6d-P1, spec billing R3, R5. FEES_MANAGE. Only the fields sent change;
+         *     default_price_paise null removes the default price. Prices change from now on only: an
+         *     issued bill keeps its lines (B3). Another clinic's service is 404.
+         */
+        readonly patch: operations["changeService"];
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/fees/services/{service_id}/doctors/{doctor_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * Set or remove a doctor's own price for a service
+         * @description M6d-P1, spec billing R4. FEES_MANAGE. price_paise null removes the doctor's own price, so
+         *     the service's default applies. Another clinic's service or doctor is 404.
+         */
+        readonly put: operations["setDoctorPrice"];
         readonly post?: never;
         readonly delete?: never;
         readonly options?: never;
@@ -4105,7 +4192,10 @@ export interface components {
             readonly problems: readonly ("NOT_ACTIVE" | "NOT_VERIFIED" | "ADDRESS_MISSING" | "NO_BOOKABLE_DOCTOR")[];
             readonly doctors: readonly {
                 readonly languages: readonly string[];
+                /** @description M6d-P1 - the doctor's consultation price on the fee schedule */
                 readonly fee_paise: number | null;
+                /** @description M6d-P1 (D8) - fee_paise is published on the public page and in search */
+                readonly show_fee: boolean;
                 /** Format: uuid */
                 readonly id: string;
                 readonly display_name: string;
@@ -4117,6 +4207,60 @@ export interface components {
                 readonly can_be_visible: boolean;
                 readonly problems: readonly ("INACTIVE" | "NOT_VERIFIED" | "NO_SCHEDULE" | "HIDDEN")[];
             }[];
+        };
+        /**
+         * @description M6d-P1 (billing R1)
+         * @enum {string}
+         */
+        readonly ServiceKind: "CONSULTATION" | "FOLLOW_UP" | "PROCEDURE" | "OTHER";
+        /** @description M6d (B1) - an amount in paise, at most 1,00,000 rupees */
+        readonly Paise: number;
+        /**
+         * @description M6d-P1, spec billing R1-R4. A doctor's price is their own, else the service's default,
+         *     else none (price_paise null).
+         */
+        readonly FeeSchedule: {
+            readonly services: readonly {
+                /** Format: uuid */
+                readonly id: string;
+                readonly name: string;
+                readonly kind: components["schemas"]["ServiceKind"];
+                readonly default_price_paise: components["schemas"]["Paise"] | null;
+                readonly active: boolean;
+                readonly position: number;
+                /** @description One per active doctor, in the order of doctors */
+                readonly doctor_prices: readonly {
+                    /** Format: uuid */
+                    readonly doctor_id: string;
+                    readonly own_price_paise: components["schemas"]["Paise"] | null;
+                    readonly price_paise: components["schemas"]["Paise"] | null;
+                }[];
+            }[];
+            /** @description The clinic's active doctors */
+            readonly doctors: readonly {
+                /** Format: uuid */
+                readonly id: string;
+                readonly display_name: string;
+            }[];
+        };
+        readonly NewService: {
+            readonly name: string;
+            readonly kind: components["schemas"]["ServiceKind"];
+            readonly default_price_paise?: components["schemas"]["Paise"] | null;
+            /** @description Left out, the service goes last */
+            readonly position?: number | null;
+        };
+        /** @description Only the fields sent change; default_price_paise null removes the default */
+        readonly ServiceChange: {
+            readonly name?: string;
+            readonly kind?: components["schemas"]["ServiceKind"];
+            readonly default_price_paise?: components["schemas"]["Paise"] | null;
+            /** @description false retires the service (it stays on issued bills); true restores it */
+            readonly active?: boolean;
+            readonly position?: number;
+        };
+        readonly DoctorPriceInput: {
+            readonly price_paise: components["schemas"]["Paise"] | null;
         };
         /**
          * @description M6c-P4 (R56). Audited; never shown to patients
@@ -4157,7 +4301,7 @@ export interface components {
         /** @enum {string} */
         readonly MembershipStatus: "INVITED" | "ACTIVE" | "DEACTIVATED";
         /** @enum {string} */
-        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "SCHEDULES_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW" | "RX_PRINT" | "AUDIT_VIEW";
+        readonly Permission: "CLINIC_VIEW" | "CLINIC_MANAGE" | "DOCTORS_VIEW" | "STAFF_MANAGE" | "PATIENTS_MANAGE" | "APPOINTMENTS_MANAGE" | "SCHEDULES_MANAGE" | "QUEUE_MOVE" | "REMINDERS_SCHEDULE" | "CLINICAL_VIEW" | "CLINICAL_WRITE" | "USAGE_METRICS_VIEW" | "RX_PRINT" | "AUDIT_VIEW" | "BILLING_MANAGE" | "FEES_MANAGE";
         readonly Clinic: {
             /** @description M6b-P4 how long an online request holds its slot (default 120) */
             readonly request_hold_minutes: number;
@@ -4215,7 +4359,10 @@ export interface components {
             readonly hours: readonly components["schemas"]["PublicHours"][];
             /** @description M6c-P5 (R61) */
             readonly languages: readonly string[];
-            /** @description M6c-P5 (R61) - the consultation fee in paise, if the clinic publishes one */
+            /**
+             * @description M6c-P5 (R61); M6d-P1 (D8) - the doctor's consultation price on the fee schedule in
+             *     paise, when the clinic shows it; else null
+             */
             readonly fee_paise: number | null;
         };
         /** @description What a clinic publishes, and nothing else (NFR-17; a test fails on any extra field) */
@@ -5219,7 +5366,7 @@ export interface components {
             readonly items: readonly components["schemas"]["BookingToMove"][];
         };
         /** @enum {string} */
-        readonly AuditCategory: "SIGN_IN" | "TEAM" | "PATIENTS" | "APPOINTMENTS" | "CLINICAL" | "PRESCRIPTIONS" | "MESSAGES" | "SCHEDULE" | "SETTINGS";
+        readonly AuditCategory: "SIGN_IN" | "TEAM" | "PATIENTS" | "APPOINTMENTS" | "CLINICAL" | "PRESCRIPTIONS" | "MESSAGES" | "SCHEDULE" | "SETTINGS" | "BILLING";
         readonly AuditEntry: {
             /** Format: uuid */
             readonly id: string;
@@ -5373,8 +5520,11 @@ export interface components {
             readonly visible?: boolean;
             /** @description M6c-P5 languages spoken (from a fixed list) */
             readonly languages?: readonly string[];
-            /** @description M6c-P5 consultation fee in paise, if published */
-            readonly fee_paise?: number | null;
+            /**
+             * @description M6d-P1 (D8) the consultation price on the fee schedule is published; the fee itself
+             *     is on GET /api/v1/clinic/fees
+             */
+            readonly show_fee?: boolean;
         };
         /** @description Unpaginated by design; a clinic has a handful of staff */
         readonly StaffList: {
@@ -6103,7 +6253,9 @@ export interface components {
          * @description The change conflicts with a clinic rule: CLN_LAST_OWNER (a clinic needs at least one
          *     active owner), CLN_INVALID_TRANSITION (the entity's state does not allow it),
          *     CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here),
-         *     CLN_NO_DOCTOR_PROFILE (a doctor's view without a doctor profile, M6a-P6)
+         *     CLN_NO_DOCTOR_PROFILE (a doctor's view without a doctor profile, M6a-P6),
+         *     BIL_SERVICE_NAME_TAKEN (another active service has that name, M6d-P1),
+         *     BIL_TOO_MANY_SERVICES (a clinic has 100 services at most, M6d-P1)
          */
         readonly ConflictError: {
             headers: {
@@ -10547,7 +10699,7 @@ export interface operations {
             readonly content: {
                 readonly "application/json": {
                     readonly languages?: readonly string[];
-                    readonly fee_paise?: number | null;
+                    readonly show_fee?: boolean;
                 };
             };
         };
@@ -10559,6 +10711,138 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": components["schemas"]["ClinicListing"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly getFees: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The fee schedule */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["FeeSchedule"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+        };
+    };
+    readonly addService: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["NewService"];
+            };
+        };
+        readonly responses: {
+            /** @description The fee schedule with the new service */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["FeeSchedule"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly changeService: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly service_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["ServiceChange"];
+            };
+        };
+        readonly responses: {
+            /** @description The fee schedule */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["FeeSchedule"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly setDoctorPrice: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly service_id: string;
+                readonly doctor_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["DoctorPriceInput"];
+            };
+        };
+        readonly responses: {
+            /** @description The fee schedule */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["FeeSchedule"];
                 };
             };
             readonly 401: components["responses"]["AuthError"];

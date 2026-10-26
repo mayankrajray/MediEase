@@ -107,7 +107,7 @@ def doctor_hit_body(hit: DoctorHit) -> dict[str, Any]:
         "qualification": d.qualification,
         "specialty": d.specialty,
         "languages": list(d.languages),
-        "fee_paise": d.fee_paise,
+        "fee_paise": hit.fee_paise,
         "next_available": hit.next_available.isoformat() if hit.next_available else None,
         "clinic": {
             "slug": c.slug,

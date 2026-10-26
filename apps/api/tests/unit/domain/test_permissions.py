@@ -30,6 +30,9 @@ MATRIX: dict[P, set[Role]] = {
     P.RX_PRINT: {OWN, DOC, DESK},
     # M6a-P8 (FR-AUD-03): the clinic's audit log, owners only.
     P.AUDIT_VIEW: {OWN},
+    # M6d (PRD §8.1, B2): billing for every role; the fee schedule for owners only.
+    P.BILLING_MANAGE: {OWN, DOC, DESK},
+    P.FEES_MANAGE: {OWN},
 }
 
 

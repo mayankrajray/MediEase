@@ -95,6 +95,9 @@ DOMAIN_ERROR_STATUS = {
     # M6c-P4 (R52, R53): the directory listing.
     "CLN_LISTING_BLOCKED": 409,
     "CLN_DOCTOR_NOT_VERIFIED": 409,
+    # M6d-P1 (R3): the fee schedule.
+    "BIL_SERVICE_NAME_TAKEN": 409,
+    "BIL_TOO_MANY_SERVICES": 409,
     # M6b-P3b (R46): a dose outside its marking window.
     "PRT_DOSE_NOT_MARKABLE": 409,
     # M6a-P4: emailed verification and reset links.

@@ -35,6 +35,10 @@ class Permission(StrEnum):
     USAGE_METRICS_VIEW = "USAGE_METRICS_VIEW"
     # M6a-P8 (FR-AUD-03, decision 8A): the clinic's audit log and its export. Owners only.
     AUDIT_VIEW = "AUDIT_VIEW"
+    # M6d (FR-BIL, PRD §8.1, decision B2): bills, payments and receipts for every role (a doctor's
+    # only for their own visits, checked in the use case); the fee schedule for owners only.
+    BILLING_MANAGE = "BILLING_MANAGE"
+    FEES_MANAGE = "FEES_MANAGE"
 
 
 _EVERY_ROLE = frozenset(
@@ -46,6 +50,7 @@ _EVERY_ROLE = frozenset(
         Permission.QUEUE_MOVE,
         Permission.REMINDERS_SCHEDULE,
         Permission.RX_PRINT,
+        Permission.BILLING_MANAGE,
     }
 )
 
@@ -58,6 +63,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
         Permission.CLINICAL_VIEW,
         Permission.USAGE_METRICS_VIEW,
         Permission.AUDIT_VIEW,
+        Permission.FEES_MANAGE,
     },
     Role.DOCTOR: _EVERY_ROLE
     | {Permission.CLINICAL_VIEW, Permission.CLINICAL_WRITE, Permission.USAGE_METRICS_VIEW},

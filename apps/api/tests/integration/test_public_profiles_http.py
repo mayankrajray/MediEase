@@ -41,9 +41,22 @@ def test_r59_r61_the_profile_shows_only_shown_doctors_with_their_languages_and_f
     url = f"{LISTING}/doctors/{world.a.doctor.id}/profile"
     bad = _put(owner, url, {"languages": ["Klingon"]})
     assert bad.status_code == 422
-    saved = _put(owner, url, {"languages": ["Hindi", "English"], "fee_paise": 50000}).get_json()
+    # M6d-P1 (D8): the fee is the consultation price on the fee schedule, shown on request.
+    fees = owner.post(
+        "/api/v1/clinic/fees/services",
+        json={"name": "Consultation", "kind": "CONSULTATION", "default_price_paise": 50000},
+        headers=staff_csrf(owner),
+    )
+    assert fees.status_code == 201, fees.get_json()
+    hidden_fee = _put(owner, url, {"languages": ["Hindi", "English"]}).get_json()
+    assert hidden_fee["doctors"][0]["fee_paise"] == 50000
+    assert hidden_fee["doctors"][0]["show_fee"] is False
+    page = world.anonymous().get(f"{PUBLIC}/{world.a.clinic.slug}").get_json()
+    assert page["doctors"][0]["fee_paise"] is None
+    saved = _put(owner, url, {"show_fee": True}).get_json()
     assert saved["doctors"][0]["languages"] == ["Hindi", "English"]
-    assert saved["doctors"][0]["fee_paise"] == 50000
+    assert saved["doctors"][0]["show_fee"] is True
+    assert _put(owner, url, {"fee_paise": 1}).status_code == 422  # no longer set here
     assert "Hindi" in saved["language_options"]
 
     anon = world.anonymous()

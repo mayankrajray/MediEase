@@ -25,6 +25,7 @@ from mediease_api.adapters.db.booking import (
 )
 from mediease_api.adapters.db.dashboard import SqlAlchemyDashboardReads
 from mediease_api.adapters.db.directory import SqlAlchemyDirectoryReader
+from mediease_api.adapters.db.fees import SqlAlchemyFeeRepository
 from mediease_api.adapters.db.jobs import SqlAlchemyJobQueue, SqlAlchemyRetentionRepository
 from mediease_api.adapters.db.messages import (
     SqlAlchemyMessageCostReport,
@@ -124,6 +125,8 @@ class SqlAlchemyTenantRepositories:
         self._notification_preferences = SqlAlchemyPreferenceRepository(session, clinic_id)
         self._dashboard = SqlAlchemyDashboardReads(session, clinic_id)
         self._audit_log = SqlAlchemyAuditReader(session, clinic_id)
+        # M6d-P1: the fee schedule.
+        self._fees = SqlAlchemyFeeRepository(session, clinic_id)
 
     @property
     def clinic_id(self) -> UUID:
@@ -180,6 +183,10 @@ class SqlAlchemyTenantRepositories:
     @property
     def rx_favourites(self) -> SqlAlchemyRxFavouriteRepository:
         return self._rx_favourites
+
+    @property
+    def fees(self) -> SqlAlchemyFeeRepository:
+        return self._fees
 
     @property
     def rx_templates(self) -> SqlAlchemyRxTemplateRepository:

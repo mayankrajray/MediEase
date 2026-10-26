@@ -79,6 +79,12 @@ from mediease_api.application.auth.password_reset import (
 from mediease_api.application.auth.refresh_session import RefreshSession
 from mediease_api.application.auth.sign_in import SignIn
 from mediease_api.application.auth.sign_out import SignOut
+from mediease_api.application.billing.fees import (
+    AddService,
+    ChangeService,
+    GetFees,
+    SetDoctorPrice,
+)
 from mediease_api.application.booking.answers import (
     AcceptBookingRequest,
     AcceptProposal,
@@ -266,6 +272,7 @@ from mediease_api.delivery.http.booking_requests import create_booking_requests_
 from mediease_api.delivery.http.clinic import create_clinic_blueprint
 from mediease_api.delivery.http.csrf import register_csrf_protection
 from mediease_api.delivery.http.dashboard import create_dashboard_blueprint
+from mediease_api.delivery.http.fees import create_fees_blueprint
 from mediease_api.delivery.http.google import create_google_blueprint
 from mediease_api.delivery.http.invites import create_invite_blueprint
 from mediease_api.delivery.http.listing import create_listing_blueprint
@@ -1009,6 +1016,19 @@ class _UseCases:
     def search_doctors(self) -> SearchDoctors:
         return SearchDoctors(uow=self._uow(), clock=self.clock)
 
+    # --- M6d-P1: the fee schedule ---------------------------------------------------------------
+    def get_fees(self) -> GetFees:
+        return GetFees(uow=self._uow())
+
+    def add_service(self) -> AddService:
+        return AddService(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def change_service(self) -> ChangeService:
+        return ChangeService(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def set_doctor_price(self) -> SetDoctorPrice:
+        return SetDoctorPrice(uow=self._uow(), clock=self.clock, ids=self.ids)
+
     def get_sitemap(self) -> GetSitemap:
         return GetSitemap(uow=self._uow(), clock=self.clock)
 
@@ -1400,6 +1420,7 @@ def create_app(
     app.register_blueprint(create_ops_verification_blueprint(use_cases))
     app.register_blueprint(create_ops_suspension_blueprint(use_cases))
     app.register_blueprint(create_listing_blueprint(use_cases))
+    app.register_blueprint(create_fees_blueprint(use_cases))
     app.register_blueprint(create_public_search_blueprint(use_cases))
     app.register_blueprint(
         create_public_sitemap_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)

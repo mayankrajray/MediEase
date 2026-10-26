@@ -456,6 +456,7 @@ def _doctor_from_row(row: DoctorRow) -> Doctor:
         visible=row.visible,
         languages=tuple(row.languages or ()),
         fee_paise=row.fee_paise,
+        show_fee=row.show_fee,
     )
 
 
@@ -474,7 +475,8 @@ def _write_doctor(row: DoctorRow, doctor: Doctor) -> None:
     )
     row.visible = doctor.visible
     row.languages = list(doctor.languages)
-    row.fee_paise = doctor.fee_paise
+    # M6d-P1 (D8): fee_paise is no longer written; the fee schedule holds the price.
+    row.show_fee = doctor.show_fee
     row.updated_at = doctor.updated_at
 
 

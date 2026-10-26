@@ -28,7 +28,7 @@ from mediease_api.application.clinics.listing import (
 )
 from mediease_api.delivery.http.access import clinic, current_context
 from mediease_api.delivery.http.validation import parse_json
-from mediease_api.domain.clinics.verification import LANGUAGES, MAX_FEE_PAISE
+from mediease_api.domain.clinics.verification import LANGUAGES
 from mediease_api.domain.identity.permissions import Permission
 
 
@@ -49,8 +49,10 @@ class ListedIn(BaseModel):
 class ProfileIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    languages: list[str] = Field(default_factory=list, max_length=len(LANGUAGES))
-    fee_paise: int | None = Field(default=None, ge=0, le=MAX_FEE_PAISE)
+    # Only what is sent changes (M6d-P1): languages left out keep the doctor's.
+    languages: list[str] | None = Field(default=None, max_length=len(LANGUAGES))
+    # M6d-P1 (D8): the fee itself is the consultation price on the fee schedule.
+    show_fee: bool | None = None
 
 
 class VisibleIn(BaseModel):
@@ -86,7 +88,8 @@ def listing_body(listing: Listing) -> dict[str, Any]:
                 "has_schedule": d.has_schedule,
                 "can_be_visible": d.can_be_visible,
                 "languages": list(d.doctor.languages),
-                "fee_paise": d.doctor.fee_paise,
+                "fee_paise": listing.fees.get(d.doctor.id),
+                "show_fee": d.doctor.show_fee,
                 "problems": [p.value for p in d.problems],
             }
             for d in listing.doctors
@@ -126,8 +129,8 @@ def create_listing_blueprint(use_cases: ListingUseCases) -> Blueprint:
         listing = use_cases.set_doctor_profile().execute(
             current_context(),
             doctor_id,
-            languages=tuple(body.languages),
-            fee_paise=body.fee_paise,
+            languages=tuple(body.languages) if body.languages is not None else None,
+            show_fee=body.show_fee,
         )
         return jsonify(listing_body(listing))
 

@@ -90,7 +90,7 @@ def doctor_body(doctor: Doctor) -> dict[str, Any]:
         ),
         "visible": doctor.visible,
         "languages": list(doctor.languages),
-        "fee_paise": doctor.fee_paise,
+        "show_fee": doctor.show_fee,
     }
 
 
