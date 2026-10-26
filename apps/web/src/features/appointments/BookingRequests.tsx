@@ -171,10 +171,13 @@ export function BookingRequests() {
                     ) : (
                       <>
                         <StatusBadge tone={r.status === "ACCEPTED" ? "done" : r.status === "EXPIRED" ? "missed" : "neutral"}>{OUTCOME[r.status]}</StatusBadge>
-                        {r.decline_reason !== null && r.decline_reason !== "PATIENT_DECLINED" && (
+                        {r.decline_reason !== null && r.decline_reason !== "PATIENT_DECLINED" && r.decline_reason !== "CLINIC_UNAVAILABLE" && (
                           <span className="block text-sm text-slate-700">{DECLINE_LABELS[r.decline_reason]}</span>
                         )}
                         {r.decline_reason === "PATIENT_DECLINED" && <span className="block text-sm text-slate-700">The patient said no thanks</span>}
+                        {r.decline_reason === "CLINIC_UNAVAILABLE" && (
+                          <span className="block text-sm text-slate-700">Withdrawn while the clinic was suspended</span>
+                        )}
                         {r.decline_note !== null && <span className="block text-sm text-slate-700">Note: {r.decline_note}</span>}
                         {(r.answered_by_name !== null || r.decided_at !== null) && (
                           <span className="block text-sm text-slate-700">

@@ -169,7 +169,8 @@ export function CheckboxField({
   onChange,
   hint,
   error,
-}: Omit<Described, "required"> & { checked: boolean; onChange: (checked: boolean) => void }) {
+  disabled,
+}: Omit<Described, "required"> & { checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }) {
   return (
     <div className="space-y-1">
       <div className="flex min-h-10 items-center gap-3">
@@ -178,6 +179,7 @@ export function CheckboxField({
           name={id}
           type="checkbox"
           checked={checked}
+          disabled={disabled}
           aria-invalid={error !== undefined ? true : undefined}
           aria-describedby={describedBy(id, hint, error)}
           onChange={(event) => onChange(event.target.checked)}
