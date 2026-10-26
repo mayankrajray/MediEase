@@ -38,11 +38,13 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+from mediease_api.application.billing.fees import add_default_services
 from mediease_api.bootstrap import SeedDependencies, build_seed_dependencies
 from mediease_api.config.settings import AppEnv, load_settings
 from mediease_api.domain.appointments.appointment import Appointment
 from mediease_api.domain.appointments.queue import transition
 from mediease_api.domain.appointments.status import AppointmentStatus
+from mediease_api.domain.billing.fees import ServiceKind
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.clinics.verification import VerificationSource
@@ -58,7 +60,7 @@ from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.shared.time import local_date
 from mediease_api.domain.visits.visit import Visit, VisitStatus
 from mediease_api.domain.visits.vitals import Vitals
-from mediease_api.ports.unit_of_work import UnitOfWork
+from mediease_api.ports.unit_of_work import TenantRepositories, UnitOfWork
 
 DEMO_SLUG = "sample-clinic"
 SECOND_SLUG = "sample-clinic-two"
@@ -185,6 +187,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             _create_clinic(deps, uow, users, spec, password_hash)
             created.append(spec)
         verified = _verify_and_list_demo_clinics(deps, uow, users[_OPS.email])
+        _price_demo_clinics(deps, uow)
         patients_added = _seed_patients(deps, uow, users)
         schedules_added = _seed_schedules(deps, uow)
         overdue_added = _seed_overdue_follow_up(deps, uow)
@@ -253,6 +256,8 @@ def _create_clinic(
     )
     uow.clinics.add(clinic)
     staff = uow.tenant(clinic.id)
+    # M6d-P1 (R2): the clinic's starting services, priced in _verify_and_list_demo_clinics.
+    add_default_services(staff, clinic.id, deps.ids, now)
 
     for person in spec.members:
         assert person.role is not None  # ops users belong to no clinic
@@ -295,7 +300,7 @@ def _verify_and_list_demo_clinics(deps: SeedDependencies, uow: UnitOfWork, ops: 
         for doctor in doctors.list():
             doctor.verify(by=ops.id, source=VerificationSource.OPS_CHECK, now=now)
             doctor.set_visible(True, now=now)
-            doctor.set_profile(languages=("English", "Hindi"), fee_paise=50000, now=now)
+            doctor.set_profile(languages=("English", "Hindi"), show_fee=True, now=now)
             doctors.update(doctor)
         if clinic.address_line is None:
             clinic.update_details(now=now, address_line="12 MG Road", state="Karnataka")
@@ -304,6 +309,27 @@ def _verify_and_list_demo_clinics(deps: SeedDependencies, uow: UnitOfWork, ops: 
         uow.clinics.update(clinic)
         count += 1
     return count
+
+
+# M6d-P1: the demo fee schedule (₹500 a consultation, ₹300 a follow-up).
+_DEMO_PRICES = {ServiceKind.CONSULTATION: 50_000, ServiceKind.FOLLOW_UP: 30_000}
+
+
+def _price_demo_clinics(deps: SeedDependencies, uow: UnitOfWork) -> None:
+    """Every demo clinic gets the demo prices where its service has none yet."""
+    now = deps.clock.now()
+    for spec in _CLINICS:
+        clinic = uow.clinics.get_by_slug(spec.slug)
+        if clinic is not None:
+            _price_services(uow.tenant(clinic.id), now)
+
+
+def _price_services(staff: TenantRepositories, now: datetime) -> None:
+    for service in staff.fees.list_services():
+        price = _DEMO_PRICES.get(service.kind)
+        if price is not None and service.default_price_paise is None:
+            service.change(now=now, default_price_paise=price)
+            staff.fees.update_service(service)
 
 
 @dataclass(frozen=True)

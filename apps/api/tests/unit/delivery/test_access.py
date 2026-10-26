@@ -205,6 +205,11 @@ EXPECTED_POLICIES = {
     "listing.set_visibility": (Access.CLINIC, Permission.CLINIC_MANAGE),
     # M6c-P5 (R61, R63): a doctor's public profile and the sitemap.
     "listing.set_profile": (Access.CLINIC, Permission.CLINIC_MANAGE),
+    # M6d-P1 (billing R6): the fee schedule.
+    "fees.get_fees": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "fees.add_service": (Access.CLINIC, Permission.FEES_MANAGE),
+    "fees.change_service": (Access.CLINIC, Permission.FEES_MANAGE),
+    "fees.set_doctor_price": (Access.CLINIC, Permission.FEES_MANAGE),
     "public_sitemap.sitemap": (Access.PUBLIC, None),
     # M6c-P6 (discovery R1-R10): directory search.
     "public_search.clinics": (Access.PUBLIC, None),

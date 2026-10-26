@@ -149,6 +149,10 @@ class AuditAction(StrEnum):
     CLINIC_REACTIVATED = "clinic.reactivated"
     CLINIC_LISTING_CHANGED = "clinic.listing_changed"
     DOCTOR_VISIBILITY_CHANGED = "doctor.visibility_changed"
+    # M6d-P1 (FR-BIL-01): the fee schedule. IDs, the kind and amounts in paise only.
+    FEES_SERVICE_ADDED = "fees.service_added"
+    FEES_SERVICE_CHANGED = "fees.service_changed"
+    FEES_DOCTOR_PRICE_SET = "fees.doctor_price_set"
     # M6b-P5 (R34-R43, R32): the answers. IDs and the decline reason code only, never the note.
     BOOKING_REQUEST_ACCEPTED = "booking_request.accepted"
     BOOKING_REQUEST_DECLINED = "booking_request.declined"

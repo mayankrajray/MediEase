@@ -14,7 +14,6 @@ from uuid import UUID
 
 from mediease_api.domain.clinics.verification import (
     LANGUAGES,
-    MAX_FEE_PAISE,
     VerificationSource,
 )
 from mediease_api.domain.shared.errors import InvalidTransition, InvalidValue
@@ -46,7 +45,11 @@ class Doctor:
     visible: bool = False
     # M6c-P5 (FR-DIS-03): what a public profile may show.
     languages: tuple[str, ...] = ()
+    # Deprecated in M6d-P1 (D8): the public fee is now the doctor's consultation price on the fee
+    # schedule. The column stays (expand-only migrations) and is no longer written or read.
     fee_paise: int | None = None
+    # M6d-P1 (D8): show the consultation price on the public profile.
+    show_fee: bool = False
 
     @property
     def is_verified(self) -> bool:
@@ -74,19 +77,18 @@ class Doctor:
         self.updated_at = require_utc(now, "now")
 
     def set_profile(
-        self, *, languages: tuple[str, ...] | None, fee_paise: int | None, now: datetime
+        self, *, languages: tuple[str, ...] | None, show_fee: bool | None, now: datetime
     ) -> None:
-        """P5 (FR-DIS-03): the profile's languages (from the published list) and an optional
-        consultation fee in paise (0 to 10 000 rupees)."""
+        """P5 (FR-DIS-03): the profile's languages (from the published list); M6d-P1 (D8):
+        whether the consultation price is shown."""
         if languages is not None:
             cleaned = tuple(dict.fromkeys(languages))
             for index, language in enumerate(cleaned):
                 if language not in LANGUAGES:
                     raise InvalidValue(f"languages.{index}", "is not on the list")
             self.languages = cleaned
-        if fee_paise is not None and not 0 <= fee_paise <= MAX_FEE_PAISE:
-            raise InvalidValue("fee_paise", "must be between 0 and 1000000")
-        self.fee_paise = fee_paise
+        if show_fee is not None:
+            self.show_fee = show_fee
         self.updated_at = require_utc(now, "now")
 
     @classmethod

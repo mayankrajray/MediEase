@@ -8,7 +8,8 @@ Every change is audited. ``load_listing`` is shared with the public and search r
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -16,6 +17,7 @@ from zoneinfo import ZoneInfo
 import structlog
 
 from mediease_api.application.audit import record_event
+from mediease_api.application.billing.fees import consultation_prices
 from mediease_api.application.context import Actor, RequestContext
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.clinics.clinic import Clinic
@@ -39,6 +41,8 @@ logger = structlog.get_logger(__name__)
 class Listing:
     clinic: Clinic
     doctors: tuple[DoctorListing, ...]
+    # M6d-P1 (D8): each doctor's consultation price on the fee schedule.
+    fees: Mapping[UUID, int | None] = field(default_factory=dict)
 
     @property
     def problems(self) -> tuple[ListingProblem, ...]:
@@ -57,7 +61,7 @@ def load_listing(uow: UnitOfWork, clinic: Clinic, now: datetime) -> Listing:
         DoctorListing(d, bool(tenant.schedules.list_for_doctor(d.id, valid_since=today)))
         for d in tenant.doctors.list()
     )
-    return Listing(clinic, doctors)
+    return Listing(clinic, doctors, consultation_prices(tenant))
 
 
 def _clinic(uow: UnitOfWork, clinic_id: UUID, *, lock: bool = False) -> Clinic:
@@ -159,8 +163,8 @@ class SetDoctorVisibility:
 
 
 class SetDoctorProfile:
-    """M6c-P5 (R61): the languages a doctor speaks (from the published list) and an optional
-    consultation fee, shown on the public profile. Owners only (``CLINIC_MANAGE``)."""
+    """M6c-P5 (R61): the languages a doctor speaks (from the published list); M6d-P1 (D8):
+    whether their consultation price is shown on the public profile. Owners (``CLINIC_MANAGE``)."""
 
     def __init__(self, *, uow: UnitOfWork, clock: ClockPort, ids: IdPort) -> None:
         self._uow = uow
@@ -172,8 +176,8 @@ class SetDoctorProfile:
         ctx: RequestContext,
         doctor_id: UUID,
         *,
-        languages: tuple[str, ...],
-        fee_paise: int | None,
+        languages: tuple[str, ...] | None,
+        show_fee: bool | None,
     ) -> Listing:
         with self._uow as uow:
             now = self._clock.now()
@@ -182,7 +186,7 @@ class SetDoctorProfile:
             doctor = doctors.get(doctor_id)
             if doctor is None:
                 raise NotFound("doctor")
-            doctor.set_profile(languages=languages, fee_paise=fee_paise, now=now)
+            doctor.set_profile(languages=languages, show_fee=show_fee, now=now)
             doctors.update(doctor)
             record_event(
                 uow,
@@ -193,7 +197,11 @@ class SetDoctorProfile:
                 clinic_id=clinic.id,
                 entity_type="doctor",
                 entity_id=doctor.id,
-                metadata={"profile": "updated", "languages": str(len(doctor.languages))},
+                metadata={
+                    "profile": "updated",
+                    "languages": str(len(doctor.languages)),
+                    "show_fee": str(doctor.show_fee).lower(),
+                },
             )
             uow.commit()
             return load_listing(uow, clinic, now)

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.42.0
+  version: 0.43.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -4588,10 +4588,12 @@ paths:
     put:
       tags: [clinic]
       operationId: setDoctorProfile
-      summary: A doctor's published languages and fee
+      summary: A doctor's published languages and whether the fee is shown
       description: |
-        M6c-P5, spec R61. CLINIC_MANAGE. Languages from language_options (422 otherwise); the fee
-        in paise, 0 to 1 000 000, or null to show none. Another clinic's doctor is 404.
+        M6c-P5, spec R61; M6d-P1 (D8). CLINIC_MANAGE. Only the fields sent change. Languages
+        from language_options (422 otherwise). show_fee publishes the doctor's consultation
+        price from the fee schedule (GET /api/v1/clinic/fees); the fee itself is set there, so
+        fee_paise is refused (422). Another clinic's doctor is 404.
       security:
         - sessionCookie: []
       parameters:
@@ -4612,7 +4614,7 @@ paths:
                 languages:
                   type: array
                   items: {type: string}
-                fee_paise: {type: [integer, 'null'], minimum: 0, maximum: 1000000}
+                show_fee: {type: boolean}
       responses:
         '200':
           description: The listing
@@ -4620,6 +4622,150 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ClinicListing'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/fees:
+    get:
+      tags: [clinic]
+      operationId: getFees
+      summary: The clinic's fee schedule
+      description: |
+        M6d-P1, FR-BIL-01, spec billing R1-R4. BILLING_MANAGE (every role). Every service, active
+        or retired, in schedule order, with each active doctor's own and effective price in paise.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The fee schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeSchedule'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/clinic/fees/services:
+    post:
+      tags: [clinic]
+      operationId: addService
+      summary: Add a service to the fee schedule
+      description: |
+        M6d-P1, spec billing R1, R3. FEES_MANAGE (owners). 409 BIL_SERVICE_NAME_TAKEN (another
+        active service has the name, ignoring case) or BIL_TOO_MANY_SERVICES (100 at most).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewService'
+      responses:
+        '201':
+          description: The fee schedule with the new service
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeSchedule'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/fees/services/{service_id}:
+    patch:
+      tags: [clinic]
+      operationId: changeService
+      summary: Rename, reprice, reorder, retire or restore a service
+      description: |
+        M6d-P1, spec billing R3, R5. FEES_MANAGE. Only the fields sent change;
+        default_price_paise null removes the default price. Prices change from now on only: an
+        issued bill keeps its lines (B3). Another clinic's service is 404.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: service_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceChange'
+      responses:
+        '200':
+          description: The fee schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeSchedule'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/fees/services/{service_id}/doctors/{doctor_id}:
+    put:
+      tags: [clinic]
+      operationId: setDoctorPrice
+      summary: Set or remove a doctor's own price for a service
+      description: |
+        M6d-P1, spec billing R4. FEES_MANAGE. price_paise null removes the doctor's own price, so
+        the service's default applies. Another clinic's service or doctor is 404.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: service_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: doctor_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DoctorPriceInput'
+      responses:
+        '200':
+          description: The fee schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeSchedule'
         '401':
           $ref: '#/components/responses/AuthError'
         '403':
@@ -6902,7 +7048,9 @@ components:
         The change conflicts with a clinic rule: CLN_LAST_OWNER (a clinic needs at least one
         active owner), CLN_INVALID_TRANSITION (the entity's state does not allow it),
         CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here),
-        CLN_NO_DOCTOR_PROFILE (a doctor's view without a doctor profile, M6a-P6)
+        CLN_NO_DOCTOR_PROFILE (a doctor's view without a doctor profile, M6a-P6),
+        BIL_SERVICE_NAME_TAKEN (another active service has that name, M6d-P1),
+        BIL_TOO_MANY_SERVICES (a clinic has 100 services at most, M6d-P1)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -8293,12 +8441,17 @@ components:
           items:
             type: object
             required: [id, display_name, is_active, verified, visible, has_schedule,
-                       can_be_visible, languages, fee_paise, problems]
+                       can_be_visible, languages, fee_paise, show_fee, problems]
             properties:
               languages:
                 type: array
                 items: {type: string}
-              fee_paise: {type: [integer, 'null']}
+              fee_paise:
+                type: [integer, 'null']
+                description: M6d-P1 - the doctor's consultation price on the fee schedule
+              show_fee:
+                type: boolean
+                description: M6d-P1 (D8) - fee_paise is published on the public page and in search
               id: {type: string, format: uuid}
               display_name: {type: string}
               is_active: {type: boolean}
@@ -8313,6 +8466,110 @@ components:
                 items:
                   type: string
                   enum: [INACTIVE, NOT_VERIFIED, NO_SCHEDULE, HIDDEN]
+    ServiceKind:
+      type: string
+      enum: [CONSULTATION, FOLLOW_UP, PROCEDURE, OTHER]
+      description: M6d-P1 (billing R1)
+    Paise:
+      type: integer
+      minimum: 0
+      maximum: 10000000
+      description: M6d (B1) - an amount in paise, at most 1,00,000 rupees
+    FeeSchedule:
+      type: object
+      additionalProperties: false
+      description: |
+        M6d-P1, spec billing R1-R4. A doctor's price is their own, else the service's default,
+        else none (price_paise null).
+      required: [services, doctors]
+      properties:
+        services:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, kind, default_price_paise, active, position, doctor_prices]
+            properties:
+              id: {type: string, format: uuid}
+              name: {type: string}
+              kind:
+                $ref: '#/components/schemas/ServiceKind'
+              default_price_paise:
+                oneOf:
+                  - $ref: '#/components/schemas/Paise'
+                  - type: 'null'
+              active: {type: boolean}
+              position: {type: integer, minimum: 1, maximum: 100}
+              doctor_prices:
+                type: array
+                description: One per active doctor, in the order of doctors
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [doctor_id, own_price_paise, price_paise]
+                  properties:
+                    doctor_id: {type: string, format: uuid}
+                    own_price_paise:
+                      oneOf:
+                        - $ref: '#/components/schemas/Paise'
+                        - type: 'null'
+                    price_paise:
+                      oneOf:
+                        - $ref: '#/components/schemas/Paise'
+                        - type: 'null'
+        doctors:
+          type: array
+          description: The clinic's active doctors
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, display_name]
+            properties:
+              id: {type: string, format: uuid}
+              display_name: {type: string}
+    NewService:
+      type: object
+      additionalProperties: false
+      required: [name, kind]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        kind:
+          $ref: '#/components/schemas/ServiceKind'
+        default_price_paise:
+          oneOf:
+            - $ref: '#/components/schemas/Paise'
+            - type: 'null'
+        position:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 100
+          description: Left out, the service goes last
+    ServiceChange:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Only the fields sent change; default_price_paise null removes the default
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        kind:
+          $ref: '#/components/schemas/ServiceKind'
+        default_price_paise:
+          oneOf:
+            - $ref: '#/components/schemas/Paise'
+            - type: 'null'
+        active:
+          type: boolean
+          description: false retires the service (it stays on issued bills); true restores it
+        position: {type: integer, minimum: 1, maximum: 100}
+    DoctorPriceInput:
+      type: object
+      additionalProperties: false
+      required: [price_paise]
+      properties:
+        price_paise:
+          oneOf:
+            - $ref: '#/components/schemas/Paise'
+            - type: 'null'
     SuspendReason:
       type: string
       enum: [VERIFICATION_PROBLEM, CLINIC_REQUEST, TERMS_BREACH, PAYMENT, OTHER]
@@ -8392,6 +8649,8 @@ components:
         - USAGE_METRICS_VIEW
         - RX_PRINT
         - AUDIT_VIEW
+        - BILLING_MANAGE
+        - FEES_MANAGE
     Clinic:
       type: object
       required:
@@ -8508,7 +8767,9 @@ components:
           description: M6c-P5 (R61)
         fee_paise:
           type: [integer, 'null']
-          description: M6c-P5 (R61) - the consultation fee in paise, if the clinic publishes one
+          description: |
+            M6c-P5 (R61); M6d-P1 (D8) - the doctor's consultation price on the fee schedule in
+            paise, when the clinic shows it; else null
     PublicClinic:
       type: object
       description: What a clinic publishes, and nothing else (NFR-17; a test fails on any extra field)
@@ -10084,7 +10345,7 @@ components:
     AuditCategory:
       type: string
       enum: [SIGN_IN, TEAM, PATIENTS, APPOINTMENTS, CLINICAL, PRESCRIPTIONS, MESSAGES, SCHEDULE,
-             SETTINGS]
+             SETTINGS, BILLING]
     AuditEntry:
       type: object
       additionalProperties: false
@@ -10341,11 +10602,11 @@ components:
           type: array
           items: {type: string}
           description: M6c-P5 languages spoken (from a fixed list)
-        fee_paise:
-          type: [integer, 'null']
-          minimum: 0
-          maximum: 1000000
-          description: M6c-P5 consultation fee in paise, if published
+        show_fee:
+          type: boolean
+          description: |
+            M6d-P1 (D8) the consultation price on the fee schedule is published; the fee itself
+            is on GET /api/v1/clinic/fees
     StaffList:
       type: object
       required: [items]

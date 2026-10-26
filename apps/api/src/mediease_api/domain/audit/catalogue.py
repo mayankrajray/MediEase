@@ -24,6 +24,8 @@ class AuditCategory(StrEnum):
     MESSAGES = "MESSAGES"
     SCHEDULE = "SCHEDULE"
     SETTINGS = "SETTINGS"
+    # M6d: fees, bills, payments and receipts.
+    BILLING = "BILLING"
 
 
 CATEGORY_LABELS: dict[AuditCategory, str] = {
@@ -36,6 +38,7 @@ CATEGORY_LABELS: dict[AuditCategory, str] = {
     AuditCategory.MESSAGES: "Messages and reminders",
     AuditCategory.SCHEDULE: "Schedule",
     AuditCategory.SETTINGS: "Settings",
+    AuditCategory.BILLING: "Billing",
 }
 
 
@@ -169,6 +172,12 @@ ACTIONS: dict[A, ActionInfo] = {
         (A.NOTIFICATION_PREFERENCES_CHANGED, "Changed notification settings"),
         (A.RETENTION_PURGED, "Deleted expired data"),
         (A.AUDIT_EXPORTED, "Exported the audit log"),
+    ),
+    **_c(
+        AuditCategory.BILLING,
+        (A.FEES_SERVICE_ADDED, "Added a service to the fees"),
+        (A.FEES_SERVICE_CHANGED, "Changed a service's fee"),
+        (A.FEES_DOCTOR_PRICE_SET, "Set a doctor's fee"),
     ),
 }
 

@@ -20,6 +20,7 @@ from uuid import UUID
 
 import structlog
 
+from mediease_api.application.billing.fees import consultation_prices
 from mediease_api.application.booking.limits import limit_reads
 from mediease_api.application.clinics.listing import load_listing
 from mediease_api.application.context import RequestInfo
@@ -135,6 +136,7 @@ class GetPublicClinic:
             tenant = uow.tenant(clinic.id)
             today = local_date(self._clock.now(), clinic.timezone)
             doctors = []
+            fees = consultation_prices(tenant)  # M6d-P1 (D8)
             for doctor in tenant.doctors.list():
                 if not doctor.is_public:  # M6c-P5 (R59): active, verified and shown
                     continue
@@ -151,7 +153,7 @@ class GetPublicClinic:
                         doctor.specialty,
                         tuple(hours),
                         doctor.languages,
-                        doctor.fee_paise,
+                        fees.get(doctor.id) if doctor.show_fee else None,
                     )
                 )
             listing = load_listing(uow, clinic, self._clock.now())

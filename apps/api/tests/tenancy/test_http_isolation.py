@@ -37,6 +37,13 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/clinic/listing/doctors/<uuid:doctor_id>": lambda w: (
         f"/api/v1/clinic/listing/doctors/{w.b.doctor.id}"
     ),
+    # M6d-P1 (billing R7): the fee schedule, with clinic B's own service.
+    "/api/v1/clinic/fees/services/<uuid:service_id>": lambda w: (
+        f"/api/v1/clinic/fees/services/{_service_of_b(w)}"
+    ),
+    "/api/v1/clinic/fees/services/<uuid:service_id>/doctors/<uuid:doctor_id>": lambda w: (
+        f"/api/v1/clinic/fees/services/{_service_of_b(w)}/doctors/{w.b.doctor.id}"
+    ),
     "/api/v1/clinic/listing/doctors/<uuid:doctor_id>/profile": lambda w: (
         f"/api/v1/clinic/listing/doctors/{w.b.doctor.id}/profile"
     ),
@@ -136,6 +143,11 @@ Body = dict[str, object] | Callable[[World], dict[str, object]]
 CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
     "/api/v1/clinic/listing/doctors/<uuid:doctor_id>": ("PUT", {"visible": False}),
     "/api/v1/clinic/listing/doctors/<uuid:doctor_id>/profile": ("PUT", {"languages": []}),
+    "/api/v1/clinic/fees/services/<uuid:service_id>": ("PATCH", {"default_price_paise": 100}),
+    "/api/v1/clinic/fees/services/<uuid:service_id>/doctors/<uuid:doctor_id>": (
+        "PUT",
+        {"price_paise": 100},
+    ),
     "/api/v1/appointments/<uuid:appointment_id>/cancel": ("POST", {"reason": "PATIENT_REQUEST"}),
     "/api/v1/appointments/<uuid:appointment_id>/transitions": (
         "POST",
@@ -233,6 +245,21 @@ def _owner_of_b(world: World) -> tuple[FlaskClient, dict[str, str]]:
     csrf = client.get_cookie("me_csrf", path="/")
     assert csrf is not None
     return client, {"X-CSRF-Token": csrf.value}
+
+
+def _service_of_b(world: World) -> str:
+    """M6d-P1: one of clinic B's services, added by B's owner if it has none."""
+    client, headers = _owner_of_b(world)
+    services = client.get("/api/v1/clinic/fees").get_json()["services"]
+    if not services:
+        resp = client.post(
+            "/api/v1/clinic/fees/services",
+            json={"name": "Consultation", "kind": "CONSULTATION", "default_price_paise": 50000},
+            headers=headers,
+        )
+        assert resp.status_code == 201, resp.get_json()
+        services = resp.get_json()["services"]
+    return str(services[0]["id"])
 
 
 def _session_of_b(world: World, *, days: int) -> str:

@@ -116,7 +116,10 @@ class DoctorRow(TenantOwned, Timestamps, Base):
     verification_source: Mapped[str | None] = mapped_column(Text)
     visible: Mapped[bool] = mapped_column(server_default=text("false"))
     languages: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
+    # Deprecated by M6d-P1 (D8): kept, no longer written; the fee schedule holds prices.
     fee_paise: Mapped[int | None]
+    # M6d-P1 (migration 0036, D8): show the consultation price on the public profile.
+    show_fee: Mapped[bool] = mapped_column(server_default=text("false"))
 
 
 class OnboardingChecklistRow(TenantOwned, Base):

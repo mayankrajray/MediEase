@@ -15,6 +15,10 @@ from uuid import UUID, uuid4
 import pytest
 
 from mediease_api.adapters.db.booking import SqlAlchemyBookingRequestRepository
+from mediease_api.adapters.db.fees import (
+    SqlAlchemyDoctorPriceRepository,
+    SqlAlchemyFeeRepository,
+)
 from mediease_api.adapters.db.messages import SqlAlchemyMessageRepository
 from mediease_api.adapters.db.models import Base
 from mediease_api.adapters.db.notifications import (
@@ -49,6 +53,7 @@ from mediease_api.adapters.db.repositories import (
 )
 from mediease_api.adapters.db.tenancy import TenancyViolation, TenantScopedRepository
 from mediease_api.domain.appointments.appointment import Appointment, history_entry
+from mediease_api.domain.billing.fees import ClinicService, DoctorPrice, ServiceKind
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
 from mediease_api.domain.links.link import PatientLink
@@ -645,6 +650,8 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "reminders",
             "notifications",
             "notification_preferences",
+            "clinic_services",
+            "doctor_service_prices",
             "audit_events",
             "jobs",
         }
@@ -676,7 +683,53 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyReminderRepository,
         SqlAlchemyNotificationRepository,
         SqlAlchemyPreferenceRepository,
+        SqlAlchemyFeeRepository,
+        SqlAlchemyDoctorPriceRepository,
     } == set(TenantScopedRepository.__subclasses__())
+
+
+def test_m6d_p1_fee_schedule_is_scoped_to_its_clinic(
+    uow_factory: UowFactory, two_clinics: tuple[Tenant, Tenant]
+) -> None:
+    """M6d-P1: clinic A reaches neither B's services nor B's doctor prices."""
+    a, b = two_clinics
+    service = ClinicService.create(
+        id=new_id(),
+        clinic_id=b.clinic_id,
+        name="Dressing",
+        kind=ServiceKind.PROCEDURE,
+        default_price_paise=20000,
+        position=1,
+        now=NOW,
+    )
+    with uow_factory() as uow:
+        fees_b = uow.tenant(b.clinic_id).fees
+        fees_b.add_service(service)
+        fees_b.set_price(service.id, b.doctor.id, 25000, id=new_id(), now=NOW)
+        uow.commit()
+
+    with uow_factory() as uow:
+        fees_a = uow.tenant(a.clinic_id).fees
+        assert fees_a.list_services() == []
+        assert fees_a.get_service(service.id) is None
+        assert fees_a.get_service(service.id, for_update=True) is None
+        assert fees_a.list_prices() == []
+        with pytest.raises(TenancyViolation):
+            fees_a.add_service(service)
+        with pytest.raises(TenancyViolation):
+            fees_a.update_service(service)
+        forged = ClinicService(**{**_fields(service), "clinic_id": a.clinic_id})
+        forged.change(now=LATER, name="Hijacked")
+        with pytest.raises(NotFound):
+            fees_a.update_service(forged)
+        # Clearing a price from A's scope cannot delete B's row.
+        fees_a.set_price(service.id, b.doctor.id, None, id=new_id(), now=LATER)
+        uow.commit()
+
+    with uow_factory() as uow:
+        fees_b = uow.tenant(b.clinic_id).fees
+        assert fees_b.get_service(service.id) == service
+        assert fees_b.list_prices() == [DoctorPrice(service.id, b.doctor.id, 25000)]
 
 
 def test_notifications_and_preferences_are_scoped_to_their_clinic(

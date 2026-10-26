@@ -87,6 +87,8 @@ class DoctorHit:
     clinic: Clinic
     doctor: Doctor
     next_available: date | None
+    # M6d-P1 (D8): the consultation price when the owner shows it.
+    fee_paise: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,7 +192,8 @@ class SearchDoctors:
                 )
                 if query.available and free is None:
                     continue
-                hit = DoctorHit(clinic, entry.doctor, free)
+                fee = listing.fees.get(entry.doctor.id) if entry.doctor.show_fee else None
+                hit = DoctorHit(clinic, entry.doctor, free, fee)
                 key = _sort_key(candidate.score, candidate.place, free, entry.doctor.display_name)
                 ranked.append((key, hit))
         ranked.sort(key=lambda pair: pair[0])
