@@ -41,12 +41,14 @@ from mediease_api.application.auth.views import SessionResult
 from mediease_api.application.clinics.errors import InviteExpired, InviteInvalid, InviteUsed
 from mediease_api.application.context import Actor, RequestInfo
 from mediease_api.application.notifications.service import publish
+from mediease_api.application.subscriptions.plans import require_room, start_trial
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.clinics.clinic import Clinic, ClinicStatus
 from mediease_api.domain.identity.membership import ClinicMembership, InviteState, Role
 from mediease_api.domain.identity.password import validate_password
 from mediease_api.domain.identity.user import User
 from mediease_api.domain.notifications.events import StaffJoined
+from mediease_api.domain.subscriptions.subscription import Limit
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.security import InviteSecrets, PasswordHasher
@@ -124,6 +126,8 @@ class AcceptInvite:
             user.record_successful_sign_in(now=now)
             uow.users.update(user)
 
+            # M6d-P7 (R4): the seat must still fit the plan (it may have changed since).
+            require_room(uow, clinic.id, Limit.USERS, adding=0, now=now)
             membership.accept_invite(now=now)
             staff = uow.tenant(clinic.id).memberships
             staff.update(membership)
@@ -153,6 +157,8 @@ class AcceptInvite:
                 # I1 is satisfiable now: the clinic has its first active owner.
                 clinic.activate(active_owner_count=staff.count_active_owners(), now=now)
                 uow.clinics.update(clinic)
+                # M6d-P7 (R3): the 14-day trial starts with the clinic.
+                start_trial(uow, clinic.id, now)
                 record_event(
                     uow,
                     event_id=self._ids.new_id(),

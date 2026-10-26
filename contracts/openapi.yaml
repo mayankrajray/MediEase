@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.48.0
+  version: 0.49.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -2358,6 +2358,8 @@ paths:
           $ref: '#/components/responses/AuthError'
         '403':
           $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
         '415':
           $ref: '#/components/responses/AuthError'
         '422':
@@ -2409,7 +2411,8 @@ paths:
         FR-ORG-02. Permission: CLINIC_MANAGE (owners). Only the fields sent are changed; send
         at least one. The required fields can be corrected but not emptied (I3). Setting
         is_active to false stops offering the doctor for new work; history keeps referring to
-        them. Records doctor.updated. Needs X-CSRF-Token.
+        them; true brings them back if the plan has room (M6d-P7, 409 SUB_LIMIT_REACHED).
+        Records doctor.updated. Needs X-CSRF-Token.
       security:
         - sessionCookie: []
       parameters:
@@ -2448,6 +2451,8 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '404':
           $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
         '415':
           $ref: '#/components/responses/AuthError'
         '422':
@@ -3710,6 +3715,8 @@ paths:
           $ref: '#/components/responses/AuthError'
         '404':
           $ref: '#/components/responses/InviteError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
         '410':
           $ref: '#/components/responses/InviteError'
         '415':
@@ -3867,6 +3874,8 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '404':
           $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
         '415':
           $ref: '#/components/responses/AuthError'
         '422':
@@ -4548,6 +4557,78 @@ paths:
           $ref: '#/components/responses/ConflictError'
         '422':
           $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/subscription:
+    get:
+      tags: [clinic]
+      operationId: getClinicSubscription
+      summary: The clinic's plan, its limits, what is used and the trial
+      description: |
+        M6d-P7, FR-SUB-01; spec plans-and-trial R6. Permission CLINIC_MANAGE (owners). Users
+        are invited or active members (the owner counts); doctors are active profiles. A clinic
+        from before plans is Plus with trial_state NONE.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+      responses:
+        '200':
+          description: The subscription
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/ops/clinics/{clinic_id}/plan:
+    put:
+      tags: [ops]
+      operationId: setOpsClinicPlan
+      summary: Set a clinic's plan
+      description: |
+        M6d-P7, spec plans-and-trial R8. OPS_ADMIN. Never smaller than what the clinic already
+        uses (409 SUB_PLAN_TOO_SMALL, details.limit, allowed and used). The trial is unchanged.
+        Records subscription.plan_changed (from, to). Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicPath'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanInput'
+      responses:
+        '200':
+          description: The subscription as it now is
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
   /api/v1/public/search/clinics:
     get:
       tags: [public]
@@ -7961,6 +8042,9 @@ components:
             $ref: '#/components/schemas/ErrorEnvelope'
     ConflictError:
       description: |
+        M6d-P7: SUB_LIMIT_REACHED (the plan has no room for another doctor or user; details.plan,
+        limit doctors or users, allowed) and SUB_PLAN_TOO_SMALL (ops chose a plan smaller than
+        what is used; details.limit, allowed, used).
         The change conflicts with a clinic rule: CLN_LAST_OWNER (a clinic needs at least one
         active owner), CLN_INVALID_TRANSITION (the entity's state does not allow it),
         CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here),
@@ -12150,6 +12234,8 @@ components:
           type: [string, 'null']
           maxLength: 4
           description: 2-4 upper-case letters for patient codes (ME-0142); derived from the name when omitted. Fixed once the clinic has patients.
+        plan:
+          $ref: '#/components/schemas/Plan'
         booking_mode:
           allOf:
             - $ref: '#/components/schemas/BookingMode'
@@ -12270,7 +12356,7 @@ components:
           format: uuid
         is_active:
           type: [boolean, 'null']
-          description: false deactivates the doctor; history keeps referring to them
+          description: false deactivates the doctor; history keeps referring to them. M6d-P7 (plans R5) true brings an inactive doctor back, within the plan (409 SUB_LIMIT_REACHED)
     OnboardingChecklist:
       type: object
       description: When each onboarding step first happened (FR-OPS-04, R12)
@@ -12317,12 +12403,72 @@ components:
             allOf:
               - $ref: '#/components/schemas/Clinic'
               - type: object
-                required: [onboarding]
+                required: [onboarding, subscription]
                 properties:
                   onboarding:
                     oneOf:
                       - $ref: '#/components/schemas/OnboardingChecklist'
                       - type: 'null'
+                  subscription:
+                    $ref: '#/components/schemas/PlanSummary'
+    Plan:
+      type: string
+      enum: [SOLO, CLINIC, PLUS]
+      description: M6d-P7 (D4). Solo 1 doctor and 2 users; Clinic 3 and 5; Plus (Clinic Plus) 5 and no user limit
+    PlanInput:
+      type: object
+      additionalProperties: false
+      required: [plan]
+      properties:
+        plan:
+          $ref: '#/components/schemas/Plan'
+    PlanSummary:
+      type: object
+      additionalProperties: false
+      required: [plan, plan_name, trial_state, trial_ends_at, trial_days_left]
+      properties:
+        plan:
+          $ref: '#/components/schemas/Plan'
+        plan_name: {type: string}
+        trial_state:
+          type: string
+          enum: [NOT_STARTED, ACTIVE, ENDED, NONE]
+          description: NOT_STARTED until the clinic is active; NONE for a clinic from before plans
+        trial_ends_at: {type: [string, 'null'], format: date-time}
+        trial_days_left:
+          type: [integer, 'null']
+          minimum: 0
+          description: Whole days left, rounded up; 0 once ended
+    Subscription:
+      type: object
+      additionalProperties: false
+      required: [plan, plan_name, trial_state, trial_ends_at, trial_days_left, trial_started_at, limits, usage]
+      properties:
+        plan:
+          $ref: '#/components/schemas/Plan'
+        plan_name: {type: string}
+        trial_state:
+          type: string
+          enum: [NOT_STARTED, ACTIVE, ENDED, NONE]
+        trial_ends_at: {type: [string, 'null'], format: date-time}
+        trial_days_left: {type: [integer, 'null'], minimum: 0}
+        trial_started_at: {type: [string, 'null'], format: date-time}
+        limits:
+          type: object
+          additionalProperties: false
+          required: [doctors, users]
+          properties:
+            doctors: {type: integer}
+            users:
+              type: [integer, 'null']
+              description: null is no limit
+        usage:
+          type: object
+          additionalProperties: false
+          required: [doctors, users]
+          properties:
+            doctors: {type: integer, description: Active doctor profiles}
+            users: {type: integer, description: Invited or active members}
     OpsMessagingCosts:
       type: object
       description: M5-P5 (R18). Money in paise, excluding GST.

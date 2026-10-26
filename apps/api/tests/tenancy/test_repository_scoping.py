@@ -158,7 +158,12 @@ class Tenant:
 # and never a suspended clinic's; and gives the medicine sweep the IDs of active clinics with a
 # reminder turned on. Writes go through the tenant-scoped repository
 # (tests/integration/test_patient_notifications_http.py).
-NOT_TENANT_SCOPED = {"audit_events", "jobs"}
+#
+# Reviewed exception (M6d-P7, FR-SUB-01): clinic_subscriptions is platform data keyed by the clinic
+# (one row each), read through SqlAlchemySubscriptionRepository: ops list every clinic's plan, and a
+# clinic's own limit check locks its row by its ID, which comes from the request's membership or
+# the ops route. It holds no clinic data beyond the plan and the trial's dates.
+NOT_TENANT_SCOPED = {"audit_events", "jobs", "clinic_subscriptions"}
 
 
 @pytest.fixture
@@ -692,6 +697,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "visit_attachments",
             "audit_events",
             "jobs",
+            "clinic_subscriptions",
         }
     )
     assert {

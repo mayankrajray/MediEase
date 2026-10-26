@@ -37,9 +37,10 @@ from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.verification import VerificationSource
 from mediease_api.domain.identity.membership import Role
-from mediease_api.domain.onboarding.application import CheckResult
+from mediease_api.domain.onboarding.application import ApplicationKind, CheckResult
 from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.shared.errors import InvalidValue, NotFound
+from mediease_api.domain.subscriptions.subscription import plan_for_application
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.security import InviteSecrets
@@ -105,6 +106,11 @@ class ApproveApplication:
                     pincode=cmd.pincode or application.pincode,
                     specialties=application.specialties,
                     booking_mode=cmd.booking_mode,
+                    # M6d-P7 (plans R1): Solo for a solo doctor, else the smallest plan that fits.
+                    plan=plan_for_application(
+                        solo=application.kind is ApplicationKind.SOLO_DOCTOR,
+                        doctors=len(application.doctors),
+                    ),
                 ),
                 now=now,
             )

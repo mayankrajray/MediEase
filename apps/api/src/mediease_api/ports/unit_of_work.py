@@ -10,7 +10,7 @@ Usage in a use case::
 
 Every repository obtained from one unit of work shares its transaction, so the
 change commits or rolls back as a whole. Leaving the ``with`` block without
-``commit()`` — normally or through an exception — rolls back. M1-P4 adds the
+``commit()`` â€” normally or through an exception â€” rolls back. M1-P4 adds the
 audit writer here, which is how an audit entry is written in the same
 transaction as the change (spec R11).
 """
@@ -77,6 +77,7 @@ from mediease_api.ports.repositories import (
     VisitAttachmentRepository,
     VisitRepository,
 )
+from mediease_api.ports.subscriptions import SubscriptionRepository
 
 
 class TenantRepositories(Protocol):
@@ -211,6 +212,11 @@ class UnitOfWork(Protocol):
 
     @property
     def staff_invites(self) -> StaffInviteRepository: ...
+    @property
+    def subscriptions(self) -> SubscriptionRepository:
+        """M6d-P7: each clinic's plan and trial (platform data)."""
+        ...
+
     @property
     def portal_lookup(self) -> PortalLookup:
         """An account's active links and an invite's clinic (M6b-P1, reviewed cross-clinic)."""

@@ -175,6 +175,8 @@ class AuditAction(StrEnum):
     VISIT_ATTACHMENT_DELETED = "visit.attachment_deleted"
     VISIT_ATTACHMENT_SHARED = "visit.attachment_shared"
     VISIT_ATTACHMENT_UNSHARED = "visit.attachment_unshared"
+    # M6d-P7 (FR-SUB-01): ops changed a clinic's plan (from and to).
+    SUBSCRIPTION_PLAN_CHANGED = "subscription.plan_changed"
     # M6b-P5 (R34-R43, R32): the answers. IDs and the decline reason code only, never the note.
     BOOKING_REQUEST_ACCEPTED = "booking_request.accepted"
     BOOKING_REQUEST_DECLINED = "booking_request.declined"
