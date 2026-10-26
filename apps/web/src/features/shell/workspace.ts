@@ -75,6 +75,8 @@ export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
     { href: "/settings/listing", label: "Directory", requires: "CLINIC_MANAGE" },
     // M6d-P1 (FR-BIL-01): the fee schedule, owners only (others reach it by URL to read it).
     { href: "/settings/fees", label: "Fees", requires: "FEES_MANAGE" },
+    // M6d-P7 (FR-SUB-01): the plan, its use and the trial, owners only.
+    { href: "/settings/plan", label: "Plan", requires: "CLINIC_MANAGE" },
     { href: "/settings/notifications", label: "Notifications" },
   ],
   DOCTOR: [

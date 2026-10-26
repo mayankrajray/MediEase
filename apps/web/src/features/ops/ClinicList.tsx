@@ -10,15 +10,13 @@ import type { GetResponse } from "@/lib/api/client";
 import { sessionGet } from "@/lib/auth/refresh";
 import { formatDateTime, formatDuration, minutesBetween } from "@/lib/format/time";
 
+import { ClinicPlanAction } from "./ClinicPlanAction";
 import { ClinicStatusAction } from "./ClinicStatusAction";
 
 type Clinics = GetResponse<"/api/v1/ops/clinics">["items"];
 type Row = Clinics[number];
 
-type Load =
-  | { readonly status: "loading" }
-  | { readonly status: "ready"; readonly items: Clinics }
-  | { readonly status: "failed"; readonly error: unknown };
+type Load = { readonly status: "loading" } | { readonly status: "ready"; readonly items: Clinics } | { readonly status: "failed"; readonly error: unknown };
 
 const STATUS_LABEL: Record<Row["status"], string> = {
   ONBOARDING: "Setting up",
@@ -60,10 +58,7 @@ export function ClinicList() {
         <h1 id="clinics-heading" className="text-2xl font-bold tracking-tight">
           Clinics
         </h1>
-        <Link
-          href="/ops/clinics/new"
-          className="rounded-lg bg-brand-700 px-4 py-2 font-semibold text-white hover:bg-brand-800"
-        >
+        <Link href="/ops/clinics/new" className="rounded-lg bg-brand-700 px-4 py-2 font-semibold text-white hover:bg-brand-800">
           Create clinic
         </Link>
       </div>
@@ -90,9 +85,7 @@ export function ClinicList() {
         </div>
       )}
 
-      {load.status === "ready" && load.items.length === 0 && (
-        <p className="text-lg">No clinics yet. Create the first one to start onboarding.</p>
-      )}
+      {load.status === "ready" && load.items.length === 0 && <p className="text-lg">No clinics yet. Create the first one to start onboarding.</p>}
 
       {load.status === "ready" && load.items.length > 0 && (
         <div className={TABLE_WRAP}>
@@ -100,11 +93,24 @@ export function ClinicList() {
             <caption className="sr-only">Clinics, newest first</caption>
             <thead role="rowgroup">
               <tr role="row">
-                <th role="columnheader" scope="col" className={TH}>Clinic</th>
-                <th role="columnheader" scope="col" className={TH}>Status</th>
-                <th role="columnheader" scope="col" className={TH}>Started</th>
-                <th role="columnheader" scope="col" className={TH}>Steps done</th>
-                <th role="columnheader" scope="col" className={TH}>Start to invitation</th>
+                <th role="columnheader" scope="col" className={TH}>
+                  Clinic
+                </th>
+                <th role="columnheader" scope="col" className={TH}>
+                  Status
+                </th>
+                <th role="columnheader" scope="col" className={TH}>
+                  Started
+                </th>
+                <th role="columnheader" scope="col" className={TH}>
+                  Steps done
+                </th>
+                <th role="columnheader" scope="col" className={TH}>
+                  Start to invitation
+                </th>
+                <th role="columnheader" scope="col" className={TH}>
+                  Plan
+                </th>
                 <th role="columnheader" scope="col" className={TH}>
                   <span className="sr-only">Actions</span>
                 </th>
@@ -131,10 +137,7 @@ export function ClinicList() {
 
 function ClinicRow({ clinic, onChanged }: { clinic: Row; onChanged: (text: string) => void }) {
   const checklist = clinic.onboarding;
-  const toInvite =
-    checklist?.staff_invited_at != null
-      ? minutesBetween(checklist.started_at, checklist.staff_invited_at)
-      : undefined;
+  const toInvite = checklist?.staff_invited_at != null ? minutesBetween(checklist.started_at, checklist.staff_invited_at) : undefined;
 
   return (
     <tr role="row" className={TR}>
@@ -142,7 +145,9 @@ function ClinicRow({ clinic, onChanged }: { clinic: Row; onChanged: (text: strin
         {clinic.name}
         <span className="block font-mono text-sm font-normal text-slate-700">{clinic.slug}</span>
       </th>
-      <td role="cell" data-label="Status" className={TD}>{STATUS_LABEL[clinic.status]}</td>
+      <td role="cell" data-label="Status" className={TD}>
+        {STATUS_LABEL[clinic.status]}
+      </td>
       <td role="cell" data-label="Started" className={TD}>
         {checklist === null ? "–" : formatDateTime(checklist.started_at, clinic.timezone)}
       </td>
@@ -159,15 +164,17 @@ function ClinicRow({ clinic, onChanged }: { clinic: Row; onChanged: (text: strin
           </>
         )}
       </td>
-      <td role="cell" data-label="Start to invitation" className={TD}>{toInvite === undefined ? "–" : formatDuration(toInvite)}</td>
+      <td role="cell" data-label="Start to invitation" className={TD}>
+        {toInvite === undefined ? "–" : formatDuration(toInvite)}
+      </td>
+      <td role="cell" data-label="Plan" className={TD}>
+        {/* M6d-P7 (plans R7, R8): the plan, an ended trial, and the plan picker. */}
+        <ClinicPlanAction clinic={clinic} onChanged={onChanged} />
+      </td>
       <td role="cell" data-label="" className={TD}>
         {clinic.status === "ONBOARDING" && (
-          <Link
-            href={`/ops/clinics/new?clinic=${encodeURIComponent(clinic.id)}`}
-            className="text-brand-800 underline"
-          >
-            Continue setup{" "}
-            <span className="sr-only">for {clinic.name}</span>
+          <Link href={`/ops/clinics/new?clinic=${encodeURIComponent(clinic.id)}`} className="text-brand-800 underline">
+            Continue setup <span className="sr-only">for {clinic.name}</span>
           </Link>
         )}
         {/* M6c-P4 (R56, R58): suspend or reactivate. */}
