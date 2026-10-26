@@ -522,6 +522,10 @@ class PatientLinkRepository(Protocol):
         """The chain's link that is not revoked (version 1's ID), if any."""
         ...
 
+    def active_for_bill(self, bill_id: UUID, *, for_update: bool = False) -> PatientLink | None:
+        """M6d-P4: the bill's receipt link that is not revoked, if any."""
+        ...
+
 
 class RateLimitRepository(Protocol):
     """Fixed one-minute windows shared by every API worker (M4-P5 decision 4A)."""

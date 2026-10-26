@@ -147,6 +147,12 @@ def test_adr_0008_the_bill_routes_match_the_contract(
     _expect(openapi, _send(desk, "GET", "/api/v1/clinic/dues"), 200)
     _expect(openapi, _send(desk, "GET", "/api/v1/queue"), 200)
     _expect(openapi, _send(desk, "GET", url), 200)
+    _expect(openapi, _send(desk, "GET", f"{url}/receipt.pdf"), 200)
+    link = _expect(openapi, _send(desk, "GET", f"{url}/link"), 200)
+    _expect(openapi, _send(desk, "POST", f"{url}/link/reset"), 409)
+    token = link["url"].rsplit("/r/", 1)[1]
+    _expect(openapi, _send(world.anonymous(), "GET", f"/api/v1/public/links/{token}"), 200)
+    _expect(openapi, _send(world.anonymous(), "GET", f"/api/v1/public/links/{token}/receipt"), 401)
     _expect(openapi, _send(desk, "GET", f"{BILLS}?patient_id={patient}"), 200)
     draft = _expect(openapi, _send(desk, "POST", BILLS, {"patient_id": patient, "lines": []}), 201)
     _expect(openapi, _send(desk, "DELETE", f"{BILLS}/{draft['id']}"), 204)

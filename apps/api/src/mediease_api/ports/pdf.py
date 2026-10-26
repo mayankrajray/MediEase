@@ -10,10 +10,15 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from mediease_api.domain.billing.receipt import ReceiptDocument
 from mediease_api.domain.prescriptions.document import RxDocument
 
 
 class PdfRendererPort(Protocol):
     def render(self, document: RxDocument) -> bytes:
         """The PDF. Raises on failure; nothing is kept by the renderer."""
+        ...
+
+    def render_receipt(self, document: ReceiptDocument) -> bytes:
+        """M6d-P4 (billing R46): a bill and its receipts, with the same rules."""
         ...

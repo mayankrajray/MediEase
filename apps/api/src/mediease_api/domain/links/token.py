@@ -31,7 +31,7 @@ from mediease_api.domain.links.link import LinkPurpose
 VERSION = 1
 MAC_BYTES = 16
 _KEY_ID = re.compile(r"[A-Za-z0-9_-]{1,16}")
-_PURPOSE_CODES = {LinkPurpose.RX_VIEW: 1}
+_PURPOSE_CODES = {LinkPurpose.RX_VIEW: 1, LinkPurpose.RECEIPT: 2}
 _PURPOSES = {code: purpose for purpose, code in _PURPOSE_CODES.items()}
 _MAX_TOKEN = 200
 

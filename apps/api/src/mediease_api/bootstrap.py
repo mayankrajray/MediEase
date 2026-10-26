@@ -95,6 +95,16 @@ from mediease_api.application.billing.fees import (
     SetDoctorPrice,
 )
 from mediease_api.application.billing.payments import ListDues, RecordPayment, VoidPayment
+from mediease_api.application.billing.receipts import (
+    DownloadReceipt,
+    GetReceiptLink,
+    ListPortalBills,
+    PortalReceiptPdf,
+    ReceiptFiles,
+    ReceiptPdfByLink,
+    ResetReceiptLink,
+    ViewReceipt,
+)
 from mediease_api.application.booking.answers import (
     AcceptBookingRequest,
     AcceptProposal,
@@ -1072,6 +1082,51 @@ class _UseCases:
     def list_dues(self) -> ListDues:
         return ListDues(uow=self._uow())
 
+    # --- M6d-P4: receipts, receipt links and the portal's bills -----------------------------
+    def _receipt_files(self) -> ReceiptFiles:
+        return ReceiptFiles(renderer=self.pdf_renderer, storage=self.blob_storage)
+
+    def download_receipt(self) -> DownloadReceipt:
+        return DownloadReceipt(
+            uow=self._uow(), clock=self.clock, ids=self.ids, files=self._receipt_files()
+        )
+
+    def get_receipt_link(self) -> GetReceiptLink:
+        return GetReceiptLink(
+            uow=self._uow(),
+            clock=self.clock,
+            ids=self.ids,
+            tokens=self.link_tokens,
+            ttl_days=self.link_ttl_days,
+        )
+
+    def reset_receipt_link(self) -> ResetReceiptLink:
+        return ResetReceiptLink(
+            uow=self._uow(),
+            clock=self.clock,
+            ids=self.ids,
+            tokens=self.link_tokens,
+            ttl_days=self.link_ttl_days,
+        )
+
+    def view_link_receipt(self) -> ViewReceipt:
+        return ViewReceipt(uow=self._uow(), clock=self.clock, ids=self.ids, tokens=self.link_tokens)
+
+    def link_receipt_pdf(self) -> ReceiptPdfByLink:
+        return ReceiptPdfByLink(
+            uow=self._uow(),
+            clock=self.clock,
+            ids=self.ids,
+            tokens=self.link_tokens,
+            files=self._receipt_files(),
+        )
+
+    def list_portal_bills(self) -> ListPortalBills:
+        return ListPortalBills(uow=self._uow())
+
+    def portal_receipt_pdf(self) -> PortalReceiptPdf:
+        return PortalReceiptPdf(uow=self._uow(), files=self._receipt_files())
+
     def get_sitemap(self) -> GetSitemap:
         return GetSitemap(uow=self._uow(), clock=self.clock)
 
@@ -1464,7 +1519,9 @@ def create_app(
     app.register_blueprint(create_ops_suspension_blueprint(use_cases))
     app.register_blueprint(create_listing_blueprint(use_cases))
     app.register_blueprint(create_fees_blueprint(use_cases))
-    app.register_blueprint(create_bills_blueprint(use_cases))
+    app.register_blueprint(
+        create_bills_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
+    )
     app.register_blueprint(create_dues_blueprint(use_cases))
     app.register_blueprint(create_public_search_blueprint(use_cases))
     app.register_blueprint(

@@ -35,6 +35,19 @@ class PatientLinkRow(TenantOwned, Timestamps, Base):
             unique=True,
             postgresql_where=text("revoked_at IS NULL"),
         ),
+        # M6d-P4: one active receipt link per bill.
+        Index(
+            "uq_patient_links_bill_id_active",
+            "bill_id",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+        # Each purpose names its own resource (M6d-P4).
+        CheckConstraint(
+            "(purpose = 'RX_VIEW') = (prescription_id IS NOT NULL)"
+            " AND (purpose = 'RECEIPT') = (bill_id IS NOT NULL)",
+            name="resource_of_purpose",
+        ),
         Index("ix_patient_links_clinic_id_patient_id", "clinic_id", "patient_id"),
         CheckConstraint(
             f"failed_challenges BETWEEN 0 AND {MAX_FAILED_CHALLENGES}",
@@ -50,7 +63,9 @@ class PatientLinkRow(TenantOwned, Timestamps, Base):
 
     patient_id: Mapped[UUID] = mapped_column(ForeignKey("patients.id"))
     # Version 1 of the chain; the page shows the latest issued version.
-    prescription_id: Mapped[UUID] = mapped_column(ForeignKey("prescriptions.id"))
+    prescription_id: Mapped[UUID | None] = mapped_column(ForeignKey("prescriptions.id"))
+    # M6d-P4 (billing R48): a receipt link's bill.
+    bill_id: Mapped[UUID | None] = mapped_column(ForeignKey("bills.id"))
     purpose: Mapped[str] = mapped_column(Text)
     key_id: Mapped[str] = mapped_column(Text)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

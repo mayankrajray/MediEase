@@ -111,6 +111,8 @@ DOMAIN_ERROR_STATUS = {
     "BIL_VOID_TOO_LATE": 409,
     "BIL_ALREADY_VOIDED": 409,
     "BIL_VOID_REFUNDED": 409,
+    # M6d-P4 (R43): a draft has no receipt.
+    "BIL_RECEIPT_NOT_READY": 409,
     # M6b-P3b (R46): a dose outside its marking window.
     "PRT_DOSE_NOT_MARKABLE": 409,
     # M6a-P4: emailed verification and reset links.

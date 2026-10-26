@@ -120,6 +120,7 @@ def test_r9_issuing_version_1_creates_the_link_and_staff_see_it_without_content(
         "language": "en",
         "locked": False,
         "challenge_required": True,
+        "purpose": "RX_VIEW",
     }
     assert public.headers["Cache-Control"] == "no-store"
     assert public.headers["X-Robots-Tag"] == "noindex, nofollow"

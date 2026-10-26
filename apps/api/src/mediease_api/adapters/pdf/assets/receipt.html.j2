@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="{{ doc.language.value }}">
+<head>
+<meta charset="utf-8">
+<title>{{ doc.title }}</title>
+</head>
+<body>
+<header class="letterhead">
+  <div class="clinic">
+    <h1>{{ doc.clinic_name }}</h1>
+    {% for line in doc.clinic_lines %}
+    <p>{{ line }}</p>
+    {% endfor %}
+  </div>
+  <div class="bill">
+    <h2>Bill {{ doc.number }}</h2>
+    <p>{{ doc.bill_date }}</p>
+    {% if doc.doctor_name %}
+    <p>{{ doc.doctor_name }}</p>
+    {% endif %}
+  </div>
+</header>
+
+<section class="patient">
+  {% for field in doc.patient %}
+  <span class="field"><span class="label">{{ field.label }}:</span> {{ field.value }}</span>
+  {% endfor %}
+</section>
+
+{% if doc.status_note %}
+<p class="status">{{ doc.status_note }}</p>
+{% endif %}
+
+<table class="lines">
+  <thead>
+    <tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Discount</th><th class="num">Amount</th></tr>
+  </thead>
+  <tbody>
+    {% for line in doc.lines %}
+    <tr{% if line.credited %} class="credited"{% endif %}>
+      <td>{{ line.description }}{% if line.credited %} <span class="tag">(credited)</span>{% endif %}</td>
+      <td class="num">{{ line.quantity }}</td>
+      <td class="num">{{ line.unit_price }}</td>
+      <td class="num">{{ line.discount or "" }}</td>
+      <td class="num">{{ line.amount }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<table class="totals">
+  {% for row in doc.totals %}
+  <tr><th>{{ row.label }}</th><td class="num">{{ row.value }}</td></tr>
+  {% endfor %}
+  <tr class="balance"><th>{{ doc.balance.label }}</th><td class="num">{{ doc.balance.value }}</td></tr>
+</table>
+
+{% if doc.credit_notes %}
+<section class="entries">
+  <h3>Credit notes</h3>
+  <table>
+    {% for row in doc.credit_notes %}
+    <tr><td>{{ row.label }}</td><td class="num">{{ row.value }}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endif %}
+
+{% if doc.payments %}
+<section class="entries">
+  <h3>Payments</h3>
+  <table>
+    {% for row in doc.payments %}
+    <tr{% if row.struck %} class="struck"{% endif %}><td>{{ row.label }}</td><td class="num">{{ row.value }}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endif %}
+
+{% if doc.notes %}
+<p class="notes"><span class="label">Notes:</span> {{ doc.notes }}</p>
+{% endif %}
+</body>
+</html>

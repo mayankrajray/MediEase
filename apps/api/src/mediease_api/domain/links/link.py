@@ -15,7 +15,13 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from uuid import UUID
 
-from mediease_api.domain.links.errors import LinkExpired, LinkLocked, LinkNotLocked, LinkRevoked
+from mediease_api.domain.links.errors import (
+    LinkExpired,
+    LinkInvalid,
+    LinkLocked,
+    LinkNotLocked,
+    LinkRevoked,
+)
 from mediease_api.domain.shared.errors import InvalidValue
 from mediease_api.domain.shared.time import require_utc
 
@@ -26,6 +32,8 @@ TTL_DAYS_MAX = 90
 
 class LinkPurpose(StrEnum):
     RX_VIEW = "RX_VIEW"
+    # M6d-P4 (billing R48, B7): a bill's receipt, with the same last-4 check and lockout.
+    RECEIPT = "RECEIPT"
 
 
 @dataclass(slots=True)
@@ -33,7 +41,8 @@ class PatientLink:
     id: UUID  # also the token's jti
     clinic_id: UUID
     patient_id: UUID
-    prescription_id: UUID
+    # RX_VIEW: version 1 of the chain. RECEIPT: none (the bill is ``bill_id``).
+    prescription_id: UUID | None
     purpose: LinkPurpose
     key_id: str
     expires_at: datetime
@@ -45,6 +54,51 @@ class PatientLink:
     created_by: UUID
     created_at: datetime
     updated_at: datetime
+    # M6d-P4: the receipt link's bill.
+    bill_id: UUID | None = None
+
+    @property
+    def resource_id(self) -> UUID:
+        """What the token's ``rid`` names: the prescription chain or the bill."""
+        resource = self.bill_id if self.purpose is LinkPurpose.RECEIPT else self.prescription_id
+        assert resource is not None  # a CHECK ties each purpose to its column
+        return resource
+
+    @property
+    def rx_id(self) -> UUID:
+        """The chain of a prescription link; ``LinkInvalid`` for any other link."""
+        if self.purpose is not LinkPurpose.RX_VIEW or self.prescription_id is None:
+            raise LinkInvalid()
+        return self.prescription_id
+
+    @classmethod
+    def create_receipt(
+        cls,
+        *,
+        id: UUID,
+        clinic_id: UUID,
+        patient_id: UUID,
+        bill_id: UUID,
+        key_id: str,
+        ttl_days: int,
+        created_by: UUID,
+        now: datetime,
+    ) -> PatientLink:
+        """M6d-P4 (R48): a bill's receipt link; the rules of a prescription link."""
+        link = cls.create(
+            id=id,
+            clinic_id=clinic_id,
+            patient_id=patient_id,
+            prescription_id=bill_id,
+            key_id=key_id,
+            ttl_days=ttl_days,
+            created_by=created_by,
+            now=now,
+        )
+        link.prescription_id = None
+        link.purpose = LinkPurpose.RECEIPT
+        link.bill_id = bill_id
+        return link
 
     @classmethod
     def create(
