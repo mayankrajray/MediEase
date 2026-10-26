@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 import { apiGet, type GetResponse } from "@/lib/api/client";
+import { rupees } from "@/lib/format/money";
 import { bookingWords, type BookingWords } from "@/lib/i18n/booking-request";
 import { portalDay, portalStrings, portalTime, type PortalLanguage } from "@/lib/i18n/portal";
 
@@ -34,11 +35,6 @@ function hoursText(doctor: Doctor, words: BookingWords): string {
     .sort(([a], [b]) => a - b)
     .map(([day, spans]) => `${words.page.weekdays[day] ?? ""} ${spans.join(", ")}`)
     .join(" · ");
-}
-
-/** ₹ from paise, without decimals when whole (M6c-P5). */
-export function rupees(paise: number): string {
-  return paise % 100 === 0 ? String(paise / 100) : (paise / 100).toFixed(2);
 }
 
 /**

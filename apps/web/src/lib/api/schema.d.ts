@@ -2356,6 +2356,52 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/public/search/clinics": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Find clinics in the MediEase directory
+         * @description M6c-P6, spec discovery R1-R10 (FR-DIS-01, 02, 04, 05; ADR-0021). No session; rate
+         *     limited per caller (PRT_RATE_LIMITED). Only discoverable clinics and their public
+         *     doctors, ordered by relevance, then place, then the earliest free day. At most 20.
+         *     An allow-list body. A bad filter is 422 naming it.
+         */
+        readonly get: operations["searchClinics"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/public/search/doctors": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Find doctors in the MediEase directory
+         * @description M6c-P6, spec discovery R1-R10 (FR-DIS-01, 02, 04, 05; ADR-0021). No session; rate
+         *     limited per caller (PRT_RATE_LIMITED). Only discoverable clinics and their public
+         *     doctors, ordered by relevance, then place, then the earliest free day. At most 20.
+         *     An allow-list body. A bad filter is 422 naming it.
+         */
+        readonly get: operations["searchDoctors"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/public/sitemap": {
         readonly parameters: {
             readonly query?: never;
@@ -3996,6 +4042,50 @@ export interface components {
             readonly user: components["schemas"]["SessionUser"];
             /** @description Active clinic memberships, ordered by clinic name */
             readonly memberships: readonly components["schemas"]["Membership"][];
+        };
+        readonly SearchOptions: {
+            readonly specialties: readonly string[];
+            readonly languages: readonly string[];
+        };
+        /** @description M6c-P6 - what a clinic publishes, and nothing else (a test fails on any extra key) */
+        readonly ClinicSearchHit: {
+            readonly slug: string;
+            readonly name: string;
+            readonly address_line: string | null;
+            readonly city: string | null;
+            readonly state: string | null;
+            readonly pincode: string | null;
+            readonly specialties: readonly string[];
+            readonly doctors: readonly {
+                /** Format: uuid */
+                readonly id: string;
+                readonly display_name: string;
+                readonly specialty: string | null;
+            }[];
+            /**
+             * Format: date
+             * @description The first day in the next 7 with a free time (clinic-local), or null
+             */
+            readonly next_available: string | null;
+        };
+        /** @description M6c-P6 - a public doctor and their clinic's published place */
+        readonly DoctorSearchHit: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly display_name: string;
+            readonly qualification: string;
+            readonly specialty: string | null;
+            readonly languages: readonly string[];
+            readonly fee_paise: number | null;
+            /** Format: date */
+            readonly next_available: string | null;
+            readonly clinic: {
+                readonly slug: string;
+                readonly name: string;
+                readonly city: string | null;
+                readonly state: string | null;
+                readonly pincode: string | null;
+            };
         };
         /**
          * @description M6c-P4, spec clinic-onboarding R50-R55. The listing, whether the clinic is discoverable,
@@ -10320,6 +10410,84 @@ export interface operations {
             readonly 404: components["responses"]["PermissionError"];
             readonly 409: components["responses"]["ConflictError"];
             readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly searchClinics: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description Words to match a clinic's or doctor's name or a specialty (trigram similarity) */
+                readonly q?: string;
+                readonly city?: string;
+                /** @description Near this PIN - the same PIN, the same city, then the same PIN district */
+                readonly pincode?: string;
+                readonly specialty?: string;
+                /** @description One of options.languages */
+                readonly language?: string;
+                /** @description Only those with a free time in the next 7 days */
+                readonly available?: boolean;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The results and the filter options */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": {
+                        readonly items: readonly components["schemas"]["ClinicSearchHit"][];
+                        readonly options: components["schemas"]["SearchOptions"];
+                    };
+                };
+            };
+            readonly 422: components["responses"]["ConflictError"];
+            readonly 429: components["responses"]["ConflictError"];
+        };
+    };
+    readonly searchDoctors: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description Words to match a clinic's or doctor's name or a specialty (trigram similarity) */
+                readonly q?: string;
+                readonly city?: string;
+                /** @description Near this PIN - the same PIN, the same city, then the same PIN district */
+                readonly pincode?: string;
+                readonly specialty?: string;
+                /** @description One of options.languages */
+                readonly language?: string;
+                /** @description Only those with a free time in the next 7 days */
+                readonly available?: boolean;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The results and the filter options */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": {
+                        readonly items: readonly components["schemas"]["DoctorSearchHit"][];
+                        readonly options: components["schemas"]["SearchOptions"];
+                    };
+                };
+            };
+            readonly 422: components["responses"]["ConflictError"];
+            readonly 429: components["responses"]["ConflictError"];
         };
     };
     readonly getPublicSitemap: {
