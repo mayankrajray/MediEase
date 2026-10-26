@@ -33,6 +33,8 @@ MATRIX: dict[P, set[Role]] = {
     # M6d (PRD §8.1, B2): billing for every role; the fee schedule for owners only.
     P.BILLING_MANAGE: {OWN, DOC, DESK},
     P.FEES_MANAGE: {OWN},
+    # M6d-P3, P5 (B2): the dues list and the daily collection.
+    P.COLLECTION_VIEW: {OWN, DESK},
 }
 
 

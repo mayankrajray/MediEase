@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.44.0
+  version: 0.45.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -5026,6 +5026,122 @@ paths:
           $ref: '#/components/responses/ConflictError'
         '422':
           $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/bills/{bill_id}/payments:
+    post:
+      tags: [clinic]
+      operationId: recordPayment
+      summary: Record a payment or a refund on an issued bill
+      description: |
+        M6d-P3, spec billing R31-R34; B6, D2. BILLING_MANAGE (a doctor on their own bills). A
+        payment never exceeds the balance; a refund never exceeds what is owed back after a
+        credit note (409 BIL_PAYMENT_TOO_LARGE with details.most_paise). Only issued bills (a
+        cancelled bill takes refunds only; 409 BIL_NOT_ISSUED).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: bill_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentInput'
+      responses:
+        '201':
+          description: The result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/bills/{bill_id}/payments/{payment_id}/void:
+    post:
+      tags: [clinic]
+      operationId: voidPayment
+      summary: Void a payment or refund recorded today
+      description: |
+        M6d-P3, spec billing R35, R36. BILLING_MANAGE. The same clinic-local day only (409
+        BIL_VOID_TOO_LATE), once (BIL_ALREADY_VOIDED), and never a payment a refund came out of
+        (BIL_VOID_REFUNDED: void the refund first).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: bill_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: payment_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoidInput'
+      responses:
+        '200':
+          description: The result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/dues:
+    get:
+      tags: [clinic]
+      operationId: listDues
+      summary: Patients who owe the clinic, the largest first
+      description: |
+        M6d-P3, spec billing R39. COLLECTION_VIEW (owners and the front desk). Positive balances
+        on issued bills, 200 patients at most.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: patient_id
+          in: query
+          required: false
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DuesList'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
   /api/v1/ops/messaging-costs:
     get:
       tags: [ops]
@@ -7304,7 +7420,8 @@ components:
         BIL_SERVICE_NAME_TAKEN (another active service has that name, M6d-P1),
         BIL_TOO_MANY_SERVICES (a clinic has 100 services at most, M6d-P1),
         BIL_NOT_DRAFT, BIL_NOT_ISSUED, BIL_EMPTY, BIL_LINE_ALREADY_CREDITED, BIL_VISIT_BILLED,
-        BIL_VISIT_NOT_COMPLETED (bills and credit notes, M6d-P2)
+        BIL_VISIT_NOT_COMPLETED (bills and credit notes, M6d-P2), BIL_PAYMENT_TOO_LARGE,
+        BIL_VOID_TOO_LATE, BIL_ALREADY_VOIDED, BIL_VOID_REFUNDED (payments, M6d-P3)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -8988,7 +9105,7 @@ components:
         - $ref: '#/components/schemas/BillSummary'
         - type: object
           required: [lines, discount, subtotal_paise, discount_paise, notes, updated_at,
-                     credit_notes]
+                     credit_notes, payments]
           properties:
             lines:
               type: array
@@ -9004,6 +9121,11 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/CreditNote'
+            payments:
+              type: array
+              description: M6d-P3 - payments and refunds, oldest first, voided ones included
+              items:
+                $ref: '#/components/schemas/Payment'
     BillPage:
       type: object
       additionalProperties: false
@@ -9014,6 +9136,68 @@ components:
           items:
             $ref: '#/components/schemas/BillSummary'
         next_cursor: {type: [string, 'null']}
+    PaymentKind:
+      type: string
+      enum: [PAYMENT, REFUND]
+    PaymentMode:
+      type: string
+      enum: [CASH, UPI, CARD]
+    PaymentInput:
+      type: object
+      additionalProperties: false
+      required: [mode, amount_paise]
+      properties:
+        kind:
+          $ref: '#/components/schemas/PaymentKind'
+        mode:
+          $ref: '#/components/schemas/PaymentMode'
+        amount_paise: {type: integer, minimum: 1, maximum: 100000000}
+        reference: {type: [string, 'null'], maxLength: 40, description: A UPI or card reference}
+    VoidInput:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: {type: string, minLength: 1, maxLength: 200}
+    Payment:
+      type: object
+      additionalProperties: false
+      required: [id, kind, mode, amount_paise, reference, received_at, local_date, received_by,
+                 voided_at, voided_by, void_reason]
+      properties:
+        id: {type: string, format: uuid}
+        kind:
+          $ref: '#/components/schemas/PaymentKind'
+        mode:
+          $ref: '#/components/schemas/PaymentMode'
+        amount_paise: {type: integer}
+        reference: {type: [string, 'null']}
+        received_at: {type: string, format: date-time}
+        local_date: {type: string, format: date, description: The clinic day it belongs to}
+        received_by: {type: [string, 'null'], description: The team member's name}
+        voided_at: {type: [string, 'null'], format: date-time}
+        voided_by: {type: [string, 'null']}
+        void_reason: {type: [string, 'null']}
+    DuesList:
+      type: object
+      additionalProperties: false
+      required: [total_paise, items]
+      properties:
+        total_paise: {type: integer}
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [patient, bills, due_paise, oldest_bill_date]
+            properties:
+              patient:
+                oneOf:
+                  - $ref: '#/components/schemas/BillPatientRef'
+                  - type: 'null'
+              bills: {type: integer}
+              due_paise: {type: integer}
+              oldest_bill_date: {type: string, format: date}
     SuspendReason:
       type: string
       enum: [VERIFICATION_PROBLEM, CLINIC_REQUEST, TERMS_BREACH, PAYMENT, OTHER]
@@ -9095,6 +9279,7 @@ components:
         - AUDIT_VIEW
         - BILLING_MANAGE
         - FEES_MANAGE
+        - COLLECTION_VIEW
     Clinic:
       type: object
       required:
@@ -12064,7 +12249,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/Appointment'
         - type: object
-          required: [patient, wait_minutes, visit_id, prescription]
+          required: [patient, wait_minutes, visit_id, prescription, dues_paise]
           properties:
             patient:
               $ref: '#/components/schemas/QueuePatient'
@@ -12075,6 +12260,9 @@ components:
               type: [string, 'null']
               format: uuid
               description: The appointment's visit, once the doctor started it (M4-P6)
+            dues_paise:
+              type: integer
+              description: M6d-P3 (billing R40) - what the patient owes on issued bills; 0 when nothing
             prescription:
               description: |
                 The visit's current issued prescription, IDs and time only (M4-P6 decision 4A),

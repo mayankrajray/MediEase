@@ -12,7 +12,7 @@ they allocate a number (B5); editing a draft takes the bill row only.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
@@ -35,6 +35,7 @@ from mediease_api.domain.billing.bill import (
     price_lines,
 )
 from mediease_api.domain.billing.fees import ClinicService, consultation_service
+from mediease_api.domain.billing.payment import Payment
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import Role
@@ -94,6 +95,9 @@ class BillView:
     credit_notes: tuple[Bill, ...]
     patient: Patient
     doctor: Doctor | None
+    # M6d-P3: payments and refunds, oldest first, and the names of who took or voided them.
+    payments: tuple[Payment, ...] = ()
+    people: Mapping[UUID, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,11 +133,26 @@ def load_bill(
     return bill
 
 
-def _view(tenant: TenantRepositories, bill: Bill) -> BillView:
+def bill_view(uow: UnitOfWork, tenant: TenantRepositories, bill: Bill) -> BillView:
     patient = tenant.patients.get(bill.patient_id)
     assert patient is not None  # a foreign key
     doctor = tenant.doctors.get(bill.doctor_id) if bill.doctor_id else None
-    return BillView(bill, tuple(tenant.bills.credit_notes_for(bill.id)), patient, doctor)
+    payments = tuple(tenant.payments.list_for_bill(bill.id))
+    people: dict[UUID, str] = {}
+    for user_id in {p.received_by for p in payments} | {
+        p.voided_by for p in payments if p.voided_by is not None
+    }:
+        user = uow.users.get(user_id)
+        if user is not None:
+            people[user_id] = user.full_name
+    return BillView(
+        bill,
+        tuple(tenant.bills.credit_notes_for(bill.id)),
+        patient,
+        doctor,
+        payments,
+        people,
+    )
 
 
 def _lines(
@@ -278,7 +297,7 @@ class DraftBill(_UseCase):
                 lines=str(len(bill.lines)),
             )
             uow.commit()
-            view = _view(tenant, bill)
+            view = bill_view(uow, tenant, bill)
         logger.info("bill.drafted", clinic_id=str(ctx.clinic_id), from_visit=visit_id is not None)
         return view
 
@@ -343,7 +362,7 @@ class ChangeBill(_UseCase):
                 lines=str(len(bill.lines)),
             )
             uow.commit()
-            return _view(tenant, bill)
+            return bill_view(uow, tenant, bill)
 
 
 class DiscardBill(_UseCase):
@@ -374,7 +393,7 @@ class IssueBill(_UseCase):
             assert bill.number is not None
             _audit(uow, self._ids, ctx, AuditAction.BILL_ISSUED, bill, now, number=bill.number)
             uow.commit()
-            view = _view(tenant, bill)
+            view = bill_view(uow, tenant, bill)
         logger.info("bill.issued", clinic_id=str(ctx.clinic_id), total_paise=bill.total_paise)
         return view
 
@@ -416,7 +435,7 @@ class CreditBill(_UseCase):
                 status=bill.status.value,
             )
             uow.commit()
-            view = _view(tenant, bill)
+            view = bill_view(uow, tenant, bill)
         logger.info("bill.credited", clinic_id=str(ctx.clinic_id), amount_paise=note.total_paise)
         return view
 
@@ -428,7 +447,7 @@ class GetBill:
     def execute(self, ctx: RequestContext, bill_id: UUID) -> BillView:
         with self._uow as uow:
             tenant = uow.tenant(ctx.clinic_id)
-            return _view(tenant, load_bill(tenant, ctx, bill_id))
+            return bill_view(uow, tenant, load_bill(tenant, ctx, bill_id))
 
 
 class ListBills:

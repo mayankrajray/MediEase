@@ -9,6 +9,9 @@
 | ``DELETE /api/v1/clinic/bills/{bill_id}`` (a draft) | ``BILLING_MANAGE`` |
 | ``POST /api/v1/clinic/bills/{bill_id}/issue`` | ``BILLING_MANAGE`` |
 | ``POST /api/v1/clinic/bills/{bill_id}/credit-notes`` | ``BILLING_MANAGE`` |
+| ``POST /api/v1/clinic/bills/{bill_id}/payments`` (M6d-P3) | ``BILLING_MANAGE`` |
+| ``POST /api/v1/clinic/bills/{bill_id}/payments/{payment_id}/void`` | ``BILLING_MANAGE`` |
+| ``GET /api/v1/clinic/dues?patient_id`` (M6d-P3) | ``COLLECTION_VIEW`` |
 
 A doctor reaches only their own bills (R21; another's is 404). Amounts are paise.
 """
@@ -16,6 +19,7 @@ A doctor reaches only their own bills (R21; another's is 404). Amounts are paise
 from __future__ import annotations
 
 import base64
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
@@ -36,6 +40,13 @@ from mediease_api.application.billing.bills import (
     LineCommand,
     ListBills,
 )
+from mediease_api.application.billing.payments import (
+    DuesView,
+    ListDues,
+    PaymentCommand,
+    RecordPayment,
+    VoidPayment,
+)
 from mediease_api.delivery.http.access import clinic, current_context
 from mediease_api.delivery.http.scheduling import _uuid_arg
 from mediease_api.delivery.http.validation import RequestValidationFailed, parse_json
@@ -52,6 +63,13 @@ from mediease_api.domain.billing.bill import (
     DiscountKind,
 )
 from mediease_api.domain.billing.money import MAX_LINE_PAISE
+from mediease_api.domain.billing.payment import (
+    REFERENCE_MAX,
+    VOID_REASON_MAX,
+    Payment,
+    PaymentKind,
+    PaymentMode,
+)
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.patients.patient import Patient
@@ -116,6 +134,22 @@ class CreditIn(BaseModel):
     reason: str = Field(min_length=1, max_length=REASON_MAX)
 
 
+class PaymentIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: PaymentKind = PaymentKind.PAYMENT
+    mode: PaymentMode
+    amount_paise: int = Field(ge=1, le=10 * MAX_LINE_PAISE)
+    # A UPI or card reference; never needed for cash.
+    reference: str | None = Field(default=None, max_length=REFERENCE_MAX)
+
+
+class VoidIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=VOID_REASON_MAX)
+
+
 class BillUseCases(Protocol):
     def list_bills(self) -> ListBills: ...
     def draft_bill(self) -> DraftBill: ...
@@ -124,6 +158,9 @@ class BillUseCases(Protocol):
     def discard_bill(self) -> DiscardBill: ...
     def issue_bill(self) -> IssueBill: ...
     def credit_bill(self) -> CreditBill: ...
+    def record_payment(self) -> RecordPayment: ...
+    def void_payment(self) -> VoidPayment: ...
+    def list_dues(self) -> ListDues: ...
 
 
 def _command(body: _Content, lines: list[LineIn]) -> BillCommand:
@@ -187,6 +224,22 @@ def summary_body(bill: Bill, patient: Patient | None, doctor: Doctor | None) -> 
     }
 
 
+def payment_body(payment: Payment, people: Mapping[UUID, str]) -> dict[str, Any]:
+    return {
+        "id": str(payment.id),
+        "kind": payment.kind.value,
+        "mode": payment.mode.value,
+        "amount_paise": payment.amount_paise,
+        "reference": payment.reference,
+        "received_at": payment.received_at.isoformat(),
+        "local_date": payment.local_date.isoformat(),
+        "received_by": people.get(payment.received_by),
+        "voided_at": _when(payment.voided_at),
+        "voided_by": people.get(payment.voided_by) if payment.voided_by else None,
+        "void_reason": payment.void_reason,
+    }
+
+
 def bill_body(view: BillView) -> dict[str, Any]:
     bill = view.bill
     return {
@@ -217,6 +270,7 @@ def bill_body(view: BillView) -> dict[str, Any]:
             }
             for note in view.credit_notes
         ],
+        "payments": [payment_body(p, view.people) for p in view.payments],
     }
 
 
@@ -340,5 +394,58 @@ def create_bills_blueprint(use_cases: BillUseCases) -> Blueprint:
             current_context(), bill_id, line_ids=body.line_ids, reason=body.reason
         )
         return jsonify(bill_body(view)), 201
+
+    @bp.post("/<uuid:bill_id>/payments")
+    @clinic(Permission.BILLING_MANAGE)
+    def record_payment(bill_id: UUID) -> tuple[Response, int]:
+        body = parse_json(PaymentIn)
+        view = use_cases.record_payment().execute(
+            current_context(),
+            bill_id,
+            PaymentCommand(body.kind, body.mode, body.amount_paise, body.reference),
+        )
+        return jsonify(bill_body(view)), 201
+
+    @bp.post("/<uuid:bill_id>/payments/<uuid:payment_id>/void")
+    @clinic(Permission.BILLING_MANAGE)
+    def void_payment(bill_id: UUID, payment_id: UUID) -> Response:
+        body = parse_json(VoidIn)
+        view = use_cases.void_payment().execute(
+            current_context(), bill_id, payment_id, reason=body.reason
+        )
+        return jsonify(bill_body(view))
+
+    return bp
+
+
+def dues_body(view: DuesView) -> dict[str, Any]:
+    return {
+        "total_paise": view.total_paise,
+        "items": [
+            {
+                "patient": patient_ref(view.patients.get(d.patient_id)),
+                "bills": d.bills,
+                "due_paise": d.due_paise,
+                "oldest_bill_date": d.oldest_bill_date.isoformat(),
+            }
+            for d in view.items
+        ],
+    }
+
+
+def create_dues_blueprint(use_cases: BillUseCases) -> Blueprint:
+    """M6d-P3 (R39): who owes the clinic, for owners and the front desk."""
+    bp = Blueprint("dues", __name__, url_prefix="/api/v1/clinic/dues")
+
+    @bp.after_request
+    def _no_store(response: Response) -> Response:
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @bp.get("")
+    @clinic(Permission.COLLECTION_VIEW)
+    def list_dues() -> Response:
+        view = use_cases.list_dues().execute(current_context(), patient_id=_uuid_arg("patient_id"))
+        return jsonify(dues_body(view))
 
     return bp

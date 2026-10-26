@@ -39,6 +39,8 @@ class Permission(StrEnum):
     # only for their own visits, checked in the use case); the fee schedule for owners only.
     BILLING_MANAGE = "BILLING_MANAGE"
     FEES_MANAGE = "FEES_MANAGE"
+    # M6d-P3, P5 (B2): the clinic's dues list and daily collection. Owners and the front desk.
+    COLLECTION_VIEW = "COLLECTION_VIEW"
 
 
 _EVERY_ROLE = frozenset(
@@ -64,12 +66,13 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
         Permission.USAGE_METRICS_VIEW,
         Permission.AUDIT_VIEW,
         Permission.FEES_MANAGE,
+        Permission.COLLECTION_VIEW,
     },
     Role.DOCTOR: _EVERY_ROLE
     | {Permission.CLINICAL_VIEW, Permission.CLINICAL_WRITE, Permission.USAGE_METRICS_VIEW},
     # Front desk sees only a "prescription issued" flag, never clinical content on screen; it may
     # print an issued prescription (RX_PRINT, spec D6).
-    Role.FRONT_DESK: _EVERY_ROLE,
+    Role.FRONT_DESK: _EVERY_ROLE | {Permission.COLLECTION_VIEW},
 }
 
 

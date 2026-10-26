@@ -17,6 +17,7 @@ from mediease_api.adapters.db.models.billing import (
     BillRow,
     ClinicServiceRow,
     DoctorServicePriceRow,
+    PaymentRow,
 )
 from mediease_api.adapters.db.models.booking import BookingRequestRow
 from mediease_api.adapters.db.models.clinics import ClinicRow, DoctorRow, OnboardingChecklistRow
@@ -86,6 +87,7 @@ __all__ = [
     "PatientPortalInviteRow",
     "PatientRefreshTokenRow",
     "PatientRow",
+    "PaymentRow",
     "PrescriptionItemRow",
     "PrescriptionRow",
     "PublicRateLimitRow",

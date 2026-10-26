@@ -317,6 +317,8 @@ def queue_body(queue: QueueView) -> dict[str, Any]:
                             "sex": e.patient.sex.value,
                         },
                         "wait_minutes": e.wait_minutes,
+                        # M6d-P3 (billing R40): the patient's dues, an amount only.
+                        "dues_paise": e.dues_paise,
                         # M4-P6 decision 4A: no content, only that a visit and an issued
                         # prescription exist, so front desk can print from the row.
                         "visit_id": str(e.visit_id) if e.visit_id else None,

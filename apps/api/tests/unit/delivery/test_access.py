@@ -217,6 +217,9 @@ EXPECTED_POLICIES = {
     "bills.discard_bill": (Access.CLINIC, Permission.BILLING_MANAGE),
     "bills.issue_bill": (Access.CLINIC, Permission.BILLING_MANAGE),
     "bills.credit_bill": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "bills.record_payment": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "bills.void_payment": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "dues.list_dues": (Access.CLINIC, Permission.COLLECTION_VIEW),
     "public_sitemap.sitemap": (Access.PUBLIC, None),
     # M6c-P6 (discovery R1-R10): directory search.
     "public_search.clinics": (Access.PUBLIC, None),
