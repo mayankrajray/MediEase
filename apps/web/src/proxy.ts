@@ -41,6 +41,8 @@ const PUBLIC_PATHS: ReadonlySet<string> = new Set([
   "/sitemap.xml",
   // M6c-P6: directory search (FR-DIS-01, 02).
   "/find",
+  // M6c-P8: the landing page; a visitor with a session is sent on by the page itself.
+  "/",
 ]);
 // /p/<token>: the patient's prescription page (M4-P5); the token and the last-4 check guard it.
 // M6a-P4: emailed reset and verification links; the token in the path is the authority.

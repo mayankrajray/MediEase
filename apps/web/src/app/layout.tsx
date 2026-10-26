@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "MediEase",
   description: "Clinic operating system",
-  // Nothing on this origin should be indexed until public pages exist (M7).
+  // Nothing is indexed unless its page says so (M6c: the landing page, /find and discoverable profiles).
   robots: { index: false, follow: false },
 };
 

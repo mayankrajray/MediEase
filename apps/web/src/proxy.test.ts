@@ -27,10 +27,11 @@ describe("proxy (sign-in hint)", () => {
     expect(location.searchParams.get("next")).toBe("/queue?day=today");
   });
 
-  it("does not remember the home page", () => {
+  it("M6c-P8: lets a signed-out visitor see the landing page", () => {
     const response = proxy(signedOut("http://localhost:3000/"));
 
-    expect(response.headers.get("location")).toBe("http://localhost:3000/sign-in");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
   });
 
   it("puts the CSP, with its own nonce, on the redirect too", () => {
@@ -87,9 +88,14 @@ describe("proxy (sign-in hint)", () => {
         // M6c-P1: applying and confirming.
         "/apply",
         "/apply/confirm/x",
+        // M6c-P5, P6, P8: crawlers, directory search and the landing page.
+        "/robots.txt",
+        "/sitemap.xml",
+        "/find",
+        "/",
       ].every(isPublicPath),
     ).toBe(true);
-    expect(["/", "/queue", "/ops", "/invite", "/portal", "/portal/x", "/q", "/portal/notifications", "/apply/x"].some(isPublicPath)).toBe(false);
+    expect(["/finder", "/queue", "/ops", "/invite", "/portal", "/portal/x", "/q", "/portal/notifications", "/apply/x"].some(isPublicPath)).toBe(false);
     // M6b-P1: linking needs a signed-in patient; the proxy sends others to sign in and back.
     expect(["/portal/link/x", "/portal/link/prescription/x"].some(isPublicPath)).toBe(false);
   });
