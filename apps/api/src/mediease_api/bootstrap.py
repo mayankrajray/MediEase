@@ -79,6 +79,15 @@ from mediease_api.application.auth.password_reset import (
 from mediease_api.application.auth.refresh_session import RefreshSession
 from mediease_api.application.auth.sign_in import SignIn
 from mediease_api.application.auth.sign_out import SignOut
+from mediease_api.application.billing.bills import (
+    ChangeBill,
+    CreditBill,
+    DiscardBill,
+    DraftBill,
+    GetBill,
+    IssueBill,
+    ListBills,
+)
 from mediease_api.application.billing.fees import (
     AddService,
     ChangeService,
@@ -268,6 +277,7 @@ from mediease_api.delivery.http.access import check_every_route_has_policy, regi
 from mediease_api.delivery.http.appointments import create_appointments_blueprint
 from mediease_api.delivery.http.audit_log import create_audit_log_blueprint
 from mediease_api.delivery.http.auth import create_auth_blueprint
+from mediease_api.delivery.http.bills import create_bills_blueprint
 from mediease_api.delivery.http.booking_requests import create_booking_requests_blueprint
 from mediease_api.delivery.http.clinic import create_clinic_blueprint
 from mediease_api.delivery.http.csrf import register_csrf_protection
@@ -1029,6 +1039,28 @@ class _UseCases:
     def set_doctor_price(self) -> SetDoctorPrice:
         return SetDoctorPrice(uow=self._uow(), clock=self.clock, ids=self.ids)
 
+    # --- M6d-P2: bills and credit notes ----------------------------------------------------
+    def list_bills(self) -> ListBills:
+        return ListBills(uow=self._uow())
+
+    def get_bill(self) -> GetBill:
+        return GetBill(uow=self._uow())
+
+    def draft_bill(self) -> DraftBill:
+        return DraftBill(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def change_bill(self) -> ChangeBill:
+        return ChangeBill(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def discard_bill(self) -> DiscardBill:
+        return DiscardBill(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def issue_bill(self) -> IssueBill:
+        return IssueBill(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def credit_bill(self) -> CreditBill:
+        return CreditBill(uow=self._uow(), clock=self.clock, ids=self.ids)
+
     def get_sitemap(self) -> GetSitemap:
         return GetSitemap(uow=self._uow(), clock=self.clock)
 
@@ -1421,6 +1453,7 @@ def create_app(
     app.register_blueprint(create_ops_suspension_blueprint(use_cases))
     app.register_blueprint(create_listing_blueprint(use_cases))
     app.register_blueprint(create_fees_blueprint(use_cases))
+    app.register_blueprint(create_bills_blueprint(use_cases))
     app.register_blueprint(create_public_search_blueprint(use_cases))
     app.register_blueprint(
         create_public_sitemap_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)

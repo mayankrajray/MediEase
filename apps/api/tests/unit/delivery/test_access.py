@@ -210,6 +210,13 @@ EXPECTED_POLICIES = {
     "fees.add_service": (Access.CLINIC, Permission.FEES_MANAGE),
     "fees.change_service": (Access.CLINIC, Permission.FEES_MANAGE),
     "fees.set_doctor_price": (Access.CLINIC, Permission.FEES_MANAGE),
+    "bills.list_bills": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "bills.draft_bill": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "bills.get_bill": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "bills.change_bill": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "bills.discard_bill": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "bills.issue_bill": (Access.CLINIC, Permission.BILLING_MANAGE),
+    "bills.credit_bill": (Access.CLINIC, Permission.BILLING_MANAGE),
     "public_sitemap.sitemap": (Access.PUBLIC, None),
     # M6c-P6 (discovery R1-R10): directory search.
     "public_search.clinics": (Access.PUBLIC, None),

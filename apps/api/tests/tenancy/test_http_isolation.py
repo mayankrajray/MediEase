@@ -47,6 +47,12 @@ CROSS_TENANT_CASES: dict[str, Callable[[World], str]] = {
     "/api/v1/clinic/listing/doctors/<uuid:doctor_id>/profile": lambda w: (
         f"/api/v1/clinic/listing/doctors/{w.b.doctor.id}/profile"
     ),
+    # M6d-P2 (billing R21): clinic B's bills.
+    "/api/v1/clinic/bills/<uuid:bill_id>": lambda w: _bill_of_b(w),
+    "/api/v1/clinic/bills/<uuid:bill_id>/issue": lambda w: f"{_bill_of_b(w)}/issue",
+    "/api/v1/clinic/bills/<uuid:bill_id>/credit-notes": lambda w: (
+        f"{_bill_of_b(w, issued=True)}/credit-notes"
+    ),
     "/api/v1/clinic/staff/<uuid:membership_id>": lambda w: _staff_url(w),
     "/api/v1/clinic/staff/<uuid:membership_id>/resend": lambda w: _invited_staff_url(w),
     "/api/v1/patients/<uuid:patient_id>": lambda w: _patient_url(w),
@@ -144,6 +150,8 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
     "/api/v1/clinic/listing/doctors/<uuid:doctor_id>": ("PUT", {"visible": False}),
     "/api/v1/clinic/listing/doctors/<uuid:doctor_id>/profile": ("PUT", {"languages": []}),
     "/api/v1/clinic/fees/services/<uuid:service_id>": ("PATCH", {"default_price_paise": 100}),
+    "/api/v1/clinic/bills/<uuid:bill_id>/issue": ("POST", {}),
+    "/api/v1/clinic/bills/<uuid:bill_id>/credit-notes": ("POST", {"reason": "Wrong line"}),
     "/api/v1/clinic/fees/services/<uuid:service_id>/doctors/<uuid:doctor_id>": (
         "PUT",
         {"price_paise": 100},
@@ -260,6 +268,25 @@ def _service_of_b(world: World) -> str:
         assert resp.status_code == 201, resp.get_json()
         services = resp.get_json()["services"]
     return str(services[0]["id"])
+
+
+def _bill_of_b(world: World, *, issued: bool = False) -> str:
+    """M6d-P2: a draft (or issued) bill of clinic B's patient, by B's owner."""
+    client, headers = _owner_of_b(world)
+    patient_id = _patient_url(world).rsplit("/", 1)[1]
+    drafted = client.post(
+        "/api/v1/clinic/bills",
+        json={
+            "patient_id": patient_id,
+            "lines": [{"description": "Dressing", "unit_price_paise": 20000}],
+        },
+        headers=headers,
+    )
+    assert drafted.status_code == 201, drafted.get_json()
+    url = f"/api/v1/clinic/bills/{drafted.get_json()['id']}"
+    if issued:
+        assert client.post(f"{url}/issue", headers=headers).status_code == 200
+    return url
 
 
 def _session_of_b(world: World, *, days: int) -> str:

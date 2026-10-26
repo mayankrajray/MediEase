@@ -153,6 +153,12 @@ class AuditAction(StrEnum):
     FEES_SERVICE_ADDED = "fees.service_added"
     FEES_SERVICE_CHANGED = "fees.service_changed"
     FEES_DOCTOR_PRICE_SET = "fees.doctor_price_set"
+    # M6d-P2 (FR-BIL-02, 07): bills and credit notes. IDs, numbers and amounts only.
+    BILL_DRAFTED = "bill.drafted"
+    BILL_CHANGED = "bill.changed"
+    BILL_DISCARDED = "bill.discarded"
+    BILL_ISSUED = "bill.issued"
+    BILL_CREDITED = "bill.credited"
     # M6b-P5 (R34-R43, R32): the answers. IDs and the decline reason code only, never the note.
     BOOKING_REQUEST_ACCEPTED = "booking_request.accepted"
     BOOKING_REQUEST_DECLINED = "booking_request.declined"

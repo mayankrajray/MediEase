@@ -14,6 +14,10 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from mediease_api.adapters.db.bills import (
+    SqlAlchemyBillLineRepository,
+    SqlAlchemyBillRepository,
+)
 from mediease_api.adapters.db.booking import SqlAlchemyBookingRequestRepository
 from mediease_api.adapters.db.fees import (
     SqlAlchemyDoctorPriceRepository,
@@ -53,6 +57,7 @@ from mediease_api.adapters.db.repositories import (
 )
 from mediease_api.adapters.db.tenancy import TenancyViolation, TenantScopedRepository
 from mediease_api.domain.appointments.appointment import Appointment, history_entry
+from mediease_api.domain.billing.bill import NO_DISCOUNT, Bill, LineInput, price_lines
 from mediease_api.domain.billing.fees import ClinicService, DoctorPrice, ServiceKind
 from mediease_api.domain.clinics.doctor import Doctor
 from mediease_api.domain.identity.membership import ClinicMembership, Role
@@ -78,6 +83,7 @@ from mediease_api.domain.shared.errors import NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.visits.visit import Visit, VisitStatus
 from mediease_api.domain.visits.vitals import Vitals
+from mediease_api.ports.billing import BillQuery
 from mediease_api.ports.repositories import RowLock
 from tests.builders import LATER, NOW, a_clinic, a_doctor, a_membership, a_patient, a_user, new_id
 from tests.conftest import UowFactory
@@ -652,6 +658,8 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "notification_preferences",
             "clinic_services",
             "doctor_service_prices",
+            "bills",
+            "bill_lines",
             "audit_events",
             "jobs",
         }
@@ -685,7 +693,55 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
         SqlAlchemyPreferenceRepository,
         SqlAlchemyFeeRepository,
         SqlAlchemyDoctorPriceRepository,
+        SqlAlchemyBillRepository,
+        SqlAlchemyBillLineRepository,
     } == set(TenantScopedRepository.__subclasses__())
+
+
+def test_m6d_p2_bills_are_scoped_to_their_clinic(
+    uow_factory: UowFactory, two_clinics: tuple[Tenant, Tenant]
+) -> None:
+    """M6d-P2: clinic A reaches neither B's bills nor their lines."""
+    a, b = two_clinics
+    priced = price_lines([LineInput("Dressing", 20000)], NO_DISCOUNT, [new_id()])
+    bill = Bill.draft(
+        id=new_id(),
+        clinic_id=b.clinic_id,
+        patient_id=b.patient.id,
+        visit_id=None,
+        doctor_id=b.doctor.id,
+        priced=priced,
+        discount=NO_DISCOUNT,
+        notes=None,
+        by=b.owner.user_id,
+        now=NOW,
+    )
+    with uow_factory() as uow:
+        uow.tenant(b.clinic_id).bills.add(bill)
+        uow.commit()
+
+    with uow_factory() as uow:
+        bills_a = uow.tenant(a.clinic_id).bills
+        assert bills_a.get(bill.id) is None
+        assert bills_a.get(bill.id, for_update=True) is None
+        assert bills_a.list(BillQuery()) == []
+        assert bills_a.credit_notes_for(bill.id) == []
+        with pytest.raises(TenancyViolation):
+            bills_a.add(bill)
+        with pytest.raises(TenancyViolation):
+            bills_a.update(bill)
+        with pytest.raises(NotFound):
+            bills_a.delete_draft(bill.id)
+        forged = Bill(**{**_fields(bill), "clinic_id": a.clinic_id})
+        with pytest.raises(NotFound):
+            bills_a.update(forged)
+        uow.commit()
+
+    with uow_factory() as uow:
+        kept = uow.tenant(b.clinic_id).bills.get(bill.id)
+        assert kept is not None and [line.id for line in kept.lines] == [
+            line.id for line in bill.lines
+        ]
 
 
 def test_m6d_p1_fee_schedule_is_scoped_to_its_clinic(
