@@ -203,3 +203,23 @@ prescription route). Also: the portal cross-account case, HTTP cross-clinic case
 the migration, the contract, and the existing prescription link, PDF and portal-linking suites,
 unchanged and green. Web: the receipt panel (print, QR), the `/r/` page, its verify and PDF routes,
 and the portal's *Bills*.
+
+## M6d-P5 — Daily collection
+
+Designed and approved in advance (26 Oct 2026). Rules: `docs/specs/billing.md` R55–R62.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | The day | The payment's clinic-local day of recording (`payments.local_date`, P3), not the bill's date | The bill date (a bill paid next week would move last week's cash) |
+| 2 | Sums | A pure `summarise` in the domain over the day's payments: totals, by mode, by the bill's doctor; voids apart | SQL aggregates per view (three queries that could disagree) |
+| 3 | Freezing | Nothing new: payments are never edited or deleted and voids are same-day only (P3), so a past day cannot change | A stored day-close record (more state for the same guarantee) |
+| 4 | Export | CSV of the list, cells made formula-safe with the audit log's `csv_safe`, audited as `collection.exported` | XLSX (a new dependency) |
+| 5 | Who | `COLLECTION_VIEW` (owners and the front desk, from P3) | Doctors too (they would see every doctor's money) |
+| 6 | API and screen | `GET /api/v1/clinic/collection?date`, `/export?date`; *Collection* page; contract 0.47.0 | — |
+
+### P5 as built (26 Oct 2026)
+
+Built as designed. AC16 is the milestone's reconciliation test: the day's net checked against the
+payments table and the bills' own paid and refunded amounts. Verified: domain sums, HTTP tests
+(AC16–AC18, CSV injection, the audit, days, access, tenancy), route policies and the contract.
+Web: the *Collection* page and its test.

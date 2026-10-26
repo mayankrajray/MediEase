@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-BIL-01 (P1); FR-BIL-02..07, FR-VIS-04, FR-SUB-01 in later phases |
 | Milestone / phases | M6d / P1–P7 (design: `docs/milestones/M6d-billing-and-documents.md`) |
-| Status | P1 (R1–R12, AC1–AC3), P2 (R13–R30, AC4–AC8) and P3 (R31–R42, AC9–AC12), P4 (R43–R54, AC13–AC15) approved 26 Oct 2026 (P2–P7 in advance) and built; P5 to follow |
+| Status | P1 (R1–R12, AC1–AC3), P2 (R13–R30, AC4–AC8) and P3 (R31–R42, AC9–AC12), P4 (R43–R54, AC13–AC15) and P5 (R55–R62, AC16–AC18) approved 26 Oct 2026 (P2–P7 in advance) and built |
 | Owner | Developer |
 | Last updated | 2026-10-26 |
 
@@ -171,6 +171,24 @@ also becomes the one source of the public profile fee (D8). Money is integer pai
 - **R54** The public receipt routes are `no-store`, `noindex` and `no-referrer`, and `/r/` is
   disallowed in `robots.txt`.
 
+### Daily collection (P5)
+- **R55** *Collection* (`COLLECTION_VIEW`, owners and the front desk) shows one clinic-local day,
+  today unless chosen. A future day is 422, as is a date that is not `YYYY-MM-DD`.
+- **R56** Totals: amounts taken, refunded and net, with the count. The same split by mode (cash, UPI,
+  card, every mode listed) and by the bill's doctor (none for a bill without one), largest net first.
+  The parts always add up to the whole.
+- **R57** Voided entries are listed and counted apart (`voided`), never in the totals.
+- **R58** A day belongs to the payment's clinic-local day of recording, not the bill's date.
+- **R59** A day's figures stop changing when it ends. Payments are never edited or deleted, and a void
+  is only possible on its own day (R35, R38).
+- **R60** *Export CSV* gives the same list: time (clinic-local), kind, mode, amount in rupees,
+  reference, bill number, patient code and name, doctor, who took it, voided. A cell that would start a
+  spreadsheet formula is prefixed with `'`. The export is audited (`collection.exported`: the day and
+  the row count).
+- **R61** (exit criterion) The day's net equals the sum of non-voided payments less refunds recorded
+  that day, which equals the bills' own `paid_paise − refunded_paise` for those entries.
+- **R62** Only amounts, numbers and names are shown; nothing clinical.
+
 ## 5. API surface
 | Method | Path | Request | Success | Errors |
 |---|---|---|---|---|
@@ -196,7 +214,10 @@ also becomes the one source of the public profile fee (D8). Money is integer pai
 | GET | `/api/v1/portal/bills`, `/api/v1/portal/bills/{bill_id}/receipt.pdf` | — | 200 | 401, 404 |
 
 Contract 0.43.0 (P1), 0.44.0 (P2), 0.45.0 (P3; the queue entry gains `dues_paise`), 0.46.0 (P4;
-the public link summary gains `purpose`).
+the public link summary gains `purpose`), 0.47.0 (P5).
+
+| GET | `/api/v1/clinic/collection?date` | — | 200 `CollectionDay` | 403, 422 |
+| GET | `/api/v1/clinic/collection/export?date` | — | 200 CSV | 403, 422 |
 
 ## 6. UI notes
 *Settings → Fees* (`/settings/fees`, in the owner's menu): a table of prices by service and
@@ -225,6 +246,10 @@ patient's bills show their dues.
 patient's `/r/<token>` page asks for the last 4 digits, then shows the amounts and *Download the
 receipt (PDF)*. The portal's prescriptions page gains a *Bills* card with each receipt.
 
+*Collection* (`/collection`, owner and front desk) has a day picker (never after today), the net
+with what was taken and refunded, tables by mode and by doctor, every entry (voided ones marked),
+and *Export CSV*.
+
 ## 7. Events and side effects
 | Trigger | Audit action | Job enqueued | Analytics event |
 |---|---|---|---|
@@ -237,6 +262,7 @@ receipt (PDF)*. The portal's prescriptions page gains a *Bills* card with each r
 | Payment or refund recorded, voided | `payment.recorded`, `payment.voided` | — | — |
 | Bill printed or downloaded by staff | `bill.receipt_downloaded` | — | — |
 | Receipt link made, opened, downloaded | `receipt_link.created`, `.opened`, `.downloaded` | — | — |
+| Collection exported | `collection.exported` | — | — |
 
 ## 8. Edge cases
 | Case | Expected outcome |
@@ -292,6 +318,14 @@ receipt (PDF)*. The portal's prescriptions page gains a *Bills* card with each r
   counts, five lock it until staff unlock it, and the token opens no prescription.
 - **AC15 (R52)** — Given a patient account linked to a record, when it opens the portal, then it
   lists that record's issued bills (not drafts) and their receipts. Another record's bill is 404.
+- **AC16 (FR-BIL-06, R56–R58, R61; the milestone exit criterion)** — Given a day of cash, UPI and
+  card payments for two doctors, a void and a refund after a credit note, when the desk opens
+  *Collection*, then the net equals the recorded payments less refunds. That equals the bills' own paid
+  less refunded, and the modes and doctors add up to it. The void is listed but not counted.
+- **AC17 (R60)** — Given the day, when it is exported, then the CSV has one row per entry, formula-like
+  cells are prefixed and the export is audited.
+- **AC18 (R55, R59)** — Given an entry recorded yesterday, when today and yesterday are opened, then
+  each shows its own. A future day is 422, a doctor is refused (403), and another clinic sees nothing.
 
 ## 10. Observability
 Log `fees.service_added` with the clinic ID and kind; `bill.drafted` (from a visit or not),

@@ -352,6 +352,13 @@ M6d-P4 (spec billing R43-R54; contract 0.46.0):
 
 `GET /api/v1/public/links/{token}` gains `purpose` (`RX_VIEW` or `RECEIPT`).
 
+M6d-P5 (spec billing R55-R62; contract 0.47.0):
+
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| GET | `/api/v1/clinic/collection?date` | One clinic-local day by mode and doctor, voids apart | FR-BIL-06 | Implemented (M6d-P5), `COLLECTION_VIEW` |
+| GET | `/api/v1/clinic/collection/export?date` | The same list as CSV, audited | FR-BIL-06 | Implemented (M6d-P5), `COLLECTION_VIEW` |
+
 ### Audit trail (M1-P4)
 
 Every audited action writes one row to `audit_events` in the same transaction as the change, so a
