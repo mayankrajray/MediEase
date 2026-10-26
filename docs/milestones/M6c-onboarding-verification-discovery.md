@@ -383,3 +383,27 @@ path in the proxy). `rupees()` joined `lib/format/money.ts` so server pages can 
 Tests: `test_search_http.py` (AC1-AC4, R1 field errors, the allow-lists), `test_0035_*`, route
 policies, contract tests; web `FindPage.test.tsx`, proxy, public page and lib suites. The 500 ms
 budget is not measured here (the full-suite run and the e2e journeys run at the end of P8).
+
+---
+
+## M6c-P7 - Discovery to booking
+
+Designed 26 Oct 2026; **approved in advance** (as P2). Covers FR-DIS-08. Rules:
+`docs/specs/discovery.md` R11-R15.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | Stale results (FR-DIS-08, NFR-19) | Result links carry `via=directory`; the public page and availability asked with it also apply `is_discoverable`, answering the same 404 as an unknown slug | Make every public page require discoverability (breaks a clinic's own link, FR-DIS-07) |
+| 2 | Through to the request | The profile's time links and the portal request form keep `via=directory`, so the form re-checks before sending; sign-in returns to the same time (M6b) | A new request endpoint for directory bookings (the request is the same request) |
+| 3 | Entry points | The portal's *Find a doctor* opens `/find`; `/find` links to *Apply* for doctors | Search inside the portal shell (two copies of the page) |
+
+### As built (M6c-P7)
+
+Built 26 Oct 2026 as designed: `require_discoverable` in `application/booking/public.py`, the
+`via` parameter (422 for any other value) on both public clinic routes; web `viaDirectory` through
+`/c/{slug}`, the doctor profile, `PublicClinicPage` (availability and `requestHref`) and
+`RequestBooking`; `FindADoctor` links to `/find` (English and Hindi strings updated).
+
+Tests: `test_search_http.py::test_ac5_*` (the stale result, the clinic's own link, a bad `via`),
+contract tests, the portal screens, find and public page suites. AC6 (search → profile → time →
+sign up → request) is a Playwright journey run with the full suite at the end of P8.

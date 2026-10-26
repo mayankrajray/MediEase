@@ -21,6 +21,10 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6c-P7 (#53): from search to a request (FR-DIS-08; spec discovery R11-R15). Search results open
+  the profile with `via=directory`; a clinic that has left the directory since then answers like
+  an unknown page, while its own link keeps working. The chosen time, sign-in and the request keep
+  the same rule. The portal's *Find a doctor* now opens `/find`. Contract 0.42.0.
 - M6c-P6 (#53): directory search (FR-DIS-01, 02, 04, 05; spec discovery R1-R10; ADR-0021). `/find`
   searches doctors and clinics by name or specialty, city or PIN, specialty, language and "free in
   the next 7 days", ordered by relevance, then place (same PIN, same city, same PIN district), then
