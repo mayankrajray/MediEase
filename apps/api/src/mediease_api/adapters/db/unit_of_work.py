@@ -18,6 +18,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from mediease_api.adapters.db.applications import SqlAlchemyApplicationRepository
+from mediease_api.adapters.db.attachments import SqlAlchemyVisitAttachmentRepository
 from mediease_api.adapters.db.audit import SqlAlchemyAuditReader, SqlAlchemyAuditWriter
 from mediease_api.adapters.db.bills import SqlAlchemyBillRepository
 from mediease_api.adapters.db.booking import (
@@ -133,6 +134,8 @@ class SqlAlchemyTenantRepositories:
         self._bills = SqlAlchemyBillRepository(session, clinic_id)
         # M6d-P3: payments and refunds.
         self._payments = SqlAlchemyPaymentRepository(session, clinic_id)
+        # M6d-P6: reports on visits.
+        self._visit_attachments = SqlAlchemyVisitAttachmentRepository(session, clinic_id)
 
     @property
     def clinic_id(self) -> UUID:
@@ -181,6 +184,10 @@ class SqlAlchemyTenantRepositories:
     @property
     def visit_addenda(self) -> SqlAlchemyVisitAddendumRepository:
         return self._visit_addenda
+
+    @property
+    def visit_attachments(self) -> SqlAlchemyVisitAttachmentRepository:
+        return self._visit_attachments
 
     @property
     def prescriptions(self) -> SqlAlchemyPrescriptionRepository:

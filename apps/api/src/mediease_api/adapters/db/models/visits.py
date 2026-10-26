@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mediease_api.adapters.db.models.base import Base, TenantOwned, Timestamps, enum_check
+from mediease_api.domain.visits.attachment import FILENAME_MAX, MAX_ATTACHMENT_BYTES
 from mediease_api.domain.visits.visit import ADDENDUM_MAX, TEXT_LIMITS, VisitStatus
 
 
@@ -87,3 +88,46 @@ class VisitAddendumRow(TenantOwned, Base):
     author_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class VisitAttachmentRow(TenantOwned, Base):
+    """M6d-P6 (migration 0040): a report on a visit. The file is in blob storage under
+    ``storage_key``; the name is clinical and never logged."""
+
+    __tablename__ = "visit_attachments"
+    __table_args__ = (
+        Index("ix_visit_attachments_visit_id_uploaded_at", "visit_id", "uploaded_at"),
+        # The portal's "reports shared with me" (R11).
+        Index(
+            "ix_visit_attachments_clinic_id_patient_id_shared_at",
+            "clinic_id",
+            "patient_id",
+            "shared_at",
+            postgresql_where=text("shared_at IS NOT NULL AND deleted_at IS NULL"),
+        ),
+        CheckConstraint(
+            "content_type IN ('application/pdf', 'image/jpeg', 'image/png')",
+            name="content_type",
+        ),
+        CheckConstraint(
+            f"size_bytes BETWEEN 1 AND {MAX_ATTACHMENT_BYTES}", name="size_bytes_range"
+        ),
+        CheckConstraint(
+            f"char_length(filename) BETWEEN 1 AND {FILENAME_MAX}", name="filename_length"
+        ),
+        CheckConstraint("(shared_at IS NULL) = (shared_by IS NULL)", name="shared_together"),
+        CheckConstraint("(deleted_at IS NULL) = (deleted_by IS NULL)", name="deleted_together"),
+    )
+
+    visit_id: Mapped[UUID] = mapped_column(ForeignKey("visits.id"))
+    patient_id: Mapped[UUID] = mapped_column(ForeignKey("patients.id"))
+    storage_key: Mapped[str] = mapped_column(Text, unique=True)
+    content_type: Mapped[str] = mapped_column(Text)
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    filename: Mapped[str] = mapped_column(Text)
+    uploaded_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    shared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    shared_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))

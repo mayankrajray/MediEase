@@ -74,6 +74,7 @@ from mediease_api.ports.repositories import (
     TemplateRepository,
     UserRepository,
     VisitAddendumRepository,
+    VisitAttachmentRepository,
     VisitRepository,
 )
 
@@ -105,6 +106,8 @@ class TenantRepositories(Protocol):
     def visits(self) -> VisitRepository: ...
     @property
     def visit_addenda(self) -> VisitAddendumRepository: ...
+    @property
+    def visit_attachments(self) -> VisitAttachmentRepository: ...
     @property
     def prescriptions(self) -> PrescriptionRepository: ...
     @property

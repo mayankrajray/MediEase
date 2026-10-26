@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.47.0
+  version: 0.48.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -1202,6 +1202,58 @@ paths:
         '401':
           $ref: '#/components/responses/PortalError'
         '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/attachments:
+    get:
+      tags: [portal]
+      operationId: listPortalAttachments
+      summary: Reports the doctor shared with the linked records
+      description: |
+        M6d-P6, spec visit-attachments R11. @patient. Newest share first, 50 per clinic; the
+        name, type, size, clinic and the visit's day. Not audited (portal reads, decision 7A).
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The shared reports
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalAttachmentList'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+  /api/v1/portal/attachments/{attachment_id}/file:
+    get:
+      tags: [portal]
+      operationId: getPortalAttachmentFile
+      summary: Open a shared report
+      description: |
+        M6d-P6, spec visit-attachments R12. @patient. Served as the clinic's is (inline, nosniff,
+        sandbox CSP). Not shared, deleted or out of scope is 404.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/AttachmentPath'
+      responses:
+        '200':
+          description: The file
+          content:
+            application/pdf:
+              schema: {description: The file's bytes, contentMediaType: application/pdf}
+            image/jpeg:
+              schema: {description: The file's bytes, contentMediaType: image/jpeg}
+            image/png:
+              schema: {description: The file's bytes, contentMediaType: image/png}
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
           $ref: '#/components/responses/PortalError'
   /api/v1/portal/bills:
     get:
@@ -5664,6 +5716,220 @@ paths:
           $ref: '#/components/responses/AuthError'
         '422':
           $ref: '#/components/responses/VisitError'
+  /api/v1/visits/{visit_id}/attachments:
+    post:
+      tags: [visits]
+      operationId: addVisitAttachment
+      summary: Attach a report (PDF, JPEG or PNG) to a visit
+      description: |
+        M6d-P6, FR-VIS-04; spec visit-attachments R1-R5, D7. Permission ATTACHMENTS_ADD (every
+        role: the front desk scans at the counter, without being able to open it afterwards).
+        multipart/form-data with one part `file`: a PDF, JPEG or PNG recognised by its first
+        bytes (never its name or declared type), at most 10 MB (422 VIS_FILE_REJECTED,
+        details.reason type, size or missing; a request much larger is 413 unread). At most 20
+        per visit (409 VIS_ATTACHMENT_LIMIT). Any visit status. The name is cleaned (last path
+        segment, no control characters, the real type's extension). Records
+        visit.attachment_added (IDs, type and size; never the name). Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/VisitPath'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses:
+        '201':
+          description: Attached
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitAttachment'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/AttachmentError'
+        '413':
+          $ref: '#/components/responses/AttachmentError'
+        '415':
+          $ref: '#/components/responses/AttachmentError'
+        '422':
+          $ref: '#/components/responses/AttachmentError'
+        '503':
+          $ref: '#/components/responses/AttachmentError'
+    get:
+      tags: [visits]
+      operationId: listVisitAttachments
+      summary: A visit's reports, oldest first
+      description: |
+        M6d-P6, spec visit-attachments R6. Permission CLINICAL_VIEW. Deleted ones are not
+        listed. can_delete is for the caller (the uploader, within 24 hours).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/VisitPath'
+      responses:
+        '200':
+          description: The reports
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitAttachmentList'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/visits/{visit_id}/attachments/{attachment_id}:
+    delete:
+      tags: [visits]
+      operationId: deleteVisitAttachment
+      summary: Delete a report you attached in the last 24 hours
+      description: |
+        M6d-P6, spec visit-attachments R8. Permission ATTACHMENTS_ADD and the uploader (403
+        VIS_ATTACHMENT_NOT_YOURS); within 24 hours of upload (409 VIS_ATTACHMENT_LOCKED). The
+        row stays with the time and author; the file is removed. Records
+        visit.attachment_deleted. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/VisitPath'
+        - $ref: '#/components/parameters/AttachmentPath'
+      responses:
+        '204':
+          description: Deleted
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AttachmentError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '409':
+          $ref: '#/components/responses/AttachmentError'
+  /api/v1/visits/{visit_id}/attachments/{attachment_id}/file:
+    get:
+      tags: [visits]
+      operationId: getVisitAttachmentFile
+      summary: Open a report (audited)
+      description: |
+        M6d-P6, spec visit-attachments R7, R13. Permission CLINICAL_VIEW. The stored file with
+        its recognised type, inline, nosniff and a sandboxing CSP, never cached. Each open is
+        audited (visit.attachment_opened).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/VisitPath'
+        - $ref: '#/components/parameters/AttachmentPath'
+      responses:
+        '200':
+          description: The file
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Content-Disposition:
+              description: inline, with the cleaned name (filename and filename*)
+              schema: {type: string}
+          content:
+            application/pdf:
+              schema: {description: The file's bytes, contentMediaType: application/pdf}
+            image/jpeg:
+              schema: {description: The file's bytes, contentMediaType: image/jpeg}
+            image/png:
+              schema: {description: The file's bytes, contentMediaType: image/png}
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+  /api/v1/visits/{visit_id}/attachments/{attachment_id}/share:
+    put:
+      tags: [visits]
+      operationId: shareVisitAttachment
+      summary: Show a report in the patient's portal, or stop showing it
+      description: |
+        M6d-P6, spec visit-attachments R10. Permission CLINICAL_WRITE, the visit's doctor (403
+        VIS_NOT_YOURS). Repeating the current state changes nothing. Records
+        visit.attachment_shared or visit.attachment_unshared. Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/VisitPath'
+        - $ref: '#/components/parameters/AttachmentPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachmentShare'
+      responses:
+        '200':
+          description: The report as it now is
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitAttachment'
+        '400':
+          $ref: '#/components/responses/PermissionError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/VisitPermissionError'
+        '404':
+          $ref: '#/components/responses/PermissionError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/VisitError'
   /api/v1/patients/{patient_id}/visits:
     get:
       tags: [visits]
@@ -7532,6 +7798,13 @@ components:
       schema:
         type: string
         format: uuid
+    AttachmentPath:
+      name: attachment_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     VisitPath:
       name: visit_id
       in: path
@@ -7883,6 +8156,21 @@ components:
         RX_NAME_TAKEN (409: the caller already has one with that name, ignoring case and spaces);
         RX_LIBRARY_FULL (409, details.limit); RX_STALE (409, details.revision);
         REQ_VALIDATION_FAILED (422, field and rule)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    AttachmentError:
+      description: |
+        M6d-P6 reports: VIS_FILE_REJECTED (422, details.reason type, size or missing);
+        REQ_VALIDATION_FAILED (422); VIS_ATTACHMENT_LIMIT (409, 20 per visit);
+        VIS_ATTACHMENT_LOCKED (409, details.locked_at: more than 24 hours old);
+        VIS_ATTACHMENT_NOT_YOURS (403, not the uploader); PERM_DENIED (403);
+        REQ_REQUEST_ENTITY_TOO_LARGE (413); REQ_UNSUPPORTED_MEDIA_TYPE (415, not multipart);
+        VIS_UPLOAD_FAILED (503, nothing kept)
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -8664,6 +8952,70 @@ components:
         author_user_id: {type: string, format: uuid}
         body: {type: string}
         created_at: {type: string, format: date-time}
+    VisitAttachment:
+      type: object
+      additionalProperties: false
+      required: [id, visit_id, filename, content_type, size_bytes, uploaded_at, uploaded_by_user_id, shared_with_patient, shared_at, can_delete, deletable_until]
+      properties:
+        id: {type: string, format: uuid}
+        visit_id: {type: string, format: uuid}
+        filename:
+          type: string
+          maxLength: 120
+          description: Cleaned; clinical, never logged
+        content_type:
+          type: string
+          enum: [application/pdf, image/jpeg, image/png]
+        size_bytes: {type: integer, minimum: 1, maximum: 10485760}
+        uploaded_at: {type: string, format: date-time}
+        uploaded_by_user_id: {type: string, format: uuid}
+        shared_with_patient: {type: boolean}
+        shared_at: {type: [string, 'null'], format: date-time}
+        can_delete:
+          type: boolean
+          description: The caller attached it and 24 hours have not passed
+        deletable_until: {type: string, format: date-time}
+    VisitAttachmentList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/VisitAttachment'
+    AttachmentShare:
+      type: object
+      additionalProperties: false
+      required: [shared]
+      properties:
+        shared: {type: boolean}
+    PortalAttachmentList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, clinic_id, clinic_name, filename, content_type, size_bytes, visit_date, shared_at]
+            properties:
+              id: {type: string, format: uuid}
+              clinic_id: {type: string, format: uuid}
+              clinic_name: {type: string}
+              filename: {type: string}
+              content_type:
+                type: string
+                enum: [application/pdf, image/jpeg, image/png]
+              size_bytes: {type: integer}
+              visit_date:
+                type: string
+                format: date-time
+                description: When the visit started
+              shared_at: {type: [string, 'null'], format: date-time}
     VisitStatus:
       type: string
       enum: [OPEN, COMPLETED]
@@ -9656,6 +10008,7 @@ components:
         - BILLING_MANAGE
         - FEES_MANAGE
         - COLLECTION_VIEW
+        - ATTACHMENTS_ADD
     Clinic:
       type: object
       required:

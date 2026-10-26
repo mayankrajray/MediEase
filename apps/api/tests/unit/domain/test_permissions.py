@@ -35,6 +35,8 @@ MATRIX: dict[P, set[Role]] = {
     P.FEES_MANAGE: {OWN},
     # M6d-P3, P5 (B2): the dues list and the daily collection.
     P.COLLECTION_VIEW: {OWN, DESK},
+    # M6d-P6 (D7): any role attaches a report (the desk scans at the counter); viewing is clinical.
+    P.ATTACHMENTS_ADD: {OWN, DOC, DESK},
 }
 
 

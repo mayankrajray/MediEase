@@ -51,7 +51,7 @@ from mediease_api.adapters.db.models.scheduling import (
     ScheduleExceptionRow,
     SessionRow,
 )
-from mediease_api.adapters.db.models.visits import VisitAddendumRow, VisitRow
+from mediease_api.adapters.db.models.visits import VisitAddendumRow, VisitAttachmentRow, VisitRow
 
 __all__ = [
     "AppointmentRow",
@@ -99,6 +99,7 @@ __all__ = [
     "SessionRow",
     "UserRow",
     "VisitAddendumRow",
+    "VisitAttachmentRow",
     "VisitRow",
     "WebhookEventRow",
 ]

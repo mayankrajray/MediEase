@@ -274,6 +274,15 @@ from mediease_api.application.reminders.use_cases import (
 from mediease_api.application.scheduling.exceptions import AddException, RemoveException
 from mediease_api.application.scheduling.schedules import GetSchedule, ReplaceSchedule
 from mediease_api.application.scheduling.sessions import ListSessions
+from mediease_api.application.visits.attachments import (
+    AddAttachment,
+    DeleteAttachment,
+    ListAttachments,
+    ListPortalAttachments,
+    OpenAttachment,
+    PortalAttachmentFile,
+    ShareAttachment,
+)
 from mediease_api.application.visits.use_cases import (
     AddAddendum,
     CompleteVisit,
@@ -287,6 +296,7 @@ from mediease_api.config.settings import AppEnv, AppSettings
 from mediease_api.delivery.errors import register_error_handlers
 from mediease_api.delivery.http.access import check_every_route_has_policy, register_access_control
 from mediease_api.delivery.http.appointments import create_appointments_blueprint
+from mediease_api.delivery.http.attachments import create_attachments_blueprint
 from mediease_api.delivery.http.audit_log import create_audit_log_blueprint
 from mediease_api.delivery.http.auth import create_auth_blueprint
 from mediease_api.delivery.http.bills import create_bills_blueprint, create_dues_blueprint
@@ -1136,6 +1146,38 @@ class _UseCases:
     def portal_receipt_pdf(self) -> PortalReceiptPdf:
         return PortalReceiptPdf(uow=self._uow(), files=self._receipt_files())
 
+    # --- M6d-P6: reports on visits ------------------------------------------------------------
+    def add_attachment(self) -> AddAttachment:
+        return AddAttachment(
+            uow=self._uow(), clock=self.clock, ids=self.ids, storage=self.blob_storage
+        )
+
+    def list_attachments(self) -> ListAttachments:
+        return ListAttachments(
+            uow=self._uow(), clock=self.clock, ids=self.ids, storage=self.blob_storage
+        )
+
+    def open_attachment(self) -> OpenAttachment:
+        return OpenAttachment(
+            uow=self._uow(), clock=self.clock, ids=self.ids, storage=self.blob_storage
+        )
+
+    def delete_attachment(self) -> DeleteAttachment:
+        return DeleteAttachment(
+            uow=self._uow(), clock=self.clock, ids=self.ids, storage=self.blob_storage
+        )
+
+    def share_attachment(self) -> ShareAttachment:
+        return ShareAttachment(
+            uow=self._uow(), clock=self.clock, ids=self.ids, storage=self.blob_storage
+        )
+
+    def list_portal_attachments(self) -> ListPortalAttachments:
+        return ListPortalAttachments(uow=self._uow())
+
+    def portal_attachment_file(self) -> PortalAttachmentFile:
+        return PortalAttachmentFile(uow=self._uow(), storage=self.blob_storage)
+
     def get_sitemap(self) -> GetSitemap:
         return GetSitemap(uow=self._uow(), clock=self.clock)
 
@@ -1517,6 +1559,7 @@ def create_app(
     app.register_blueprint(create_scheduling_blueprint(use_cases))
     app.register_blueprint(create_appointments_blueprint(use_cases))
     app.register_blueprint(create_visits_blueprint(use_cases))
+    app.register_blueprint(create_attachments_blueprint(use_cases))
     app.register_blueprint(
         create_prescriptions_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
     )
