@@ -39,6 +39,8 @@ const PUBLIC_PATHS: ReadonlySet<string> = new Set([
   // M6c-P5 (FR-DIS-06): for crawlers.
   "/robots.txt",
   "/sitemap.xml",
+  // M6c-P6: directory search (FR-DIS-01, 02).
+  "/find",
 ]);
 // /p/<token>: the patient's prescription page (M4-P5); the token and the last-4 check guard it.
 // M6a-P4: emailed reset and verification links; the token in the path is the authority.

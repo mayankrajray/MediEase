@@ -11,3 +11,8 @@ const RUPEES = new Intl.NumberFormat("en-IN", {
 export function formatPaise(paise: number): string {
   return RUPEES.format(paise / 100);
 }
+
+/** M6c-P5 fees: the rupee figure without the sign, and without decimals when whole (30000 → "300"). */
+export function rupees(paise: number): string {
+  return paise % 100 === 0 ? String(paise / 100) : (paise / 100).toFixed(2);
+}
