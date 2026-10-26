@@ -224,6 +224,16 @@ with no verified active doctor is `REQ_VALIDATION_FAILED` (422) naming the field
 the existing `CLN_SLUG_TAKEN` (409), and nothing is created. An ops user without the route's role
 gets `PERM_DENIED` (403).
 
+The listing (M6c-P4; spec R52, R53):
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `CLN_LISTING_BLOCKED` | 409 | The clinic cannot be listed yet | `details.problems` (comma-separated): `NOT_ACTIVE`, `NOT_VERIFIED`, `ADDRESS_MISSING`, `NO_BOOKABLE_DOCTOR` | The owner's *Directory* page lists each in words |
+| `CLN_DOCTOR_NOT_VERIFIED` | 409 | Only an active doctor verified by MediEase can be shown | The doctor is inactive or not verified (or their registration changed, R46) | A reviewer verifies the doctor (RUNBOOK 25) |
+
+A booking request withdrawn by a suspension is `DECLINED` with `decline_reason`
+`CLINIC_UNAVAILABLE` and `decided_by` `SYSTEM`.
+
 ## Patient links (M4)
 
 | Code | HTTP | Meaning | Likely cause | Where to look |

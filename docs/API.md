@@ -269,6 +269,16 @@ both, and `SessionUser.ops_roles` carries them.
 | POST | `/api/v1/ops/clinics/{id}/doctors/{doctor_id}/verify` | Verify an ops-created clinic's doctor (both answers yes) | FR-ONB-06 | Implemented (M6c-P3), `@reviewer` |
 | POST | `/api/v1/ops/clinics/{id}/verify` | Verify an ops-created clinic (needs a verified active doctor) | FR-ONB-06 | Implemented (M6c-P3), `@reviewer` |
 
+M6c-P4 (spec R50-R58; contract 0.39.0):
+
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| GET | `/api/v1/clinic/listing` | The listing, whether the clinic is discoverable, the problems in the way and each doctor's state | FR-ONB-09, 10 | Implemented (M6c-P4), `CLINIC_VIEW` |
+| PUT | `/api/v1/clinic/listing` | List (only with no problem: 409 `CLN_LISTING_BLOCKED`) or unlist | FR-ONB-10 | Implemented (M6c-P4), `CLINIC_MANAGE` |
+| PUT | `/api/v1/clinic/listing/doctors/{doctor_id}` | Show (active and verified only: 409 `CLN_DOCTOR_NOT_VERIFIED`) or hide a doctor | FR-ONB-09 | Implemented (M6c-P4), `CLINIC_MANAGE` |
+| POST | `/api/v1/ops/clinics/{id}/suspend` | Suspend with a reason; open booking requests are declined (`CLINIC_UNAVAILABLE`) and their patients told | FR-ONB-05 | Implemented (M6c-P4), `@ops` (`OPS_ADMIN`) |
+| POST | `/api/v1/ops/clinics/{id}/reactivate` | Reactivate (needs an active owner); the listing is kept | FR-ONB-05 | Implemented (M6c-P4), `@ops` |
+
 `Clinic` and `Doctor` bodies gain `verified_at` and `verification_source` (and the P4/P5 fields
 `listed`, `search_indexing`, `visible`, `languages`, `fee_paise`). The public clinic page and
 booking requests need the clinic `ACTIVE` and verified (one 404 otherwise).

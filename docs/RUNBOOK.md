@@ -668,3 +668,14 @@ reviewer verifies each doctor (`POST /api/v1/ops/clinics/<id>/doctors/<doctor_id
 the clinic (`POST /api/v1/ops/clinics/<id>/verify`). Changing a doctor's registration number or
 council clears that doctor's verification: check it again. Rejected applications are deleted
 with their certificates 180 days after the decision (hourly purge).
+
+**Suspending a clinic (M6c-P4).** `OPS_ADMIN` only, from the ops clinic list (*Suspend…*), with a
+reason (the note is for MediEase and is not audited). At once: the clinic's page, booking and live
+token links stop, staff are refused, and every open booking request is declined with "This clinic
+is not taking requests on MediEase at the moment", which the patient sees in the app. **Confirmed
+appointments are not cancelled**: ask the clinic to call its patients, or call them, if the
+suspension will last past them. *Reactivate* restores everything, including the owner's listing.
+
+**"Why is our clinic not in search?"** The owner's *Directory* page (`/settings/listing`) lists
+what is missing: verification, the address, or a verified, visible doctor with weekly hours.
+A doctor whose registration number or council was edited needs to be verified again.

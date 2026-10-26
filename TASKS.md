@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M6c — SaaS clinic onboarding, verification and discovery** (issue #53, branch `m6c/53-onboarding-discovery` from `main` at `9df830b`, one PR for the milestone). M6b merged in PR #52 on 26 Oct 2026 (#51 closed) |
-| Active phase | **M6c-P4 — Suspension and listing.** P1–P3 built and pushed (spec `docs/specs/clinic-onboarding.md` R1–R49, AC1–AC14). The developer approved every design decision for P2–P8 in advance (26 Oct 2026); phases are built in order and pushed, the full API and Playwright suites run once after P8, and the PR waits for the developer's merge approval |
+| Active phase | **M6c-P5 — Public profiles.** P1–P4 built and pushed (spec `docs/specs/clinic-onboarding.md` R1–R58, AC1–AC16). The developer approved every design decision for P2–P8 in advance (26 Oct 2026); phases are built in order and pushed, the full API and Playwright suites run once after P8, and the PR waits for the developer's merge approval |
 | Design notes | `docs/milestones/M6c-onboarding-verification-discovery.md` (M6c); M6b in `docs/milestones/M6b-patient-portal-booking.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M6c phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -195,7 +195,7 @@ will reply within 2 working days; **D4** issue #53, branch from the latest `main
 | M6c-P1 | The application: `/apply` for a clinic or a solo doctor, certificates, the verified email, lifecycle states, limits, the duplicate flag (FR-ONB-01, 02, 07) | ✅ (pushed 26 Oct 2026) |
 | M6c-P2 | Reviewer workflow: ops roles, queue, per-doctor checks, decision with a reason, applicant emails (no status page, R37) (FR-ONB-03, 05) | ✅ (built 26 Oct 2026, pushed) |
 | M6c-P3 | Approval through the one creation path (a prefilled approve form); clinic and doctor verification; `has_public_page` = `ACTIVE` ∧ verified (FR-ONB-04, 06, 08) | ✅ (built 26 Oct 2026, pushed) |
-| M6c-P4 | Suspension and listing; the one discoverability rule (FR-ONB-05, 09, 10) | ☐ |
+| M6c-P4 | Suspension and listing; the one discoverability rule (FR-ONB-05, 09, 10) | ✅ (built 26 Oct 2026, pushed) |
 | M6c-P5 | Public clinic and doctor profiles (FR-DIS-03, 06, 07) | ☐ |
 | M6c-P6 | Clinic and doctor search (FR-DIS-01, 02, 04, 05) | ☐ |
 | M6c-P7 | Discovery to booking (FR-DIS-08) | ☐ |
