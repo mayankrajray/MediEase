@@ -248,10 +248,10 @@ describe("Account (R20, AC12)", () => {
 });
 
 describe("Find a doctor (decision 4A)", () => {
-  it("says search is coming and how to link meanwhile", async () => {
+  it("M6c-P7 (discovery R14): opens the directory search and still says how to link", async () => {
     mockApi(me());
     await renderPortal(<FindADoctor />);
-    expect(screen.getByText(/coming soon/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Search doctors and clinics" })).toHaveAttribute("href", "/find");
     expect(screen.getByText(/ask your clinic for an invitation/)).toBeInTheDocument();
   });
 });

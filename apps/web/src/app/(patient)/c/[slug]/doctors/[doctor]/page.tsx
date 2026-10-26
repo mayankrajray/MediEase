@@ -15,9 +15,10 @@ const NOINDEX = { index: false, follow: false } as const;
 const INDEX = { index: true, follow: true } as const;
 
 /** The clinic with the doctor shown on it, or the same 404 as an unknown page (spec R59, NFR-19). */
-async function load(slug: string, doctorId: string): Promise<{ clinic: Clinic; doctor: Clinic["doctors"][number] }> {
+async function load(slug: string, doctorId: string, via = false): Promise<{ clinic: Clinic; doctor: Clinic["doctors"][number] }> {
   try {
-    const clinic = (await apiGet("/api/v1/public/clinics/{slug}", { pathParams: { slug } })).data;
+    // M6c-P7 (discovery R11): opened from search, the API applies the directory's rule too.
+    const clinic = (await apiGet("/api/v1/public/clinics/{slug}", { pathParams: { slug }, ...(via ? { query: { via: "directory" } } : {}) })).data;
     const doctor = clinic.doctors.find((d) => d.id === doctorId);
     if (doctor === undefined) notFound();
     return { clinic, doctor };
@@ -52,7 +53,8 @@ export async function generateMetadata({ params }: Readonly<{ params: Params }>)
 export default async function DoctorProfileRoute({ params, searchParams }: Readonly<{ params: Params; searchParams: Promise<Search> }>) {
   const { slug, doctor: doctorId } = await params;
   const query = await searchParams;
-  const { clinic, doctor } = await load(slug, doctorId);
+  const via = query.via === "directory";
+  const { clinic, doctor } = await load(slug, doctorId, via);
   const language = pickLanguage(query.lang, (await cookies()).get(PORTAL_LANGUAGE_COOKIE)?.value);
-  return <PublicClinicPage clinic={clinic} language={language} profileOf={doctor.id} />;
+  return <PublicClinicPage clinic={clinic} language={language} profileOf={doctor.id} viaDirectory={via} />;
 }

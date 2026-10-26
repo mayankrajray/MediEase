@@ -66,7 +66,15 @@ export interface PortalStrings {
     readonly upcomingReminders: string;
     readonly seeAll: string;
   };
-  readonly find: { readonly title: string; readonly soon: string; readonly meanwhile: string; readonly clinicPage: string; readonly invitation: string; readonly prescription: string };
+  readonly find: {
+    readonly title: string;
+    readonly soon: string;
+    readonly search: string;
+    readonly meanwhile: string;
+    readonly clinicPage: string;
+    readonly invitation: string;
+    readonly prescription: string;
+  };
   readonly appointments: {
     readonly title: string;
     readonly empty: string;
@@ -246,8 +254,9 @@ const EN: PortalStrings = {
   },
   find: {
     title: "Find a doctor",
-    soon: "Searching for doctors and clinics on MediEase is coming soon.",
-    meanwhile: "Until then you can:",
+    soon: "Search the doctors and clinics on MediEase. MediEase has checked every doctor's registration.",
+    search: "Search doctors and clinics",
+    meanwhile: "You can also:",
     clinicPage: "open your clinic's own MediEase page, if it gave you one;",
     invitation: "ask your clinic for an invitation to the patient app;",
     prescription: "choose “Save to my MediEase” on a prescription link from your clinic.",
@@ -454,8 +463,9 @@ const HI: PortalStrings = {
   },
   find: {
     title: "डॉक्टर ढूँढें",
-    soon: "MediEase पर डॉक्टर और क्लिनिक खोजने की सुविधा जल्द आ रही है।",
-    meanwhile: "तब तक आप:",
+    soon: "MediEase पर डॉक्टर और क्लिनिक खोजें। MediEase ने हर डॉक्टर का पंजीकरण जाँचा है।",
+    search: "डॉक्टर और क्लिनिक खोजें",
+    meanwhile: "आप यह भी कर सकते हैं:",
     clinicPage: "अपने क्लिनिक का MediEase पेज खोल सकते हैं, अगर उन्होंने दिया हो;",
     invitation: "अपने क्लिनिक से मरीज़ ऐप का आमंत्रण माँग सकते हैं;",
     prescription: "क्लिनिक के पर्चे के लिंक पर “मेरे MediEase में सहेजें” चुन सकते हैं।",
