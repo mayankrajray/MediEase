@@ -101,4 +101,31 @@ test("AC1, AC2: a solo doctor applies, confirms by email and ops sees it waiting
   await expect(waiting).toContainText(reference);
   await expect(waiting).toContainText(clinic);
   await expect(waiting).not.toContainText(email);
+
+  // M6c-P2, P3 (AC10, AC11): the reviewer opens it, takes it, checks the doctor and approves.
+  await waiting.getByRole("link", { name: reference }).click();
+  await expect(page.getByRole("heading", { level: 1, name: new RegExp(reference) })).toBeVisible();
+  await expectAccessible(page);
+  await page.getByRole("button", { name: "Take for review" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "You are reviewing this application." })).toBeVisible();
+  const approve = page.getByRole("button", { name: "Approve and create the clinic" });
+  await expect(approve).toBeDisabled();
+  await page.getByLabel("Found on the council's register").check();
+  await page.getByLabel("The certificate matches the application").check();
+  await page.getByRole("button", { name: "Mark verified" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Doctor 1 checked." })).toBeVisible();
+  await approve.click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel(/Clinic URL name/).fill(`solo-${stamp}`);
+  // The dialog fades in (me-overlay); check contrast once it is fully shown.
+  await dialog.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+  await expectAccessible(page);
+  await dialog.getByRole("button", { name: "Approve and email the owner" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Approved." })).toBeVisible();
+  await expect(page.getByText("Approved", { exact: true })).toBeVisible();
+
+  // The owner is invited by email to the confirmed address (R43); the clinic is not public yet (D1).
+  await waitForEmail(request, email, "on MediEase");
+  const publicPage = await request.get(`/api/v1/public/clinics/solo-${stamp}`);
+  expect(publicPage.status()).toBe(404);
 });

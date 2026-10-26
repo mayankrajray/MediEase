@@ -15,6 +15,8 @@ traces kept on failure). This folder is not in the web image (`.dockerignore`).
 | `patient-link-360.spec.ts` | The issued sample opens at 360 px after the last-4 check, in English and Hindi; five wrong answers lock the link (AC2, AC3) | M4-P5 |
 | `consultation-keyboard.spec.ts` | The doctor starts from the queue, types the sample with the keyboard, previews, issues, prints; front desk prints from the row; a second tab's save stops the first (NFR-09, D6) | M4-P6 |
 | `reminders-follow-ups.spec.ts` | An issued follow-up's reminder on the consultation and the profile, with the message history; Book follow-up from the pending list (on `make seed`'s overdue follow-up); ops open the month's messaging costs (R16-R18) | M5-P6 |
+| `clinic-application.spec.ts` | A solo doctor applies at 360 px (a text file renamed `.pdf` is refused), confirms from Mailpit; ops sees it waiting, takes it, verifies the doctor and approves; the owner's invitation arrives by email and the clinic has no public page yet (clinic-onboarding AC1, AC2, AC4, AC9-AC11). Uses one of the 5 applications a day per address | M6c-P1..P3 |
+| `discovery.spec.ts` | At 360 px: the landing page (indexable, under 200 KB, axe, LCP logged), *Find a doctor*, a search for the seeded doctor, the profile from the result (`via=directory`), a time, the fake Google sign-in back to the form, *Requested*; an empty place and an unknown profile (discovery AC1, AC5, AC6) | M6c-P5..P8 |
 
 Printing opens a tab on a `blob:` URL. Headless Chromium has no PDF viewer, so there the PDF
 arrives as a download of that URL; the journey checks the download starts with `%PDF-`.
