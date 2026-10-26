@@ -264,6 +264,11 @@ Payments (M6d-P3; spec billing R31-R36):
 | `BIL_VOID_TOO_LATE` | 409 | Only a payment of today can be voided | Correcting yesterday's collection | A credit note and a refund; RUNBOOK 28 |
 | `BIL_ALREADY_VOIDED` | 409 | The payment is already voided | Two people correcting at once | The bill's payments |
 | `BIL_VOID_REFUNDED` | 409 | A refund came out of this payment | Voiding the payment before the refund | Void the refund first |
+| `BIL_RECEIPT_NOT_READY` | 409 | A draft has no receipt or receipt link (M6d-P4) | Printing before *Issue bill* | Issue the bill first |
+
+Receipt links use the patient-link codes (`LINK_INVALID`, `LINK_CHALLENGE_*`, `LINK_LOCKED`,
+`LINK_RATE_LIMITED`, `LINK_NOT_LOCKED`): a receipt token on a prescription route, or the other way
+round, is `LINK_INVALID`.
 
 ## Patient links (M4)
 

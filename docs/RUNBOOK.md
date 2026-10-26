@@ -39,6 +39,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 26. Fees and the public fee (M6d-P1)
 27. Bills and credit notes (M6d-P2)
 28. Payments, refunds and dues (M6d-P3)
+29. Receipts and receipt links (M6d-P4)
 
 ---
 
@@ -758,3 +759,23 @@ overpaid (a negative balance shown as "to refund"), and the bill page then offer
 `SELECT number, total_paise, credited_paise, paid_paise, refunded_paise FROM bills WHERE clinic_id =
 '<id>' AND patient_id = '<id>' AND status = 'ISSUED';` and the payments (`SELECT kind, amount_paise,
 voided_at FROM payments WHERE bill_id = '<id>';`). Never edit these rows. Audit: `payment.*`.
+
+### 29. Receipts and receipt links (M6d-P4)
+
+*Print bill* on an issued bill opens its PDF: the bill, credit notes, payments and balance on the
+letterhead. *Show QR for the patient* gives the receipt link (`/r/<token>`). The patient opens it with
+the last 4 digits of their phone, as for a prescription link (spec billing R43-R54).
+
+**"The receipt does not show today's payment."** Each change (a payment, a void, a credit note)
+makes a new file on the next download; old files never change. Print again. If one state's file is
+missing from storage, the next download renders it again (`receipt.pdf_rendered` in the API log).
+
+**"The patient is locked out of the receipt."** Five wrong answers lock it. *Show QR for the patient*
+then *Unlock link* on the bill (audited `patient_link.reset`). Check that the patient's phone number
+on their record is right: the last 4 digits come from it.
+
+**"Can we send the receipt on WhatsApp?"** Not yet (D6): it needs a receipt template approved by
+Meta (L-02). Share the link or the QR code.
+
+**Storage.** Receipts are blobs under `receipt/<clinic_id>/<bill_id>/s<n>.pdf`, private, and served
+only through the API. Back them up with the prescriptions (ADR-0012).

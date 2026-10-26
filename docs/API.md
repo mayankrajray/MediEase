@@ -338,6 +338,20 @@ their own bills (another's is 404).
 M6d-P3 (contract 0.45.0): the bill body gains `payments`; the queue entry gains `dues_paise`;
 permissions gain `COLLECTION_VIEW` (owners and the front desk).
 
+M6d-P4 (spec billing R43-R54; contract 0.46.0):
+
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| GET | `/api/v1/clinic/bills/{bill_id}/receipt.pdf` | The bill and its receipts, rendered once per state, audited | FR-BIL-04 | Implemented (M6d-P4), `BILLING_MANAGE` |
+| GET | `/api/v1/clinic/bills/{bill_id}/link` | The receipt link (`/r/<token>`) for the QR code | FR-BIL-04 | Implemented (M6d-P4), `BILLING_MANAGE` |
+| POST | `/api/v1/clinic/bills/{bill_id}/link/reset` | Unlock it after five wrong answers | FR-BIL-04 | Implemented (M6d-P4), `BILLING_MANAGE` |
+| GET | `/api/v1/public/links/{token}/receipt` | The amounts, after the last-4 check (`X-Link-View`) | FR-BIL-04 | Implemented (M6d-P4), public |
+| GET | `/api/v1/public/links/{token}/receipt.pdf` | The clinic's PDF, after the check | FR-BIL-04 | Implemented (M6d-P4), public |
+| GET | `/api/v1/portal/bills` | The linked records' issued bills | FR-BIL-04 | Implemented (M6d-P4), `@patient` |
+| GET | `/api/v1/portal/bills/{bill_id}/receipt.pdf` | One bill's receipt | FR-BIL-04 | Implemented (M6d-P4), `@patient` |
+
+`GET /api/v1/public/links/{token}` gains `purpose` (`RX_VIEW` or `RECEIPT`).
+
 ### Audit trail (M1-P4)
 
 Every audited action writes one row to `audit_events` in the same transaction as the change, so a
