@@ -1351,7 +1351,8 @@ export interface paths {
          * @description FR-ORG-02. Permission: CLINIC_MANAGE (owners). Only the fields sent are changed; send
          *     at least one. The required fields can be corrected but not emptied (I3). Setting
          *     is_active to false stops offering the doctor for new work; history keeps referring to
-         *     them. Records doctor.updated. Needs X-CSRF-Token.
+         *     them; true brings them back if the plan has room (M6d-P7, 409 SUB_LIMIT_REACHED).
+         *     Records doctor.updated. Needs X-CSRF-Token.
          */
         readonly patch: operations["updateDoctor"];
         readonly trace?: never;
@@ -2433,6 +2434,50 @@ export interface paths {
          *     without an active owner). The owner's listing choice is kept.
          */
         readonly post: operations["reactivateOpsClinic"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/subscription": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The clinic's plan, its limits, what is used and the trial
+         * @description M6d-P7, FR-SUB-01; spec plans-and-trial R6. Permission CLINIC_MANAGE (owners). Users
+         *     are invited or active members (the owner counts); doctors are active profiles. A clinic
+         *     from before plans is Plus with trial_state NONE.
+         */
+        readonly get: operations["getClinicSubscription"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/ops/clinics/{clinic_id}/plan": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * Set a clinic's plan
+         * @description M6d-P7, spec plans-and-trial R8. OPS_ADMIN. Never smaller than what the clinic already
+         *     uses (409 SUB_PLAN_TOO_SMALL, details.limit, allowed and used). The trial is unchanged.
+         *     Records subscription.plan_changed (from, to). Needs X-CSRF-Token.
+         */
+        readonly put: operations["setOpsClinicPlan"];
+        readonly post?: never;
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -6422,6 +6467,7 @@ export interface components {
             readonly specialties?: readonly string[];
             /** @description 2-4 upper-case letters for patient codes (ME-0142); derived from the name when omitted. Fixed once the clinic has patients. */
             readonly patient_code_prefix?: string | null;
+            readonly plan?: components["schemas"]["Plan"];
             /** @description Defaults to TOKENS */
             readonly booking_mode?: components["schemas"]["BookingMode"];
             /** @description Defaults to A5 */
@@ -6475,7 +6521,7 @@ export interface components {
             readonly specialty?: string | null;
             /** Format: uuid */
             readonly user_id?: string | null;
-            /** @description false deactivates the doctor; history keeps referring to them */
+            /** @description false deactivates the doctor; history keeps referring to them. M6d-P7 (plans R5) true brings an inactive doctor back, within the plan (409 SUB_LIMIT_REACHED) */
             readonly is_active?: boolean | null;
         };
         /** @description When each onboarding step first happened (FR-OPS-04, R12) */
@@ -6507,7 +6553,51 @@ export interface components {
         readonly OpsClinicList: {
             readonly items: readonly (components["schemas"]["Clinic"] & {
                 readonly onboarding: components["schemas"]["OnboardingChecklist"] | null;
+                readonly subscription: components["schemas"]["PlanSummary"];
             })[];
+        };
+        /**
+         * @description M6d-P7 (D4). Solo 1 doctor and 2 users; Clinic 3 and 5; Plus (Clinic Plus) 5 and no user limit
+         * @enum {string}
+         */
+        readonly Plan: "SOLO" | "CLINIC" | "PLUS";
+        readonly PlanInput: {
+            readonly plan: components["schemas"]["Plan"];
+        };
+        readonly PlanSummary: {
+            readonly plan: components["schemas"]["Plan"];
+            readonly plan_name: string;
+            /**
+             * @description NOT_STARTED until the clinic is active; NONE for a clinic from before plans
+             * @enum {string}
+             */
+            readonly trial_state: "NOT_STARTED" | "ACTIVE" | "ENDED" | "NONE";
+            /** Format: date-time */
+            readonly trial_ends_at: string | null;
+            /** @description Whole days left, rounded up; 0 once ended */
+            readonly trial_days_left: number | null;
+        };
+        readonly Subscription: {
+            readonly plan: components["schemas"]["Plan"];
+            readonly plan_name: string;
+            /** @enum {string} */
+            readonly trial_state: "NOT_STARTED" | "ACTIVE" | "ENDED" | "NONE";
+            /** Format: date-time */
+            readonly trial_ends_at: string | null;
+            readonly trial_days_left: number | null;
+            /** Format: date-time */
+            readonly trial_started_at: string | null;
+            readonly limits: {
+                readonly doctors: number;
+                /** @description null is no limit */
+                readonly users: number | null;
+            };
+            readonly usage: {
+                /** @description Active doctor profiles */
+                readonly doctors: number;
+                /** @description Invited or active members */
+                readonly users: number;
+            };
         };
         /** @description M5-P5 (R18). Money in paise, excluding GST. */
         readonly OpsMessagingCosts: {
@@ -7046,7 +7136,10 @@ export interface components {
             };
         };
         /**
-         * @description The change conflicts with a clinic rule: CLN_LAST_OWNER (a clinic needs at least one
+         * @description M6d-P7: SUB_LIMIT_REACHED (the plan has no room for another doctor or user; details.plan,
+         *     limit doctors or users, allowed) and SUB_PLAN_TOO_SMALL (ops chose a plan smaller than
+         *     what is used; details.limit, allowed, used).
+         *     The change conflicts with a clinic rule: CLN_LAST_OWNER (a clinic needs at least one
          *     active owner), CLN_INVALID_TRANSITION (the entity's state does not allow it),
          *     CLN_SLUG_TAKEN (that clinic URL is in use), CLN_MEMBER_EXISTS (already a member here),
          *     CLN_NO_DOCTOR_PROFILE (a doctor's view without a doctor profile, M6a-P6),
@@ -9505,6 +9598,7 @@ export interface operations {
             readonly 400: components["responses"]["PermissionError"];
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["AuthError"];
         };
@@ -9587,6 +9681,7 @@ export interface operations {
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["AuthError"];
         };
@@ -10754,6 +10849,7 @@ export interface operations {
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["AuthError"];
             readonly 404: components["responses"]["InviteError"];
+            readonly 409: components["responses"]["ConflictError"];
             readonly 410: components["responses"]["InviteError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["AuthError"];
@@ -10900,6 +10996,7 @@ export interface operations {
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["AuthError"];
         };
@@ -11497,6 +11594,78 @@ export interface operations {
             readonly 404: components["responses"]["PermissionError"];
             readonly 409: components["responses"]["ConflictError"];
             readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly getClinicSubscription: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /**
+                 * @description Which clinic the request is for. Optional for a user with a single membership;
+                 *     required when they have more than one (otherwise 400 PERM_CLINIC_REQUIRED). A
+                 *     value that is not one of the caller's clinics gets the same 400, never a 404.
+                 */
+                readonly "X-Clinic-ID"?: components["parameters"]["ClinicId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The subscription */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Subscription"];
+                };
+            };
+            readonly 400: components["responses"]["PermissionError"];
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+        };
+    };
+    readonly setOpsClinicPlan: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                /** @description The clinic an ops request is about (ops users have no membership to infer). */
+                readonly clinic_id: components["parameters"]["ClinicPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PlanInput"];
+            };
+        };
+        readonly responses: {
+            /** @description The subscription as it now is */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Subscription"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
+            readonly 409: components["responses"]["ConflictError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
         };
     };
     readonly searchClinics: {

@@ -206,6 +206,9 @@ EXPECTED_POLICIES = {
     # M6c-P4 (R50-R58): suspension (OPS_ADMIN) and the owner's listing.
     "ops_suspension.suspend": (Access.OPS, None),
     "ops_suspension.reactivate": (Access.OPS, None),
+    # M6d-P7 (plans R6, R8): the owner's plan view and ops' plan choice.
+    "subscriptions.get_subscription": (Access.CLINIC, Permission.CLINIC_MANAGE),
+    "subscriptions.set_plan": (Access.OPS, None),
     "listing.get_listing": (Access.CLINIC, Permission.CLINIC_VIEW),
     "listing.set_listing": (Access.CLINIC, Permission.CLINIC_MANAGE),
     "listing.set_visibility": (Access.CLINIC, Permission.CLINIC_MANAGE),

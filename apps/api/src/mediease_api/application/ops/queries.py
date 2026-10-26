@@ -11,13 +11,15 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from mediease_api.domain.clinics.clinic import Clinic
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist
 from mediease_api.domain.identity.access import StaffMember
 from mediease_api.domain.shared.errors import NotFound
+from mediease_api.domain.subscriptions.subscription import Subscription
+from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.messaging import ChannelCost
 from mediease_api.ports.unit_of_work import UnitOfWork
 
@@ -26,6 +28,9 @@ from mediease_api.ports.unit_of_work import UnitOfWork
 class ClinicOnboarding:
     clinic: Clinic
     checklist: OnboardingChecklist | None
+    # M6d-P7 (plans R7): the plan and trial, so ops see a trial that has ended.
+    subscription: Subscription
+    now: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,15 +42,23 @@ class ClinicDetail:
 
 
 class ListClinics:
-    """Every clinic with its onboarding state, newest first."""
+    """Every clinic with its onboarding state and plan, newest first."""
 
-    def __init__(self, *, uow: UnitOfWork) -> None:
+    def __init__(self, *, uow: UnitOfWork, clock: ClockPort) -> None:
         self._uow = uow
+        self._clock = clock
 
     def execute(self) -> Sequence[ClinicOnboarding]:
+        now = self._clock.now()
         with self._uow as uow:
+            plans = uow.subscriptions.all_by_clinic()
             return [
-                ClinicOnboarding(clinic=clinic, checklist=checklist)
+                ClinicOnboarding(
+                    clinic=clinic,
+                    checklist=checklist,
+                    subscription=plans.get(clinic.id) or Subscription.legacy(clinic.id, now),
+                    now=now,
+                )
                 for clinic, checklist in uow.clinics.list_onboarding()
             ]
 

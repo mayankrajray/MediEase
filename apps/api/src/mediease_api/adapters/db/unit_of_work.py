@@ -1,4 +1,4 @@
-"""SQLAlchemy unit of work — one session and one transaction per command.
+"""SQLAlchemy unit of work â€” one session and one transaction per command.
 
 ``with uow:`` opens a session; every repository it hands out shares that
 session. Leaving the block without ``commit()`` rolls back, including when an
@@ -84,6 +84,7 @@ from mediease_api.adapters.db.repositories import (
     SqlAlchemyVisitAddendumRepository,
     SqlAlchemyVisitRepository,
 )
+from mediease_api.adapters.db.subscriptions import SqlAlchemySubscriptionRepository
 
 
 def build_session_factory(engine: Engine) -> sessionmaker[Session]:
@@ -308,6 +309,8 @@ class _OpenUnit:
         # M5-P5: who a STOP reply opts out (IDs only).
         self.opt_out_lookup = SqlAlchemyOptOutLookup(session)
         self.message_costs = SqlAlchemyMessageCostReport(session)
+        # M6d-P7: each clinic's plan and trial (platform data, one row per clinic).
+        self.subscriptions = SqlAlchemySubscriptionRepository(session)
 
 
 class SqlAlchemyUnitOfWork:
@@ -331,7 +334,7 @@ class SqlAlchemyUnitOfWork:
     ) -> None:
         session = self._require_open().session
         try:
-            # Anything not committed is discarded — on success and on error alike.
+            # Anything not committed is discarded â€” on success and on error alike.
             session.rollback()
         finally:
             session.close()
@@ -372,6 +375,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def staff_invites(self) -> SqlAlchemyStaffInviteRepository:
         return self._require_open().staff_invites
+
+    @property
+    def subscriptions(self) -> SqlAlchemySubscriptionRepository:
+        return self._require_open().subscriptions
 
     @property
     def portal_lookup(self) -> SqlAlchemyPortalLookup:

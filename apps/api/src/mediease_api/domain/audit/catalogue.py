@@ -175,6 +175,8 @@ ACTIONS: dict[A, ActionInfo] = {
         (A.DOCTOR_VISIBILITY_CHANGED, "Changed a doctor's directory visibility"),
         (A.CLINIC_ACTIVATED, "Activated the clinic"),
         (A.CLINIC_UPDATED, "Changed clinic settings"),
+        # M6d-P7 (FR-SUB-01): MediEase changed the clinic's plan.
+        (A.SUBSCRIPTION_PLAN_CHANGED, "Plan changed by MediEase"),
         (A.NOTIFICATION_PREFERENCES_CHANGED, "Changed notification settings"),
         (A.RETENTION_PURGED, "Deleted expired data"),
         (A.AUDIT_EXPORTED, "Exported the audit log"),

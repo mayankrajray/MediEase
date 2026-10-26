@@ -58,6 +58,7 @@ from mediease_api.domain.scheduling.sessions import PlannedSession, Session
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.shared.time import local_date
+from mediease_api.domain.subscriptions.subscription import Plan, Subscription
 from mediease_api.domain.visits.visit import Visit, VisitStatus
 from mediease_api.domain.visits.vitals import Vitals
 from mediease_api.ports.unit_of_work import TenantRepositories, UnitOfWork
@@ -258,6 +259,11 @@ def _create_clinic(
     staff = uow.tenant(clinic.id)
     # M6d-P1 (R2): the clinic's starting services, priced in _verify_and_list_demo_clinics.
     add_default_services(staff, clinic.id, deps.ids, now)
+    # M6d-P7: the demo clinics are on Clinic Plus (the family clinic has two doctors and three
+    # people), with the trial running from the seed.
+    uow.subscriptions.add(
+        Subscription.start(clinic_id=clinic.id, plan=Plan.PLUS, now=now).start_trial(now)
+    )
 
     for person in spec.members:
         assert person.role is not None  # ops users belong to no clinic

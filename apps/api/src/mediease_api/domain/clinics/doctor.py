@@ -177,3 +177,10 @@ class Doctor:
             raise InvalidTransition("doctor", "INACTIVE", "deactivate")
         self.updated_at = require_utc(now, "now")
         self.is_active = False
+
+    def reactivate(self, *, now: datetime) -> None:
+        """M6d-P7 (plans R5): offer this doctor again; the caller checks the plan's limit first."""
+        if self.is_active:
+            raise InvalidTransition("doctor", "ACTIVE", "reactivate")
+        self.updated_at = require_utc(now, "now")
+        self.is_active = True

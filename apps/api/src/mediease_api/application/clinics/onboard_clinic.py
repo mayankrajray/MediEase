@@ -31,6 +31,7 @@ from mediease_api.application.audit import record_event
 from mediease_api.application.billing.fees import add_default_services
 from mediease_api.application.context import Actor
 from mediease_api.application.scheduling.booking_mode import check_mode_supported, reconcile_clinic
+from mediease_api.application.subscriptions.plans import open_subscription, require_room
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.clinics.clinic import Clinic, PaperSize
 from mediease_api.domain.clinics.doctor import Doctor
@@ -40,6 +41,7 @@ from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.shared.errors import InvalidValue, NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.shared.time import local_date
+from mediease_api.domain.subscriptions.subscription import Limit, Plan
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.unit_of_work import UnitOfWork
@@ -66,6 +68,8 @@ class CreateClinicCommand:
     patient_code_prefix: str | None = None
     booking_mode: BookingMode = BookingMode.TOKENS
     rx_paper_size: PaperSize = PaperSize.A5
+    # M6d-P7 (FR-SUB-01, R1): ops choose it; an approved application's follows its doctors.
+    plan: Plan = Plan.CLINIC
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +148,8 @@ class CreateClinic:
         uow.tenant(clinic.id).checklist.add(checklist)
         # M6d-P1 (R2): every clinic starts with Consultation and Follow-up.
         add_default_services(uow.tenant(clinic.id), clinic.id, self._ids, now)
+        # M6d-P7 (R1): its plan, before any doctor or member is added and limited by it.
+        open_subscription(uow, clinic.id, cmd.plan, now)
 
         record_event(
             uow,
@@ -190,6 +196,8 @@ class AddDoctor:
             raise NotFound("clinic")
         if cmd.user_id is not None:
             _require_linkable_member(uow, clinic_id, cmd.user_id)
+        # M6d-P7 (R4): the plan's doctor limit.
+        require_room(uow, clinic_id, Limit.DOCTORS, adding=1, now=now)
 
         doctor = Doctor.create(
             id=self._ids.new_id(),
@@ -253,6 +261,10 @@ class UpdateDoctor:
             changed = _changed_fields(cmd)
             if cmd.is_active is False and doctor.is_active:
                 doctor.deactivate(now=now)
+            elif cmd.is_active is True and not doctor.is_active:
+                # M6d-P7 (R5): bringing a doctor back takes a place on the plan.
+                require_room(uow, clinic_id, Limit.DOCTORS, adding=1, now=now)
+                doctor.reactivate(now=now)
             doctors.update(doctor)
             record_event(
                 uow,

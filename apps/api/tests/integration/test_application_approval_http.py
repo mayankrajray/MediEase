@@ -66,6 +66,9 @@ def test_ac11_approval_creates_a_verified_clinic_and_emails_the_owner_invitation
         c=clinic["id"],
     )
     assert verified == 2
+    # M6d-P7 (plans R1): a clinic application with two doctors is on the Clinic plan.
+    plan = _scalar(db, "SELECT plan FROM clinic_subscriptions WHERE clinic_id = :c", c=clinic["id"])
+    assert plan == "CLINIC"
     invites = _scalar(
         db,
         "SELECT count(*) FROM jobs WHERE kind = :k AND clinic_id = :c",

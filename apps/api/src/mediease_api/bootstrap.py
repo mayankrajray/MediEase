@@ -274,6 +274,7 @@ from mediease_api.application.reminders.use_cases import (
 from mediease_api.application.scheduling.exceptions import AddException, RemoveException
 from mediease_api.application.scheduling.schedules import GetSchedule, ReplaceSchedule
 from mediease_api.application.scheduling.sessions import ListSessions
+from mediease_api.application.subscriptions.plans import GetSubscription, SetPlan
 from mediease_api.application.visits.attachments import (
     AddAttachment,
     DeleteAttachment,
@@ -340,6 +341,7 @@ from mediease_api.delivery.http.reminders import create_reminders_blueprint
 from mediease_api.delivery.http.request_info import register_request_info
 from mediease_api.delivery.http.rx_library import create_rx_library_blueprint
 from mediease_api.delivery.http.scheduling import create_scheduling_blueprint
+from mediease_api.delivery.http.subscriptions import create_subscriptions_blueprint
 from mediease_api.delivery.http.visits import create_visits_blueprint
 from mediease_api.delivery.middleware import register_request_middleware
 from mediease_api.delivery.webhooks.whatsapp import create_whatsapp_webhook_blueprint
@@ -974,7 +976,7 @@ class _UseCases:
         return SuggestMedicines(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     def list_clinics(self) -> ListClinics:
-        return ListClinics(uow=self._uow())
+        return ListClinics(uow=self._uow(), clock=self.clock)
 
     def get_clinic_onboarding(self) -> GetClinicOnboarding:
         return GetClinicOnboarding(uow=self._uow())
@@ -1145,6 +1147,13 @@ class _UseCases:
 
     def portal_receipt_pdf(self) -> PortalReceiptPdf:
         return PortalReceiptPdf(uow=self._uow(), files=self._receipt_files())
+
+    # --- M6d-P7: plans and the trial ------------------------------------------------------------
+    def get_subscription(self) -> GetSubscription:
+        return GetSubscription(uow=self._uow(), clock=self.clock)
+
+    def set_plan(self) -> SetPlan:
+        return SetPlan(uow=self._uow(), clock=self.clock, ids=self.ids)
 
     # --- M6d-P6: reports on visits ------------------------------------------------------------
     def add_attachment(self) -> AddAttachment:
@@ -1560,6 +1569,7 @@ def create_app(
     app.register_blueprint(create_appointments_blueprint(use_cases))
     app.register_blueprint(create_visits_blueprint(use_cases))
     app.register_blueprint(create_attachments_blueprint(use_cases))
+    app.register_blueprint(create_subscriptions_blueprint(use_cases))
     app.register_blueprint(
         create_prescriptions_blueprint(use_cases, public_base_url=settings.PUBLIC_BASE_URL)
     )

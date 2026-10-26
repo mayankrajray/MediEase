@@ -36,6 +36,7 @@ import structlog
 
 from mediease_api.application.audit import record_event
 from mediease_api.application.context import Actor, RequestContext
+from mediease_api.application.subscriptions.plans import require_room
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.clinics.onboarding import OnboardingChecklist, OnboardingStep
 from mediease_api.domain.identity.access import StaffMember
@@ -49,6 +50,7 @@ from mediease_api.domain.jobs.job import STAFF_INVITE_KIND, NewJob
 from mediease_api.domain.shared.email import EmailAddress
 from mediease_api.domain.shared.errors import InvalidTransition, InvalidValue, NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
+from mediease_api.domain.subscriptions.subscription import Limit
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
 from mediease_api.ports.security import InviteSecrets
@@ -166,6 +168,9 @@ class InviteStaff:
         membership = staff.get_for_user(user.id)
         action = AuditAction.STAFF_INVITED
         is_new = membership is None
+        if membership is None or membership.status is MembershipStatus.DEACTIVATED:
+            # M6d-P7 (R4): a new or returning member takes a seat on the plan.
+            require_room(uow, clinic_id, Limit.USERS, adding=1, now=now)
         if membership is None:
             membership = ClinicMembership.invite(
                 id=self._ids.new_id(),
