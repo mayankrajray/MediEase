@@ -26,6 +26,11 @@ from mediease_api.domain.prescriptions.prescription import (
     PrescriptionStatus,
 )
 from mediease_api.domain.prescriptions.schedule import DAY_ORDER, DurationKind, Frequency, Slot
+from mediease_api.domain.prescriptions.verification import (
+    VERIFICATION_LAYOUT,
+    printed_code,
+    qr_payload,
+)
 from mediease_api.domain.prescriptions.vocabulary import (
     PreparationCode,
     StorageCode,
@@ -87,6 +92,11 @@ class RxDocument:
     schedule_start: str | None = None
     schedule_medicine: str = ""
     schedule_as_written: str = ""
+    # Layout 3 (M7a-P1, FR-RX-11): the fixed verification block, outside the clinic's content.
+    # Empty on earlier layouts, whose templates ignore it.
+    verification_label: str = ""
+    verification_code: str = ""
+    qr_payload: str = ""
 
 
 def pdf_object_key(clinic_id: UUID, prescription_id: UUID, version: int) -> str:
@@ -352,4 +362,17 @@ def build_document(
         ),
         schedule_medicine=phrase("schedule.medicine", lang),
         schedule_as_written=phrase("schedule.as_written", lang),
+        **_verification(rx),
     )
+
+
+def _verification(rx: Prescription) -> dict[str, str]:
+    """FR-RX-11: the version's own ID, as text and as the QR payload (layout 3 onwards)."""
+    if rx.layout_version < VERIFICATION_LAYOUT:
+        return {}
+    assert rx.language is not None
+    return {
+        "verification_label": phrase("verification.label", rx.language),
+        "verification_code": printed_code(rx.id),
+        "qr_payload": qr_payload(rx.id),
+    }

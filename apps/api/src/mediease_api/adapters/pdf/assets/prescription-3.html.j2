@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="{{ doc.language.value }}">
+<head>
+<meta charset="utf-8">
+<title>{{ doc.title }}</title>
+</head>
+<body>
+{# Layout 3 (M7a-P1, FR-RX-11): the fixed MediEase layer. Both blocks are running elements drawn
+   in the page's bottom margin boxes on every page (page-3.css.j2), so no clinic or doctor
+   content can move or hide them. They come first so the first page has them. #}
+<div class="brand"><span class="mark-box">{% include "mediease-mark.svg" %}</span><span class="brand-text">{{ doc.footer }}</span></div>
+<div class="verify"><span class="verify-text"><span class="verify-label">{{ doc.verification_label }}</span><span class="verify-code">{{ doc.verification_code }}</span></span>{{ doc.qr_payload | qr_svg }}</div>
+<header class="letterhead">
+  <div class="clinic">
+    <h1>{{ doc.clinic_name }}</h1>
+    {% for line in doc.clinic_lines %}
+    <p>{{ line }}</p>
+    {% endfor %}
+  </div>
+  <div class="doctor">
+    <h2>{{ doc.doctor_name }}</h2>
+    {% for line in doc.doctor_lines %}
+    <p>{{ line }}</p>
+    {% endfor %}
+  </div>
+</header>
+
+<section class="patient">
+  {% for field in doc.patient %}
+  <span class="field"><span class="label">{{ field.label }}:</span> {{ field.value }}</span>
+  {% endfor %}
+  <span class="field date"><span class="label">{{ doc.issued_on.label }}:</span> {{ doc.issued_on.value }}</span>
+</section>
+
+{% if doc.revision_note %}
+<p class="revision">{{ doc.revision_note }}</p>
+{% endif %}
+
+{% if doc.medicines %}
+<section class="medicines">
+  <h3>{{ doc.medicines_heading }}</h3>
+  {% for medicine in doc.medicines %}
+  <div class="medicine">
+    <p class="name"><span class="number">{{ medicine.number }}.</span> {{ medicine.name }}{% if medicine.form_strength %} <span class="form">({{ medicine.form_strength }})</span>{% endif %}</p>
+    {% if medicine.details %}
+    <table class="details">
+      {% for field in medicine.details %}
+      <tr><th>{{ field.label }}</th><td>{{ field.value }}</td></tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if doc.schedule %}
+<section class="schedule">
+  <h3>{{ doc.schedule_heading }}</h3>
+  {% if doc.schedule_start %}<p class="schedule-start">{{ doc.schedule_start }}</p>{% endif %}
+  <table class="schedule-table">
+    <thead>
+      <tr>
+        <th class="medicine-col">{{ doc.schedule_medicine }}</th>
+        {% for column in doc.schedule_columns %}<th class="slot">{{ column }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in doc.schedule %}
+      <tr>
+        <td class="medicine-col">
+          <span class="number">{{ row.number }}.</span> {{ row.name }}{% if row.dose %} <span class="dose">({{ row.dose }})</span>{% endif %}
+          {% for note in (row.timing, row.how, row.duration) %}{% if note %}<span class="note">{{ note }}</span>{% endif %}{% endfor %}
+        </td>
+        {% if row.as_written %}
+        <td class="as-written" colspan="{{ doc.schedule_columns|length }}"><span class="label">{{ doc.schedule_as_written }}:</span> {{ row.as_written }}</td>
+        {% else %}
+        {% for marked in row.marks %}<td class="slot{% if marked %} marked{% endif %}">{% if marked %}&#8226;{% else %}&#8212;{% endif %}</td>{% endfor %}
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if doc.advice or doc.advice_notes %}
+<section class="advice">
+  <h3>{{ doc.advice_heading }}</h3>
+  {% for block in doc.advice %}
+  <div class="block">
+    <p class="label">{{ block.heading }}</p>
+    <ul>
+      {% for entry in block.entries %}
+      <li>{{ entry }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+  {% if doc.advice_notes %}
+  <div class="block">
+    <p class="label">{{ doc.advice_notes.label }}</p>
+    <p class="notes">{{ doc.advice_notes.value }}</p>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if doc.follow_up %}
+<p class="follow-up"><span class="label">{{ doc.follow_up.label }}:</span> {{ doc.follow_up.value }}</p>
+{% endif %}
+</body>
+</html>
