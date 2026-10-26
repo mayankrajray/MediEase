@@ -288,3 +288,38 @@ Tests (changed code only): domain (`test_clinic_application.py`), integration
 R41), migrations `test_0033_*` and `test_0034_*`, route policies, and the unit, contract, tenancy,
 seed, booking, portal and links suites (1,454 passed); web: `ReviewApplication.test.tsx` and the
 ops and shell suites.
+
+---
+
+## M6c-P4 - Suspension and listing
+
+Designed 26 Oct 2026; **approved in advance** (as P2). Covers FR-ONB-05 (suspension), FR-ONB-09,
+FR-ONB-10. Rules: spec R50-R58.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | The one discoverability rule | `domain/clinics/listing.py`: `listing_problems(clinic, doctors)` and `is_discoverable` = listed and no problem. Problems: not `ACTIVE`, not verified, no address/city/PIN, no doctor who is active, verified, visible and has weekly hours. Used by the owner's screen now and by profiles, the sitemap and search later | A `discoverable` column kept up to date (one more thing to keep in step; the rule is cheap to compute) |
+| 2 | The owner's switches | *Directory* under the owner's settings (`/settings/listing`): *Listed in the MediEase directory* (only when nothing is in the way; each problem in words) and per doctor *Show on the public page and in search* (only for an active, verified doctor). Unlisting and hiding always work | Ops lists clinics (the clinic decides whether to be found, FR-ONB-10) |
+| 3 | What a problem does to a listed clinic | It stays listed but stops being discoverable until fixed; the screen says so | Unlist automatically (the owner would have to notice and list again) |
+| 4 | Suspension | `OPS_ADMIN`, with a reason code (audited) and an optional note (required for *Other*, kept out of the audit). `ACTIVE` -> `SUSPENDED`; every public surface already needs `ACTIVE` | A free-text reason in the audit (free text does not belong in the audit) |
+| 5 | Open requests on suspension (FR-ONB-05) | Declined by the system in the same transaction with the new reason `CLINIC_UNAVAILABLE`; the patient's in-app notice is written then (the worker cancels a suspended clinic's jobs, so no email), and the portal keeps booking notices of suspended clinics visible | Leave them to expire (patients wait hours for nothing) |
+| 6 | Confirmed appointments | Not cancelled automatically: a suspension may be lifted the same day, and cancelling sends messages in the clinic's name. The RUNBOOK says to call the patients | Cancel them all (irreversible) |
+| 7 | Reactivation | `OPS_ADMIN`; needs an active owner (I1). The listing is kept | Unlist on suspension |
+
+No migration: `0034` already holds the listing columns and the decline reason. Contract 0.39.0.
+Errors `CLN_LISTING_BLOCKED`, `CLN_DOCTOR_NOT_VERIFIED` (409).
+
+### As built (M6c-P4)
+
+Built 26 Oct 2026 as designed. `BookingRequest.withdraw`, `SuspendReason`, the listing module,
+`application/clinics/listing.py` (`GetListing`, `SetListing`, `SetDoctorVisibility`,
+`load_listing`), `application/ops/suspension.py`, `delivery/http/listing.py` and
+`ops_suspension.py`. A doctor "has a schedule" when a weekly block is in force on the clinic's
+today. Web: *Directory* (owners, `/settings/listing`), *Suspend…* and *Reactivate* on the ops
+clinic list, the new decline reason in English and Hindi on the portal and as "Withdrawn while
+the clinic was suspended" on the staff list. `CheckboxField` gained `disabled`.
+
+Tests: `test_listing.py` (domain), `test_listing_suspension_http.py` (AC15, AC16, R46, R58, the
+cross-clinic doctor), route policies and the cross-tenant case; the unit, tenancy and patient
+notification suites (941 passed); web `DirectoryListing.test.tsx` and the ops, shell and
+appointments suites.

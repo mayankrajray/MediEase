@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-ONB-01, 02, 07 (P1); FR-ONB-03, 05 (P2); FR-ONB-04, 06, 08 (P3); FR-ONB-05, 09, 10 (P4); NFR-19 |
 | Milestone / phases | M6c / P1–P4 |
-| Status | P1 (R1–R23, AC1–AC9) **Approved** 26 Oct 2026 (developer decisions D1–D3) and built (as-built notes in the M6c design note); P2 (R24–R40, AC10, AC14) and P3 (R41–R49, AC11–AC13) approved in advance by the developer 26 Oct 2026 and built; P4 written at its start |
+| Status | P1 (R1–R23, AC1–AC9) **Approved** 26 Oct 2026 (developer decisions D1–D3) and built (as-built notes in the M6c design note); P2 (R24–R40, AC10, AC14) and P3 (R41–R49, AC11–AC13) and P4 (R50–R58, AC15–AC16) approved in advance by the developer 26 Oct 2026 and built |
 | Owner | Developer |
 | Last updated | 2026-10-26 |
 
@@ -202,7 +202,44 @@ stateDiagram-v2
 - **R49** Existing clinics are not verified by the migration; `make seed` verifies, lists and
   completes the demo clinics.
 
-## 5. API surface (P1-P3)
+## 4d. Behaviour (P4: suspension and listing)
+
+### The listing
+- **R50** `GET /api/v1/clinic/listing` (`CLINIC_VIEW`) answers the listing (`listed`,
+  `listed_at`), whether the clinic is verified and **discoverable**, the clinic's problems and each
+  doctor's state (`is_active`, `verified`, `visible`, `has_schedule`, `can_be_visible`, problems).
+- **R51** The clinic's problems, in this order: `NOT_ACTIVE`, `NOT_VERIFIED`, `ADDRESS_MISSING`
+  (address line, city or PIN missing), `NO_BOOKABLE_DOCTOR` (no doctor who is active, verified,
+  visible and has weekly hours in force). A doctor's: `INACTIVE`, `NOT_VERIFIED`, `NO_SCHEDULE`,
+  `HIDDEN`.
+- **R52** `PUT /api/v1/clinic/listing {listed}` (`CLINIC_MANAGE`, owners): listing needs no
+  problem (409 `CLN_LISTING_BLOCKED`, `details.problems` comma-separated); unlisting always works.
+  `listed` needs the clinic verified (a database CHECK too). Audited `clinic.listing_changed`.
+- **R53** `PUT /api/v1/clinic/listing/doctors/{doctor_id} {visible}` (`CLINIC_MANAGE`): showing
+  needs the doctor active and verified (409 `CLN_DOCTOR_NOT_VERIFIED`); hiding always works.
+  Another clinic's doctor is 404. Audited `doctor.visibility_changed`.
+- **R54** A doctor is shown on the public page and in the directory when active, verified and
+  visible (from P5).
+- **R55** **Discoverable** = listed and no problem (`is_discoverable`, the one rule for profiles,
+  the sitemap and search). A listed clinic that develops a problem (a doctor's registration
+  changed, R46) stays listed but is not discoverable until it is fixed.
+
+### Suspension
+- **R56** `POST /api/v1/ops/clinics/{id}/suspend {reason, note}` (`OPS_ADMIN`): `ACTIVE` ->
+  `SUSPENDED` (409 `CLN_INVALID_TRANSITION` otherwise). Reasons `VERIFICATION_PROBLEM`,
+  `CLINIC_REQUEST`, `TERMS_BREACH`, `PAYMENT`, `OTHER` (a note is required for `OTHER`, 422). The
+  audit (`clinic.suspended`) holds the reason and the count of withdrawn requests, never the note.
+  The public page, its availability, new requests, answers and the live token links stop at once
+  (they need `ACTIVE`), and staff are refused with `CLN_SUSPENDED`.
+- **R57** In the same transaction every open booking request of the clinic is declined by the
+  system with `CLINIC_UNAVAILABLE`, and each requester gets a portal notice that stays visible
+  although the clinic is suspended. The answer email is not sent (the worker cancels a suspended
+  clinic's jobs). Confirmed appointments are not cancelled: the clinic or MediEase calls patients.
+- **R58** `POST /api/v1/ops/clinics/{id}/reactivate` (`OPS_ADMIN`): `SUSPENDED` -> `ACTIVE` (422
+  otherwise; 409 `CLN_OWNER_REQUIRED` without an active owner). The owner's listing choice is kept.
+  Audited `clinic.reactivated`.
+
+## 5. API surface (P1-P4)
 | Method | Path | Request | Success | Errors |
 |---|---|---|---|---|
 | POST | `/api/v1/public/applications` | multipart: `application` (JSON), `certificate_{n}` | 202 `ApplicationReceipt {reference, email_masked}` | 413, 415, 422 `REQ_VALIDATION_FAILED`, 422 `ONB_FILE_REJECTED`, 429 `ONB_RATE_LIMITED`, 503 `ONB_UPLOAD_FAILED` |
@@ -222,6 +259,11 @@ P2 and P3 (contract 0.37.0, 0.38.0):
 | POST | `/api/v1/ops/applications/{id}/approve` | R41-R43 | `OPS_REVIEWER` | 201 `{application, clinic, invitation_delivery}` | 404, 409 `ONB_NOT_UNDER_REVIEW` / `CLN_SLUG_TAKEN`, 422 |
 | POST | `/api/v1/ops/clinics/{id}/doctors/{doctor_id}/verify` | R45 | `OPS_REVIEWER` | 200 `{verified, changed}` | 404, 422 |
 | POST | `/api/v1/ops/clinics/{id}/verify` | R45 | `OPS_REVIEWER` | 200 `Clinic` | 404, 422 |
+| GET | `/api/v1/clinic/listing` | R50 | `CLINIC_VIEW` | 200 `ClinicListing` | 401, 403 |
+| PUT | `/api/v1/clinic/listing` | R52 | `CLINIC_MANAGE` | 200 `ClinicListing` | 409 `CLN_LISTING_BLOCKED` |
+| PUT | `/api/v1/clinic/listing/doctors/{doctor_id}` | R53 | `CLINIC_MANAGE` | 200 `ClinicListing` | 404, 409 `CLN_DOCTOR_NOT_VERIFIED` |
+| POST | `/api/v1/ops/clinics/{id}/suspend` | R56, R57 | `OPS_ADMIN` | 200 `{clinic, requests_withdrawn}` | 404, 409, 422 |
+| POST | `/api/v1/ops/clinics/{id}/reactivate` | R58 | `OPS_ADMIN` | 200 `Clinic` | 404, 409, 422 |
 
 All three answer `Cache-Control: no-store`; the public two also `X-Robots-Tag: noindex`.
 
@@ -297,6 +339,14 @@ All three answer `Cache-Control: no-store`; the public two also `X-Robots-Tag: n
 - **AC14 (R24)** — Given an `OPS_ADMIN`-only user, the review routes are 403; given an
   `OPS_REVIEWER`-only user, the clinic list is 403.
 
+- **AC15 (FR-ONB-05)** — Given an `ACTIVE` clinic with an open request, when ops suspends it,
+  then the request is `DECLINED` (`CLINIC_UNAVAILABLE`, by the system), the patient's portal shows
+  the notice, the public page is 404, staff get `CLN_SUSPENDED`; reactivating brings the page back.
+- **AC16 (FR-ONB-09, 10)** — Given a verified clinic without an address and a hidden, unverified
+  doctor without hours, then listing is 409 `CLN_LISTING_BLOCKED` naming `ADDRESS_MISSING` and
+  `NO_BOOKABLE_DOCTOR`, and showing the doctor is 409 `CLN_DOCTOR_NOT_VERIFIED`; once each is fixed
+  the clinic can be listed and is discoverable.
+
 ## 10. Observability
 Log events: `application.submitted` (id, reference, kind, doctors), `application.rejected_input`
 (field or reason only), `application.rate_limited` (bucket kind), `application.email_verified`,
@@ -305,7 +355,7 @@ Log events: `application.submitted` (id, reference, kind, doctors), `application
 `REQ_VALIDATION_FAILED`.
 
 ## 11. Out of scope
-Listing (P4); automatic council-register lookups; payments; an applicant status page (not
+Automatic council-register lookups; cancelling a suspended clinic's appointments (R57); payments; an applicant status page (not
 built, R37); Hindi on the clinic side (not in M6c, D2).
 
 ## 12. Open questions

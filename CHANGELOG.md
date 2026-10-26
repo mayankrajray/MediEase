@@ -21,6 +21,12 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6c-P4 (#53): owners choose whether their clinic is in the MediEase directory and which doctors
+  are shown (FR-ONB-09, 10; spec clinic-onboarding R50-R55). The *Directory* page says what is in
+  the way (verification, the address, a verified and visible doctor with weekly hours). Ops can
+  suspend and reactivate a clinic (FR-ONB-05, R56-R58): suspension stops its page and booking at
+  once and withdraws its open requests, telling each patient in the app. Contract 0.39.0; errors
+  `CLN_LISTING_BLOCKED`, `CLN_DOCTOR_NOT_VERIFIED`; decline reason `CLINIC_UNAVAILABLE`.
 - M6c-P2, P3 (#53): MediEase reviews applications and approved clinics are created through the one
   creation path (FR-ONB-03..06, 08; spec clinic-onboarding R24-R49). Ops roles `OPS_ADMIN` and
   `OPS_REVIEWER` (every existing ops user holds both). Reviewers work a queue at
