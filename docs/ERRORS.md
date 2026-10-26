@@ -19,6 +19,7 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | `PAT_` | Patients | | `MSG_` / `WH_` / `JOB_` | Messaging, webhooks, jobs |
 | `PRT_` | Patient portal accounts (M6a-P3) | | `AUD_` | Audit log (M6a-P8) |
 | `SYS_` | Unexpected server errors | | `WEB_` | Web app → API (raised in the browser/web server, never by the API) |
+| `SUB_` | Plans and limits (M6d-P7) | | | |
 
 ## Platform
 
@@ -274,6 +275,15 @@ Payments (M6d-P3; spec billing R31-R36):
 Receipt links use the patient-link codes (`LINK_INVALID`, `LINK_CHALLENGE_*`, `LINK_LOCKED`,
 `LINK_RATE_LIMITED`, `LINK_NOT_LOCKED`): a receipt token on a prescription route, or the other way
 round, is `LINK_INVALID`.
+
+## Plans and limits (M6d-P7)
+
+Spec `docs/specs/plans-and-trial.md` R4, R8.
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `SUB_LIMIT_REACHED` | 409 | The plan has no room for another doctor or person; `details.plan`, `limit` (`doctors` or `users`), `allowed` | Adding a doctor, inviting or bringing back a member, or accepting an invitation on a full plan | `clinic_subscriptions.plan`; ops change the plan (RUNBOOK §32) |
+| `SUB_PLAN_TOO_SMALL` | 409 | Ops chose a plan smaller than what the clinic uses; `details.limit`, `allowed`, `used` | Downgrading a clinic with more doctors or people than the plan allows | Deactivate doctors or members first, or keep the plan |
 
 ## Patient links (M4)
 

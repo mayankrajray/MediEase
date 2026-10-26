@@ -26,6 +26,14 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6d-P7 (#63): plans, the trial and limits (FR-SUB-01; spec plans-and-trial). Each clinic is on Solo
+  (1 doctor, 2 people), Clinic (3, 5) or Clinic Plus (5, no limit on people), chosen by ops (Clinic by
+  default; an approved application by its doctors) and enforced on every path that adds or brings
+  back a doctor or a member (`SUB_LIMIT_REACHED`). A 14-day trial starts when the owner joins; when it
+  ends the owner sees a notice and ops a flag, and nothing locks. *Settings → Plan* for owners, a *Plan*
+  column with a picker in the ops clinic list (`SUB_PLAN_TOO_SMALL` below the clinic's use). Doctors
+  can now be brought back (`is_active: true`). Migration `0041` puts every existing clinic on Clinic
+  Plus with no trial; contract 0.49.0.
 - M6d-P6 (#63): report attachments on visits (FR-VIS-04; spec visit-attachments). A PDF, JPEG or
   PNG of at most 10 MB, recognised by its first bytes, attached from the consultation screen or, by
   the front desk, from the queue row (*Attach report…*, D7: the desk cannot open it). Opening needs

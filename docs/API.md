@@ -370,7 +370,16 @@ M6d-P6 (spec visit-attachments R1-R13; contract 0.48.0; permissions gain `ATTACH
 | PUT | `/api/v1/visits/{visit_id}/attachments/{attachment_id}/share` | Show in the patient's portal, or stop | FR-VIS-04 | Implemented (M6d-P6), `CLINICAL_WRITE`, the visit's doctor |
 | GET | `/api/v1/portal/attachments` | The linked records' shared reports | FR-VIS-04 | Implemented (M6d-P6), `@patient` |
 | GET | `/api/v1/portal/attachments/{attachment_id}/file` | Open a shared report | FR-VIS-04 | Implemented (M6d-P6), `@patient` |
-### Audit trail (M1-P4)
+
+M6d-P7 (spec plans-and-trial R1-R10; contract 0.49.0). `POST /api/v1/ops/clinics` takes `plan`
+(`CLINIC` by default); the ops clinic list items gain `subscription`; adding a doctor, inviting,
+accepting an invitation and bringing a doctor back (`is_active: true`) can answer 409
+`SUB_LIMIT_REACHED`.
+
+| Method | Path | Purpose | Req | Status |
+|---|---|---|---|---|
+| GET | `/api/v1/clinic/subscription` | The plan, its limits, what is used and the trial | FR-SUB-01 | Implemented (M6d-P7), `CLINIC_MANAGE` |
+| PUT | `/api/v1/ops/clinics/{clinic_id}/plan` | Set the plan (never below the use), audited | FR-SUB-01 | Implemented (M6d-P7), `OPS_ADMIN` |### Audit trail (M1-P4)
 
 Every audited action writes one row to `audit_events` in the same transaction as the change, so a
 committed change always has its record. Rows hold IDs, enums, the `request_id` and a salted IP

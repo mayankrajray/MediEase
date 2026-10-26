@@ -42,6 +42,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 29. Receipts and receipt links (M6d-P4)
 30. The daily collection (M6d-P5)
 31. Reports attached to visits (M6d-P6)
+32. Plans, the trial and limits (M6d-P7)
 
 ---
 
@@ -800,6 +801,7 @@ clinic's local day.
 IS NULL;` gives the day's net in paise.
 
 ### 31. Reports attached to visits (M6d-P6)
+32. Plans, the trial and limits (M6d-P7)
 
 A visit's reports are on the consultation screen (*Reports*); the front desk attaches one from the
 queue row's menu (*Attach report…*) but cannot open it. PDF, JPEG or PNG only, at most 10 MB, 20 per
@@ -827,3 +829,22 @@ only through the API (ADR-0012), backed up with the prescriptions. `visit.attach
 means a deleted report's file could not be removed; the row says deleted so it is never served —
 remove the object by hand. `visit.attachment_missing` (error) is a row whose file is gone: restore
 it from the backup.
+
+### 32. Plans, the trial and limits (M6d-P7)
+
+Each clinic is on Solo (1 doctor, 2 people), Clinic (3, 5) or Clinic Plus (5, no limit on people);
+the owner counts as one person, and an invitation holds its place until accepted or the member is
+removed (spec plans-and-trial). Clinics from before plans are on Clinic Plus with no trial.
+
+**"We cannot add a doctor / invite someone."** `SUB_LIMIT_REACHED` names the limit. Either remove
+someone (deactivate a doctor; remove a member or a stale invitation on *Team*) or move the clinic to
+a bigger plan: ops console → *Clinics* → *Plan* column → choose → *Save plan* (audited
+`subscription.plan_changed`).
+
+**"Ops cannot lower the plan."** `SUB_PLAN_TOO_SMALL`: the clinic uses more than the smaller plan
+allows (`details.used`). Deactivate doctors or members first.
+
+**The trial.** It starts when the owner accepts the invitation and lasts 14 days. When it ends
+nothing stops: the owner sees a notice and the ops list says *Free trial ended*. Payment collection
+is not built yet; agree the plan with the clinic and set it. To check by hand: `SELECT plan,
+has_trial, trial_ends_at FROM clinic_subscriptions WHERE clinic_id = '<id>';`
