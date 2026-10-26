@@ -22,6 +22,7 @@
 | [0018](0018-soft-hold-as-booking-request.md) | The soft hold is the pending booking request, counted under the session lock | Accepted |
 | [0019](0019-live-token-link-without-challenge.md) | The live token link needs no last-4 check | Accepted |
 | [0020](0020-clinic-applications-as-platform-data.md) | Clinic applications are platform data; the applicant has no account until approval | Accepted (M6c) |
+| [0021](0021-directory-search-in-postgresql.md) | Directory search in PostgreSQL over the live tables, behind the one discoverability rule | Accepted (M6c-P6) |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, and add a row here.
 Accepted ADRs are never edited; supersede them with a new ADR.

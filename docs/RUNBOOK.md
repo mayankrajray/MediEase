@@ -685,3 +685,10 @@ discoverable and the owner has left *Let search engines show our pages* on (*Dir
 `GET /api/v1/public/clinics/<slug>` for `"indexable": true` and that the clinic is in
 `/sitemap.xml`; crawlers take days to weeks. A doctor missing from the page is hidden, inactive or
 not verified.
+
+**"We are listed but not in search (`/find`)."** Search shows a clinic only while it is
+discoverable, which the *Directory* page states, and a place filter keeps the same PIN, the same
+city and the same PIN district (first three digits) only. A doctor result needs the doctor shown.
+Search logs `search.clinics` / `search.doctors` with result counts only (never the words). If
+`/public/search/*` gets slow (p95 above 300 ms) or listed clinics pass about 2,000, ADR-0021 says
+to add the read model.

@@ -356,3 +356,30 @@ Tests: `test_public_profiles_http.py` (AC17, R59, R61, the opt-out, the hidden d
 the P4 tests adjusted to the verified world, route policies and the cross-tenant case for the
 profile route; unit, contract, tenancy, booking, portal, notification and link suites (1,282 and
 206 passed); web public page (the profile), listing and i18n suites.
+
+---
+
+## M6c-P6 - Search
+
+Designed 26 Oct 2026; **approved in advance** (as P2). Covers FR-DIS-01, 02, 04, 05. Rules:
+`docs/specs/discovery.md` R1-R10; ADR-0021.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | Engine | PostgreSQL with `pg_trgm` (`word_similarity`), migration `0035` | An external search service |
+| 2 | Read model (milestone decision M6) | **Not yet**: a reviewed cross-clinic reader proposes 40 candidates from the live tables (published columns, IDs out) and each passes `is_discoverable`; ADR-0021 records when to add the read model (about 2,000 listed clinics or p95 over 300 ms) | Build the read model now (a consistency mechanism to maintain before there is load). A deviation from M6's wording, recorded in ADR-0021 |
+| 3 | Place | Same PIN, same city, same PIN district (first three digits), elsewhere; a place filter keeps the first three | Geocoding (no coordinates are stored) |
+| 4 | Availability | The public page's offer builder, first free day within 7 days, for the candidates only | A precomputed column (stale within minutes) |
+| 5 | The page | `/find`, server-rendered from a GET form (works without JavaScript), English and Hindi, doctor and clinic tabs, results linking to the profiles | A client-side search box (more JavaScript on a 4G phone) |
+
+### As built (M6c-P6)
+
+Built 26 Oct 2026 as designed: `ports/directory.py`, `adapters/db/directory.py` (bound
+parameters; `strpos` instead of `LIKE`, so input is never a pattern), `application/discovery/
+search.py` (`SearchClinics`, `SearchDoctors`), `delivery/http/public_search.py` (allow-list
+bodies with tests), `uow.directory`; web `/find` (`features/find`, `lib/i18n/find.ts`, a public
+path in the proxy). `rupees()` joined `lib/format/money.ts` so server pages can use it.
+
+Tests: `test_search_http.py` (AC1-AC4, R1 field errors, the allow-lists), `test_0035_*`, route
+policies, contract tests; web `FindPage.test.tsx`, proxy, public page and lib suites. The 500 ms
+budget is not measured here (the full-suite run and the e2e journeys run at the end of P8).
