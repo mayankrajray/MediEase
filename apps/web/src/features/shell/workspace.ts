@@ -65,6 +65,8 @@ export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
     { href: "/bills", label: "Bills", requires: "BILLING_MANAGE" },
     // M6d-P3 (FR-BIL-05): who owes the clinic, owners and the front desk.
     { href: "/dues", label: "Dues", requires: "COLLECTION_VIEW" },
+    // M6d-P5 (FR-BIL-06): the day's collection.
+    { href: "/collection", label: "Collection", requires: "COLLECTION_VIEW" },
     { href: "/team", label: "Team", requires: "STAFF_MANAGE" },
     { href: "/settings/schedule", label: "Schedule", requires: "SCHEDULES_MANAGE" },
     // M6a-P8 (FR-AUD-03): the clinic's audit log, owners only.
@@ -92,6 +94,7 @@ export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
     { href: "/follow-ups", label: "Follow-ups", requires: "REMINDERS_SCHEDULE" },
     { href: "/bills", label: "Bills", requires: "BILLING_MANAGE" },
     { href: "/dues", label: "Dues", requires: "COLLECTION_VIEW" },
+    { href: "/collection", label: "Collection", requires: "COLLECTION_VIEW" },
     { href: "/settings/notifications", label: "Notifications" },
   ],
 };
