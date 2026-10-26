@@ -26,6 +26,11 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6d-P5 (#63): the daily collection (FR-BIL-06; spec billing R55-R62). *Collection* for owners
+  and the front desk shows one clinic-local day's payments and refunds by mode and by doctor, the
+  net and the entries (voids listed, not counted), with an audited, formula-safe CSV export. The
+  reconciliation test (the milestone's exit criterion) checks the net against the recorded payments.
+  Contract 0.47.0.
 - M6d-P4 (#63): receipts (FR-BIL-04; spec billing R43-R54). *Print bill* gives the bill, credit
   notes, payments and balance as a PDF on the letterhead, rendered once per state. The receipt link
   `/r/<token>` (QR at the desk) works with the last 4 digits of the patient's phone and the

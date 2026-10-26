@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M6d — Billing and documents** (issue #63, branch `m6d/63-billing-and-documents` from `main` at `ec721e6`, one PR for the milestone). M6c merged in PR #54 on 26 Oct 2026 (#53 closed) |
-| Active phase | **M6d-P5 — Daily collection** (FR-BIL-06). P1–P4 built 26 Oct 2026 (spec `docs/specs/billing.md` R1–R54); the developer approved every P2–P7 design in advance |
+| Active phase | **M6d-P6 — Report attachments** (FR-VIS-04). P1–P5 built 26 Oct 2026 (spec `docs/specs/billing.md` R1–R62); the developer approved every P2–P7 design in advance |
 | Design notes | `docs/milestones/M6d-billing-and-documents.md` (M6d); M6c in `docs/milestones/M6c-onboarding-verification-discovery.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M6d phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -220,7 +220,7 @@ reports it cannot open; **D8** the public fee is the consultation price; **D9** 
 | M6d-P2 | Bills from a visit or for a patient; discounts; issue with a number; credit notes (FR-BIL-02, 07) | ✅ (built 26 Oct 2026) |
 | M6d-P3 | Payments (cash, UPI, card; partial), refunds, dues (FR-BIL-03, 05) | ✅ (built 26 Oct 2026) |
 | M6d-P4 | Receipt PDFs, the receipt link, bills in the portal (FR-BIL-04) | ✅ (built 26 Oct 2026) |
-| M6d-P5 | Daily collection by mode and doctor, CSV (FR-BIL-06) | ☐ |
+| M6d-P5 | Daily collection by mode and doctor, CSV (FR-BIL-06) | ✅ (built 26 Oct 2026) |
 | M6d-P6 | Report attachments on visits (FR-VIS-04) | ☐ |
 | M6d-P7 | Plans, trial and limits (FR-SUB-01) | ☐ |
 
