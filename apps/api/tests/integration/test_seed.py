@@ -241,4 +241,4 @@ def test_seed_gives_every_seeded_doctor_a_weekly_schedule_once(
         [doctor] = staff.doctors.list()
         blocks = staff.schedules.list_for_doctor(doctor.id, valid_since=date(2026, 1, 1))
         assert [b.weekday for b in blocks] == [0, 1, 2, 3, 4, 5]
-        assert {(b.shape.slot_minutes, b.shape.capacity) for b in blocks} == {(15, 12)}
+        assert {(b.shape.slot_minutes, b.shape.capacity) for b in blocks} == {(15, 40)}

@@ -370,8 +370,10 @@ def _seed_patients(deps: SeedDependencies, uow: UnitOfWork, users: dict[str, Use
     return len(_PATIENTS)
 
 
-# Monday to Saturday mornings; both values present, so the clinic may switch modes (R19).
-_SEED_BLOCK = BlockShape(time(10), time(13), slot_minutes=15, capacity=12)
+# Monday to Saturday mornings; both values present, so the clinic may switch modes (R19). 40 tokens
+# (12 slots in slot mode): the browser journeys book walk-ins into the session running now, and a
+# run inside 10:00-13:00 must not fill it (an extra session cannot overlap it, SCH_OVERLAP).
+_SEED_BLOCK = BlockShape(time(10), time(13), slot_minutes=15, capacity=40)
 
 
 def _seed_schedules(deps: SeedDependencies, uow: UnitOfWork) -> int:
