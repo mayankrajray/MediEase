@@ -1,0 +1,89 @@
+/* Printed prescription, layout 3 (M7a-P1, FR-RX-11): layout 2 plus the fixed MediEase layer in the
+   bottom margin (the mark, the verification code and its QR). Layouts 1 and 2 are never edited.
+   Layout 2 (M6b-P3, prescriptions R25): layout 1 plus the Medicine schedule.
+   Spec prescriptions R8; M4-P4. Fonts are vendored in this directory;
+   the renderer fetches nothing else. Latin and Devanagari are two families, Pango picking the
+   second for characters the first lacks: one family with unicode-range drew Devanagari
+   conjuncts with wrong glyphs (seen in M4-P4 with WeasyPrint 70.0). page.css.j2 sets their
+   order by the prescription's language. */
+
+@font-face { font-family: "RxLatin"; font-weight: normal; src: url(NotoSans-Regular.ttf); }
+@font-face { font-family: "RxLatin"; font-weight: bold; src: url(NotoSans-Bold.ttf); }
+@font-face { font-family: "RxDeva"; font-weight: normal; src: url(NotoSansDevanagari-Regular.ttf); }
+@font-face { font-family: "RxDeva"; font-weight: bold; src: url(NotoSansDevanagari-Bold.ttf); }
+
+/* The bottom margin holds the MediEase layer: the mark and footer (left) and the verification
+   block (right); the page number sits in the top margin. Its height fits the 17 mm QR code. */
+@page {
+  margin: 12mm 11mm 26mm 11mm;
+  @top-right { font-size: 7.5pt; color: #555; vertical-align: bottom; padding-bottom: 2mm; }
+  @bottom-left { font-size: 7.5pt; color: #555; vertical-align: middle; width: 42%; }
+  @bottom-right { font-size: 7.5pt; color: #111; vertical-align: middle; width: 58%; }
+}
+
+.brand { position: running(brand); display: flex; align-items: center; gap: 1.5mm; }
+.brand .mark-box { display: block; width: 6mm; height: 6mm; flex: none; }
+.brand .mark { display: block; width: 6mm; height: 6mm; }
+.brand .brand-text { font-size: 7.5pt; color: #555; }
+
+.verify { position: running(verify); display: flex; align-items: center; justify-content: flex-end;
+  gap: 2mm; }
+.verify .verify-text { display: block; text-align: right; }
+.verify .verify-label { display: block; font-weight: bold; font-size: 7pt; }
+.verify .verify-code { display: block; font-size: 7pt; letter-spacing: 0.1pt; white-space: nowrap; }
+/* A quiet zone is part of the SVG (segno's border), so the code scans when printed. */
+.verify .qr { display: block; width: 17mm; height: 17mm; flex: none; }
+
+html { font-size: 9.5pt; line-height: 1.35; color: #111; }
+body { margin: 0; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; font-weight: bold; }
+
+.letterhead {
+  display: flex; justify-content: space-between; gap: 6mm;
+  border-bottom: 1.2pt solid #111; padding-bottom: 2.5mm; margin-bottom: 2.5mm;
+}
+.letterhead h1 { font-size: 13pt; }
+.letterhead h2 { font-size: 10.5pt; }
+.letterhead .doctor { text-align: right; }
+.letterhead p { font-size: 8.5pt; }
+
+.patient {
+  display: flex; flex-wrap: wrap; column-gap: 5mm; row-gap: 0.8mm;
+  border-bottom: 0.5pt solid #999; padding-bottom: 2mm; margin-bottom: 3mm;
+}
+.label { font-weight: bold; }
+.patient .date { margin-left: auto; }
+
+.revision { font-weight: bold; margin-bottom: 2mm; }
+
+h3 { font-size: 10.5pt; margin: 2mm 0 1.5mm; }
+
+.medicine { break-inside: avoid; margin-bottom: 2.5mm; }
+.medicine .name { font-weight: bold; font-size: 10pt; }
+.medicine .form { font-weight: normal; }
+.details { border-collapse: collapse; margin: 0.6mm 0 0 4.5mm; }
+.details th { text-align: left; font-weight: bold; padding: 0.2mm 3mm 0.2mm 0; vertical-align: top;
+  white-space: nowrap; }
+.details td { padding: 0.2mm 0; vertical-align: top; }
+
+.advice .block { break-inside: avoid; margin-bottom: 1.5mm; }
+.advice ul { margin: 0.3mm 0 0 0; padding-left: 5mm; }
+.notes { white-space: pre-line; }
+.details td, .advice li, .notes { overflow-wrap: anywhere; }
+
+.follow-up { margin-top: 3mm; font-size: 10pt; }
+
+/* Medicine schedule (layout 2): the doctor's pattern laid out by time of day, nothing derived. */
+.schedule { margin-top: 1mm; }
+.schedule-table tr { break-inside: avoid; }
+.schedule-start { font-size: 8.5pt; margin-bottom: 1mm; }
+.schedule-table { border-collapse: collapse; width: 100%; }
+.schedule-table th, .schedule-table td { border: 0.5pt solid #999; padding: 0.6mm 1.5mm;
+  vertical-align: top; }
+.schedule-table th { font-weight: bold; text-align: left; background: #f2f2f2; }
+.schedule-table .slot { text-align: center; width: 15mm; }
+.schedule-table .marked { font-weight: bold; font-size: 12pt; line-height: 1; }
+.schedule-table .note { display: block; font-size: 8pt; color: #333; }
+.schedule-table .dose { font-weight: normal; }
+.schedule-table td { overflow-wrap: anywhere; }

@@ -11,6 +11,10 @@ local files, ``data:``), stopping the render. Two renders of one document read t
 not always byte-identical (internal font naming varies), one more reason a version is rendered
 once and its stored file served after that (R18). The PDF's metadata holds only the title
 ("Prescription") and the producer.
+
+**Layout 3 (M7a-P1, FR-RX-11)** adds the MediEase mark and the verification code with its QR in
+the bottom margin. Both are inline SVG (the mark from ``assets/``, the QR drawn here by ``segno``
+from the opaque payload), so the fetcher stays closed.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import segno
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 from markupsafe import Markup
 from weasyprint import CSS, HTML
@@ -76,6 +81,18 @@ def _css_string(value: str) -> Markup:
     return Markup(f'"{escaped}"')
 
 
+def _qr_svg(payload: str) -> Markup:
+    """FR-RX-11: the payload as an inline SVG QR code (error correction M, a 4-module quiet zone).
+
+    ``segno`` escapes nothing because it draws modules, not text; the payload is ours and holds
+    only ``MEDIEASE-RX:1:<uuid>``. An empty payload (an earlier layout) draws nothing.
+    """
+    if not payload:
+        return Markup("")
+    code = segno.make(payload, error="m", micro=False)
+    return Markup(code.svg_inline(border=4, omitsize=True, svgclass="qr", lineclass=None))
+
+
 @dataclass(frozen=True, slots=True)
 class Layout:
     """One printed layout's files (M4-P5). Never edit a released layout: add the next one."""
@@ -91,6 +108,8 @@ LAYOUTS: dict[int, Layout] = {
     1: Layout(html="prescription.html.j2", css="prescription.css", page_css="page.css.j2"),
     # M6b-P3 (prescriptions R25): layout 1 plus the Medicine schedule section.
     2: Layout(html="prescription-2.html.j2", css="prescription-2.css", page_css="page.css.j2"),
+    # M7a-P1 (FR-RX-11): layout 2 plus the MediEase mark and the verification code with its QR.
+    3: Layout(html="prescription-3.html.j2", css="prescription-3.css", page_css="page-3.css.j2"),
 }
 
 
@@ -111,6 +130,7 @@ class WeasyPrintRenderer:
             lstrip_blocks=True,
         )
         self._env.filters["css_string"] = _css_string
+        self._env.filters["qr_svg"] = _qr_svg
         self._stylesheets = {
             version: (ASSETS / layout.css).read_text(encoding="utf-8")
             for version, layout in LAYOUTS.items()

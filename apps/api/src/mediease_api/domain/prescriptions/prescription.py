@@ -60,8 +60,9 @@ WARNINGS_MAX = 500
 ITEM_NOTES_MAX = 1000
 # The printed layout new issues get (M4-P5). Raise it with a new template in adapters/pdf, keeping
 # the old one, so a prescription issued before a layout change still prints as it was issued.
-# Layout 2 (M6b-P3, prescriptions R25) adds the Medicine schedule section.
-CURRENT_LAYOUT = 2
+# Layout 2 (M6b-P3, prescriptions R25) adds the Medicine schedule section. Layout 3 (M7a-P1,
+# FR-RX-11) adds the MediEase mark and the verification code with its QR (``verification.py``).
+CURRENT_LAYOUT = 3
 
 
 class PrescriptionStatus(StrEnum):

@@ -1,0 +1,23 @@
+{% set fonts = "\"RxDeva\", \"RxLatin\"" if doc.language.value == "hi" else "\"RxLatin\", \"RxDeva\"" %}
+{# Layout 3's page box (M7a-P1, FR-RX-11): paper size from the clinic; the bottom margin carries
+   the fixed MediEase layer on every page: the mark with the footer (left), the page number
+   (centre) and the verification code with its QR (right), from the running elements in
+   prescription-3.html.j2. Values are phrases, quoted as CSS strings by css_string. #}
+@page {
+  size: {{ doc.paper_size.value }} portrait;
+  @bottom-left {
+    font-family: {{ fonts | safe }};
+    content: element(brand);
+  }
+  {# The page number moves to the top margin so it never meets the verification block. #}
+  @top-right {
+    font-family: {{ fonts | safe }};
+    content: {{ doc.page_label[0] | css_string }} counter(page) {{ doc.page_label[1] | css_string }} counter(pages) {{ doc.page_label[2] | css_string }};
+  }
+  @bottom-right {
+    font-family: {{ fonts | safe }};
+    content: element(verify);
+  }
+}
+{# The prescription's own script first (seen in M4-P4, see page.css.j2). #}
+html { font-family: {{ fonts | safe }}; }

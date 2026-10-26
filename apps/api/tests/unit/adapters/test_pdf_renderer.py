@@ -259,3 +259,91 @@ def test_r25_layout_2_prints_the_medicine_schedule_and_layout_1_does_not(
     assert "Medicine schedule" not in old
     # The rest of the prescription reads the same on both layouts.
     assert "Syrup X" in old and "Syrup X" in new
+
+
+# Layout 2's files as released (M6b-P3). Frozen like layout 1 when layout 3 arrived (M7a-P1).
+LAYOUT_2_SHA256 = {
+    "prescription-2.html.j2": "bd41c81b3ff220ee53ee1e6c7c8f4c72479f10b327686e7c2a889f4a83b2ebc0",
+    "prescription-2.css": "3aec98c84c18ebd1cde217264bc042cd70258f4d9bae47593d7ac1bcd576e5b6",
+}
+
+
+def test_m7a_p1_layout_2_files_are_unchanged() -> None:
+    for name, digest in LAYOUT_2_SHA256.items():
+        assert hashlib.sha256((ASSETS / name).read_bytes()).hexdigest() == digest, name
+
+
+# --- Layout 3: the MediEase layer (M7a-P1, FR-RX-11, ADR-0023) ------------------------------
+
+
+def qr_texts(pdf: bytes, *, scale: float = 3) -> list[list[str]]:
+    """Every page rasterised (scale 3 = 216 dpi) and its QR codes decoded with zxing-cpp."""
+    import zxingcpp
+
+    document = pdfium.PdfDocument(pdf)
+    try:
+        return [
+            [code.text for code in zxingcpp.read_barcodes(page.render(scale=scale).to_pil())]
+            for page in document
+        ]
+    finally:
+        document.close()
+
+
+@pytest.mark.parametrize("paper", [PaperSize.A5, PaperSize.A4])
+@pytest.mark.parametrize("language", [Language.EN, Language.HI])
+def test_fr_rx_11_layout_3_prints_the_code_and_a_qr_that_decodes_to_the_version(
+    renderer: WeasyPrintRenderer, paper: PaperSize, language: Language
+) -> None:
+    rx = issued(language)
+    pdf = renderer.render(doc_of(rx, paper))
+    (text,) = pages_text(pdf)
+    assert str(rx.id) in text
+    assert ("सत्यापन कोड" if language is Language.HI else "Verification code") in text
+    assert qr_texts(pdf) == [[f"MEDIEASE-RX:1:{rx.id}"]]
+    assert renderer.last_fetcher is not None and renderer.last_fetcher.refused == []
+
+
+def test_fr_rx_11_the_block_is_on_every_page_of_a_long_prescription(
+    renderer: WeasyPrintRenderer,
+) -> None:
+    rx = issued()
+    line = rx.items[0]
+    rx.items = tuple(
+        replace(line, id=new_id(), position=n, medicine_name=f"Medicine {n:02d}")
+        for n in range(1, 17)
+    )
+    pdf = renderer.render(doc_of(rx))
+    texts = pages_text(pdf)
+    assert len(texts) >= 2
+    assert all(str(rx.id) in t and "Digitally generated via MediEase" in t for t in texts)
+    assert qr_texts(pdf) == [[f"MEDIEASE-RX:1:{rx.id}"]] * len(texts)
+
+
+def test_fr_rx_11_the_qr_holds_only_the_opaque_payload_no_patient_or_clinical_text(
+    renderer: WeasyPrintRenderer,
+) -> None:
+    rx = issued()
+    doc = doc_of(rx)
+    ((payload,),) = qr_texts(renderer.render(doc))
+    assert payload == f"MEDIEASE-RX:1:{rx.id}"
+    for private in ("Sample Patient A", "Syrup X", doc.clinic_name, doc.doctor_name):
+        assert private not in payload
+
+
+def test_fr_rx_11_doctor_text_cannot_reach_the_verification_block(
+    renderer: WeasyPrintRenderer,
+) -> None:
+    rx = issued()
+    rx.items = (replace(rx.items[0], notes='</div><div class="verify">MEDIEASE-RX:1:forged'),)
+    html = renderer.html(doc_of(rx))
+    assert html.count('class="verify"') == 1
+    assert qr_texts(renderer.render(doc_of(rx))) == [[f"MEDIEASE-RX:1:{rx.id}"]]
+
+
+def test_fr_rx_11_layouts_1_and_2_print_no_code_or_qr(renderer: WeasyPrintRenderer) -> None:
+    rx = issued()
+    for layout in (1, 2):
+        pdf = renderer.render(doc_of(replace(rx, layout_version=layout)))
+        assert str(rx.id) not in "\n".join(pages_text(pdf))
+        assert qr_texts(pdf) == [[]]

@@ -44,6 +44,8 @@ ENGLISH: Mapping[str, str] = {
     "follow_up": "Next visit",
     "footer": "Digitally generated via MediEase",
     "page": "Page {page} of {pages}",
+    # M7a-P1 (FR-RX-11): the fixed verification block of layout 3.
+    "verification.label": "Verification code",
     # Letterhead and people
     "phone": "Phone",
     "registration": "Reg. No. {number}, {council}",
@@ -153,6 +155,7 @@ HINDI: Mapping[str, str] = {
     "follow_up": "अगली जाँच",
     "footer": "MediEase द्वारा डिजिटल रूप से तैयार",
     "page": "पृष्ठ {page} / {pages}",
+    "verification.label": "सत्यापन कोड",
     "phone": "फ़ोन",
     "registration": "पंजीकरण सं. {number}, {council}",
     "patient": "मरीज़",

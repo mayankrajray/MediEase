@@ -17,3 +17,12 @@ fonts are embedded (subset) in each PDF, which the OFL permits; they are not sol
 
 To update a font: replace the file, update its row here and the hash in the test, and check a
 rendered Hindi prescription by eye.
+
+## The MediEase mark (layout 3, M7a-P1)
+
+`mediease-mark.svg` is a **placeholder** for the official MediEase logo, which the founder will
+provide. It is inline SVG, included into the page by the template, so the renderer still fetches
+nothing (the fetcher serves fonts only). To replace it: swap the file's content for the official
+mark (shapes only; text inside an SVG would not use the vendored fonts), keep the `class="mark"`
+attribute, and add a new layout version if prescriptions already issued on layout 3 must keep the
+old mark (they would otherwise reprint with the new one only if their PDF was never stored).
