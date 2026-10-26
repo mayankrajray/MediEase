@@ -19,6 +19,12 @@ export type BillLineInput = components["schemas"]["BillLineInput"];
 export type BillChange = components["schemas"]["BillChange"];
 export type Discount = components["schemas"]["Discount"];
 export type DiscountKind = components["schemas"]["DiscountKind"];
+export type Payment = components["schemas"]["Payment"];
+export type PaymentInput = components["schemas"]["PaymentInput"];
+export type PaymentMode = components["schemas"]["PaymentMode"];
+export type DuesList = components["schemas"]["DuesList"];
+
+export const MODE_LABELS: Readonly<Record<PaymentMode, string>> = { CASH: "Cash", UPI: "UPI", CARD: "Card" };
 
 export const BIL_VISIT_BILLED = "BIL_VISIT_BILLED";
 
@@ -46,6 +52,11 @@ export interface BillsApi {
   readonly discard: (billId: string) => Promise<void>;
   readonly issue: (billId: string) => Promise<Bill>;
   readonly credit: (billId: string, lineIds: readonly string[] | null, reason: string) => Promise<Bill>;
+  /** M6d-P3: a payment or refund, and a void the same day. */
+  readonly pay: (billId: string, payment: PaymentInput) => Promise<Bill>;
+  readonly voidPayment: (billId: string, paymentId: string, reason: string) => Promise<Bill>;
+  /** M6d-P3: who owes the clinic (COLLECTION_VIEW). */
+  readonly dues: (patientId?: string) => Promise<DuesList>;
 }
 
 export function useBillsApi(): BillsApi {
@@ -73,6 +84,16 @@ export function useBillsApi(): BillsApi {
       issue: async (billId) => (await sessionPost("/api/v1/clinic/bills/{bill_id}/issue", undefined, one(billId))).data,
       credit: async (billId, lineIds, reason) =>
         (await sessionPost("/api/v1/clinic/bills/{bill_id}/credit-notes", { line_ids: lineIds === null ? null : [...lineIds], reason }, one(billId))).data,
+      pay: async (billId, payment) => (await sessionPost("/api/v1/clinic/bills/{bill_id}/payments", payment, one(billId))).data,
+      voidPayment: async (billId, paymentId, reason) =>
+        (
+          await sessionPost(
+            "/api/v1/clinic/bills/{bill_id}/payments/{payment_id}/void",
+            { reason },
+            { ...base, pathParams: { bill_id: billId, payment_id: paymentId } },
+          )
+        ).data,
+      dues: async (patientId) => (await sessionGet("/api/v1/clinic/dues", { ...base, query: { patient_id: patientId } })).data,
     };
   }, [clinicId]);
 }

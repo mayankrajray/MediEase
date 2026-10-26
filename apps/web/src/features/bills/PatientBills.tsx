@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
+import { formatPaise } from "@/lib/format/money";
 
 import { billPath, useBillsApi, type BillSummary } from "./api";
 import { BillTable } from "./BillsList";
@@ -17,6 +18,23 @@ export function PatientBills({ patientId }: Readonly<{ patientId: string }>) {
   const { endSession } = useSession();
   const [items, setItems] = useState<readonly BillSummary[] | undefined>(undefined);
   const [error, setError] = useState<unknown>(null);
+  const { clinic } = useSession();
+  const canSeeDues = clinic.kind === "active" && clinic.membership.permissions.includes("COLLECTION_VIEW");
+  const [due, setDue] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!canSeeDues) return;
+    let cancelled = false;
+    api.dues(patientId).then(
+      (list) => {
+        if (!cancelled) setDue(list.total_paise);
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [api, patientId, canSeeDues]);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +70,7 @@ export function PatientBills({ patientId }: Readonly<{ patientId: string }>) {
           New bill
         </Button>
       </div>
+      {due !== undefined && due > 0 && <p className="font-semibold text-amber-900">Dues: {formatPaise(due)}</p>}
       {error !== null && <ErrorNotice error={error} />}
       {items === undefined && error === null && <p role="status">Loading bills…</p>}
       {items !== undefined && items.length === 0 && <p>No bills yet.</p>}
