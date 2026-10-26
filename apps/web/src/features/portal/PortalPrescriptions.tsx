@@ -18,7 +18,7 @@ import { PortalCard, ScreenLoading, usePortal } from "./PortalShell";
 type Page = components["schemas"]["PatientPrescriptionPage"];
 
 async function loadList() {
-  const [links, items, bills] = await Promise.all([
+  const [links, items, bills, reports] = await Promise.all([
     portalGet("/api/v1/portal/links"),
     portalGet("/api/v1/portal/prescriptions"),
     // M6d-P4: the bills card is extra; a failure there must not hide the prescriptions.
@@ -26,8 +26,13 @@ async function loadList() {
       (r) => r.data,
       () => ({ items: [] as PortalBill[] }),
     ),
+    // M6d-P6: the same for the reports the doctor shared.
+    portalGet("/api/v1/portal/attachments").then(
+      (r) => r.data.items,
+      () => [] as PortalReport[],
+    ),
   ]);
-  return { zones: zonesOf(links.data.items), items: items.data.items, bills: bills.items };
+  return { zones: zonesOf(links.data.items), items: items.data.items, bills: bills.items, reports };
 }
 
 /** *My prescriptions* (M6b-P2; spec R19): each linked clinic's current prescriptions, by clinic. */
@@ -66,12 +71,55 @@ export function PortalPrescriptions() {
             </ul>
           </PortalCard>
         ))}
+      {loaded.status === "ready" && loaded.data.reports.length > 0 && <PortalReports reports={loaded.data.reports} zones={loaded.data.zones} />}
       {loaded.status === "ready" && loaded.data.bills.length > 0 && <PortalBills bills={loaded.data.bills} />}
     </div>
   );
 }
 
 type PortalBill = components["schemas"]["PortalBillList"]["items"][number];
+type PortalReport = components["schemas"]["PortalAttachmentList"]["items"][number];
+
+/** M6d-P6 (visit-attachments R11, R12): reports the doctor shared, each saved under its name. */
+function PortalReports({ reports, zones }: Readonly<{ reports: readonly PortalReport[]; zones: ReadonlyMap<string, string> }>) {
+  const { s, leave } = usePortal();
+  const [error, setError] = useState<unknown>(null);
+
+  async function download(report: PortalReport) {
+    setError(null);
+    try {
+      const url = URL.createObjectURL(await portalPdfAt(`/api/v1/portal/attachments/${encodeURIComponent(report.id)}/file`));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = report.filename;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (failure) {
+      if (!leave(failure)) setError(failure);
+    }
+  }
+
+  return (
+    <PortalCard id="reports" title={s.reports.title}>
+      {error !== null && <ErrorNotice error={error} />}
+      <ul>
+        {reports.map((r) => (
+          <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 py-2 first:border-t-0">
+            <span>
+              <span className="block break-all font-semibold">{r.filename}</span>
+              <span className="text-sm text-slate-700">
+                {r.clinic_name} · {s.reports.visitOn(portalDate(r.visit_date, zones.get(r.clinic_id) ?? DEFAULT_ZONE, s))}
+              </span>
+            </span>
+            <button type="button" onClick={() => void download(r)} className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+              {s.reports.open} <span className="sr-only">{r.filename}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </PortalCard>
+  );
+}
 
 /** M6d-P4 (billing R52): the linked records' issued bills, each with its receipt. */
 function PortalBills({ bills }: Readonly<{ bills: readonly PortalBill[] }>) {

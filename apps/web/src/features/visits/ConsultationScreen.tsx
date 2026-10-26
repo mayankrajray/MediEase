@@ -8,6 +8,7 @@ import { Dialog } from "@/components/Dialog";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { useAppointmentApi, type Doctor } from "@/features/appointments/api";
+import { AttachmentsPanel } from "@/features/attachments/AttachmentsPanel";
 import { ageText, clinicToday, isNotFound, LANGUAGE_LABELS, SEX_LABELS } from "@/features/patients/fields";
 import { patientPath } from "@/features/patients/RegisterPatientDrawer";
 import { useRxApi, type Consultation } from "@/features/prescriptions/api";
@@ -90,7 +91,10 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
       <section className="space-y-2">
         <h1 className="text-2xl font-bold tracking-tight">Visit not found</h1>
         <p>
-          This visit is not in {clinic.name}. <Link href="/queue" className="text-brand-800 underline">Back to the queue</Link>
+          This visit is not in {clinic.name}.{" "}
+          <Link href="/queue" className="text-brand-800 underline">
+            Back to the queue
+          </Link>
         </p>
       </section>
     ) : (
@@ -176,11 +180,7 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
           <HistoryTimeline
             history={history}
             timeZone={clinic.timezone}
-            onRepeat={
-              rxEditable
-                ? (v) => builder.current?.add((v.prescription?.items ?? []).map((item) => toLine(item)))
-                : undefined
-            }
+            onRepeat={rxEditable ? (v) => builder.current?.add((v.prescription?.items ?? []).map((item) => toLine(item))) : undefined}
           />
         </aside>
         <div className="space-y-6">
@@ -198,12 +198,7 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
               onReload={reload}
             />
           ) : issued !== undefined ? (
-            <IssuedActions
-              rx={issued}
-              canRevise={writer}
-              onRevised={reload}
-              chainId={(prescriptions.find((p) => p.version === 1) ?? issued).id}
-            />
+            <IssuedActions rx={issued} canRevise={writer} onRevised={reload} chainId={(prescriptions.find((p) => p.version === 1) ?? issued).id} />
           ) : (
             <section aria-labelledby="rx-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
               <h2 id="rx-heading" className="text-lg font-bold">
@@ -213,6 +208,7 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
             </section>
           )}
           <Addenda visit={visit} canAdd={writer && locked} timeZone={clinic.timezone} onAdded={reload} />
+          <AttachmentsPanel visitId={visit.id} canShare={writer} timeZone={clinic.timezone} />
         </div>
       </div>
 
@@ -220,7 +216,12 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
         <Dialog title="Complete without issuing?" onClose={() => setConfirming(false)}>
           <p>The prescription is written but not issued, so the patient gets nothing to print or open. You can still issue it afterwards.</p>
           <div className="flex justify-end gap-2">
-            <button type="button" data-autofocus onClick={() => setConfirming(false)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none">
+            <button
+              type="button"
+              data-autofocus
+              onClick={() => setConfirming(false)}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
+            >
               Go back
             </button>
             <button

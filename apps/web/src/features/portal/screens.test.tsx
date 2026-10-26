@@ -88,7 +88,11 @@ describe("the portal shell (M6b-P2, R15, R21, R25)", () => {
     mockApi({ ...me(), "GET /api/v1/portal/links": () => json(200, { items: [] }) });
     await renderPortal(<Home />);
     const nav = screen.getByRole("navigation", { name: "Patient app" });
-    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Home", "Appointments", "Medicines", "Prescriptions", "Account"]);
+    expect(
+      within(nav)
+        .getAllByRole("link")
+        .map((l) => l.textContent),
+    ).toEqual(["Home", "Appointments", "Medicines", "Prescriptions", "Account"]);
     expect(within(nav).getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
   });
 
@@ -117,9 +121,7 @@ describe("the portal shell (M6b-P2, R15, R21, R25)", () => {
         <MyAppointments />
       </PortalShell>,
     );
-    await waitFor(() =>
-      expect(replace).toHaveBeenCalledWith("/portal/sign-in?reason=session_ended_for_safety&next=%2Fportal%2Fappointments"),
-    );
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/portal/sign-in?reason=session_ended_for_safety&next=%2Fportal%2Fappointments"));
   });
 });
 
@@ -142,7 +144,15 @@ describe("Home (FR-PRT-05, R16, R17)", () => {
       "GET /api/v1/portal/reminders": () =>
         json(200, {
           items: [
-            { id: "r1", clinic_id: CLINIC_ID, clinic_name: "Sample Clinic", kind: "FOLLOW_UP", follow_up_date: "2026-11-02", due_at: later.toISOString(), status: "SCHEDULED" },
+            {
+              id: "r1",
+              clinic_id: CLINIC_ID,
+              clinic_name: "Sample Clinic",
+              kind: "FOLLOW_UP",
+              follow_up_date: "2026-11-02",
+              due_at: later.toISOString(),
+              status: "SCHEDULED",
+            },
           ],
         }),
     });
@@ -164,9 +174,7 @@ describe("My appointments (FR-PRT-07, R18, R22)", () => {
         json(200, {
           items: [
             group(CLINIC_ID, "Sample Clinic", [appointment("a1", slot), appointment("a2", earlier, "NO_SHOW")]),
-            group(OTHER_CLINIC_ID, "Other Clinic", [
-              appointment("b1", later, "ARRIVED", { mode: "TOKENS", token_number: 4, slot_start: null }),
-            ]),
+            group(OTHER_CLINIC_ID, "Other Clinic", [appointment("b1", later, "ARRIVED", { mode: "TOKENS", token_number: 4, slot_start: null })]),
           ],
         }),
       "GET /api/v1/portal/reminders": () => json(200, { items: [] }),
@@ -197,6 +205,42 @@ describe("Prescriptions (R19, AC9)", () => {
     const clinic = await screen.findByRole("region", { name: "Sample Clinic" });
     expect(within(clinic).getByRole("link", { name: "Dr. Mehta" })).toHaveAttribute("href", `/portal/prescriptions/${RX.id}`);
     expect(clinic).toHaveTextContent("Updated by the doctor");
+  });
+
+  it("M6d-P6 (visit-attachments R11, R12): the reports the doctor shared, each opened through the session", async () => {
+    const api = mockApi({
+      ...me(),
+      "GET /api/v1/portal/links": () => json(200, { items: [link()] }),
+      "GET /api/v1/portal/prescriptions": () => json(200, { items: [] }),
+      "GET /api/v1/portal/bills": () => json(200, { items: [] }),
+      "GET /api/v1/portal/attachments": () =>
+        json(200, {
+          items: [
+            {
+              id: "rep-1",
+              clinic_id: CLINIC_ID,
+              clinic_name: "Sample Clinic",
+              filename: "cbc-report.pdf",
+              content_type: "application/pdf",
+              size_bytes: 2048,
+              visit_date: "2026-10-20T05:00:00+00:00",
+              shared_at: "2026-10-20T06:00:00+00:00",
+            },
+          ],
+        }),
+      "GET /api/v1/portal/attachments/rep-1/file": () => new Response("%PDF-1", { status: 200, headers: { "Content-Type": "application/pdf" } }),
+    });
+    URL.createObjectURL = vi.fn(() => "blob:report");
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    await renderPortal(<PortalPrescriptions />);
+    const reports = await screen.findByRole("region", { name: "Reports from your doctor" });
+    expect(reports).toHaveTextContent(/cbc-report\.pdf/);
+    expect(reports).toHaveTextContent(/Sample Clinic · Visit on/);
+    fireEvent.click(within(reports).getByRole("button", { name: "Open cbc-report.pdf" }));
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(api.count("GET /api/v1/portal/attachments/rep-1/file")).toBe(1);
+    click.mockRestore();
   });
 
   it("opens the patient page in one main landmark and downloads the PDF through the session", async () => {
