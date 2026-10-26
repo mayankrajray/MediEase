@@ -36,6 +36,8 @@ export function RequestBooking() {
   const doctorId = params.get("doctor") ?? "";
   const sessionStart = params.get("session") ?? "";
   const slotStart = params.get("slot");
+  // M6c-P7 (discovery R13): from search, the clinic must still be in the directory.
+  const via = params.get("via") === "directory";
   const { s, account, leave } = usePortal();
   const words = bookingWords(s.lang);
   const [load, setLoad] = useState<Load>({ status: "loading" });
@@ -44,7 +46,7 @@ export function RequestBooking() {
   useEffect(() => {
     if (incomplete) return;
     let cancelled = false;
-    apiGet("/api/v1/public/clinics/{slug}", { pathParams: { slug } }).then(
+    apiGet("/api/v1/public/clinics/{slug}", { pathParams: { slug }, ...(via ? { query: { via: "directory" } } : {}) }).then(
       ({ data }) => {
         if (!cancelled) setLoad({ status: "ready", clinic: data });
       },
@@ -56,7 +58,7 @@ export function RequestBooking() {
     return () => {
       cancelled = true;
     };
-  }, [incomplete, slug]);
+  }, [incomplete, slug, via]);
 
   if (!incomplete && load.status === "loading") return <ScreenLoading label={s.loading} />;
   if (load.status === "failed") return <ErrorNotice error={load.error} />;
@@ -65,7 +67,7 @@ export function RequestBooking() {
     return (
       <PortalCard id="request-gone" title={words.form.title}>
         <p>{words.form.notAvailable}</p>
-        <Link href={slug === "" ? "/portal/find" : `/c/${encodeURIComponent(slug)}`} className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+        <Link href={slug === "" || via ? "/find" : `/c/${encodeURIComponent(slug)}`} className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
           {words.form.chooseAnother}
         </Link>
       </PortalCard>

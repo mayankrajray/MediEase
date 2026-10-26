@@ -20,11 +20,13 @@ const noSubscribe = () => () => undefined;
 const canShareNow = () => typeof navigator.share === "function";
 const cannotShareOnServer = () => false;
 
-/** The portal form's address for one chosen time; sign-in returns to it unchanged (spec R10). */
-export function requestHref(slug: string, doctorId: string, session: Session, slotStart: string | null, lang: PortalLanguage): string {
+/** The portal form's address for one chosen time; sign-in returns to it unchanged (spec R10).
+ * M6c-P7 (discovery R13): a page opened from search keeps `via=directory`. */
+export function requestHref(slug: string, doctorId: string, session: Session, slotStart: string | null, lang: PortalLanguage, viaDirectory = false): string {
   const query = new URLSearchParams({ clinic: slug, doctor: doctorId, session: session.starts_at });
   if (slotStart !== null) query.set("slot", slotStart);
   if (lang === "hi") query.set("lang", "hi");
+  if (viaDirectory) query.set("via", "directory");
   return `/portal/request?${query.toString()}`;
 }
 
@@ -48,7 +50,8 @@ export function PublicClinicPage({
   clinic,
   language,
   profileOf,
-}: Readonly<{ clinic: Clinic; language: PortalLanguage; profileOf?: string }>) {
+  viaDirectory = false,
+}: Readonly<{ clinic: Clinic; language: PortalLanguage; profileOf?: string; viaDirectory?: boolean }>) {
   const words = bookingWords(language);
   const doctors = profileOf === undefined ? clinic.doctors : clinic.doctors.filter((d) => d.id === profileOf);
   const [doctorId, setDoctorId] = useState<string | undefined>(doctors.length === 1 ? doctors[0]?.id : undefined);
@@ -64,7 +67,7 @@ export function PublicClinicPage({
     let cancelled = false;
     apiGet("/api/v1/public/clinics/{slug}/availability", {
       pathParams: { slug: clinic.slug },
-      query: { doctor_id: doctorId },
+      query: viaDirectory ? { doctor_id: doctorId, via: "directory" } : { doctor_id: doctorId },
     }).then(
       ({ data }) => {
         if (!cancelled) setResult({ key, days: data.days });
@@ -76,8 +79,13 @@ export function PublicClinicPage({
     return () => {
       cancelled = true;
     };
-  }, [clinic.slug, doctorId, key]);
-  const load = result === null || result.key !== key ? { status: "loading" as const } : result.days === undefined ? { status: "failed" as const } : { status: "ready" as const, days: result.days };
+  }, [clinic.slug, doctorId, key, viaDirectory]);
+  const load =
+    result === null || result.key !== key
+      ? { status: "loading" as const }
+      : result.days === undefined
+        ? { status: "failed" as const }
+        : { status: "ready" as const, days: result.days };
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const doctor = doctors.find((d) => d.id === doctorId);
@@ -100,8 +108,7 @@ export function PublicClinicPage({
     }
   }
 
-  const button =
-    "inline-flex min-h-11 items-center rounded-lg border border-slate-400 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-100";
+  const button = "inline-flex min-h-11 items-center rounded-lg border border-slate-400 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-100";
 
   return (
     <div lang={language} className="min-h-screen bg-canvas">
@@ -239,7 +246,7 @@ export function PublicClinicPage({
             {load.status === "ready" && load.days.length === 0 && <p>{words.page.none}</p>}
             {load.status === "ready" &&
               load.days.map((day) => (
-                <DayOffers key={day.date} day={day} clinic={clinic} doctor={doctor} words={words} language={language} />
+                <DayOffers key={day.date} day={day} clinic={clinic} doctor={doctor} words={words} language={language} viaDirectory={viaDirectory} />
               ))}
           </section>
         )}
@@ -254,12 +261,12 @@ function DayOffers({
   doctor,
   words,
   language,
-}: Readonly<{ day: Days[number]; clinic: Clinic; doctor: Doctor; words: BookingWords; language: PortalLanguage }>) {
+  viaDirectory,
+}: Readonly<{ day: Days[number]; clinic: Clinic; doctor: Doctor; words: BookingWords; language: PortalLanguage; viaDirectory: boolean }>) {
   const s = portalStrings(language);
   const first = day.sessions[0];
   if (first === undefined) return null;
-  const link =
-    "inline-flex min-h-11 items-center rounded-lg border border-brand-700 bg-white px-3 text-sm font-semibold text-brand-900 hover:bg-brand-50";
+  const link = "inline-flex min-h-11 items-center rounded-lg border border-brand-700 bg-white px-3 text-sm font-semibold text-brand-900 hover:bg-brand-50";
   return (
     <div className="space-y-2 rounded-card border border-slate-200 bg-white p-4 shadow-card">
       <h3 className="font-semibold">{portalDay(first.starts_at, clinic.timezone, s)}</h3>
@@ -270,7 +277,7 @@ function DayOffers({
             {session.mode === "TOKENS" && ` · ${words.page.placesLeft(session.places_left)}`}
           </p>
           {session.mode === "TOKENS" ? (
-            <Link href={requestHref(clinic.slug, doctor.id, session, null, language)} className={link}>
+            <Link href={requestHref(clinic.slug, doctor.id, session, null, language, viaDirectory)} className={link}>
               {words.page.requestSession}
             </Link>
           ) : (
@@ -278,7 +285,7 @@ function DayOffers({
               {session.slots.map((slot) => (
                 <li key={slot.starts_at}>
                   <Link
-                    href={requestHref(clinic.slug, doctor.id, session, slot.starts_at, language)}
+                    href={requestHref(clinic.slug, doctor.id, session, slot.starts_at, language, viaDirectory)}
                     aria-label={words.page.requestSlot(portalTime(slot.starts_at, clinic.timezone, s))}
                     className={link}
                   >

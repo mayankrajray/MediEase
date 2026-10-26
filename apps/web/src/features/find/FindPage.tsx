@@ -187,7 +187,7 @@ export function FindPage({
                     {d.next_available === null ? w.noFreeTime : w.freeFrom(shortDay(d.next_available, language))}
                   </p>
                   <Link
-                    href={`/c/${encodeURIComponent(d.clinic.slug)}/doctors/${encodeURIComponent(d.id)}${language === "hi" ? "?lang=hi" : ""}`}
+                    href={`/c/${encodeURIComponent(d.clinic.slug)}/doctors/${encodeURIComponent(d.id)}?via=directory${language === "hi" ? "&lang=hi" : ""}`}
                     className={LINK}
                   >
                     {w.viewProfile}
@@ -208,7 +208,7 @@ export function FindPage({
                   <p className="text-sm font-medium text-emerald-900">
                     {c.next_available === null ? w.noFreeTime : w.freeFrom(shortDay(c.next_available, language))}
                   </p>
-                  <Link href={`/c/${encodeURIComponent(c.slug)}${language === "hi" ? "?lang=hi" : ""}`} className={LINK}>
+                  <Link href={`/c/${encodeURIComponent(c.slug)}?via=directory${language === "hi" ? "&lang=hi" : ""}`} className={LINK}>
                     {w.viewClinic}
                     <span className="sr-only">: {c.name}</span>
                   </Link>

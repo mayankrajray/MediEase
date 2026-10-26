@@ -36,7 +36,7 @@ describe("directory search (M6c-P6, discovery R1-R10)", () => {
     expect(within(item).getByText("Sample Clinic, Pune")).toBeInTheDocument();
     expect(within(item).getByText("Fee ₹300")).toBeInTheDocument();
     expect(within(item).getByText(/^Free from /)).toBeInTheDocument();
-    expect(within(item).getByRole("link", { name: /See profile and times/ })).toHaveAttribute("href", `/c/sample-clinic/doctors/${DOCTOR.id}`);
+    expect(within(item).getByRole("link", { name: /See profile and times/ })).toHaveAttribute("href", `/c/sample-clinic/doctors/${DOCTOR.id}?via=directory`);
     expect(screen.getByRole("link", { name: "Doctors" })).toHaveAttribute("aria-current", "page");
   });
 

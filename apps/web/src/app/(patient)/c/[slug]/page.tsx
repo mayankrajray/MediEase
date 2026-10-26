@@ -15,9 +15,14 @@ type Clinic = GetResponse<"/api/v1/public/clinics/{slug}">;
 const NOINDEX = { index: false, follow: false } as const;
 const INDEX = { index: true, follow: true } as const;
 
-async function load(slug: string): Promise<Clinic> {
+/** M6c-P7 (discovery R11): opened from search, the API applies the directory's rule too. */
+function viaDirectory(search: Search): boolean {
+  return search.via === "directory";
+}
+
+async function load(slug: string, via: boolean): Promise<Clinic> {
   try {
-    return (await apiGet("/api/v1/public/clinics/{slug}", { pathParams: { slug } })).data;
+    return (await apiGet("/api/v1/public/clinics/{slug}", { pathParams: { slug }, ...(via ? { query: { via: "directory" } } : {}) })).data;
   } catch (error) {
     // An unknown slug and a clinic without a public page are the same answer (spec R2).
     if (error instanceof ApiError && (error.code === "REQ_NOT_FOUND" || error.status === 404)) notFound();
@@ -50,13 +55,11 @@ export async function generateMetadata({ params }: Readonly<{ params: Promise<{ 
  * first. Nothing here is signed in: choosing a time goes to the portal's request form, which asks
  * the patient to sign in and brings them back to the same time.
  */
-export default async function PublicClinicRoute({
-  params,
-  searchParams,
-}: Readonly<{ params: Promise<{ slug: string }>; searchParams: Promise<Search> }>) {
+export default async function PublicClinicRoute({ params, searchParams }: Readonly<{ params: Promise<{ slug: string }>; searchParams: Promise<Search> }>) {
   const { slug } = await params;
   const query = await searchParams;
-  const clinic = await load(slug);
+  const via = viaDirectory(query);
+  const clinic = await load(slug, via);
   const language = pickLanguage(query.lang, (await cookies()).get(PORTAL_LANGUAGE_COOKIE)?.value);
-  return <PublicClinicPage clinic={clinic} language={language} />;
+  return <PublicClinicPage clinic={clinic} language={language} viaDirectory={via} />;
 }
