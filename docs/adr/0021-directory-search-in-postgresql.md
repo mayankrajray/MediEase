@@ -5,7 +5,7 @@
 | Status | Accepted |
 | Date | 26 Oct 2026 |
 | Deciders | Developer (all M6c design decisions approved in advance, 26 Oct 2026); MediEase engineering |
-| Supersedes | — |
+| Supersedes | M6c milestone decision M6's directory read model, for M6c (confirmed by the developer at the merge review, 26 Oct 2026) |
 | Related | ADR-0003 (tenancy), ADR-0018 (public booking requests), ADR-0020 (applications); spec `docs/specs/discovery.md`; M6c milestone decision M6 |
 
 ## Context
