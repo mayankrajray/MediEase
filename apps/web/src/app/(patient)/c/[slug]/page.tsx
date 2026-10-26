@@ -10,8 +10,10 @@ import { PORTAL_LANGUAGE_COOKIE } from "@/lib/i18n/portal";
 type Search = Record<string, string | string[] | undefined>;
 type Clinic = GetResponse<"/api/v1/public/clinics/{slug}">;
 
-// FR-DIS-06: not indexed until a clinic is verified (M6c); the head carries the name and place only.
+// FR-DIS-06 (M6c-P5, R62): indexed only when the API says so (discoverable and not opted out);
+// the head carries the name and place only.
 const NOINDEX = { index: false, follow: false } as const;
+const INDEX = { index: true, follow: true } as const;
 
 async function load(slug: string): Promise<Clinic> {
   try {
@@ -33,7 +35,8 @@ export async function generateMetadata({ params }: Readonly<{ params: Promise<{ 
     return {
       title,
       description: place === "" ? clinic.name : `${clinic.name}, ${place}`,
-      robots: NOINDEX,
+      robots: clinic.indexable ? INDEX : NOINDEX,
+      alternates: { canonical: `/c/${clinic.slug}` },
       openGraph: { title: clinic.name, ...(place === "" ? {} : { description: place }), type: "website" },
     };
   } catch {

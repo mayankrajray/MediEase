@@ -32,6 +32,12 @@ export interface BookingWords {
     readonly session: (from: string, to: string) => string;
     readonly requestSession: string;
     readonly requestSlot: (time: string) => string;
+    // M6c-P5 (FR-DIS-03): the published profile.
+    readonly specialties: string;
+    readonly languages: string;
+    readonly fee: (rupees: string) => string;
+    readonly profile: string;
+    readonly allDoctors: string;
   };
   readonly form: {
     readonly title: string;
@@ -106,6 +112,11 @@ const EN: BookingWords = {
     session: (from, to) => `Session ${from} to ${to}`,
     requestSession: "Ask for this session",
     requestSlot: (time) => `Ask for ${time}`,
+    specialties: "Specialties",
+    languages: "Speaks",
+    fee: (rupees) => `Consultation fee ₹${rupees}`,
+    profile: "Doctor's profile",
+    allDoctors: "All doctors at this clinic",
   },
   form: {
     title: "Ask for this time",
@@ -199,6 +210,11 @@ const HI: BookingWords = {
     session: (from, to) => `सत्र ${from} से ${to}`,
     requestSession: "इस सत्र के लिए माँगें",
     requestSlot: (time) => `${time} माँगें`,
+    specialties: "विशेषज्ञता",
+    languages: "भाषाएँ",
+    fee: (rupees) => `परामर्श शुल्क ₹${rupees}`,
+    profile: "डॉक्टर की प्रोफ़ाइल",
+    allDoctors: "इस क्लिनिक के सभी डॉक्टर",
   },
   form: {
     title: "यह समय माँगें",

@@ -2356,6 +2356,50 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/public/sitemap": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The indexable public profiles, for sitemap.xml
+         * @description M6c-P5, spec clinic-onboarding R63 (FR-DIS-06). No session. The clinic page and each shown
+         *     doctor's profile of every discoverable clinic that has not opted out of search engines, as
+         *     absolute URLs under PUBLIC_BASE_URL. Unlisted, unverified, suspended and opted-out clinics
+         *     are absent. Cacheable for an hour; the JSON itself is noindex.
+         */
+        readonly get: operations["getPublicSitemap"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/clinic/listing/doctors/{doctor_id}/profile": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * A doctor's published languages and fee
+         * @description M6c-P5, spec R61. CLINIC_MANAGE. Languages from language_options (422 otherwise); the fee
+         *     in paise, 0 to 1 000 000, or null to show none. Another clinic's doctor is 404.
+         */
+        readonly put: operations["setDoctorProfile"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/ops/messaging-costs": {
         readonly parameters: {
             readonly query?: never;
@@ -3958,6 +4002,9 @@ export interface components {
          *     what stands in the way, and each doctor's state, so the screen never computes a rule.
          */
         readonly ClinicListing: {
+            readonly search_indexing: boolean;
+            /** @description M6c-P5 - the languages a doctor's profile may name */
+            readonly language_options: readonly string[];
             readonly listed: boolean;
             /** Format: date-time */
             readonly listed_at: string | null;
@@ -3966,6 +4013,8 @@ export interface components {
             readonly discoverable: boolean;
             readonly problems: readonly ("NOT_ACTIVE" | "NOT_VERIFIED" | "ADDRESS_MISSING" | "NO_BOOKABLE_DOCTOR")[];
             readonly doctors: readonly {
+                readonly languages: readonly string[];
+                readonly fee_paise: number | null;
                 /** Format: uuid */
                 readonly id: string;
                 readonly display_name: string;
@@ -4065,6 +4114,7 @@ export interface components {
             /** @description Clinic-local HH:MM */
             readonly end: string;
         };
+        /** @description M6c-P5 (R59) - only active doctors verified by MediEase and shown by the owner */
         readonly PublicDoctor: {
             /** Format: uuid */
             readonly id: string;
@@ -4072,9 +4122,19 @@ export interface components {
             readonly qualification: string | null;
             readonly specialty: string | null;
             readonly hours: readonly components["schemas"]["PublicHours"][];
+            /** @description M6c-P5 (R61) */
+            readonly languages: readonly string[];
+            /** @description M6c-P5 (R61) - the consultation fee in paise, if the clinic publishes one */
+            readonly fee_paise: number | null;
         };
         /** @description What a clinic publishes, and nothing else (NFR-17; a test fails on any extra field) */
         readonly PublicClinic: {
+            readonly specialties: readonly string[];
+            /**
+             * @description M6c-P5 (R62, FR-DIS-06): search engines may index the page - discoverable and not
+             *     opted out. Otherwise the page is noindex.
+             */
+            readonly indexable: boolean;
             readonly name: string;
             readonly slug: string;
             readonly address_line: string | null;
@@ -10127,7 +10187,9 @@ export interface operations {
         readonly requestBody: {
             readonly content: {
                 readonly "application/json": {
-                    readonly listed: boolean;
+                    readonly listed?: boolean;
+                    /** @description M6c-P5 (R62) - false keeps search engines away from the profiles */
+                    readonly search_indexing?: boolean;
                 };
             };
         };
@@ -10257,6 +10319,74 @@ export interface operations {
             readonly 403: components["responses"]["PermissionError"];
             readonly 404: components["responses"]["PermissionError"];
             readonly 409: components["responses"]["ConflictError"];
+            readonly 422: components["responses"]["ConflictError"];
+        };
+    };
+    readonly getPublicSitemap: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The URLs */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": {
+                        readonly base_url: string;
+                        readonly items: readonly {
+                            readonly loc: string;
+                            /** Format: date-time */
+                            readonly lastmod: string;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    readonly setDoctorProfile: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly doctor_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": {
+                    readonly languages?: readonly string[];
+                    readonly fee_paise?: number | null;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description The listing */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ClinicListing"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            readonly 404: components["responses"]["PermissionError"];
             readonly 422: components["responses"]["ConflictError"];
         };
     };

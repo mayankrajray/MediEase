@@ -36,6 +36,9 @@ const PUBLIC_PATHS: ReadonlySet<string> = new Set([
   "/portal/forgot-password",
   // M6c-P1: applying to join MediEase needs no account (FR-ONB-01, ADR-0020).
   "/apply",
+  // M6c-P5 (FR-DIS-06): for crawlers.
+  "/robots.txt",
+  "/sitemap.xml",
 ]);
 // /p/<token>: the patient's prescription page (M4-P5); the token and the last-4 check guard it.
 // M6a-P4: emailed reset and verification links; the token in the path is the authority.
