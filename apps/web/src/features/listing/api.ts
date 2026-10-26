@@ -20,7 +20,8 @@ export interface ListingApi {
   readonly setListed: (listed: boolean) => Promise<ClinicListing>;
   readonly setVisible: (doctorId: string, visible: boolean) => Promise<ClinicListing>;
   readonly setIndexing: (allowed: boolean) => Promise<ClinicListing>;
-  readonly setProfile: (doctorId: string, languages: readonly string[], feePaise: number | null) => Promise<ClinicListing>;
+  /** M6d-P1 (D8): the fee itself is the consultation price on the fee schedule; this only shows it. */
+  readonly setProfile: (doctorId: string, languages: readonly string[], showFee: boolean) => Promise<ClinicListing>;
 }
 
 /** R51: what the owner reads for each problem, with where to fix it. */
@@ -48,11 +49,11 @@ export function useListingApi(): ListingApi {
       get: async () => (await sessionGet("/api/v1/clinic/listing", base)).data,
       setListed: async (listed) => (await sessionPut("/api/v1/clinic/listing", { listed }, base)).data,
       setIndexing: async (allowed) => (await sessionPut("/api/v1/clinic/listing", { search_indexing: allowed }, base)).data,
-      setProfile: async (doctorId, languages, feePaise) =>
+      setProfile: async (doctorId, languages, showFee) =>
         (
           await sessionPut(
             "/api/v1/clinic/listing/doctors/{doctor_id}/profile",
-            { languages: [...languages], fee_paise: feePaise },
+            { languages: [...languages], show_fee: showFee },
             { ...base, pathParams: { doctor_id: doctorId } },
           )
         ).data,
