@@ -21,6 +21,12 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6c-P5 (#53): public profiles (FR-DIS-03, 06, 07; spec clinic-onboarding R59-R64). A clinic's
+  page shows its specialties and each doctor's languages and fee; each doctor has a profile at
+  `/c/{slug}/doctors/{id}`. Only doctors who are active, verified and shown appear. Pages are
+  indexable only when the clinic is discoverable and has not opted out; `sitemap.xml` and
+  `robots.txt` are served. Owners set languages, fees and the search-engine switch on
+  *Directory*. Contract 0.40.0.
 - M6c-P4 (#53): owners choose whether their clinic is in the MediEase directory and which doctors
   are shown (FR-ONB-09, 10; spec clinic-onboarding R50-R55). The *Directory* page says what is in
   the way (verification, the address, a verified and visible doctor with weekly hours). Ops can

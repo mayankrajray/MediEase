@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-ONB-01, 02, 07 (P1); FR-ONB-03, 05 (P2); FR-ONB-04, 06, 08 (P3); FR-ONB-05, 09, 10 (P4); NFR-19 |
 | Milestone / phases | M6c / P1–P4 |
-| Status | P1 (R1–R23, AC1–AC9) **Approved** 26 Oct 2026 (developer decisions D1–D3) and built (as-built notes in the M6c design note); P2 (R24–R40, AC10, AC14) and P3 (R41–R49, AC11–AC13) and P4 (R50–R58, AC15–AC16) approved in advance by the developer 26 Oct 2026 and built |
+| Status | P1 (R1–R23, AC1–AC9) **Approved** 26 Oct 2026 (developer decisions D1–D3) and built (as-built notes in the M6c design note); P2 (R24–R40, AC10, AC14) and P3 (R41–R49, AC11–AC13) P4 (R50–R58, AC15–AC16) and P5 (R59–R64, AC17) approved in advance by the developer 26 Oct 2026 and built |
 | Owner | Developer |
 | Last updated | 2026-10-26 |
 
@@ -239,7 +239,29 @@ stateDiagram-v2
   otherwise; 409 `CLN_OWNER_REQUIRED` without an active owner). The owner's listing choice is kept.
   Audited `clinic.reactivated`.
 
-## 5. API surface (P1-P4)
+## 4e. Behaviour (P5: public profiles)
+
+- **R59** A doctor is **public** when active, verified and shown (`Doctor.is_public`). Only public
+  doctors appear on `/c/{slug}`; availability for any other doctor is the same 404 as an unknown
+  one, and a request for one is refused (`APT_SESSION_CLOSED`, 409).
+- **R60** Approval shows the application's doctors (`visible` true); the owner may hide any. A
+  doctor's profile is `/c/{slug}/doctors/{doctor_id}`: the clinic page for that doctor alone, its
+  times loaded at once. A doctor who is not public is the page's 404.
+- **R61** `PUT /api/v1/clinic/listing/doctors/{doctor_id}/profile {languages, fee_paise}`
+  (`CLINIC_MANAGE`): languages from the published list (`language_options`; 422 otherwise), the
+  fee 0 to 1 000 000 paise or null. The public body adds the clinic's `specialties` and each
+  doctor's `languages` and `fee_paise` (still an allow-list).
+- **R62** `indexable` = discoverable (R55) and `search_indexing` (the owner's opt-out, `PUT
+  /clinic/listing {search_indexing}`). The web page is `index, follow` with a canonical URL when
+  indexable and `noindex, nofollow` otherwise. The API's JSON is always `noindex`.
+- **R63** `GET /api/v1/public/sitemap` lists, as absolute URLs under `PUBLIC_BASE_URL`, each
+  indexable clinic page and its public doctors' profiles (at most 5,000 clinics; cacheable an
+  hour). The web app serves it as `/sitemap.xml`; `/robots.txt` allows the public pages and names
+  the sitemap, and disallows signed-in areas, patient links and the API.
+- **R64** Nothing else is published: no patient count, rating, registration number or staff
+  detail (NFR-17; the allow-list test fails on any other key).
+
+## 5. API surface (P1-P5)
 | Method | Path | Request | Success | Errors |
 |---|---|---|---|---|
 | POST | `/api/v1/public/applications` | multipart: `application` (JSON), `certificate_{n}` | 202 `ApplicationReceipt {reference, email_masked}` | 413, 415, 422 `REQ_VALIDATION_FAILED`, 422 `ONB_FILE_REJECTED`, 429 `ONB_RATE_LIMITED`, 503 `ONB_UPLOAD_FAILED` |
@@ -264,6 +286,8 @@ P2 and P3 (contract 0.37.0, 0.38.0):
 | PUT | `/api/v1/clinic/listing/doctors/{doctor_id}` | R53 | `CLINIC_MANAGE` | 200 `ClinicListing` | 404, 409 `CLN_DOCTOR_NOT_VERIFIED` |
 | POST | `/api/v1/ops/clinics/{id}/suspend` | R56, R57 | `OPS_ADMIN` | 200 `{clinic, requests_withdrawn}` | 404, 409, 422 |
 | POST | `/api/v1/ops/clinics/{id}/reactivate` | R58 | `OPS_ADMIN` | 200 `Clinic` | 404, 409, 422 |
+| PUT | `/api/v1/clinic/listing/doctors/{doctor_id}/profile` | R61 | `CLINIC_MANAGE` | 200 `ClinicListing` | 404, 422 |
+| GET | `/api/v1/public/sitemap` | R63 | public | 200 `{base_url, items}` | — |
 
 All three answer `Cache-Control: no-store`; the public two also `X-Robots-Tag: noindex`.
 
@@ -346,6 +370,10 @@ All three answer `Cache-Control: no-store`; the public two also `X-Robots-Tag: n
   doctor without hours, then listing is 409 `CLN_LISTING_BLOCKED` naming `ADDRESS_MISSING` and
   `NO_BOOKABLE_DOCTOR`, and showing the doctor is 409 `CLN_DOCTOR_NOT_VERIFIED`; once each is fixed
   the clinic can be listed and is discoverable.
+
+- **AC17 (FR-DIS-03, 06)** — Given a discoverable clinic, then its page says `indexable` and the
+  sitemap lists it and its public doctors; when the owner opts out, neither; a doctor the owner
+  hides disappears from the page and its availability is 404.
 
 ## 10. Observability
 Log events: `application.submitted` (id, reference, kind, doctors), `application.rejected_input`
