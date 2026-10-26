@@ -292,6 +292,10 @@ M6c-P6 (spec discovery R1-R10; ADR-0021; contract 0.41.0):
 | GET | `/api/v1/public/search/clinics?q=&city=&pincode=&specialty=&language=&available=` | Discoverable clinics by relevance, place and first free day (at most 20) | FR-DIS-01, 04, 05 | Implemented (M6c-P6), public, rate limited |
 | GET | `/api/v1/public/search/doctors?...` | Public doctors of discoverable clinics, the same filters | FR-DIS-02, 04, 05 | Implemented (M6c-P6), public, rate limited |
 
+M6c-P7 (spec discovery R11-R13; contract 0.42.0): `GET /api/v1/public/clinics/{slug}` and its
+`/availability` take `via=directory` (any other value is 422): opened from a search result, the
+clinic must also be discoverable, otherwise the same 404 as an unknown slug.
+
 `Clinic` and `Doctor` bodies gain `verified_at` and `verification_source` (and the P4/P5 fields
 `listed`, `search_indexing`, `visible`, `languages`, `fee_paise`). The public clinic page and
 booking requests need the clinic `ACTIVE` and verified (one 404 otherwise).
