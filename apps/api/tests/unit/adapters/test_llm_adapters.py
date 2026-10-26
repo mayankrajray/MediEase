@@ -39,7 +39,9 @@ class FakeTransport:
         self.result = result
         self.sent: list[tuple[str, dict[str, Any], Mapping[str, str], float]] = []
 
-    def __call__(self, url: str, body: bytes, headers: Mapping[str, str], timeout: float) -> HttpResult:
+    def __call__(
+        self, url: str, body: bytes, headers: Mapping[str, str], timeout: float
+    ) -> HttpResult:
         self.sent.append((url, json.loads(body), headers, timeout))
         if isinstance(self.result, Exception):
             raise self.result
@@ -47,7 +49,10 @@ class FakeTransport:
 
 
 def _ok(message: dict[str, Any]) -> HttpResult:
-    body = {"choices": [{"message": message}], "usage": {"prompt_tokens": 7, "completion_tokens": 3}}
+    body = {
+        "choices": [{"message": message}],
+        "usage": {"prompt_tokens": 7, "completion_tokens": 3},
+    }
     return HttpResult(200, json.dumps(body).encode())
 
 
@@ -75,14 +80,22 @@ def test_ac1_the_request_is_openai_compatible_with_tools() -> None:
     assert body["model"] == PRESETS["groq"].model and body["tool_choice"] == "auto"
     assert body["tools"][0]["function"]["name"] == "my_appointments"
     assert body["messages"][2]["tool_calls"][0]["function"]["arguments"] == "{}"
-    assert body["messages"][3] == {"role": "tool", "tool_call_id": "c1", "content": '{"summary": "none"}'}
+    assert body["messages"][3] == {
+        "role": "tool",
+        "tool_call_id": "c1",
+        "content": '{"summary": "none"}',
+    }
 
 
 @pytest.mark.parametrize("provider", ["groq", "deepinfra", "openai"])
 def test_ac1_each_provider_is_a_preset_and_overridable(provider: str) -> None:
     transport = FakeTransport(_ok({"content": "x"}))
     OpenAICompatibleLlm(
-        provider=provider, api_key="k", base_url="https://llm.example/v1/", model="m", transport=transport
+        provider=provider,
+        api_key="k",
+        base_url="https://llm.example/v1/",
+        model="m",
+        transport=transport,
     ).complete([ChatMessage.user("hi")], [])
     url, body, _, _ = transport.sent[0]
     assert url == "https://llm.example/v1/chat/completions" and body["model"] == "m"
@@ -93,7 +106,11 @@ def test_r2_tool_calls_are_parsed() -> None:
     message = {
         "content": None,
         "tool_calls": [
-            {"id": "a", "type": "function", "function": {"name": "list_slots", "arguments": '{"doctor_id": "d"}'}}
+            {
+                "id": "a",
+                "type": "function",
+                "function": {"name": "list_slots", "arguments": '{"doctor_id": "d"}'},
+            }
         ],
     }
     reply = _llm(FakeTransport(_ok(message))).complete([ChatMessage.user("x")], [TOOL])
@@ -138,7 +155,7 @@ def server() -> Iterator[tuple[str, list[dict[str, Any]]]]:
     received: list[dict[str, Any]] = []
 
     class Handler(BaseHTTPRequestHandler):
-        def do_POST(self) -> None:  # noqa: N802 - http.server's naming
+        def do_POST(self) -> None:
             length = int(self.headers["Content-Length"])
             received.append(json.loads(self.rfile.read(length)))
             if self.path.endswith("/busy/chat/completions"):
@@ -166,10 +183,14 @@ def server() -> Iterator[tuple[str, list[dict[str, Any]]]]:
 
 def test_ac1_over_real_http(server: tuple[str, list[dict[str, Any]]]) -> None:
     url, received = server
-    llm = OpenAICompatibleLlm(provider="openai", api_key="k", base_url=f"{url}/v1", timeout_seconds=5)
+    llm = OpenAICompatibleLlm(
+        provider="openai", api_key="k", base_url=f"{url}/v1", timeout_seconds=5
+    )
     assert llm.complete([ChatMessage.user("hi")], []).content == "over http"
     assert received[0]["messages"] == [{"role": "user", "content": "hi"}]
-    busy = OpenAICompatibleLlm(provider="openai", api_key="k", base_url=f"{url}/busy", timeout_seconds=5)
+    busy = OpenAICompatibleLlm(
+        provider="openai", api_key="k", base_url=f"{url}/busy", timeout_seconds=5
+    )
     with pytest.raises(LlmBusy) as caught:
         busy.complete([ChatMessage.user("hi")], [])
     assert caught.value.retry_after_seconds == 9
@@ -183,17 +204,30 @@ def _specs(*names: str) -> list[ToolSpec]:
 
 
 PATIENT_TOOLS = _specs(
-    "search_clinics", "list_slots", "request_booking", "my_appointments", "my_booking_requests",
-    "my_prescriptions", "explain_prescription",
+    "search_clinics",
+    "list_slots",
+    "request_booking",
+    "my_appointments",
+    "my_booking_requests",
+    "my_prescriptions",
+    "explain_prescription",
 )
 
 
 def test_console_routes_questions_to_tools_and_asks_which_clinic() -> None:
     llm = ConsoleLlm()
-    assert llm.complete([ChatMessage.user("When do I take my medicine?")], PATIENT_TOOLS).tool_calls[0].name == "explain_prescription"
+    assert (
+        llm.complete([ChatMessage.user("When do I take my medicine?")], PATIENT_TOOLS)
+        .tool_calls[0]
+        .name
+        == "explain_prescription"
+    )
     one = llm.complete([ChatMessage.user("explain medicine 2")], PATIENT_TOOLS).tool_calls[0]
     assert one.arguments == {"medicine_number": 2}
-    assert llm.complete([ChatMessage.user("show my appointments")], PATIENT_TOOLS).tool_calls[0].name == "my_appointments"
+    assert (
+        llm.complete([ChatMessage.user("show my appointments")], PATIENT_TOOLS).tool_calls[0].name
+        == "my_appointments"
+    )
     assert llm.complete([ChatMessage.user("I want to book")], PATIENT_TOOLS).content == ASK_CLINIC
     follow = llm.complete(
         [ChatMessage.user("book"), ChatMessage.assistant(ASK_CLINIC), ChatMessage.user("Alpha")],
@@ -208,7 +242,9 @@ def test_console_repeats_the_tools_own_summary() -> None:
         [
             ChatMessage.user("my appointments"),
             ChatMessage.assistant("", (call,)),
-            ChatMessage.tool(call, json.dumps({"summary": "You have no appointments yet.", "data": {}})),
+            ChatMessage.tool(
+                call, json.dumps({"summary": "You have no appointments yet.", "data": {}})
+            ),
         ],
         PATIENT_TOOLS,
     )
@@ -221,13 +257,34 @@ def test_console_turns_a_chosen_time_into_a_booking_request() -> None:
     first = ConsoleLlm().complete(history, PATIENT_TOOLS).tool_calls[0]
     assert first.name == "search_clinics"
     search = ToolCall("call_1", "search_clinics", {})
-    clinics = {"clinics": [{"name": "Alpha Sample Clinic", "clinic_slug": "alpha", "doctors": [{"name": "Dr. Alpha Sample", "doctor_id": "d1"}]}]}
-    history += [ChatMessage.assistant("", (search,)), ChatMessage.tool(search, json.dumps({"summary": "", "data": clinics}))]
+    clinics = {
+        "clinics": [
+            {
+                "name": "Alpha Sample Clinic",
+                "clinic_slug": "alpha",
+                "doctors": [{"name": "Dr. Alpha Sample", "doctor_id": "d1"}],
+            }
+        ]
+    }
+    history += [
+        ChatMessage.assistant("", (search,)),
+        ChatMessage.tool(search, json.dumps({"summary": "", "data": clinics})),
+    ]
     slots = ConsoleLlm().complete(history, PATIENT_TOOLS).tool_calls[0]
-    assert (slots.name, slots.arguments) == ("list_slots", {"clinic_slug": "alpha", "doctor_id": "d1"})
+    assert (slots.name, slots.arguments) == (
+        "list_slots",
+        {"clinic_slug": "alpha", "doctor_id": "d1"},
+    )
     listed = ToolCall("call_2", "list_slots", {})
-    times = {"clinic_slug": "alpha", "doctor_id": "d1", "times": [{"session_start": "s1"}, {"session_start": "s2", "slot_start": "t2"}]}
-    history += [ChatMessage.assistant("", (listed,)), ChatMessage.tool(listed, json.dumps({"summary": "", "data": times}))]
+    times = {
+        "clinic_slug": "alpha",
+        "doctor_id": "d1",
+        "times": [{"session_start": "s1"}, {"session_start": "s2", "slot_start": "t2"}],
+    }
+    history += [
+        ChatMessage.assistant("", (listed,)),
+        ChatMessage.tool(listed, json.dumps({"summary": "", "data": times})),
+    ]
     booking = ConsoleLlm().complete(history, PATIENT_TOOLS).tool_calls[0]
     assert booking.name == "request_booking"
     assert booking.arguments["session_start"] == "s2" and booking.arguments["slot_start"] == "t2"
@@ -237,10 +294,15 @@ def test_console_turns_a_chosen_time_into_a_booking_request() -> None:
 def test_console_staff_rules() -> None:
     staff = _specs("today_queue", "list_sessions", "find_patient")
     system = ChatMessage.system("Today is 2026-10-27 (Tuesday)")
-    assert ConsoleLlm().complete([system, ChatMessage.user("queue please")], staff).tool_calls[0].name == "today_queue"
+    assert (
+        ConsoleLlm().complete([system, ChatMessage.user("queue please")], staff).tool_calls[0].name
+        == "today_queue"
+    )
     sessions = ConsoleLlm().complete([system, ChatMessage.user("sessions")], staff).tool_calls[0]
     assert sessions.arguments == {"date": "2026-10-27"}
-    found = ConsoleLlm().complete([system, ChatMessage.user("find patient Asha")], staff).tool_calls[0]
+    found = (
+        ConsoleLlm().complete([system, ChatMessage.user("find patient Asha")], staff).tool_calls[0]
+    )
     assert found.arguments == {"text": "Asha"}
 
 
