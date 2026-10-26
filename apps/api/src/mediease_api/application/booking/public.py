@@ -109,15 +109,29 @@ def find_public_clinic(uow: UnitOfWork, slug: str) -> Clinic:
     return clinic
 
 
+def require_discoverable(uow: UnitOfWork, clinic: Clinic, now: datetime) -> None:
+    """M6c-P7 (discovery R11, FR-DIS-08): a page opened from a search result answers exactly like
+    an unknown slug once the clinic has left the directory."""
+    if not load_listing(uow, clinic, now).discoverable:
+        logger.info(
+            "public.page_not_found",
+            slug_digest=sha256(clinic.slug.encode()).hexdigest()[:12],
+            via="directory",
+        )
+        raise NotFound("clinic")
+
+
 class GetPublicClinic:
     def __init__(self, *, uow: UnitOfWork, clock: ClockPort) -> None:
         self._uow = uow
         self._clock = clock
 
-    def execute(self, slug: str, info: RequestInfo) -> PublicClinic:
+    def execute(self, slug: str, info: RequestInfo, *, via_directory: bool = False) -> PublicClinic:
         limit_reads(self._uow, self._clock, info)
         with self._uow as uow:
             clinic = find_public_clinic(uow, slug)
+            if via_directory:
+                require_discoverable(uow, clinic, self._clock.now())
             tenant = uow.tenant(clinic.id)
             today = local_date(self._clock.now(), clinic.timezone)
             doctors = []
@@ -215,12 +229,20 @@ class GetAvailability:
         self._clock = clock
 
     def execute(
-        self, slug: str, doctor_id: UUID, first: date | None, info: RequestInfo
+        self,
+        slug: str,
+        doctor_id: UUID,
+        first: date | None,
+        info: RequestInfo,
+        *,
+        via_directory: bool = False,
     ) -> Sequence[DayOffer]:
         limit_reads(self._uow, self._clock, info)
         now = self._clock.now()
         with self._uow as uow:
             clinic = find_public_clinic(uow, slug)
+            if via_directory:
+                require_discoverable(uow, clinic, now)
             tenant = uow.tenant(clinic.id)
             doctor = tenant.doctors.get(doctor_id)
             if doctor is None or not doctor.is_public:

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.41.0
+  version: 0.42.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -1706,9 +1706,10 @@ paths:
       summary: A clinic's public page
       description: |
         M6b-P4, spec booking-requests R1-R4. No sign-in. Only what a clinic publishes (an
-        allow-list: name, address, phone, booking mode, doctors with their weekly hours). An
-        unknown slug and a clinic that is not active are the same 404 REQ_NOT_FOUND. Never cached
-        and marked noindex until M6c. Rate limited per caller (429 with Retry-After).
+        allow-list: name, address, phone, booking mode, specialties, public doctors with their
+        weekly hours, languages and fee). An unknown slug and a clinic without a public page
+        (ACTIVE and verified, M6c-P3) are the same 404 REQ_NOT_FOUND. Never cached; the JSON is
+        noindex (the web page follows `indexable`, M6c-P5). Rate limited per caller (429).
       parameters:
         - $ref: '#/components/parameters/RequestId'
         - name: slug
@@ -1717,6 +1718,12 @@ paths:
           schema:
             type: string
             maxLength: 63
+        - name: via
+          in: query
+          schema: {type: string, enum: [directory]}
+          description: |
+            M6c-P7 (discovery R11, FR-DIS-08): opened from a search result. The clinic must also be
+            discoverable, or the answer is the same 404 as an unknown slug.
       responses:
         '200':
           description: The public page
@@ -1762,6 +1769,10 @@ paths:
           schema:
             type: string
             format: date
+        - name: via
+          in: query
+          schema: {type: string, enum: [directory]}
+          description: M6c-P7 (discovery R11) - the clinic must also be discoverable (else 404)
       responses:
         '200':
           description: The offered days
