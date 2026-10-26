@@ -37,6 +37,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 24. The public clinic page and booking requests (M6b-P4)
 25. Clinic applications (M6c-P1)
 26. Fees and the public fee (M6d-P1)
+27. Bills and credit notes (M6d-P2)
 
 ---
 
@@ -719,3 +720,22 @@ one per patient. Audit: `fees.*` actions, category *Billing* (RUNBOOK 18).
 
 There are no tax fields (D3): if a clinic needs GST on its bills, raise it with the developer and
 counsel before changing anything.
+
+### 27. Bills and credit notes (M6d-P2)
+
+Bills are made on *Bills* (`/bills`), from a patient's profile, or with *Bill this visit* on a
+completed queue row. A draft can change freely. *Issue bill* gives it the next number of the
+financial year (`<prefix>/26-27/0001`) and freezes it (ADR-0022, spec billing R13-R30).
+
+**"The bill is wrong."** An issued bill never changes, even for support. On the bill, *Correct
+this bill* issues a credit note for the wrong lines (or *Cancel the whole bill*), with a reason.
+Then make a new bill. A cancelled visit bill frees the visit for a new one. Do not edit `bills` or
+`bill_lines` in the database: the number series and the audit trail would no longer agree.
+
+**"The number jumped" or "two bills have the same number."** Neither should happen: numbers are
+taken under the clinic row lock at issue, drafts take none, and a unique index guards the series.
+Check `SELECT number, kind, financial_year, seq FROM bills WHERE clinic_id = '<id>' AND status <>
+'DRAFT' ORDER BY kind, financial_year, seq;`. Numbering restarts on 1 April.
+
+**"A doctor cannot see a bill."** Doctors see only bills with their own doctor profile. The front
+desk or the owner can open it. Audit: `bill.*` actions, category *Billing* (RUNBOOK 18).

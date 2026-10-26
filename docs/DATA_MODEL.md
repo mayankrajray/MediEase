@@ -42,6 +42,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0035` | The `pg_trgm` extension (directory search, ADR-0021) | M6c-P6 |
 | `0034` | Verification on `clinics` and `doctors`; `clinics.listed`, `listed_at`, `search_indexing`; `doctors.visible`, `languages`, `fee_paise`; decline reason `CLINIC_UNAVAILABLE` | M6c-P3..P5 |
 | `0036` | `clinic_services`, `doctor_service_prices`; `doctors.show_fee`; the starting services and the M6c fees carried over (`doctors.fee_paise` deprecated) | M6d-P1 |
+| `0037` | `bills` (bills and credit notes), `bill_lines` | M6d-P2 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -1020,6 +1021,48 @@ row (the default applies).
 consultation price. The migration copies each `doctors.fee_paise` into a *Consultation* price
 and sets `show_fee` where there was one. **`doctors.fee_paise` is deprecated** from 0036: kept
 (expand-only), never written or read; a later contract migration may drop it.
+
+## M6d — Bills and credit notes (migration `0037`, M6d-P2, ADR-0022)
+
+Spec `docs/specs/billing.md` R13–R30. **Tenant data** (`SqlAlchemyBillRepository`, `tenant.bills`;
+the lines through `SqlAlchemyBillLineRepository` inside it). Nothing clinical is stored (B3).
+
+### `bills`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | |
+| kind | text not null | `BILL` \| `CREDIT_NOTE` (CHECK) |
+| status | text not null | `DRAFT` \| `ISSUED` \| `CANCELLED` (CHECK); a credit note is always `ISSUED` |
+| patient_id | uuid FK patients not null | |
+| visit_id | uuid FK visits null | A completed visit; one open bill per visit (`uq_bills_visit_id`, partial) |
+| doctor_id | uuid FK doctors null | A doctor reaches only their own (R21) |
+| discount_kind, discount_value | text, integer | The bill discount: `NONE` \| `AMOUNT` (paise) \| `PERCENT` (hundredths) |
+| subtotal_paise, discount_paise, total_paise | integer | 0 to 100 000 000 (CHECK) |
+| credited_paise, paid_paise, refunded_paise | integer default 0 | Kept on the bill; paid and refunded from P3 |
+| notes | text null | Up to 500; printed, never clinical |
+| number, financial_year, seq, bill_date, issued_at, issued_by | | Set together at issue (CHECK `numbered_when_issued`); unique `(clinic_id, kind, financial_year, seq)` |
+| credits_bill_id | uuid FK bills null | A credit note's bill (CHECK `credit_note_shape`) |
+| reason | text null | A credit note's reason, up to 200 |
+| created_by | uuid FK users | |
+| created_at, updated_at | timestamptz | |
+
+Indexes: `(clinic_id, created_at)`, `(clinic_id, patient_id)`, `credits_bill_id`.
+
+### `bill_lines`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | |
+| bill_id | uuid FK bills not null, on delete cascade | |
+| position | smallint | 1–50, unique per bill |
+| service_id | uuid FK clinic_services null | The service it was drafted from |
+| description | text | 1–80, a snapshot |
+| unit_price_paise, quantity | integer, smallint | 0–10 000 000; 1–99 |
+| discount_kind, discount_value, discount_paise | | The line's own discount |
+| bill_discount_paise | integer | Its share of the bill discount (largest remainder) |
+| amount_paise | integer | `unit_price × quantity − discount_paise − bill_discount_paise` (CHECK) |
+| credits_line_id | uuid FK bill_lines null, unique | On a credit note: the line it reverses, at most once |
 
 ---
 

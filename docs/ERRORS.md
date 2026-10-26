@@ -244,6 +244,18 @@ The fee schedule (M6d-P1; spec billing R1, R3). A price outside 0 to 10 000 000 
 | `BIL_SERVICE_NAME_TAKEN` | 409 | Another active service already has this name (ignoring case); `field` is `name` | A duplicate, or restoring a retired service whose name was reused | The owner's *Fees* page lists the active names |
 | `BIL_TOO_MANY_SERVICES` | 409 | A clinic has 100 services at most, retired ones included | A clinic adding a service per patient or per test | Retire and reuse services; RUNBOOK 26 |
 
+Bills and credit notes (M6d-P2; spec billing R13-R30; ADR-0022):
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `BIL_NOT_DRAFT` | 409 | Only a draft can be changed, discarded or issued | The bill was issued (perhaps in another tab) | Correct it with a credit note; RUNBOOK 27 |
+| `BIL_NOT_ISSUED` | 409 | Only an issued bill can be credited (or paid, P3) | A draft, a cancelled bill, or a credit note | The bill's state on its page |
+| `BIL_EMPTY` | 409 | A bill needs a line before it is issued | An empty draft | Add a line |
+| `BIL_LINE_ALREADY_CREDITED` | 409 | A chosen line is already credited or not on the bill | Two people correcting at once | The bill's credit notes |
+| `BIL_VISIT_BILLED` | 409 | The visit already has an open bill; `details.bill_id` names it | *Bill this visit* pressed twice | The queue opens that bill |
+| `BIL_VISIT_NOT_COMPLETED` | 409 | A visit is billed once the consultation is completed | The doctor has not completed it | Bill without the visit, or wait |
+| `BIL_NOT_YOURS` | 403 | A doctor bills and lists only their own consultations | Drafting for, or filtering by, another doctor | The front desk or the owner bills it |
+
 ## Patient links (M4)
 
 | Code | HTTP | Meaning | Likely cause | Where to look |

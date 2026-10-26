@@ -135,3 +135,28 @@ Verified: changed-code API tests (1452 passed, including the repository and HTTP
 cases, the permission matrix, the migration test and the contract), web tests for the touched
 areas (73), ruff, mypy, import-linter, tsc, ESLint, `make contract-check`, `make up` to `0036`,
 `make smoke`, and the workspaces and discovery journeys.
+
+## M6d-P2 — Bills and credit notes
+
+Designed and **approved in advance** by the developer (26 Oct 2026: "approving all the design choices
+for P2-P7"). Rules: `docs/specs/billing.md` R13–R30. Decision record: ADR-0022.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | Storage | Migration `0037`: **`bills`** holds both bills and credit notes (`kind`), with the stored totals and `credited_paise`, `paid_paise`, `refunded_paise` (the last two used from P3). **`bill_lines`** holds each line's snapshot and final amount, tied by a CHECK. A credit note's line names the bill line it reverses (unique) | Separate credit-note tables (two copies of the line shape) |
+| 2 | Bill discount | Shared across the lines in proportion by largest remainder, so each line's final amount is exact and a partial credit note refunds exactly what that line cost | Credit notes at the line's pre-discount value (would not add up to the total) |
+| 3 | Numbering | `max(seq) + 1` per clinic, kind and financial year under the clinic row lock, with a unique index as the last guard | A sequence per series (gaps on rollback) |
+| 4 | One bill per visit | A partial unique index on `visit_id` for open bills, and `BIL_VISIT_BILLED` carries the open bill's ID, so the queue's *Bill this visit* opens it | Several bills per visit (double billing at the desk) |
+| 5 | Doctors | `BILLING_MANAGE` for every role (B2). A `DOCTOR` role is limited to bills with their own profile: 404 for another doctor's, 403 `BIL_NOT_YOURS` for drafting or listing as another | A separate permission for the doctor's own bills |
+| 6 | Prefill | A visit's draft starts with the first active consultation service at the doctor's price. Follow-up is chosen by hand | Guessing follow-up from the appointment (no reliable signal) |
+| 7 | Screens | *Bills* list (owner, front desk; *My bills* for doctors); the bill page (draft editor, issue, discard, credit notes); *Bill this visit* in the queue menu; *Bills* on the patient profile | A billing drawer in the queue (too much for a phone) |
+| 8 | API | `GET/POST /api/v1/clinic/bills`, `GET/PUT/DELETE /bills/{id}`, `POST /bills/{id}/issue`, `POST /bills/{id}/credit-notes`; contract 0.44.0 | — |
+
+### P2 as built (26 Oct 2026)
+
+Built as designed. Verified: domain tests (pricing, the shared discount, limits, financial years,
+the state machine, credit notes), HTTP tests (AC4–AC8, the doctor's scope, paging, two issues at
+once), repository and HTTP cross-clinic cases, the migration test, route policies and the contract
+(`tests/contract/test_billing_contract.py` also covers P1's fee routes). Web: the bills list, the
+bill page, the patient's bills and the queue action (tests for the editor, issue, credit notes and
+the list). Lint, typecheck and import contracts are clean.
