@@ -36,14 +36,26 @@ function hoursText(doctor: Doctor, words: BookingWords): string {
     .join(" · ");
 }
 
+/** ₹ from paise, without decimals when whole (M6c-P5). */
+export function rupees(paise: number): string {
+  return paise % 100 === 0 ? String(paise / 100) : (paise / 100).toFixed(2);
+}
+
 /**
  * The public clinic page (M6b-P4; FR-PUB-01, 04): the clinic, its doctors and the times a patient
  * may ask for in the next 14 days. The words and the clinic's published details only; no medical
- * advice, and an emergency notice above everything else (NFR-19).
+ * advice, and an emergency notice above everything else (NFR-19). M6c-P5 (FR-DIS-03): the
+ * specialties, each doctor's languages and fee, and a doctor's own profile (`profileOf`: the same
+ * page for that doctor alone, its times shown at once).
  */
-export function PublicClinicPage({ clinic, language }: Readonly<{ clinic: Clinic; language: PortalLanguage }>) {
+export function PublicClinicPage({
+  clinic,
+  language,
+  profileOf,
+}: Readonly<{ clinic: Clinic; language: PortalLanguage; profileOf?: string }>) {
   const words = bookingWords(language);
-  const [doctorId, setDoctorId] = useState<string | undefined>(clinic.doctors.length === 1 ? clinic.doctors[0]?.id : undefined);
+  const doctors = profileOf === undefined ? clinic.doctors : clinic.doctors.filter((d) => d.id === profileOf);
+  const [doctorId, setDoctorId] = useState<string | undefined>(doctors.length === 1 ? doctors[0]?.id : undefined);
   const [result, setResult] = useState<Result | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -72,7 +84,7 @@ export function PublicClinicPage({ clinic, language }: Readonly<{ clinic: Clinic
   const load = result === null || result.key !== key ? { status: "loading" as const } : result.days === undefined ? { status: "failed" as const } : { status: "ready" as const, days: result.days };
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
-  const doctor = clinic.doctors.find((d) => d.id === doctorId);
+  const doctor = doctors.find((d) => d.id === doctorId);
   const address = [clinic.address_line, clinic.city, clinic.state, clinic.pincode].filter((p) => p !== null && p !== "").join(", ");
 
   async function copy() {
@@ -105,7 +117,12 @@ export function PublicClinicPage({ clinic, language }: Readonly<{ clinic: Clinic
             </span>
             MediEase
           </span>
-          <Link href={`/c/${encodeURIComponent(clinic.slug)}?lang=${other}`} lang={other} aria-label={words.switchLabel} className={button}>
+          <Link
+            href={`/c/${encodeURIComponent(clinic.slug)}${profileOf === undefined ? "" : `/doctors/${encodeURIComponent(profileOf)}`}?lang=${other}`}
+            lang={other}
+            aria-label={words.switchLabel}
+            className={button}
+          >
             {words.switchTo}
           </Link>
         </div>
@@ -120,6 +137,11 @@ export function PublicClinicPage({ clinic, language }: Readonly<{ clinic: Clinic
             {clinic.name}
           </h1>
           {address !== "" && <p className="text-slate-800">{address}</p>}
+          {clinic.specialties.length > 0 && (
+            <p className="text-sm text-slate-800">
+              {words.page.specialties}: {clinic.specialties.join(", ")}
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
             {clinic.phone_e164 !== null && (
               <a href={`tel:${clinic.phone_e164}`} className={button}>
@@ -150,9 +172,14 @@ export function PublicClinicPage({ clinic, language }: Readonly<{ clinic: Clinic
           <h2 id="doctors-heading" className="text-lg font-bold">
             {words.page.doctors}
           </h2>
+          {profileOf !== undefined && (
+            <Link href={`/c/${encodeURIComponent(clinic.slug)}${language === "hi" ? "?lang=hi" : ""}`} className="font-medium text-brand-800 underline">
+              {words.page.allDoctors}
+            </Link>
+          )}
           {doctorId === undefined && <p>{words.page.pickDoctor}</p>}
           <ul className="space-y-3">
-            {clinic.doctors.map((d) => {
+            {doctors.map((d) => {
               const chosen = d.id === doctorId;
               const hours = hoursText(d, words);
               return (
@@ -165,6 +192,21 @@ export function PublicClinicPage({ clinic, language }: Readonly<{ clinic: Clinic
                     <p className="text-sm text-slate-700">
                       {words.page.hours}: {hours}
                     </p>
+                  )}
+                  {d.languages.length > 0 && (
+                    <p className="text-sm text-slate-700">
+                      {words.page.languages}: {d.languages.join(", ")}
+                    </p>
+                  )}
+                  {d.fee_paise !== null && <p className="text-sm text-slate-700">{words.page.fee(rupees(d.fee_paise))}</p>}
+                  {profileOf === undefined && (
+                    <Link
+                      href={`/c/${encodeURIComponent(clinic.slug)}/doctors/${encodeURIComponent(d.id)}${language === "hi" ? "?lang=hi" : ""}`}
+                      className="mr-2 inline-flex min-h-11 items-center text-sm font-medium text-brand-800 underline"
+                    >
+                      {words.page.profile}
+                      <span className="sr-only">: {d.display_name}</span>
+                    </Link>
                   )}
                   <button
                     type="button"

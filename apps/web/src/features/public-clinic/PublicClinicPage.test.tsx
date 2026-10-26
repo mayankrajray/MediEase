@@ -19,12 +19,16 @@ const CLINIC = {
   booking_mode: "SLOTS",
   map_url: "https://maps.example.test/?q=12+MG+Road",
   requires_age_sex: false,
+  specialties: ["General Medicine"],
+  indexable: false,
   doctors: [
     {
       id: DOCTOR,
       display_name: "Dr. Mehta",
       qualification: "MBBS",
       specialty: "General medicine",
+      languages: ["Hindi", "English"],
+      fee_paise: 30000,
       hours: [
         { weekday: 0, start: "10:00", end: "13:00" },
         { weekday: 2, start: "10:00", end: "13:00" },
@@ -93,5 +97,16 @@ describe("the public clinic page (M6b-P4, FR-PUB-01, 04)", () => {
     render(<PublicClinicPage clinic={CLINIC} language="en" />);
     fireEvent.click(screen.getByRole("button", { name: "See times" }));
     expect(await screen.findByText(/No free times in the next 14 days/)).toBeInTheDocument();
+  });
+
+  it("M6c-P5 (R60, R61): a doctor's profile shows their languages and fee, with a way back to the clinic", async () => {
+    render(<PublicClinicPage clinic={CLINIC} language="en" profileOf={DOCTOR} />);
+    expect(screen.getByText("Specialties: General Medicine")).toBeInTheDocument();
+    expect(screen.getByText("Speaks: Hindi, English")).toBeInTheDocument();
+    expect(screen.getByText("Consultation fee ₹300")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "All doctors at this clinic" })).toHaveAttribute("href", "/c/sample-clinic");
+    expect(screen.queryByRole("link", { name: /Doctor's profile/ })).not.toBeInTheDocument();
+    // One doctor: the times are loaded at once.
+    expect(await screen.findByRole("heading", { name: "Free times with Dr. Mehta" })).toBeInTheDocument();
   });
 });
