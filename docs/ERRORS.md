@@ -256,6 +256,15 @@ Bills and credit notes (M6d-P2; spec billing R13-R30; ADR-0022):
 | `BIL_VISIT_NOT_COMPLETED` | 409 | A visit is billed once the consultation is completed | The doctor has not completed it | Bill without the visit, or wait |
 | `BIL_NOT_YOURS` | 403 | A doctor bills and lists only their own consultations | Drafting for, or filtering by, another doctor | The front desk or the owner bills it |
 
+Payments (M6d-P3; spec billing R31-R36):
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `BIL_PAYMENT_TOO_LARGE` | 409 | More than the balance (or, for a refund, than is owed back); `details.most_paise` | A second payment in another tab, or a refund without a credit note | The bill's balance |
+| `BIL_VOID_TOO_LATE` | 409 | Only a payment of today can be voided | Correcting yesterday's collection | A credit note and a refund; RUNBOOK 28 |
+| `BIL_ALREADY_VOIDED` | 409 | The payment is already voided | Two people correcting at once | The bill's payments |
+| `BIL_VOID_REFUNDED` | 409 | A refund came out of this payment | Voiding the payment before the refund | Void the refund first |
+
 ## Patient links (M4)
 
 | Code | HTTP | Meaning | Likely cause | Where to look |

@@ -43,6 +43,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0034` | Verification on `clinics` and `doctors`; `clinics.listed`, `listed_at`, `search_indexing`; `doctors.visible`, `languages`, `fee_paise`; decline reason `CLINIC_UNAVAILABLE` | M6c-P3..P5 |
 | `0036` | `clinic_services`, `doctor_service_prices`; `doctors.show_fee`; the starting services and the M6c fees carried over (`doctors.fee_paise` deprecated) | M6d-P1 |
 | `0037` | `bills` (bills and credit notes), `bill_lines` | M6d-P2 |
+| `0038` | `payments` (payments and refunds, voids) | M6d-P3 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -1063,6 +1064,28 @@ Indexes: `(clinic_id, created_at)`, `(clinic_id, patient_id)`, `credits_bill_id`
 | bill_discount_paise | integer | Its share of the bill discount (largest remainder) |
 | amount_paise | integer | `unit_price × quantity − discount_paise − bill_discount_paise` (CHECK) |
 | credits_line_id | uuid FK bill_lines null, unique | On a credit note: the line it reverses, at most once |
+
+## M6d — Payments (migration `0038`, M6d-P3)
+
+Spec billing R31–R42. **Tenant data** (`SqlAlchemyPaymentRepository`, `tenant.payments`). The
+bill's `paid_paise` and `refunded_paise` are updated in the same transaction under the bill row lock.
+
+### `payments`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| clinic_id | uuid FK not null | |
+| bill_id | uuid FK bills not null | |
+| patient_id, doctor_id | uuid FKs | Copied from the bill (the collection by doctor, P5) |
+| kind | text | `PAYMENT` \| `REFUND` (CHECK) |
+| mode | text | `CASH` \| `UPI` \| `CARD` (CHECK) |
+| amount_paise | integer | 1 to 100 000 000 (CHECK) |
+| reference | text null | Up to 40 (a UPI or card reference) |
+| received_by, received_at | uuid FK users, timestamptz | |
+| local_date | date | The clinic-local day: the collection it belongs to |
+| voided_at, voided_by, void_reason | | All or none (CHECK `voided_together`); the reason up to 200 |
+
+Indexes: `bill_id`, `(clinic_id, local_date)`. Rows are never deleted.
 
 ---
 

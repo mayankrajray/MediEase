@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-BIL-01 (P1); FR-BIL-02..07, FR-VIS-04, FR-SUB-01 in later phases |
 | Milestone / phases | M6d / P1–P7 (design: `docs/milestones/M6d-billing-and-documents.md`) |
-| Status | P1 (R1–R12, AC1–AC3) and P2 (R13–R30, AC4–AC8) approved 26 Oct 2026 (P2–P7 in advance) and built; P3–P5 to be specified per phase |
+| Status | P1 (R1–R12, AC1–AC3), P2 (R13–R30, AC4–AC8) and P3 (R31–R42, AC9–AC12) approved 26 Oct 2026 (P2–P7 in advance) and built; P4, P5 to follow |
 | Owner | Developer |
 | Last updated | 2026-10-26 |
 
@@ -108,6 +108,34 @@ also becomes the one source of the public profile fee (D8). Money is integer pai
 - **R30** A bill's body names the patient (ID, code, name) and the doctor; it never carries a
   diagnosis, a note from the visit or a medicine.
 
+### Payments, refunds and dues (P3; B6, D2)
+- **R31** A payment or refund belongs to one bill. A payment needs an `ISSUED` bill. A refund needs
+  an issued or cancelled bill. A draft takes neither (`BIL_NOT_ISSUED`, 409).
+- **R32** A payment never exceeds the balance, and a refund never exceeds what is owed back
+  (`BIL_PAYMENT_TOO_LARGE`, 409, with `details.most_paise`). Partial payments are fine. There is
+  no advance or deposit.
+- **R33** A refund is possible only when a credit note leaves the bill overpaid (balance below 0).
+- **R34** Recording takes the bill row lock, so two payments at once can never both fit a balance
+  meant for one.
+- **R35** A payment or refund is voided on the clinic-local day it was recorded only
+  (`BIL_VOID_TOO_LATE`), once (`BIL_ALREADY_VOIDED`), with a reason up to 200 characters. Its
+  amount goes back on the bill. Later corrections are a credit note and a refund.
+- **R36** A payment is not voided while a refund taken out of it stands (`BIL_VOID_REFUNDED`): void
+  the refund first, so refunded never exceeds paid.
+- **R37** A payment records its mode (`CASH`, `UPI`, `CARD`), amount in paise (1 to ₹10,00,000), an
+  optional UPI or card reference (up to 40), who took it, when, and the clinic-local day (the
+  collection's day, P5).
+- **R38** Payments are never edited or deleted. A void keeps the row with its time, author and
+  reason.
+- **R39** *Dues* (`COLLECTION_VIEW`, owners and the front desk) lists patients with a positive
+  balance on issued bills, the largest first, with the number of bills, the amount and the oldest
+  bill date, and the total. 200 patients at most.
+- **R40** The queue shows what each patient owes (`dues_paise`, an amount only), and so does the
+  patient profile for those with `COLLECTION_VIEW`.
+- **R41** Every payment and void is audited (`payment.recorded`, `payment.voided`) with the bill
+  ID, kind, mode and amount.
+- **R42** A doctor records payments on their own bills only (D2, R21); another doctor's bill is 404.
+
 ## 5. API surface
 | Method | Path | Request | Success | Errors |
 |---|---|---|---|---|
@@ -122,8 +150,11 @@ also becomes the one source of the public profile fee (D8). Money is integer pai
 | GET, PUT, DELETE | `/api/v1/clinic/bills/{bill_id}` | —, `BillChange`, — | 200 `Bill`, 204 | 404, 409 `BIL_NOT_DRAFT`, 422 |
 | POST | `/api/v1/clinic/bills/{bill_id}/issue` | — | 200 `Bill` | 404, 409 `BIL_NOT_DRAFT` / `BIL_EMPTY` |
 | POST | `/api/v1/clinic/bills/{bill_id}/credit-notes` | `CreditNoteInput` | 201 `Bill` | 404, 409 `BIL_NOT_ISSUED` / `BIL_LINE_ALREADY_CREDITED`, 422 |
+| POST | `/api/v1/clinic/bills/{bill_id}/payments` | `PaymentInput` | 201 `Bill` | 404, 409 `BIL_PAYMENT_TOO_LARGE` / `BIL_NOT_ISSUED`, 422 |
+| POST | `/api/v1/clinic/bills/{bill_id}/payments/{payment_id}/void` | `VoidInput` | 200 `Bill` | 404, 409 `BIL_VOID_TOO_LATE` / `BIL_ALREADY_VOIDED` / `BIL_VOID_REFUNDED` |
+| GET | `/api/v1/clinic/dues?patient_id` | — | 200 `DuesList` | 403 (`COLLECTION_VIEW`) |
 
-Contract 0.43.0 (P1), 0.44.0 (P2).
+Contract 0.43.0 (P1), 0.44.0 (P2), 0.45.0 (P3; the queue entry gains `dues_paise`).
 
 ## 6. UI notes
 *Settings → Fees* (`/settings/fees`, in the owner's menu): a table of prices by service and
@@ -142,6 +173,11 @@ typed, rupees and percents, the bill discount and notes. It has *Save draft*, *I
 *Discard draft* (confirmed). An issued bill shows its lines, totals and credit notes. *Correct
 this bill* credits chosen lines or cancels the whole bill, with a reason.
 
+*Payments* on an issued bill takes cash, UPI or card (with a reference), starting at the balance.
+It offers a refund when a credit note leaves the bill overpaid. Today's payments can be voided with
+a reason. *Dues* (`/dues`, owner and front desk) lists who owes. Queue rows show "Dues ₹…", and the
+patient's bills show their dues.
+
 ## 7. Events and side effects
 | Trigger | Audit action | Job enqueued | Analytics event |
 |---|---|---|---|
@@ -151,6 +187,7 @@ this bill* credits chosen lines or cancels the whole bill, with a reason.
 | Bill drafted, changed, discarded | `bill.drafted`, `bill.changed`, `bill.discarded` | — | — |
 | Bill issued | `bill.issued` | — | — |
 | Credit note issued | `bill.credited` | — | — |
+| Payment or refund recorded, voided | `payment.recorded`, `payment.voided` | — | — |
 
 ## 8. Edge cases
 | Case | Expected outcome |
@@ -163,6 +200,9 @@ this bill* credits chosen lines or cancels the whole bill, with a reason.
 | The first bill after 31 March | Numbering restarts at 0001 in the new financial year |
 | A cancelled visit bill | The visit may be billed again |
 | A 100% bill discount | A total of ₹0; it can still be issued as a record |
+| Two payments for the whole balance at once | One is recorded; the other is 409 (R34) |
+| A payment voided the next day | 409 `BIL_VOID_TOO_LATE`; use a credit note and a refund |
+| A bill fully credited after being paid | `CANCELLED` with a negative balance; refund it |
 
 ## 9. Acceptance criteria
 - **AC1 (FR-BIL-01, R2)** — Given a clinic created through onboarding, when the owner opens
@@ -183,12 +223,24 @@ this bill* credits chosen lines or cancels the whole bill, with a reason.
 - **AC7 (R21)** — Given two doctors, when one drafts and lists bills, then they see only their own.
   Another doctor's bill is 404, and drafting for them is 403 `BIL_NOT_YOURS`.
 - **AC8 (R27)** — Given two drafts, when both are issued at once, then they get consecutive numbers.
+- **AC9 (FR-BIL-03, R31–R34, R37)** — Given an issued ₹500 bill, when ₹200 cash and then ₹300 UPI
+  with a reference are taken, then the balance is settled. Any more is 409 with the most allowed,
+  two payments at once never exceed the balance, and each payment is audited.
+- **AC10 (R33)** — Given a paid bill, when a line is credited, then a refund up to the credited
+  amount is accepted and nothing more.
+- **AC11 (R35, R36)** — Given today's payment and a refund taken out of it, when the payment is
+  voided, then it is refused until the refund is voided. A payment from an earlier day cannot be voided.
+- **AC12 (FR-BIL-05, R39, R40)** — Given patients with partly paid bills, when the desk opens *Dues*,
+  then each patient's total appears, largest first. Settled bills and drafts are not counted, a
+  doctor is refused (403), another clinic sees none, and the queue row shows the same amount.
 
 ## 10. Observability
 Log `fees.service_added` with the clinic ID and kind; `bill.drafted` (from a visit or not),
 `bill.issued` and `bill.credited` with the clinic ID and amounts. Error codes:
 `BIL_SERVICE_NAME_TAKEN`, `BIL_TOO_MANY_SERVICES`, `BIL_NOT_DRAFT`, `BIL_NOT_ISSUED`, `BIL_EMPTY`,
-`BIL_LINE_ALREADY_CREDITED`, `BIL_VISIT_BILLED`, `BIL_VISIT_NOT_COMPLETED`, `BIL_NOT_YOURS`
+`BIL_LINE_ALREADY_CREDITED`, `BIL_VISIT_BILLED`, `BIL_VISIT_NOT_COMPLETED`, `BIL_NOT_YOURS`,
+`BIL_PAYMENT_TOO_LARGE`, `BIL_VOID_TOO_LATE`, `BIL_ALREADY_VOIDED`, `BIL_VOID_REFUNDED`; logs
+`payment.recorded` with kind, mode and amount
 (docs/ERRORS.md).
 
 ## 11. Out of scope

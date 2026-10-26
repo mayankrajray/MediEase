@@ -160,3 +160,23 @@ once), repository and HTTP cross-clinic cases, the migration test, route policie
 (`tests/contract/test_billing_contract.py` also covers P1's fee routes). Web: the bills list, the
 bill page, the patient's bills and the queue action (tests for the editor, issue, credit notes and
 the list). Lint, typecheck and import contracts are clean.
+
+## M6d-P3 — Payments and dues
+
+Designed and approved in advance (26 Oct 2026). Rules: `docs/specs/billing.md` R31–R42.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | Storage | Migration `0038`: **`payments`** (tenant) holds payments and refunds (`kind`), mode, amount, reference, who and when, the clinic-local day, and the void (time, author, reason, all or none). The bill's `paid_paise` and `refunded_paise` (0037) are updated in the same transaction under the bill row lock | Summing payments on every read (slow dues lists) |
+| 2 | Limits | A payment up to the balance; a refund only when overpaid, up to the amount owed back (B6) | Advances held on account (out of scope) |
+| 3 | Corrections | A void on the same clinic-local day with a reason, never under a standing refund; after that a credit note and a refund. So a day's collection never changes once the day is over (P5) | Edits or deletes (no trail) |
+| 4 | Permission | New **`COLLECTION_VIEW`** (owner, front desk) for *Dues* now and the daily collection in P5 (B2). Payments need `BILLING_MANAGE`, and doctors take them on their own bills (D2) | Dues for every role (doctors would see every patient's money) |
+| 5 | Dues | `GET /api/v1/clinic/dues` (largest first, 200 at most, `patient_id` filter). The queue entry gains `dues_paise`, the patient profile shows it, and queue rows say "Dues ₹…" | A dues column on the patient table (one more migration and its upkeep) |
+| 6 | Screens | *Payments* on the bill page (mode, amount at the balance, a reference for UPI or card, refund when overpaid, *Void* today only); *Dues* page | — |
+
+### P3 as built (26 Oct 2026)
+
+Built as designed. Verified: domain tests (limits, refunds, voids, the refund guard), HTTP tests
+(AC9–AC12, two payments at once, a doctor's own bills, a void on an earlier day), repository and
+HTTP cross-clinic cases, the permission matrix, route policies, the migration and the contract
+(payments, dues and the queue). Web: the payments panel, *Dues*, the queue and profile amounts.

@@ -26,6 +26,11 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6d-P3 (#63): payments, refunds and dues (FR-BIL-03, 05; spec billing R31-R42). Cash, UPI or
+  card payments on issued bills, partial allowed, never more than the balance. A refund after
+  a credit note leaves a bill overpaid. A void the same day with a reason. *Dues* for owners
+  and the front desk (new `COLLECTION_VIEW`), and the amount owed on queue rows and the patient
+  profile. Migration `0038`, contract 0.45.0, four `BIL_` errors.
 - M6d-P2 (#63): bills and credit notes (FR-BIL-02, 07; spec billing R13-R30; ADR-0022). Drafts
   for a patient or from a completed visit (the doctor's consultation filled in), lines from the
   fee schedule or typed, line and bill discounts in rupees or percent, notes. *Issue* numbers a

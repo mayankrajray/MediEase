@@ -331,6 +331,12 @@ their own bills (another's is 404).
 | DELETE | `/api/v1/clinic/bills/{bill_id}` | Discard a draft | FR-BIL-02 | Implemented (M6d-P2) |
 | POST | `/api/v1/clinic/bills/{bill_id}/issue` | Number (per financial year) and freeze | FR-BIL-07 | Implemented (M6d-P2) |
 | POST | `/api/v1/clinic/bills/{bill_id}/credit-notes` | A numbered credit note for some or all lines | FR-BIL-07 | Implemented (M6d-P2) |
+| POST | `/api/v1/clinic/bills/{bill_id}/payments` | A payment (up to the balance) or a refund (when overpaid) | FR-BIL-03 | Implemented (M6d-P3) |
+| POST | `/api/v1/clinic/bills/{bill_id}/payments/{payment_id}/void` | Void today's payment, with a reason | FR-BIL-03 | Implemented (M6d-P3) |
+| GET | `/api/v1/clinic/dues?patient_id` | Who owes, the largest first | FR-BIL-05 | Implemented (M6d-P3), `COLLECTION_VIEW` |
+
+M6d-P3 (contract 0.45.0): the bill body gains `payments`; the queue entry gains `dues_paise`;
+permissions gain `COLLECTION_VIEW` (owners and the front desk).
 
 ### Audit trail (M1-P4)
 
