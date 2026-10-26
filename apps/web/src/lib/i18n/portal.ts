@@ -111,6 +111,12 @@ export interface PortalStrings {
     readonly cancelled: string;
     readonly download: string;
   };
+  /** M6d-P6 (visit-attachments R11, R12): reports the doctor shared. */
+  readonly reports: {
+    readonly title: string;
+    readonly visitOn: (date: string) => string;
+    readonly open: string;
+  };
   /** M6b-P3 (spec R36-R44): the planner's own words; the medicine's come from the API. */
   readonly medicines: {
     readonly title: string;
@@ -313,6 +319,11 @@ const EN: PortalStrings = {
     cancelled: "Cancelled",
     download: "Receipt (PDF)",
   },
+  reports: {
+    title: "Reports from your doctor",
+    visitOn: (date) => `Visit on ${date}`,
+    open: "Open",
+  },
   medicines: {
     title: "My medicines",
     views: "Show",
@@ -393,8 +404,7 @@ const EN: PortalStrings = {
   },
   link: {
     heading: (clinic) => `Link your records at ${clinic}`,
-    help: (clinic) =>
-      `Your appointments, prescriptions and reminders from ${clinic} will appear in this account. Only link records that are yours.`,
+    help: (clinic) => `Your appointments, prescriptions and reminders from ${clinic} will appear in this account. Only link records that are yours.`,
     link: "Link",
     linking: "Linking…",
     notMe: "Not me",
@@ -529,6 +539,11 @@ const HI: PortalStrings = {
     cancelled: "रद्द",
     download: "रसीद (PDF)",
   },
+  reports: {
+    title: "डॉक्टर की भेजी रिपोर्ट",
+    visitOn: (date) => `मुलाक़ात: ${date}`,
+    open: "खोलें",
+  },
   medicines: {
     title: "मेरी दवाइयाँ",
     views: "दिखाएँ",
@@ -599,8 +614,7 @@ const HI: PortalStrings = {
     byInvite: "आमंत्रण से",
     byPrescription: "पर्चे के लिंक से",
     unlink: "हटाएँ",
-    unlinkConfirm: (clinic) =>
-      `${clinic} को हटाएँ? इसके अपॉइंटमेंट, पर्चे और रिमाइंडर आपके खाते से हट जाएँगे। क्लिनिक के अपने रिकॉर्ड बने रहेंगे।`,
+    unlinkConfirm: (clinic) => `${clinic} को हटाएँ? इसके अपॉइंटमेंट, पर्चे और रिमाइंडर आपके खाते से हट जाएँगे। क्लिनिक के अपने रिकॉर्ड बने रहेंगे।`,
     unlinkYes: "हाँ, हटाएँ",
     cancel: "रहने दें",
     unlinked: (clinic) => `${clinic} अब जुड़ा नहीं है।`,
@@ -609,8 +623,7 @@ const HI: PortalStrings = {
   },
   link: {
     heading: (clinic) => `${clinic} के अपने रिकॉर्ड जोड़ें`,
-    help: (clinic) =>
-      `${clinic} के आपके अपॉइंटमेंट, पर्चे और रिमाइंडर इस खाते में दिखेंगे। सिर्फ़ अपने रिकॉर्ड जोड़ें।`,
+    help: (clinic) => `${clinic} के आपके अपॉइंटमेंट, पर्चे और रिमाइंडर इस खाते में दिखेंगे। सिर्फ़ अपने रिकॉर्ड जोड़ें।`,
     link: "जोड़ें",
     linking: "जोड़ रहे हैं…",
     notMe: "यह मैं नहीं हूँ",
@@ -621,8 +634,7 @@ const HI: PortalStrings = {
     doneHelp: (clinic, who) => `${clinic} के आपके रिकॉर्ड (${who}) अब आपके MediEase खाते में हैं।`,
     goAccount: "होम पर जाएँ",
     rxHeading: "अपने रिकॉर्ड MediEase में सहेजें",
-    rxHelp:
-      "क्लिनिक के पास जो फ़ोन नंबर है, उसके आख़िरी 4 अंक लिखें। फिर उस क्लिनिक के आपके अपॉइंटमेंट, पर्चे और रिमाइंडर इस खाते में दिखेंगे।",
+    rxHelp: "क्लिनिक के पास जो फ़ोन नंबर है, उसके आख़िरी 4 अंक लिखें। फिर उस क्लिनिक के आपके अपॉइंटमेंट, पर्चे और रिमाइंडर इस खाते में दिखेंगे।",
     last4: "आपके फ़ोन नंबर के आख़िरी 4 अंक",
     save: "मेरे MediEase में सहेजें",
     saving: "सहेज रहे हैं…",

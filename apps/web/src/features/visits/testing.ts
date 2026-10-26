@@ -173,6 +173,8 @@ export function screenRoutes(c: Consultation = consultation()) {
     "GET /api/v1/me": () => json(200, person([doctorMember])),
     "GET /api/v1/clinic/doctors": () => json(200, { items: [doctor({ user_id: "u-1" })] }),
     [`GET ${VISIT}`]: () => json(200, c),
+    // M6d-P6: the visit's reports, none unless a test says otherwise.
+    [`GET ${VISIT}/attachments`]: () => json(200, { items: [] }),
     "GET /api/v1/rx-favourites": () => json(200, { items: [] }),
     "GET /api/v1/rx-templates": () => json(200, { items: [] }),
     "GET /api/v1/rx-vocabulary": () => json(200, vocabulary),

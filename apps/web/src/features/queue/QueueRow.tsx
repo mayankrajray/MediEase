@@ -21,14 +21,13 @@ export type QueueSession = Queue["sessions"][number];
 export type QueueEntry = QueueSession["appointments"][number];
 
 /** The one next step for each status (spec §6), with the accessible name naming the patient. */
-export const NEXT_STEP: Partial<
-  Record<AppointmentStatus, { readonly to: AppointmentStatus; readonly text: string; readonly name: (who: string) => string }>
-> = {
-  BOOKED: { to: "ARRIVED", text: "Arrived", name: (who) => `Mark ${who} arrived` },
-  NO_SHOW: { to: "ARRIVED", text: "Arrived", name: (who) => `Mark ${who} arrived (late)` },
-  ARRIVED: { to: "IN_CONSULTATION", text: "Start", name: (who) => `Start ${who}'s consultation` },
-  IN_CONSULTATION: { to: "COMPLETED", text: "Complete", name: (who) => `Complete ${who}'s consultation` },
-};
+export const NEXT_STEP: Partial<Record<AppointmentStatus, { readonly to: AppointmentStatus; readonly text: string; readonly name: (who: string) => string }>> =
+  {
+    BOOKED: { to: "ARRIVED", text: "Arrived", name: (who) => `Mark ${who} arrived` },
+    NO_SHOW: { to: "ARRIVED", text: "Arrived", name: (who) => `Mark ${who} arrived (late)` },
+    ARRIVED: { to: "IN_CONSULTATION", text: "Start", name: (who) => `Start ${who}'s consultation` },
+    IN_CONSULTATION: { to: "COMPLETED", text: "Complete", name: (who) => `Complete ${who}'s consultation` },
+  };
 
 export interface RowActions {
   /** Moves the queue (QUEUE_MOVE, the session's day only). */
@@ -50,6 +49,8 @@ export interface RowActions {
   readonly onCopyLiveLink?: (entry: QueueEntry) => void;
   /** M6d-P2 (billing R13): bill a completed visit (BILLING_MANAGE). */
   readonly onBill?: (entry: QueueEntry) => void;
+  /** M6d-P6 (D7): attach a scanned report to the row's visit (ATTACHMENTS_ADD). */
+  readonly onAttach?: (entry: QueueEntry) => void;
 }
 
 /**
@@ -81,6 +82,9 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
   if (actions.onBill !== undefined && status === "COMPLETED" && entry.visit_id !== null) {
     menu.push({ label: "Bill this visit", onSelect: () => actions.onBill?.(entry) });
   }
+  if (actions.onAttach !== undefined && entry.visit_id !== null) {
+    menu.push({ label: "Attach report…", onSelect: () => actions.onAttach?.(entry) });
+  }
   if (actions.onCopyLiveLink !== undefined && (status === "BOOKED" || status === "ARRIVED" || status === "IN_CONSULTATION")) {
     menu.push({ label: "Copy live link", onSelect: () => actions.onCopyLiveLink?.(entry) });
   }
@@ -106,19 +110,19 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
       </td>
       <td role="cell" data-label="Patient" className={TD}>
         <div>
-        <Link href={patientPath(entry.patient.id)} className="font-semibold text-brand-800 underline-offset-2 hover:underline">
-          {who}
-        </Link>
-        <span className="block text-sm text-slate-700">
-          {entry.patient.code} · {entry.patient.age_years} y{entry.source === "WALK_IN" ? " · walk-in" : ""}
-        </span>
+          <Link href={patientPath(entry.patient.id)} className="font-semibold text-brand-800 underline-offset-2 hover:underline">
+            {who}
+          </Link>
+          <span className="block text-sm text-slate-700">
+            {entry.patient.code} · {entry.patient.age_years} y{entry.source === "WALK_IN" ? " · walk-in" : ""}
+          </span>
         </div>
       </td>
       <td role="cell" data-label="Status" className={TD}>
         <div>
-        <StatusBadge tone={STATUS_TONES[status]}>{STATUS_LABELS[status]}</StatusBadge>
-        {entry.prescription !== null && <span className="mt-1 block text-sm font-medium text-slate-800">Prescription issued</span>}
-        {entry.dues_paise > 0 && <span className="mt-1 block text-sm font-medium text-amber-900">Dues {formatPaise(entry.dues_paise)}</span>}
+          <StatusBadge tone={STATUS_TONES[status]}>{STATUS_LABELS[status]}</StatusBadge>
+          {entry.prescription !== null && <span className="mt-1 block text-sm font-medium text-slate-800">Prescription issued</span>}
+          {entry.dues_paise > 0 && <span className="mt-1 block text-sm font-medium text-amber-900">Dues {formatPaise(entry.dues_paise)}</span>}
         </div>
       </td>
       <td role="cell" data-label={waited === null ? "" : "Waiting"} className={`${TD} text-slate-800`}>

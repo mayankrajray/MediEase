@@ -21,6 +21,7 @@ import {
   apiGet,
   apiPatch,
   apiPost,
+  apiPostForm,
   apiPut,
   type DeletePath,
   type DeleteResponse,
@@ -71,10 +72,7 @@ export function isSessionExpired(error: unknown): boolean {
  * Runs `call`; if the access token had expired, refreshes the session once and
  * runs `call` again. Any other failure, or a second failure, is thrown as is.
  */
-export async function withSessionRefresh<T>(
-  call: () => Promise<T>,
-  deps: RefreshDeps = {},
-): Promise<T> {
+export async function withSessionRefresh<T>(call: () => Promise<T>, deps: RefreshDeps = {}): Promise<T> {
   try {
     return await call();
   } catch (error) {
@@ -136,44 +134,31 @@ function defaultLocks(): Pick<LockManager, "request"> | undefined {
 }
 
 /** `apiGet` that survives an expired access token. */
-export function sessionGet<P extends GetPath>(
-  path: P,
-  options: RequestOptions = {},
-): Promise<ApiResult<GetResponse<P>>> {
+export function sessionGet<P extends GetPath>(path: P, options: RequestOptions = {}): Promise<ApiResult<GetResponse<P>>> {
   return withSessionRefresh(() => apiGet(path, options));
 }
 
 /** `apiPost` that survives an expired access token. */
-export function sessionPost<P extends PostPath>(
-  path: P,
-  body: PostBody<P>,
-  options: RequestOptions = {},
-): Promise<ApiResult<PostResponse<P>>> {
+export function sessionPost<P extends PostPath>(path: P, body: PostBody<P>, options: RequestOptions = {}): Promise<ApiResult<PostResponse<P>>> {
   return withSessionRefresh(() => apiPost(path, body, options));
 }
 
+/** M6d-P6: a multipart POST (a report on a visit) that survives an expired access token. */
+export function sessionPostForm<P extends PostPath>(path: P, form: FormData, options: RequestOptions = {}): Promise<ApiResult<PostResponse<P>>> {
+  return withSessionRefresh(() => apiPostForm(path, form, options));
+}
+
 /** `apiPut` that survives an expired access token. */
-export function sessionPut<P extends PutPath>(
-  path: P,
-  body: PutBody<P>,
-  options: RequestOptions = {},
-): Promise<ApiResult<PutResponse<P>>> {
+export function sessionPut<P extends PutPath>(path: P, body: PutBody<P>, options: RequestOptions = {}): Promise<ApiResult<PutResponse<P>>> {
   return withSessionRefresh(() => apiPut(path, body, options));
 }
 
 /** `apiPatch` that survives an expired access token. */
-export function sessionPatch<P extends PatchPath>(
-  path: P,
-  body: PatchBody<P>,
-  options: RequestOptions = {},
-): Promise<ApiResult<PatchResponse<P>>> {
+export function sessionPatch<P extends PatchPath>(path: P, body: PatchBody<P>, options: RequestOptions = {}): Promise<ApiResult<PatchResponse<P>>> {
   return withSessionRefresh(() => apiPatch(path, body, options));
 }
 
 /** `apiDelete` that survives an expired access token. */
-export function sessionDelete<P extends DeletePath>(
-  path: P,
-  options: RequestOptions = {},
-): Promise<ApiResult<DeleteResponse<P>>> {
+export function sessionDelete<P extends DeletePath>(path: P, options: RequestOptions = {}): Promise<ApiResult<DeleteResponse<P>>> {
   return withSessionRefresh(() => apiDelete(path, options));
 }

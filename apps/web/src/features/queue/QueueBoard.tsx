@@ -15,14 +15,9 @@ import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { BookDrawer, type BookingTarget } from "@/features/appointments/BookDrawer";
 import { CancelDialog } from "@/features/appointments/CancelDialog";
+import { AttachForm } from "@/features/attachments/AttachForm";
 import { PatientPicker } from "@/features/appointments/PatientPicker";
-import {
-  STATUS_LABELS,
-  placeText,
-  useAppointmentApi,
-  type AppointmentStatus,
-  type Doctor,
-} from "@/features/appointments/api";
+import { STATUS_LABELS, placeText, useAppointmentApi, type AppointmentStatus, type Doctor } from "@/features/appointments/api";
 import { clinicToday } from "@/features/patients/fields";
 import { useRxApi } from "@/features/prescriptions/api";
 import { usePrint } from "@/features/prescriptions/PrintAndLink";
@@ -42,18 +37,15 @@ const STORAGE_PREFIX = "mediease.queue.doctor.";
 /** D27: a doctor sees their own day; others the doctor last chosen here, else the first active. */
 export function initialDoctor(doctors: readonly Doctor[], userId: string, remembered: string | null): string | undefined {
   const active = doctors.filter((d) => d.is_active);
-  return (
-    active.find((d) => d.user_id === userId)?.id ??
-    active.find((d) => d.id === remembered)?.id ??
-    active[0]?.id
-  );
+  return active.find((d) => d.user_id === userId)?.id ?? active.find((d) => d.id === remembered)?.id ?? active[0]?.id;
 }
 
 type Overlay =
   | { readonly kind: "book"; readonly target: BookingTarget }
   | { readonly kind: "cancel"; readonly entry: QueueEntry }
   | { readonly kind: "no-show"; readonly entry: QueueEntry }
-  | { readonly kind: "walk-in" };
+  | { readonly kind: "walk-in" }
+  | { readonly kind: "attach"; readonly entry: QueueEntry };
 
 /**
  * The live queue board (FR-QUE-01, FR-QUE-03, M3-P5): one doctor's day, refreshed every 5 s.
@@ -78,6 +70,7 @@ export function QueueBoard({
   const canWriteClinical = permissions.includes("CLINICAL_WRITE");
   const canPrint = permissions.includes("RX_PRINT");
   const canBill = permissions.includes("BILLING_MANAGE");
+  const canAttach = permissions.includes("ATTACHMENTS_ADD");
   const billsApi = useBillsApi();
   const router = useRouter();
   const rxApi = useRxApi();
@@ -269,12 +262,7 @@ export function QueueBoard({
               <label htmlFor={pickerId} className={`${LABEL} text-sm`}>
                 Doctor
               </label>
-              <select
-                id={pickerId}
-                value={doctorId ?? ""}
-                onChange={(event) => chooseDoctor(event.target.value)}
-                className={INPUT}
-              >
+              <select id={pickerId} value={doctorId ?? ""} onChange={(event) => chooseDoctor(event.target.value)} className={INPUT}>
                 {doctors
                   .filter((d) => d.is_active)
                   .map((d) => (
@@ -293,13 +281,7 @@ export function QueueBoard({
               <label htmlFor={dateId} className={`${LABEL} text-sm`}>
                 Date
               </label>
-              <input
-                id={dateId}
-                type="date"
-                value={date}
-                onChange={(event) => event.target.value !== "" && setDate(event.target.value)}
-                className={INPUT}
-              />
+              <input id={dateId} type="date" value={date} onChange={(event) => event.target.value !== "" && setDate(event.target.value)} className={INPUT} />
             </div>
             <button type="button" onClick={() => setDate(addDays(date, 1))} className={buttonClasses("secondary")}>
               Next day
@@ -311,11 +293,7 @@ export function QueueBoard({
             )}
           </nav>
           {canManage && doctorId !== undefined && (
-            <button
-              type="button"
-              onClick={() => setOverlay({ kind: "book", target: { kind: "book" } })}
-              className={buttonClasses("primary")}
-            >
+            <button type="button" onClick={() => setOverlay({ kind: "book", target: { kind: "book" } })} className={buttonClasses("primary")}>
               Book
             </button>
           )}
@@ -339,15 +317,10 @@ export function QueueBoard({
       {printer.printing && <p role="status">Preparing the prescription…</p>}
       {doctorsError !== undefined && <ErrorNotice error={doctorsError} />}
       {error !== undefined && (
-        <ErrorNotice
-          error={error}
-          {...(queue === undefined ? {} : { message: "The queue could not be refreshed; it will try again." })}
-        />
+        <ErrorNotice error={error} {...(queue === undefined ? {} : { message: "The queue could not be refreshed; it will try again." })} />
       )}
 
-      {doctors !== undefined && doctorId === undefined && (
-        <EmptyState title="No active doctors yet">Ask the clinic owner to add one.</EmptyState>
-      )}
+      {doctors !== undefined && doctorId === undefined && <EmptyState title="No active doctors yet">Ask the clinic owner to add one.</EmptyState>}
       {doctorId !== undefined && queue === undefined && error === undefined && (
         <p role="status" className="text-slate-700">
           Loading the queue…
@@ -358,12 +331,14 @@ export function QueueBoard({
       )}
 
       {sessions.map((session) => {
-        const sessionDay =
-          session.on_date === today ||
-          (now >= new Date(session.starts_at).getTime() && now < new Date(session.ends_at).getTime());
+        const sessionDay = session.on_date === today || (now >= new Date(session.starts_at).getTime() && now < new Date(session.ends_at).getTime());
         const rows = session.appointments;
         return (
-          <section key={session.id} aria-label={`Session ${clock(session.starts_at)} to ${clock(session.ends_at)}`} className="overflow-hidden rounded-card border border-slate-200 bg-white shadow-card">
+          <section
+            key={session.id}
+            aria-label={`Session ${clock(session.starts_at)} to ${clock(session.ends_at)}`}
+            className="overflow-hidden rounded-card border border-slate-200 bg-white shadow-card"
+          >
             <h2 className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 px-4 py-3">
               <span className="font-semibold tabular-nums">
                 {clock(session.starts_at)}–{clock(session.ends_at)}
@@ -386,48 +361,59 @@ export function QueueBoard({
               <p className="px-4 py-4 text-slate-700">Nobody booked yet.</p>
             ) : (
               <LayoutMotion>
-              <div className="p-3 md:p-0">
-              <table role="table" className={TABLE}>
-                <caption className="sr-only">Appointments in this session</caption>
-                <thead role="rowgroup">
-                  <tr role="row">
-                    <th role="columnheader" scope="col" className={TH}>Place</th>
-                    <th role="columnheader" scope="col" className={TH}>Patient</th>
-                    <th role="columnheader" scope="col" className={TH}>Status</th>
-                    <th role="columnheader" scope="col" className={TH}>Waiting</th>
-                    <th role="columnheader" scope="col" className={`${TH} text-right`}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody role="rowgroup">
-                  {rows.map((entry) => (
-                    <QueueRow
-                      key={entry.id}
-                      entry={entry}
-                      session={session}
-                      actions={{
-                        canMove: canMove && sessionDay,
-                        canManage,
-                        busy,
-                        onStep: (e, to) => void step(e, to),
-                        onNoShow: (e) => setOverlay({ kind: "no-show", entry: e }),
-                        onCancel: (e) => setOverlay({ kind: "cancel", entry: e }),
-                        onReschedule: (e) =>
-                          setOverlay({
-                            kind: "book",
-                            target: { kind: "reschedule", appointment: e, patientName: e.patient.full_name },
-                          }),
-                        isMine,
-                        onOpen: (e) => void openFromRow(e),
-                        canPrint,
-                        onPrint: printer.print,
-                        ...(canBill ? { onBill: (e: QueueEntry) => void billFromRow(e) } : {}),
-                        ...(canManage && isToday ? { onCopyLiveLink: (e: QueueEntry) => void copyLiveLink(e) } : {}),
-                      }}
-                    />
-                  ))}
-                </tbody>
-              </table>
-              </div>
+                <div className="p-3 md:p-0">
+                  <table role="table" className={TABLE}>
+                    <caption className="sr-only">Appointments in this session</caption>
+                    <thead role="rowgroup">
+                      <tr role="row">
+                        <th role="columnheader" scope="col" className={TH}>
+                          Place
+                        </th>
+                        <th role="columnheader" scope="col" className={TH}>
+                          Patient
+                        </th>
+                        <th role="columnheader" scope="col" className={TH}>
+                          Status
+                        </th>
+                        <th role="columnheader" scope="col" className={TH}>
+                          Waiting
+                        </th>
+                        <th role="columnheader" scope="col" className={`${TH} text-right`}>
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody role="rowgroup">
+                      {rows.map((entry) => (
+                        <QueueRow
+                          key={entry.id}
+                          entry={entry}
+                          session={session}
+                          actions={{
+                            canMove: canMove && sessionDay,
+                            canManage,
+                            busy,
+                            onStep: (e, to) => void step(e, to),
+                            onNoShow: (e) => setOverlay({ kind: "no-show", entry: e }),
+                            onCancel: (e) => setOverlay({ kind: "cancel", entry: e }),
+                            onReschedule: (e) =>
+                              setOverlay({
+                                kind: "book",
+                                target: { kind: "reschedule", appointment: e, patientName: e.patient.full_name },
+                              }),
+                            isMine,
+                            onOpen: (e) => void openFromRow(e),
+                            canPrint,
+                            onPrint: printer.print,
+                            ...(canBill ? { onBill: (e: QueueEntry) => void billFromRow(e) } : {}),
+                            ...(canAttach ? { onAttach: (e: QueueEntry) => setOverlay({ kind: "attach", entry: e }) } : {}),
+                            ...(canManage && isToday ? { onCopyLiveLink: (e: QueueEntry) => void copyLiveLink(e) } : {}),
+                          }}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </LayoutMotion>
             )}
           </section>
@@ -444,6 +430,22 @@ export function QueueBoard({
           onClose={() => setOverlay(undefined)}
         />
       )}
+      {overlay?.kind === "attach" && overlay.entry.visit_id !== null && (
+        <Dialog title={`Attach a report for ${overlay.entry.patient.full_name}`} onClose={() => setOverlay(undefined)}>
+          <AttachForm
+            visitId={overlay.entry.visit_id}
+            onAdded={(added) => {
+              setMessage(`Report ${added.filename} attached for ${overlay.entry.patient.full_name} at ${at()}.`);
+              setOverlay(undefined);
+            }}
+          />
+          <div className="flex justify-end">
+            <button type="button" onClick={() => setOverlay(undefined)} className={buttonClasses("secondary")}>
+              Close
+            </button>
+          </div>
+        </Dialog>
+      )}
       {overlay?.kind === "cancel" && (
         <CancelDialog
           appointmentId={overlay.entry.id}
@@ -455,27 +457,20 @@ export function QueueBoard({
       {overlay?.kind === "no-show" && (
         <Dialog title={`Mark ${overlay.entry.patient.full_name} as a no-show?`} onClose={() => setOverlay(undefined)}>
           <p>
-            {placeText(overlay.entry, clock)} · booked for {clock(overlay.entry.slot_start ?? overlay.entry.session_starts_at)}. If they
-            arrive later today you can still mark them arrived.
+            {placeText(overlay.entry, clock)} · booked for {clock(overlay.entry.slot_start ?? overlay.entry.session_starts_at)}. If they arrive later today you
+            can still mark them arrived.
           </p>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setOverlay(undefined)} className={buttonClasses("secondary")}>
               Go back
             </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void step(overlay.entry, "NO_SHOW")}
-              className={buttonClasses("danger")}
-            >
+            <button type="button" disabled={busy} onClick={() => void step(overlay.entry, "NO_SHOW")} className={buttonClasses("danger")}>
               Mark no-show
             </button>
           </div>
         </Dialog>
       )}
-      {overlay?.kind === "walk-in" && doctorId !== undefined && (
-        <WalkInDialog doctorId={doctorId} onDone={done} onClose={() => setOverlay(undefined)} />
-      )}
+      {overlay?.kind === "walk-in" && doctorId !== undefined && <WalkInDialog doctorId={doctorId} onDone={done} onClose={() => setOverlay(undefined)} />}
     </section>
   );
 }

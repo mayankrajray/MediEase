@@ -66,8 +66,7 @@ describe("queue board (M3-P5, FR-QUE-01)", () => {
     const api = mockApi({
       ...boardRoutes,
       "GET /api/v1/queue": queueRoute(queueOf([{}])),
-      [TRANSITION]: () =>
-        apiError(409, "QUE_INVALID_TRANSITION", "That status change isn't allowed.", {}, { from: "ARRIVED", to: "ARRIVED" }),
+      [TRANSITION]: () => apiError(409, "QUE_INVALID_TRANSITION", "That status change isn't allowed.", {}, { from: "ARRIVED", to: "ARRIVED" }),
     });
     await board();
     const before = api.count("GET /api/v1/queue");
@@ -131,9 +130,7 @@ describe("queue board (M3-P5, FR-QUE-01)", () => {
     });
     renderInWorkspace(<QueueBoard />);
 
-    await waitFor(() =>
-      expect(api.calls.some((c) => c.path === "/api/v1/queue" && c.search.get("doctor_id") === OTHER_DOCTOR_ID)).toBe(true),
-    );
+    await waitFor(() => expect(api.calls.some((c) => c.path === "/api/v1/queue" && c.search.get("doctor_id") === OTHER_DOCTOR_ID)).toBe(true));
     fireEvent.change(screen.getByLabelText("Doctor"), { target: { value: DOCTOR_ID } });
     expect(window.localStorage.getItem(`mediease.queue.doctor.${deskWithQueue.clinic_id}`)).toBe(DOCTOR_ID);
   });
@@ -152,8 +149,7 @@ describe("queue board (M3-P5, FR-QUE-01)", () => {
     const q = queueOf([{}]);
     const api = mockApi({
       ...boardRoutes,
-      "GET /api/v1/queue": (call) =>
-        json(200, call.search.get("date") === q.on_date ? q : { on_date: call.search.get("date"), sessions: [] }),
+      "GET /api/v1/queue": (call) => json(200, call.search.get("date") === q.on_date ? q : { on_date: call.search.get("date"), sessions: [] }),
     });
     await board();
     fireEvent.click(screen.getByRole("button", { name: "Next day" }));
@@ -203,8 +199,7 @@ describe("queue board and the consultation (M4-P6)", () => {
       ...asDoctor,
       "GET /api/v1/queue": queueRoute(queueOf([{ status: "ARRIVED" }])),
       [TRANSITION]: () => json(200, {}),
-      "POST /api/v1/visits": () =>
-        apiError(409, "VIS_ALREADY_EXISTS", "This consultation already has a visit", {}, { visit_id: VISIT_ID }),
+      "POST /api/v1/visits": () => apiError(409, "VIS_ALREADY_EXISTS", "This consultation already has a visit", {}, { visit_id: VISIT_ID }),
     });
     await board();
 
@@ -266,9 +261,7 @@ describe("queue board and the consultation (M4-P6)", () => {
     const api = mockApi({
       ...boardRoutes,
       "GET /api/v1/me": () => json(200, person([deskPrinting])),
-      "GET /api/v1/queue": queueRoute(
-        queueOf([{ status: "COMPLETED" }], "Asha Rao", [{ visit_id: VISIT_ID, prescription: issued }]),
-      ),
+      "GET /api/v1/queue": queueRoute(queueOf([{ status: "COMPLETED" }], "Asha Rao", [{ visit_id: VISIT_ID, prescription: issued }])),
       [`GET /api/v1/prescriptions/${RX_ID}/pdf`]: () => new Response(pdf, { status: 200, headers: { "Content-Type": "application/pdf" } }),
     });
     const table = await board();
@@ -284,6 +277,44 @@ describe("queue board and the consultation (M4-P6)", () => {
     expect(opened).toHaveBeenCalledWith("", "_blank");
     expect(api.count(`GET /api/v1/prescriptions/${RX_ID}/pdf`)).toBe(1);
     opened.mockRestore();
+  });
+
+  it("M6d-P6 (D7): front desk attaches a scanned report to the row's visit without opening it", async () => {
+    const deskAttaching = membership(CLINIC_A, "Alpha Clinic", "FRONT_DESK", {
+      permissions: [...deskWithQueue.permissions, "ATTACHMENTS_ADD"],
+    });
+    const api = mockApi({
+      ...boardRoutes,
+      "GET /api/v1/me": () => json(200, person([deskAttaching])),
+      "GET /api/v1/queue": queueRoute(queueOf([{ status: "COMPLETED" }], "Asha Rao", [{ visit_id: VISIT_ID }])),
+      [`POST /api/v1/visits/${VISIT_ID}/attachments`]: () =>
+        json(201, {
+          id: "0192f0a0-0000-7000-8000-0000000009a1",
+          visit_id: VISIT_ID,
+          filename: "cbc.pdf",
+          content_type: "application/pdf",
+          size_bytes: 8,
+          uploaded_at: "2026-10-26T05:00:00+00:00",
+          uploaded_by_user_id: "u-1",
+          shared_with_patient: false,
+          shared_at: null,
+          can_delete: true,
+          deletable_until: "2026-10-27T05:00:00+00:00",
+        }),
+    });
+    await board();
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Asha Rao" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Attach report…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Attach a report for Asha Rao" });
+    fireEvent.change(within(dialog).getByLabelText("Attach a report"), {
+      target: { files: [new File(["%PDF-1.7"], "cbc.pdf", { type: "application/pdf" })] },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Attach" }));
+
+    expect(await screen.findByText(/^Report cbc\.pdf attached for Asha Rao at \d\d:\d\d\.$/)).toBeInTheDocument();
+    expect(api.count(`POST /api/v1/visits/${VISIT_ID}/attachments`)).toBe(1);
+    expect(api.calls.some((c) => c.method === "GET" && c.path.includes("/attachments"))).toBe(false);
   });
 });
 
