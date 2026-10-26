@@ -62,6 +62,14 @@ class PublicClinicUseCases(Protocol):
     def get_sitemap(self) -> GetSitemap: ...
 
 
+def _via_directory() -> bool:
+    """M6c-P7 (discovery R11): ``via=directory`` asks for the discoverability rule too."""
+    via = request.args.get("via")
+    if via not in (None, "directory"):
+        raise InvalidValue("via", "must be directory")
+    return via == "directory"
+
+
 def _hhmm(value: Any) -> str:
     return str(value.strftime("%H:%M"))
 
@@ -136,9 +144,10 @@ def create_public_clinics_blueprint(use_cases: PublicClinicUseCases) -> Blueprin
     @bp.get("/<string(maxlength=63):slug>")
     @public
     def get_clinic(slug: str) -> Response:
-        return jsonify(
-            public_clinic_body(use_cases.get_public_clinic().execute(slug, request_info()))
+        view = use_cases.get_public_clinic().execute(
+            slug, request_info(), via_directory=_via_directory()
         )
+        return jsonify(public_clinic_body(view))
 
     @bp.get("/<string(maxlength=63):slug>/availability")
     @public
@@ -152,7 +161,9 @@ def create_public_clinics_blueprint(use_cases: PublicClinicUseCases) -> Blueprin
             first = date.fromisoformat(raw) if raw else None
         except ValueError:
             raise InvalidValue("from", "must be a date as YYYY-MM-DD") from None
-        days = use_cases.get_availability().execute(slug, doctor_id, first, request_info())
+        days = use_cases.get_availability().execute(
+            slug, doctor_id, first, request_info(), via_directory=_via_directory()
+        )
         return jsonify(availability_body(list(days)))
 
     return bp

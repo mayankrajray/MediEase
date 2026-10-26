@@ -131,3 +131,22 @@ def test_r1_bad_filters_are_named(world: World) -> None:
         assert resp.get_json()["error"]["details"]["fields"][0]["field"] == field
     options = anon.get(f"{SEARCH}/doctors").get_json()["options"]
     assert "Hindi" in options["languages"] and options["specialties"]
+
+
+def test_ac5_a_result_for_a_clinic_that_left_the_directory_is_not_found(world: World) -> None:
+    """M6c-P7 (discovery R11, FR-DIS-08): opened from search, the page follows the rule."""
+    owner = _discoverable_a(world)
+    anon = world.anonymous()
+    page = f"/api/v1/public/clinics/{world.a.clinic.slug}"
+    times = f"{page}/availability?doctor_id={world.a.doctor.id}"
+    assert anon.get(f"{page}?via=directory").status_code == 200
+    assert anon.get(f"{times}&via=directory").status_code == 200
+    owner.put(LISTING, json={"listed": False}, headers=staff_csrf(owner))
+    gone = anon.get(f"{page}?via=directory")
+    unknown = anon.get("/api/v1/public/clinics/no-such-clinic?via=directory")
+    assert gone.status_code == unknown.status_code == 404
+    assert gone.get_json()["error"]["code"] == unknown.get_json()["error"]["code"]
+    assert anon.get(f"{times}&via=directory").status_code == 404
+    # The clinic's own link keeps working (FR-DIS-07).
+    assert anon.get(page).status_code == 200
+    assert anon.get(f"{page}?via=elsewhere").status_code == 422
