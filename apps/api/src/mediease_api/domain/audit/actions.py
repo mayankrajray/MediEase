@@ -167,6 +167,8 @@ class AuditAction(StrEnum):
     RECEIPT_LINK_CREATED = "receipt_link.created"
     RECEIPT_LINK_OPENED = "receipt_link.opened"
     RECEIPT_LINK_DOWNLOADED = "receipt_link.downloaded"
+    # M6d-P5 (FR-BIL-06): the day's collection exported as CSV (the day and the row count).
+    COLLECTION_EXPORTED = "collection.exported"
     # M6b-P5 (R34-R43, R32): the answers. IDs and the decline reason code only, never the note.
     BOOKING_REQUEST_ACCEPTED = "booking_request.accepted"
     BOOKING_REQUEST_DECLINED = "booking_request.declined"

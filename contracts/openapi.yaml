@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.46.0
+  version: 0.47.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -5289,6 +5289,67 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '409':
           $ref: '#/components/responses/LinkError'
+  /api/v1/clinic/collection:
+    get:
+      tags: [clinic]
+      operationId: getCollection
+      summary: One day's collection by mode and doctor
+      description: |
+        M6d-P5, spec billing R55-R59; FR-BIL-06. COLLECTION_VIEW (owners and the front desk).
+        Every payment and refund recorded that clinic-local day; voided ones listed but not counted.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: date
+          in: query
+          required: false
+          schema: {type: string, format: date}
+          description: A clinic-local day; today when left out; never a future day (422)
+      responses:
+        '200':
+          description: The day
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionDay'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
+  /api/v1/clinic/collection/export:
+    get:
+      tags: [clinic]
+      operationId: exportCollection
+      summary: One day's collection as CSV
+      description: |
+        M6d-P5, spec billing R60. COLLECTION_VIEW. The same list, every cell safe for a
+        spreadsheet (no formula), audited (collection.exported).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: date
+          in: query
+          required: false
+          schema: {type: string, format: date}
+          description: A clinic-local day; today when left out; never a future day (422)
+      responses:
+        '200':
+          description: The CSV
+          content:
+            text/csv:
+              schema:
+                description: The CSV text
+                contentMediaType: text/csv
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          $ref: '#/components/responses/ConflictError'
   /api/v1/ops/messaging-costs:
     get:
       tags: [ops]
@@ -7149,7 +7210,9 @@ paths:
               schema: {type: string}
           content:
             text/csv:
-              schema: {type: string}
+              schema:
+                description: The CSV text
+                contentMediaType: text/csv
         '400':
           $ref: '#/components/responses/PermissionError'
         '401':
@@ -9448,6 +9511,69 @@ components:
               total_paise: {type: integer}
               balance_paise: {type: integer}
               cancelled: {type: boolean}
+    CollectionTally: {type: object, description: Sums in paise; combined with allOf so no additionalProperties, required: [payments_paise, refunds_paise, net_paise, count], properties: {payments_paise: {type: integer}, refunds_paise: {type: integer}, net_paise: {type: integer}, count: {type: integer}}}
+    CollectionDay:
+      type: object
+      additionalProperties: false
+      required: [date, timezone, total, voided, by_mode, by_doctor, items]
+      description: M6d-P5 (billing R55-R59)
+      properties:
+        date: {type: string, format: date}
+        timezone: {type: string}
+        total:
+          $ref: '#/components/schemas/CollectionTally'
+        voided:
+          $ref: '#/components/schemas/CollectionTally'
+        by_mode:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/CollectionTally'
+              - type: object
+                required: [mode]
+                properties:
+                  mode:
+                    $ref: '#/components/schemas/PaymentMode'
+        by_doctor:
+          type: array
+          items:
+            allOf:
+              - type: object
+                required: [doctor]
+                properties:
+                  doctor:
+                    oneOf:
+                      - $ref: '#/components/schemas/BillDoctorRef'
+                      - type: 'null'
+              - $ref: '#/components/schemas/CollectionTally'
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, bill_id, bill_number, kind, mode, amount_paise, reference, received_at,
+                       received_by, patient, doctor, voided]
+            properties:
+              id: {type: string, format: uuid}
+              bill_id: {type: string, format: uuid}
+              bill_number: {type: [string, 'null']}
+              kind:
+                $ref: '#/components/schemas/PaymentKind'
+              mode:
+                $ref: '#/components/schemas/PaymentMode'
+              amount_paise: {type: integer}
+              reference: {type: [string, 'null']}
+              received_at: {type: string, format: date-time}
+              received_by: {type: [string, 'null']}
+              patient:
+                oneOf:
+                  - $ref: '#/components/schemas/BillPatientRef'
+                  - type: 'null'
+              doctor:
+                oneOf:
+                  - $ref: '#/components/schemas/BillDoctorRef'
+                  - type: 'null'
+              voided: {type: boolean}
     SuspendReason:
       type: string
       enum: [VERIFICATION_PROBLEM, CLINIC_REQUEST, TERMS_BREACH, PAYMENT, OTHER]

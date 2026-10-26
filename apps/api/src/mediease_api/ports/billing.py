@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Protocol
@@ -85,6 +85,10 @@ class BillRepository(Protocol):
         ...
 
     def delete_draft(self, bill_id: UUID) -> None: ...
+
+    def get_many(self, bill_ids: Collection[UUID]) -> Sequence[Bill]:
+        """These bills of this clinic, without their lines (P5); others are skipped."""
+        ...
 
     def open_for_visit(self, visit_id: UUID) -> Bill | None:
         """The visit's draft or issued bill (not a cancelled one), without its lines."""

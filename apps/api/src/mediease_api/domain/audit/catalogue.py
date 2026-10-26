@@ -189,6 +189,7 @@ ACTIONS: dict[A, ActionInfo] = {
         (A.RECEIPT_LINK_CREATED, "Created a receipt link"),
         (A.RECEIPT_LINK_OPENED, "Patient opened a receipt link"),
         (A.RECEIPT_LINK_DOWNLOADED, "Patient downloaded a receipt"),
+        (A.COLLECTION_EXPORTED, "Exported the day's collection"),
     ),
 }
 
