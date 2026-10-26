@@ -40,6 +40,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 27. Bills and credit notes (M6d-P2)
 28. Payments, refunds and dues (M6d-P3)
 29. Receipts and receipt links (M6d-P4)
+30. The daily collection (M6d-P5)
 
 ---
 
@@ -779,3 +780,20 @@ Meta (L-02). Share the link or the QR code.
 
 **Storage.** Receipts are blobs under `receipt/<clinic_id>/<bill_id>/s<n>.pdf`, private, and served
 only through the API. Back them up with the prescriptions (ADR-0012).
+
+### 30. The daily collection (M6d-P5)
+
+*Collection* (`/collection`) shows what was taken and refunded on a clinic-local day, by mode and by
+doctor. *Export CSV* downloads the list (audited).
+
+**"The cash in the drawer does not match."** Compare the *Cash* row with the drawer. The entries list
+shows each payment with who took it. A voided entry is not counted. A payment recorded on the wrong
+bill today can still be voided and taken again; from tomorrow it needs a credit note and a refund.
+
+**"Yesterday's figure changed."** It cannot: past payments are never edited and voids are same-day
+only. Check the day picked, and that the clinic's time zone is right (Settings), since a day is the
+clinic's local day.
+
+**Checking the figure by hand.** `SELECT sum(CASE kind WHEN 'PAYMENT' THEN amount_paise ELSE
+-amount_paise END) FROM payments WHERE clinic_id = '<id>' AND local_date = '<YYYY-MM-DD>' AND voided_at
+IS NULL;` gives the day's net in paise.
