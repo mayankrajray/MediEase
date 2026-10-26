@@ -27,6 +27,7 @@ import { clinicToday } from "@/features/patients/fields";
 import { useRxApi } from "@/features/prescriptions/api";
 import { usePrint } from "@/features/prescriptions/PrintAndLink";
 import { visitPath } from "@/features/visits/paths";
+import { BIL_VISIT_BILLED, billPath, useBillsApi } from "@/features/bills/api";
 import { useClinic } from "@/features/shell/ClinicGate";
 import { ApiError } from "@/lib/api/client";
 import { addDays, formatClock, formatDay } from "@/lib/format/time";
@@ -76,6 +77,8 @@ export function QueueBoard({
   const canManage = permissions.includes("APPOINTMENTS_MANAGE");
   const canWriteClinical = permissions.includes("CLINICAL_WRITE");
   const canPrint = permissions.includes("RX_PRINT");
+  const canBill = permissions.includes("BILLING_MANAGE");
+  const billsApi = useBillsApi();
   const router = useRouter();
   const rxApi = useRxApi();
   const printer = usePrint();
@@ -161,6 +164,22 @@ export function QueueBoard({
         return;
       }
       throw failure;
+    }
+  }
+
+  /** M6d-P2: the visit's bill, drafted now or the one it already has. */
+  async function billFromRow(entry: QueueEntry) {
+    if (entry.visit_id === null) return;
+    setBusy(true);
+    setActionError(undefined);
+    try {
+      router.push(billPath((await billsApi.draft(entry.patient.id, entry.visit_id)).id));
+    } catch (failure) {
+      const existing = failure instanceof ApiError && failure.code === BIL_VISIT_BILLED ? failure.details["bill_id"] : undefined;
+      if (typeof existing === "string") router.push(billPath(existing));
+      else if (!endSession(failure)) setActionError(failure);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -401,6 +420,7 @@ export function QueueBoard({
                         onOpen: (e) => void openFromRow(e),
                         canPrint,
                         onPrint: printer.print,
+                        ...(canBill ? { onBill: (e: QueueEntry) => void billFromRow(e) } : {}),
                         ...(canManage && isToday ? { onCopyLiveLink: (e: QueueEntry) => void copyLiveLink(e) } : {}),
                       }}
                     />

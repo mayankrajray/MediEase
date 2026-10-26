@@ -44,15 +44,15 @@ test("FR-UX-05: the owner, the doctor and the front desk each get their own home
   }
 
   expect(seen["owner"]).toEqual({
-    nav: ["Today", "Queue", "Booking requests", "Patients", "Follow-ups", "Team", "Schedule", "Audit log", "Directory", "Fees", "Notifications"],
+    nav: ["Today", "Queue", "Booking requests", "Patients", "Follow-ups", "Bills", "Team", "Schedule", "Audit log", "Directory", "Fees", "Notifications"],
     actions: ["Invite someone", "Schedule settings", "See the queue"],
   });
   expect(seen["doctor"]).toEqual({
-    nav: ["Today", "My queue", "My patients", "My follow-ups", "My schedule", "Notifications"],
+    nav: ["Today", "My queue", "My patients", "My follow-ups", "My schedule", "My bills", "Notifications"],
     actions: ["Open my queue", "My patients", "My follow-ups"],
   });
   expect(seen["desk"]).toEqual({
-    nav: ["Today", "Queue", "Booking requests", "Patients", "Follow-ups", "Notifications"],
+    nav: ["Today", "Queue", "Booking requests", "Patients", "Follow-ups", "Bills", "Notifications"],
     actions: ["Register a patient", "Book an appointment", "Add a walk-in"],
   });
 });
@@ -103,7 +103,7 @@ test("FR-UX-06: a practising owner switches to Doctor and sees only their own se
   await view.getByText("Doctor", { exact: true }).click();
   await expect(view.getByRole("radio", { name: "Doctor" })).toBeChecked();
   const doctor = await home(page);
-  expect(doctor.nav).toEqual(["Today", "My queue", "My patients", "My follow-ups", "My schedule", "Notifications"]);
+  expect(doctor.nav).toEqual(["Today", "My queue", "My patients", "My follow-ups", "My schedule", "My bills", "Notifications"]);
   const sessions = page.getByRole("region", { name: "Your sessions" });
   await expect(sessions).toContainText(OWNER_DOCTOR_NAME);
   await expect(sessions).not.toContainText(COLLEAGUE_NAME);

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { PatientAppointments } from "@/features/appointments/PatientAppointments";
+import { PatientBills } from "@/features/bills/PatientBills";
 import { PrintablePrescriptions } from "@/features/prescriptions/PrintablePrescriptions";
 import { PatientMessages } from "@/features/reminders/PatientMessages";
 import { PatientReminders } from "@/features/reminders/PatientReminders";
@@ -36,6 +37,7 @@ export function PatientProfile({ patientId }: { patientId: string }) {
   const canPrint = permissions.includes("RX_PRINT");
   const canRemind = permissions.includes("REMINDERS_SCHEDULE");
   const canManage = permissions.includes("PATIENTS_MANAGE");
+  const canBill = permissions.includes("BILLING_MANAGE");
   const api = usePatientApi();
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
@@ -155,6 +157,7 @@ export function PatientProfile({ patientId }: { patientId: string }) {
 
       {canViewClinical && <PatientVisits patientId={patient.id} />}
       {canPrint && <PrintablePrescriptions patientId={patient.id} />}
+      {canBill && <PatientBills patientId={patient.id} />}
     </article>
   );
 }
