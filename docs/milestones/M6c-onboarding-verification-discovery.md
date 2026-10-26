@@ -81,7 +81,7 @@ Locked when M6c was approved; they override anything below that reads otherwise.
 | M3 | Ops roles | `users.ops_roles` (`OPS_ADMIN`, `OPS_REVIEWER`) replaces the boolean in P2; every existing ops user gets both, so nothing changes for them. Reviewing needs `OPS_REVIEWER`; creating clinics, imports and messaging costs need `OPS_ADMIN`; suspension needs `OPS_ADMIN` | B: keep one ops boolean (the PRD names `OPS_REVIEWER`; separating who verifies doctors from who sets clinics up is the point) |
 | M4 | Verification | Recorded **per clinic and per doctor**: who, when, and against what (`APPLICATION` or `OPS_CHECK`), never inferred from status. A doctor's verification is its own check row (council, number, register looked up, certificate seen, result). Editing a verified doctor's registration number or council clears that doctor's verification (to be re-checked) | B: one `verified` flag on the clinic (FR-ONB-09 needs doctors verified one by one) |
 | M5 | Activation (**D1**) | **Keep today's rule** for `ACTIVE`: the owner accepting the invitation. FR-ONB-04's "checklist complete" is read as the steps that are required before a patient can be served: clinic created, a doctor added, the owner joined. The remaining checklist items (first appointment, first prescription) stay as measures (G4), not gates | B: activate only when every checklist item has a time (a clinic could never book its first appointment, since booking needs `ACTIVE`) |
-| M6 | Search technology | PostgreSQL only: `pg_trgm` for names and a **directory read model** (a platform table of discoverable clinics and doctors, refreshed in the same transaction as every change that affects it and rebuilt by a job), designed in P6 and recorded then as an ADR. "Distance" means same PIN, then same city, then same state, because no coordinates are stored | B: an external search service (cost and one more data processor for pilot scale). C: geocoding addresses now (a provider, consent wording and accuracy questions for little gain at pilot scale) |
+| M6 | Search technology (**superseded for M6c by ADR-0021**, 26 Oct 2026: live tables now, the read model at about 2,000 clinics or p95 over 300 ms) | PostgreSQL only: `pg_trgm` for names and a **directory read model** (a platform table of discoverable clinics and doctors, refreshed in the same transaction as every change that affects it and rebuilt by a job), designed in P6 and recorded then as an ADR. "Distance" means same PIN, then same city, then same state, because no coordinates are stored | B: an external search service (cost and one more data processor for pilot scale). C: geocoding addresses now (a provider, consent wording and accuracy questions for little gain at pilot scale) |
 
 ---
 
@@ -367,7 +367,7 @@ Designed 26 Oct 2026; **approved in advance** (as P2). Covers FR-DIS-01, 02, 04,
 | # | Decision | Chosen | Alternatives |
 |---|---|---|---|
 | 1 | Engine | PostgreSQL with `pg_trgm` (`word_similarity`), migration `0035` | An external search service |
-| 2 | Read model (milestone decision M6) | **Not yet**: a reviewed cross-clinic reader proposes 40 candidates from the live tables (published columns, IDs out) and each passes `is_discoverable`; ADR-0021 records when to add the read model (about 2,000 listed clinics or p95 over 300 ms) | Build the read model now (a consistency mechanism to maintain before there is load). A deviation from M6's wording, recorded in ADR-0021 |
+| 2 | Read model (milestone decision M6) | **ADR-0021 supersedes M6's directory read model for M6c** (developer, 26 Oct 2026). **Not yet**: a reviewed cross-clinic reader proposes 40 candidates from the live tables (published columns, IDs out) and each passes `is_discoverable`; ADR-0021 records when to add the read model (about 2,000 listed clinics or p95 over 300 ms) | Build the read model now (a consistency mechanism to maintain before there is load). A deviation from M6's wording, recorded in ADR-0021 |
 | 3 | Place | Same PIN, same city, same PIN district (first three digits), elsewhere; a place filter keeps the first three | Geocoding (no coordinates are stored) |
 | 4 | Availability | The public page's offer builder, first free day within 7 days, for the candidates only | A precomputed column (stale within minutes) |
 | 5 | The page | `/find`, server-rendered from a GET form (works without JavaScript), English and Hindi, doctor and clinic tabs, results linking to the profiles | A client-side search box (more JavaScript on a 4G phone) |
@@ -379,6 +379,11 @@ parameters; `strpos` instead of `LIKE`, so input is never a pattern), `applicati
 search.py` (`SearchClinics`, `SearchDoctors`), `delivery/http/public_search.py` (allow-list
 bodies with tests), `uow.directory`; web `/find` (`features/find`, `lib/i18n/find.ts`, a public
 path in the proxy). `rupees()` joined `lib/format/money.ts` so server pages can use it.
+
+**Developer's final decision (26 Oct 2026):** search over the live tables is approved for M6c;
+ADR-0021 supersedes milestone decision M6's read model for this milestone, and its thresholds
+(about 2,000 listed clinics, or a p95 above 300 ms on `/public/search/*`) are the trigger for
+adding the search table in a later milestone.
 
 Tests: `test_search_http.py` (AC1-AC4, R1 field errors, the allow-lists), `test_0035_*`, route
 policies, contract tests; web `FindPage.test.tsx`, proxy, public page and lib suites. The 500 ms
