@@ -133,7 +133,7 @@ const EN: LandingWords = {
   },
   footer: { staff: "Staff sign in", apply: "Apply to join", find: "Find a doctor" },
   switchTo: "हिंदी में देखें",
-  switchLabel: "View this page in Hindi",
+  switchLabel: "हिंदी में देखें (view this page in Hindi)",
 };
 
 const HI: LandingWords = {
@@ -219,7 +219,7 @@ const HI: LandingWords = {
   },
   footer: { staff: "स्टाफ़ साइन इन", apply: "आवेदन करें", find: "डॉक्टर खोजें" },
   switchTo: "View in English",
-  switchLabel: "इस पेज को अंग्रेज़ी में देखें",
+  switchLabel: "View in English (इस पेज को अंग्रेज़ी में देखें)",
 };
 
 export function landingWords(language: PortalLanguage): LandingWords {

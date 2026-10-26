@@ -63,7 +63,7 @@ const EN: FindWords = {
   viewClinic: "See clinic and times",
   emergency: "Not for emergencies. In an emergency call your local emergency number or go to the nearest hospital.",
   switchTo: "हिंदी में देखें",
-  switchLabel: "View this page in Hindi",
+  switchLabel: "हिंदी में देखें (view this page in Hindi)",
   applyCta: "Are you a doctor? Apply to join MediEase",
 };
 
@@ -94,7 +94,7 @@ const HI: FindWords = {
   viewClinic: "क्लिनिक और समय देखें",
   emergency: "आपात स्थिति के लिए नहीं। आपात स्थिति में अपने यहाँ का आपातकालीन नंबर मिलाएँ या सबसे नज़दीकी अस्पताल जाएँ।",
   switchTo: "View in English",
-  switchLabel: "इस पेज को अंग्रेज़ी में देखें",
+  switchLabel: "View in English (इस पेज को अंग्रेज़ी में देखें)",
   applyCta: "क्या आप डॉक्टर हैं? MediEase से जुड़ने के लिए आवेदन करें",
 };
 
