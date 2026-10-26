@@ -407,3 +407,30 @@ Built 26 Oct 2026 as designed: `require_discoverable` in `application/booking/pu
 Tests: `test_search_http.py::test_ac5_*` (the stale result, the clinic's own link, a bad `via`),
 contract tests, the portal screens, find and public page suites. AC6 (search → profile → time →
 sign up → request) is a Playwright journey run with the full suite at the end of P8.
+
+---
+
+## M6c-P8 - Landing page v1
+
+Designed 26 Oct 2026; **approved in advance** (as P2). Covers FR-LND-01..03. No spec file: the
+page has no API; its rules are L1-L6 below.
+
+| # | Decision | Chosen | Alternatives |
+|---|---|---|---|
+| 1 | Who sees it (L1) | `/` renders the landing page for a visitor with no session hint; a staff hint (`me_csrf`) goes to Today, a patient hint (`me_pt_csrf`) to `/portal`. `/` becomes a public path | A separate `/welcome` (the address people type is `/`) |
+| 2 | Content (L2, FR-LND-02) | Problem, features, a card per role (Owner, Doctor, Front desk), the 5-minute set-up promise after approval, pricing, privacy and safety, FAQ, the emergency notice on the patient path. No clinical claims; every claim is something M6c ships | Role screenshots now (images cost the 4G LCP budget and go stale with every screen change; M7's landing polish adds them) |
+| 3 | Calls to action (L3, FR-LND-01) | *Apply to join MediEase* (`/apply`), *Find a doctor* (`/find`), the patient app's sign-in (Google or email), staff sign-in. "Book a demo" is the honest version available today: apply, and MediEase calls to show the product | A demo booking form (another inbox with personal data and no owner yet) |
+| 4 | Pricing (L4) | PRD §12 tiers in one constant (`PLANS` in `lib/i18n/landing.ts`), labelled pilot prices, with the 14-day trial and "no commission, no per-booking fee". **PRD §12 asks the developer to confirm the figures before the page is deployed** | Hide prices until M6d |
+| 5 | Performance and access (L5, FR-LND-03) | Server-rendered text and links, no images or web fonts, one small client component; skip link, landmarks, headings in order, 44 px targets; English and Hindi (`?lang=hi` or the portal language cookie) | A client-rendered page |
+| 6 | Analytics (L6, PRD §11.3) | `landing_viewed` and `landing_cta_clicked` with enum properties only (`lib/analytics.ts`), queued in the page: **no processor is chosen yet** (privacy review L-04), so nothing leaves the browser | Add a third-party analytics script now |
+
+### As built (M6c-P8)
+
+Built 26 Oct 2026 as designed: `app/page.tsx` (redirects by session hint, otherwise `Landing`),
+`features/landing/Landing.tsx` and `LandingAnalytics.tsx`, `lib/i18n/landing.ts`,
+`lib/analytics.ts`, `/` in the proxy's public paths; the root layout's comment on indexing.
+The page is `index, follow` with a canonical `/` and an `hi` alternate.
+
+Tests: `app/page.test.ts` (the redirects, the signed-out page, metadata), `Landing.test.tsx`
+(both paths, pricing, the emergency notice, the two events in Hindi), the proxy suite. LCP and
+axe are measured in the final end-to-end run.
