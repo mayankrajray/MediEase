@@ -101,6 +101,7 @@ export function queueOf(entries: readonly Partial<Appointment>[], name = "Asha R
           wait_minutes: e.status === "ARRIVED" ? 0 : null,
           visit_id: null,
           prescription: null,
+          dues_paise: 0,
           ...(extras[i] ?? {}),
         })),
       },

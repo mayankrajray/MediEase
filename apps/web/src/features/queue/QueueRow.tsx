@@ -12,6 +12,7 @@ import { TD, TR } from "@/components/ui/table";
 import { useNow } from "@/components/useNow";
 import { STATUS_LABELS, STATUS_TONES, placeText, type AppointmentStatus } from "@/features/appointments/api";
 import { patientPath } from "@/features/patients/RegisterPatientDrawer";
+import { formatPaise } from "@/lib/format/money";
 import { formatClock, formatDuration } from "@/lib/format/time";
 
 import type { Queue } from "./useQueue";
@@ -117,6 +118,7 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
         <div>
         <StatusBadge tone={STATUS_TONES[status]}>{STATUS_LABELS[status]}</StatusBadge>
         {entry.prescription !== null && <span className="mt-1 block text-sm font-medium text-slate-800">Prescription issued</span>}
+        {entry.dues_paise > 0 && <span className="mt-1 block text-sm font-medium text-amber-900">Dues {formatPaise(entry.dues_paise)}</span>}
         </div>
       </td>
       <td role="cell" data-label={waited === null ? "" : "Waiting"} className={`${TD} text-slate-800`}>
