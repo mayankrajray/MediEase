@@ -21,6 +21,11 @@ first production release.
   the web image). Revisit when braces is patched or Next drops `fast-glob`. `make audit` mirrors CI.
 
 ### Added
+- M6c-P8 (#53): the landing page at `/` for signed-out visitors (FR-LND-01..03): the clinic path
+  (problem, features, a screen per role, the 5-minute set-up promise, pilot pricing from PRD §12,
+  privacy and safety, FAQ, *Apply to join MediEase*) and the patient path (*Find a doctor*, the
+  patient app's sign-in). English and Hindi, indexable, no images, PII-free analytics events
+  queued in the page (no processor yet). Signed-in staff still land on Today.
 - M6c-P7 (#53): from search to a request (FR-DIS-08; spec discovery R11-R15). Search results open
   the profile with `via=directory`; a clinic that has left the directory since then answers like
   an unknown page, while its own link keeps working. The chosen time, sign-in and the request keep

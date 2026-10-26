@@ -63,7 +63,7 @@ Milestone issue #53 → branch m6c/53-onboarding-discovery (from origin/main at 
 ## 4. Phase breakdown
 
 Details, file lists and test plans per phase are in the design notes; each phase is designed at
-its start. P1-P7 are built and pushed; the developer approved every design decision for P2-P8 in
+its start. P1-P8 are built and pushed; the developer approved every design decision for P2-P8 in
 advance (26 Oct 2026).
 
 | Phase | Objective | Requirements | Verify |
@@ -202,3 +202,4 @@ advance (26 Oct 2026).
 | 26 Oct 2026 | M6c-P5 built: only active, verified and shown doctors are public; specialties, languages and fees published; doctor profiles at `/c/{slug}/doctors/{id}`; `indexable` (discoverable and not opted out) drives the page's robots; the sitemap API with `sitemap.xml` and `robots.txt`; the owner's languages, fee and search-engine switches; contract 0.40.0. Changed-code tests green | #53 | P5 built and pushed |
 | 26 Oct 2026 | M6c-P6 built: `pg_trgm` (`0035`), the reviewed `DirectoryReader` over the live tables with every candidate re-checked by the discoverability rule (ADR-0021: no read model yet), clinic and doctor search with place, specialty, language and 7-day availability, `/find` (server-rendered GET form, English and Hindi); spec `docs/specs/discovery.md`; contract 0.41.0. Changed-code tests green | #53 | P6 built and pushed |
 | 26 Oct 2026 | M6c-P7 built: `via=directory` on the public page and availability (a clinic that left the directory answers like an unknown one; its own link keeps working), carried through the profile, the chosen time and the request form; the portal's *Find a doctor* opens `/find`; contract 0.42.0. Changed-code tests green; the search-to-request journey joins the Playwright suite at the end | #53 | P7 built and pushed |
+| 26 Oct 2026 | M6c-P8 built: the landing page at `/` (clinic and patient paths, pilot pricing from PRD §12 to be confirmed before deployment, privacy and FAQ, English and Hindi, PII-free events queued in the page), `/` public in the proxy, signed-in visitors sent on by the page. Changed-code tests green. Next: the full suites and Playwright once | #53 | P8 built and pushed |
