@@ -21,12 +21,14 @@ import structlog
 from flask import Flask, Response, jsonify
 from werkzeug.exceptions import HTTPException
 
+from mediease_api.application.assistant.errors import RateLimited as AssistantRateLimited
 from mediease_api.application.auth.errors import AccountLocked, AuthRateLimited
 from mediease_api.application.clinics.errors import InvitesRateLimited
 from mediease_api.application.patients.errors import ImportInvalid, PhoneExists
 from mediease_api.delivery.http.bodies import candidate_body
 from mediease_api.delivery.http.validation import RequestValidationFailed
 from mediease_api.delivery.middleware import get_request_id
+from mediease_api.domain.assistant.llm import LlmBusy
 from mediease_api.domain.booking.request import BookingRateLimited
 from mediease_api.domain.links.errors import LinkRateLimited
 from mediease_api.domain.messaging.errors import WebhookRateLimited
@@ -195,6 +197,12 @@ DOMAIN_ERROR_STATUS = {
     "REM_NOT_SCHEDULED": 409,
     "REM_FOLLOWS_APPOINTMENT": 409,
     "AUD_RANGE_TOO_LONG": 422,
+    # M7a (spec assistant R2, R8, R11): the assistant.
+    "AI_UNAVAILABLE": 503,
+    "AI_PROVIDER_BUSY": 503,
+    "AI_RATE_LIMITED": 429,
+    "AI_PROPOSAL_INVALID": 404,
+    "AI_PROPOSAL_USED": 409,
 }
 
 
@@ -225,7 +233,9 @@ def domain_error_response(exc: DomainError) -> tuple[Response, int]:
         | WebhookRateLimited
         | InvitesRateLimited
         | BookingRateLimited
-        | ApplicationRateLimited,
+        | ApplicationRateLimited
+        | AssistantRateLimited
+        | LlmBusy,
     ):
         response.headers["Retry-After"] = str(exc.retry_after_seconds)
     return response, status
