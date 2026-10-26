@@ -25,6 +25,7 @@ export type PaymentInput = components["schemas"]["PaymentInput"];
 export type PaymentMode = components["schemas"]["PaymentMode"];
 export type DuesList = components["schemas"]["DuesList"];
 export type ReceiptLink = components["schemas"]["PatientLinkInfo"];
+export type CollectionDay = components["schemas"]["CollectionDay"];
 
 export const MODE_LABELS: Readonly<Record<PaymentMode, string>> = { CASH: "Cash", UPI: "UPI", CARD: "Card" };
 
@@ -63,6 +64,9 @@ export interface BillsApi {
   readonly receipt: (billId: string) => Promise<Blob>;
   readonly link: (billId: string) => Promise<ReceiptLink>;
   readonly resetLink: (billId: string) => Promise<ReceiptLink>;
+  /** M6d-P5: one day's collection, and its CSV (a blob to download). */
+  readonly collection: (day?: string) => Promise<CollectionDay>;
+  readonly collectionCsv: (day: string) => Promise<Blob>;
 }
 
 export function useBillsApi(): BillsApi {
@@ -102,6 +106,8 @@ export function useBillsApi(): BillsApi {
       receipt: (billId) => fetchPdfAt(`/api/v1/clinic/bills/${encodeURIComponent(billId)}/receipt.pdf`, clinicId),
       link: async (billId) => (await sessionGet("/api/v1/clinic/bills/{bill_id}/link", one(billId))).data,
       resetLink: async (billId) => (await sessionPost("/api/v1/clinic/bills/{bill_id}/link/reset", undefined, one(billId))).data,
+      collection: async (day) => (await sessionGet("/api/v1/clinic/collection", { ...base, query: { date: day } })).data,
+      collectionCsv: (day) => fetchPdfAt(`/api/v1/clinic/collection/export?date=${encodeURIComponent(day)}`, clinicId),
       dues: async (patientId) => (await sessionGet("/api/v1/clinic/dues", { ...base, query: { patient_id: patientId } })).data,
     };
   }, [clinicId]);
