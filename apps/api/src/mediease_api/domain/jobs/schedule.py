@@ -16,6 +16,7 @@ from mediease_api.domain.jobs.job import (
     PURGE_KIND,
     RECONCILE_KIND,
     REQUEST_EXPIRY_SWEEP_KIND,
+    UPLOAD_SWEEP_KIND,
 )
 from mediease_api.domain.shared.time import require_utc
 
@@ -42,6 +43,8 @@ RECURRING: tuple[Recurring, ...] = (
     Recurring(MEDICINE_DUE_SWEEP_KIND, timedelta(minutes=5)),
     # M6c-P1: applications never confirmed, 72 hours after submission (clinic-onboarding R14).
     Recurring(APPLICATION_PURGE_KIND, timedelta(hours=1)),
+    # M7b (prescription-uploads R18): abandoned uploads, expired checks and 30-day-old rows.
+    Recurring(UPLOAD_SWEEP_KIND, timedelta(minutes=10)),
 )
 
 

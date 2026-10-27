@@ -186,3 +186,7 @@ class AuditAction(StrEnum):
     PATIENT_PORTAL_INVITED = "patient.portal_invited"
     PATIENT_PORTAL_LINKED = "patient.portal_linked"
     PATIENT_PORTAL_UNLINKED = "patient.portal_unlinked"
+    # M7b (prescription-uploads R11, R12, R19): an upload verified (the clinic, the prescription and
+    # the access) and a wrong last-4 answer on one (the attempt number). Actor PATIENT; IDs only.
+    PRESCRIPTION_UPLOAD_VERIFIED = "prescription_upload.verified"
+    PRESCRIPTION_UPLOAD_CHALLENGE_FAILED = "prescription_upload.challenge_failed"

@@ -18,11 +18,12 @@ from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0041"
+HEAD = "0042"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -57,6 +58,7 @@ M6D_P2_TABLES = sorted([*M6D_P1_TABLES, "bills", "bill_lines"])
 M6D_P3_TABLES = sorted([*M6D_P2_TABLES, "payments"])
 M6D_P6_TABLES = sorted([*M6D_P3_TABLES, "visit_attachments"])
 M6D_P7_TABLES = sorted([*M6D_P6_TABLES, "clinic_subscriptions"])
+M7B_TABLES = sorted([*M6D_P7_TABLES, "prescription_uploads"])
 
 
 @pytest.fixture
@@ -664,7 +666,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M6D_P7_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M7B_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -1208,3 +1210,46 @@ def test_0041_clinic_subscriptions_backfill_plus_and_round_trip(
         engine.dispose()
     command.downgrade(alembic_config, "0040")
     assert _tables(scratch_database_url) == M6D_P6_TABLES
+
+
+def test_0042_prescription_uploads_checks_and_round_trip(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    """M7b-P6 (prescription-uploads §3): the table, its state CHECKs and the two system kinds."""
+    command.upgrade(alembic_config, "0042")
+    assert _tables(scratch_database_url) == M7B_TABLES
+    insert = text(
+        "INSERT INTO prescription_uploads (id, account_id, source, state, content_type,"
+        " size_bytes, sha256, quarantine_key, created_at, updated_at)"
+        " VALUES (gen_random_uuid(), :account, 'FILE', :state, 'application/pdf', 10, 'x',"
+        " :key, now(), now())"
+    )
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.begin() as conn:
+            account = conn.execute(
+                text(
+                    "INSERT INTO patient_accounts (id, full_name, email, sign_in_method, status,"
+                    " created_at, updated_at) VALUES (gen_random_uuid(), 'Sample Person',"
+                    " 'person@example.test', 'GOOGLE', 'ACTIVE', now(), now()) RETURNING id"
+                )
+            ).scalar_one()
+            conn.execute(insert, {"account": account, "state": "QUARANTINED", "key": "k1"})
+        # A file key outside the checking states; a verified row without its fields.
+        for state, key in (("REJECTED", "k2"), ("VERIFIED", None)):
+            with pytest.raises(IntegrityError), engine.begin() as conn:
+                conn.execute(insert, {"account": account, "state": state, "key": key})
+        # The upload jobs belong to no clinic (ck_jobs_system_kind).
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO jobs (id, kind, state, payload, run_at, max_attempts,"
+                    " created_at, updated_at) VALUES (gen_random_uuid(),"
+                    " 'process_prescription_upload', 'queued', '{}', now(), 4, now(), now())"
+                )
+            )
+            conn.execute(text("DELETE FROM jobs"))
+    finally:
+        engine.dispose()
+    command.downgrade(alembic_config, "0041")
+    assert _tables(scratch_database_url) == M6D_P7_TABLES

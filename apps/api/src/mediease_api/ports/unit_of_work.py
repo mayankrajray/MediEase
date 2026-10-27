@@ -78,6 +78,7 @@ from mediease_api.ports.repositories import (
     VisitRepository,
 )
 from mediease_api.ports.subscriptions import SubscriptionRepository
+from mediease_api.ports.uploads import PrescriptionLookup, PrescriptionUploadRepository
 
 
 class TenantRepositories(Protocol):
@@ -255,6 +256,16 @@ class UnitOfWork(Protocol):
     @property
     def rate_limits(self) -> RateLimitRepository:
         """Public-route request counts (M4-P5); not tenant data."""
+        ...
+
+    @property
+    def prescription_uploads(self) -> PrescriptionUploadRepository:
+        """M7b: patient accounts' prescription uploads (platform data owned by the account)."""
+        ...
+
+    @property
+    def prescription_lookup(self) -> PrescriptionLookup:
+        """M7b (prescription-uploads R11): a prescription ID's clinic (reviewed cross-clinic)."""
         ...
 
     @property

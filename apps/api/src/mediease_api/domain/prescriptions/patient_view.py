@@ -115,6 +115,22 @@ def build_patient_view(
     )
 
 
+def build_version_page(rx: Prescription, *, language: Language, timezone: str) -> PatientPage:
+    """M7b (prescription-uploads R15, R16): the page of one exact issued or superseded version, so
+    a historical version the user chose is explained as itself, never as the latest."""
+    if rx.status not in (PrescriptionStatus.ISSUED, PrescriptionStatus.SUPERSEDED):
+        raise NotDraft(rx.status.value)
+    assert rx.issued_at and rx.doctor_snapshot and rx.clinic_snapshot
+    return _page(
+        rx,
+        doctor=rx.doctor_snapshot,
+        clinic=rx.clinic_snapshot,
+        issued_on=local_date(rx.issued_at, timezone),
+        older=rx.version > 1,
+        language=language,
+    )
+
+
 def build_preview(
     draft: Prescription,
     *,

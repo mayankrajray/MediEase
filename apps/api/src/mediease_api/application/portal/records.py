@@ -204,6 +204,18 @@ def issued_in_scope(scope: PortalScope, rx_id: UUID) -> tuple[ScopeEntry, Prescr
     raise NotFound("prescription")
 
 
+def version_in_scope(scope: PortalScope, rx_id: UUID) -> tuple[ScopeEntry, Prescription] | None:
+    """M7b (prescription-uploads R10): an issued *or superseded* version of a linked record, for
+    an upload's own-record check; ``None`` when it is not the account's (never an error)."""
+    for entry in scope:
+        rx = entry.tenant.prescriptions.get(rx_id)
+        if rx is not None and rx.patient_id == entry.patient_id:
+            if rx.status in (PrescriptionStatus.ISSUED, PrescriptionStatus.SUPERSEDED):
+                return entry, rx
+            return None
+    return None
+
+
 class GetPortalPrescription(_Reads):
     """The patient page, as the prescription link shows it (``?lang=en|hi``; else the account's
     language, M6b-P2 decision 2A)."""
