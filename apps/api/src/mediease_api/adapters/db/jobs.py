@@ -40,6 +40,8 @@ _CLAIM = text(
     WITH due AS (
         SELECT id FROM jobs
         WHERE state = 'queued' AND run_at <= :now
+          AND (cardinality(CAST(:only AS text[])) = 0 OR kind = ANY(CAST(:only AS text[])))
+          AND NOT (kind = ANY(CAST(:skip AS text[])))
         ORDER BY run_at, id
         LIMIT :limit
         FOR UPDATE SKIP LOCKED
@@ -111,14 +113,36 @@ class SqlAlchemyJobQueue:
 
 
 class SqlAlchemyJobStore:
-    """``JobStore`` for the worker: each call is one short, committed transaction."""
+    """``JobStore`` for the worker: each call is one short, committed transaction.
 
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    M7b (prescription-uploads R4): a store claims only ``only`` kinds (when given) and never
+    ``skip`` kinds, so the upload worker and the default worker split the queue between them
+    (``WORKER_QUEUE``) and a slow scan never holds up a reminder.
+    """
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        *,
+        only: frozenset[str] = frozenset(),
+        skip: frozenset[str] = frozenset(),
+    ) -> None:
         self._session_factory = session_factory
+        self._only = sorted(only)
+        self._skip = sorted(skip)
 
     def claim(self, worker: str, now: datetime, limit: int) -> Sequence[ClaimedJob]:
         with self._session_factory() as session:
-            rows = session.execute(_CLAIM, {"now": now, "limit": limit, "worker": worker}).all()
+            rows = session.execute(
+                _CLAIM,
+                {
+                    "now": now,
+                    "limit": limit,
+                    "worker": worker,
+                    "only": self._only,
+                    "skip": self._skip,
+                },
+            ).all()
             session.commit()  # before any handler runs (R9a)
         return [
             ClaimedJob(

@@ -2,7 +2,8 @@
 # Rule (CLAUDE.md): a service appears here only when the application uses it today.
 # Start-up order is declared, not scripted:
 #   db (healthy) -> migrate (exits 0) -> api (healthy) -> web (healthy).
-# The worker (M5-P1) starts after migrate and runs beside the api. Target shape: docs/ARCHITECTURE.md §12.
+# The worker (M5-P1) starts after migrate and runs beside the api; the upload worker (M7b)
+# claims only the upload jobs and scans with clamav. Target shape: docs/ARCHITECTURE.md §12.
 
 name: mediease
 
@@ -30,6 +31,11 @@ x-api-environment: &api-environment
   # M5-P1: the background worker's polling.
   WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-2}
   WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-10}
+  # M7b (prescription-uploads R4, R5): which jobs a worker claims, and the malware scanner.
+  WORKER_QUEUE: ${WORKER_QUEUE:-all}
+  CLAMD_HOST: ${CLAMD_HOST:-clamav}
+  CLAMD_PORT: ${CLAMD_PORT:-3310}
+  CLAMD_TIMEOUT_SECONDS: ${CLAMD_TIMEOUT_SECONDS:-30}
   # M5-P2: messaging (empty phone keys locally means the development key; required when deployed).
   MESSAGING_PROVIDER: ${MESSAGING_PROVIDER:-console}
   MESSAGING_PHONE_KEYS: ${MESSAGING_PHONE_KEYS:-}
@@ -149,8 +155,13 @@ services:
     build: ./apps/api
     image: mediease-api:local
     command: ["python", "-m", "mediease_api.delivery.worker"]
-    environment: *api-environment
+    # M7b: everything except the upload jobs, so a slow scan never delays a reminder.
+    environment:
+      <<: *api-environment
+      WORKER_QUEUE: default
     tmpfs: ["/tmp:size=1m,mode=1777"]
+    volumes:
+      - blobs:/var/lib/mediease/blobs
     depends_on:
       db:
         condition: service_healthy
@@ -165,6 +176,57 @@ services:
       start_period: 20s
     # SIGTERM lets the job in hand finish; the rest are handed back.
     stop_grace_period: 30s
+    restart: unless-stopped
+
+  # M7b (prescription-uploads R4-R8, R17; NFR-20): the upload worker. The same image and command,
+  # claiming only the upload jobs: it reads the quarantined file from the blobs volume, has it
+  # scanned by clamav, reads the MediEase ID (no OCR) and deletes the file. Rendering a page needs
+  # more scratch space than the default worker, hence the larger tmpfs.
+  upload-worker:
+    <<: *hardened
+    build: ./apps/api
+    image: mediease-api:local
+    command: ["python", "-m", "mediease_api.delivery.worker"]
+    environment:
+      <<: *api-environment
+      WORKER_QUEUE: uploads
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    volumes:
+      - blobs:/var/lib/mediease/blobs
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      clamav:
+        condition: service_healthy
+    dns_opt: *fast-dns
+    healthcheck:
+      test: ["CMD", "python", "-m", "mediease_api.delivery.worker.health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  # M7b (R5; NFR-20): ClamAV, which scans every upload before anything parses it. The official
+  # image ships a signature database and keeps it fresh with freshclam; like db it keeps the
+  # image's defaults (its entrypoint owns /var/lib/clamav). clamd on the compose network, and on
+  # localhost:3310 for the live EICAR test only.
+  clamav:
+    image: clamav/clamav:1.5.4
+    volumes:
+      - clamav-db:/var/lib/clamav
+    ports:
+      - "127.0.0.1:${CLAMD_PUBLISH_PORT:-3310}:3310"
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      # Loading the signatures takes a minute or more on first start.
+      start_period: 180s
     restart: unless-stopped
 
   # M6a-P4 (ADR-0016 decision 3): catches every email the worker sends locally. SMTP on the
@@ -221,3 +283,4 @@ services:
 volumes:
   pgdata:
   blobs:
+  clamav-db:

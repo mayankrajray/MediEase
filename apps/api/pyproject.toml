@@ -36,6 +36,13 @@ dependencies = [
     # M7a-P1 (FR-RX-11, ADR-0023): the QR code on layout 3, drawn as inline SVG so the PDF
     # renderer still fetches nothing. Pure Python, no dependencies (BSD).
     "segno==1.6.6",
+    # M7b-P8 (FR-UPL-03, NFR-20; ADR-0023): reading the MediEase ID from an uploaded file, with no
+    # OCR. pdfium for the PDF text layer and page rendering (was dev-only since M4-P4), zxing-cpp
+    # for the QR (dev-only since M7a-P1), and Pillow (already installed through WeasyPrint, now
+    # named because the reader decodes JPEG and PNG with it under a pixel cap).
+    "pypdfium2==5.14.0",
+    "zxing-cpp==3.1.1",
+    "pillow==13.0.0",
 ]
 
 [project.optional-dependencies]
@@ -56,12 +63,9 @@ dev = [
     # M4-P4: an in-process S3 for the blob adapter (no network), PDF text extraction that
     # understands WeasyPrint's font encoding (pdfium), and boto3 type stubs for mypy.
     "moto[s3]==5.2.4",
-    "pypdfium2==5.14.0",
     "types-boto3[s3]==1.43.114",
     # M5-P2: PyYAML type stubs for mypy.
     "types-pyyaml==6.0.12.20260906",
-    # M7a-P1 (FR-RX-11): decodes the printed QR in the round-trip tests (Apache-2.0, wheels).
-    "zxing-cpp==3.1.1",
 ]
 
 [build-system]
@@ -106,9 +110,10 @@ disallow_untyped_defs = true
 module = ["mediease_api.domain.*", "mediease_api.application.*"]
 strict = true
 
-# WeasyPrint ships no type information; only adapters/pdf imports it.
+# WeasyPrint ships no type information; only adapters/pdf imports it. pypdfium2 neither; only
+# adapters/extraction imports it at runtime (M7b).
 [[tool.mypy.overrides]]
-module = ["weasyprint", "weasyprint.*"]
+module = ["weasyprint", "weasyprint.*", "pypdfium2", "pypdfium2.*"]
 ignore_missing_imports = true
 
 # --- pytest ------------------------------------------------------------------
@@ -148,7 +153,7 @@ forbidden_modules = [
     "mediease_api.delivery", "mediease_api.config", "mediease_api.bootstrap", "mediease_api.wsgi",
     "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
     "structlog", "gunicorn", "ulid", "argon2", "jwt", "weasyprint", "jinja2", "boto3", "botocore",
-    "cryptography", "yaml", "segno",
+    "cryptography", "yaml", "segno", "pypdfium2", "zxingcpp", "PIL",
 ]
 
 [[tool.importlinter.contracts]]
@@ -160,6 +165,7 @@ forbidden_modules = [
     "mediease_api.bootstrap", "mediease_api.wsgi",
     "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
     "gunicorn", "argon2", "jwt", "cryptography", "yaml",
+    "segno", "pypdfium2", "zxingcpp", "PIL",
 ]
 
 [[tool.importlinter.contracts]]
@@ -179,4 +185,19 @@ type = "forbidden"
 source_modules = ["mediease_api.adapters"]
 forbidden_modules = [
     "mediease_api.delivery", "mediease_api.bootstrap", "mediease_api.wsgi", "flask", "werkzeug",
+]
+
+# M7b (ADR-0023, prescription-uploads R8, R16): the assistant never reaches an uploaded file. It
+# gets a verified upload's database prescription through ``application.uploads.assistant`` only;
+# the upload intake and processing, the scanner and the identifier reader are out of its reach.
+# (Blob storage itself is not listed: the portal's own prescription PDFs use it.)
+[[tool.importlinter.contracts]]
+name = "the assistant never reads an uploaded file"
+type = "forbidden"
+source_modules = ["mediease_api.application.assistant", "mediease_api.adapters.llm"]
+forbidden_modules = [
+    "mediease_api.application.uploads.processing", "mediease_api.application.uploads.intake",
+    "mediease_api.adapters.extraction", "mediease_api.adapters.malware",
+    "mediease_api.adapters.storage",
+    "pypdfium2", "zxingcpp", "PIL",
 ]

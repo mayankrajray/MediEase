@@ -63,6 +63,8 @@ class AppEnv(StrEnum):
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 BlobBackend = Literal["local", "s3"]
+# M7b: which jobs a worker claims (prescription-uploads R4).
+WorkerQueue = Literal["default", "uploads", "all"]
 # M5-P2: the console provider; M5-P3 adds the WhatsApp Cloud API.
 MessagingProvider = Literal["console", "whatsapp_cloud"]
 # M5-P5: the SMS fallback's provider; a real one follows L-03.
@@ -143,6 +145,15 @@ class AppSettings(BaseSettings):
     # The background worker (M5-P1): seconds to sleep when no job is due, and jobs claimed per poll.
     WORKER_POLL_SECONDS: int = Field(default=2, ge=1, le=60)
     WORKER_BATCH_SIZE: int = Field(default=10, ge=1, le=100)
+    # M7b (prescription-uploads R4): which jobs this worker claims. `default`: everything except
+    # the upload jobs; `uploads`: only them (the upload worker, beside ClamAV); `all`: both, for a
+    # single local worker. Two workers split the queue so a slow scan never delays a reminder.
+    WORKER_QUEUE: WorkerQueue = "all"
+    # M7b (R5): the clamd daemon that scans every uploaded file before anything parses it. An
+    # unreachable scanner is retried and then rejects the upload; it is never skipped.
+    CLAMD_HOST: str = Field(default="clamav", min_length=1)
+    CLAMD_PORT: int = Field(default=3310, ge=1, le=65535)
+    CLAMD_TIMEOUT_SECONDS: int = Field(default=30, ge=1, le=120)
     # Messaging (M5-P2). `console` writes a log line instead of sending; the worker refuses it in
     # production (bootstrap.build_worker), the API never sends.
     MESSAGING_PROVIDER: MessagingProvider = "console"
