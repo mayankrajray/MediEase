@@ -102,6 +102,20 @@ export async function sessionRunningNow(
 
   const found = await running();
   if (found !== undefined) return { doctorId, sessionId: found.id };
+  // The seeded weekly block (10:00-13:00) may be running and already full from earlier runs; an
+  // extra session cannot overlap it (SCH_OVERLAP), so say what to do instead of failing on a 409.
+  const busy = (await (await request.get(`/api/v1/sessions?date=${today}&doctor_id=${doctorId}`)).json()) as {
+    items: Session[];
+  };
+  const fullNow = busy.items.find(
+    (s) => s.status === "OPEN" && s.available === 0 && Date.parse(s.starts_at) <= now && Date.parse(s.ends_at) > now + 120_000,
+  );
+  if (fullNow !== undefined) {
+    throw new Error(
+      `The doctor's session running now (until ${fullNow.ends_at}) is full from earlier runs, and an extra session ` +
+        "cannot overlap it. Run the journeys after it ends, or reset the local database (RUNBOOK §1).",
+    );
+  }
 
   // An earlier run's extra session may be about to end (under 2 minutes left, so not used) or may
   // have ended in the last 10 minutes. A new one starting up to 10 minutes ago would overlap it
