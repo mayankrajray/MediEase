@@ -48,7 +48,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest==9.1.1",
-    "ruff==0.17.0",
+    "ruff==0.17.2",
     "mypy==2.4.0",
     # Contract tests: validate real responses against contracts/openapi.yaml (ADR-0008).
     "openapi-core==0.23.1",
