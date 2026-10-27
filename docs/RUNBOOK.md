@@ -872,8 +872,8 @@ has_trial, trial_ends_at FROM clinic_subscriptions WHERE clinic_id = '<id>';`
 
 - **What runs.** `upload-worker` (`WORKER_QUEUE=uploads`) claims only the two upload jobs and
   scans with `clamav` (`clamav/clamav:1.5.4`); `worker` (`default`) claims everything else, so a
-  slow scan never delays a reminder. `make worker` runs a single foreground worker with the
-  default `WORKER_QUEUE=all`. Both mount `blobs`; uploaded files live under `uploads/` only while
+  slow scan never delays a reminder. `make worker` runs one more `worker` in the foreground, with
+  the same `default` queue. Both mount `blobs`; uploaded files live under `uploads/` only while
   they are checked.
 - **ClamAV's first start** loads its signatures (a minute or more; the health check allows
   180 s). freshclam inside the container keeps them current; they persist on the `clamav-db`
