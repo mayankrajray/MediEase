@@ -65,6 +65,8 @@ class HttpResult:
 # (url, body, headers, timeout) -> the response; raises OSError when no response came back.
 Transport = Callable[[str, bytes, Mapping[str, str], float], HttpResult]
 
+USER_AGENT = "MediEase/1.0 (+https://github.com/mayankrajray/MediEase)"
+
 
 def urllib_transport(
     url: str, body: bytes, headers: Mapping[str, str], timeout: float
@@ -189,6 +191,9 @@ class OpenAICompatibleLlm:
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json",
+            # Groq's edge (Cloudflare) refuses urllib's default "Python-urllib/3.x" agent with
+            # 403 error 1010; a named agent is accepted. It carries no data about the caller.
+            "User-Agent": USER_AGENT,
         }
         try:
             result = self._transport(
