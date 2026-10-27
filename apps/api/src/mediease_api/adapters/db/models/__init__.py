@@ -52,6 +52,7 @@ from mediease_api.adapters.db.models.scheduling import (
     SessionRow,
 )
 from mediease_api.adapters.db.models.subscriptions import ClinicSubscriptionRow
+from mediease_api.adapters.db.models.uploads import PrescriptionUploadRow
 from mediease_api.adapters.db.models.visits import VisitAddendumRow, VisitAttachmentRow, VisitRow
 
 __all__ = [
@@ -92,6 +93,7 @@ __all__ = [
     "PaymentRow",
     "PrescriptionItemRow",
     "PrescriptionRow",
+    "PrescriptionUploadRow",
     "PublicRateLimitRow",
     "RefreshTokenRow",
     "ReminderRow",

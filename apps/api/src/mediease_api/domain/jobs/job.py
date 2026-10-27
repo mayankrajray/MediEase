@@ -52,6 +52,12 @@ PATIENT_EMAIL_KIND = "send_patient_email"
 # deletion of applications never confirmed, with their certificates.
 APPLICATION_EMAIL_KIND = "send_application_email"
 APPLICATION_PURGE_KIND = "purge_applications"
+# M7b (prescription-uploads R4-R8, R18): an upload's scan, identifier and verification, and the
+# 10-minute sweep of abandoned uploads and old rows. They belong to no clinic, and only the upload
+# worker claims them (``UPLOAD_KINDS``, ``WORKER_QUEUE``), so scanning never delays reminders.
+PROCESS_UPLOAD_KIND = "process_prescription_upload"
+UPLOAD_SWEEP_KIND = "purge_prescription_uploads"
+UPLOAD_KINDS: frozenset[str] = frozenset({PROCESS_UPLOAD_KIND, UPLOAD_SWEEP_KIND})
 # R9d: the only kinds allowed to have no clinic. The database CHECK ``ck_jobs_system_kind`` lists
 # the same kinds; a test keeps the two in step, and adding a kind is a migration.
 SYSTEM_KINDS: frozenset[str] = frozenset(
@@ -65,6 +71,8 @@ SYSTEM_KINDS: frozenset[str] = frozenset(
         MEDICINE_DUE_SWEEP_KIND,
         APPLICATION_EMAIL_KIND,
         APPLICATION_PURGE_KIND,
+        PROCESS_UPLOAD_KIND,
+        UPLOAD_SWEEP_KIND,
     }
 )
 

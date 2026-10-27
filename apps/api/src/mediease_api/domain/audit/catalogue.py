@@ -136,6 +136,9 @@ ACTIONS: dict[A, ActionInfo] = {
         (A.PATIENT_LINK_CREATED, "Created a prescription link"),
         (A.PATIENT_LINK_RESET, "Unlocked a prescription link"),
         (A.PATIENT_LINK_REPLACED, "Replaced a prescription link"),
+        # M7b (FR-UPL-04): an uploaded or typed prescription code verified in the patient app.
+        (A.PRESCRIPTION_UPLOAD_VERIFIED, "Patient verified a prescription in the patient app"),
+        (A.PRESCRIPTION_UPLOAD_CHALLENGE_FAILED, "Wrong answer on an uploaded prescription"),
         (A.RX_FAVOURITE_CREATED, "Saved a favourite"),
         (A.RX_FAVOURITE_UPDATED, "Changed a favourite"),
         (A.RX_FAVOURITE_DELETED, "Deleted a favourite"),

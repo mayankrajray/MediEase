@@ -163,7 +163,15 @@ class Tenant:
 # (one row each), read through SqlAlchemySubscriptionRepository: ops list every clinic's plan, and a
 # clinic's own limit check locks its row by its ID, which comes from the request's membership or
 # the ops route. It holds no clinic data beyond the plan and the trial's dates.
-NOT_TENANT_SCOPED = {"audit_events", "jobs", "clinic_subscriptions"}
+#
+# Reviewed exception (M7b, ADR-0023): prescription_uploads is owned by a patient account, not a
+# clinic. clinic_id is set only once an upload is verified, to say which clinic's prescription it
+# points at; the account's own reads filter by account (portal) or by upload ID (the worker), and
+# the prescription itself is then read through that clinic's tenant repositories. No clinic read
+# reaches the table. SqlAlchemyPrescriptionLookup is the reviewed cross-clinic read for the last-4
+# check: a prescription's clinic ID and nothing else (tests/integration/
+# test_prescription_uploads_http.py, test_r12_an_unknown_code_and_a_real_one_answer_the_same_way).
+NOT_TENANT_SCOPED = {"audit_events", "jobs", "clinic_subscriptions", "prescription_uploads"}
 
 
 @pytest.fixture
@@ -698,6 +706,7 @@ def test_every_tenant_table_has_a_scoped_repository() -> None:
             "audit_events",
             "jobs",
             "clinic_subscriptions",
+            "prescription_uploads",
         }
     )
     assert {

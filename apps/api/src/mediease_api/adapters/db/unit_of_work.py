@@ -85,6 +85,10 @@ from mediease_api.adapters.db.repositories import (
     SqlAlchemyVisitRepository,
 )
 from mediease_api.adapters.db.subscriptions import SqlAlchemySubscriptionRepository
+from mediease_api.adapters.db.uploads import (
+    SqlAlchemyPrescriptionLookup,
+    SqlAlchemyPrescriptionUploadRepository,
+)
 
 
 def build_session_factory(engine: Engine) -> sessionmaker[Session]:
@@ -311,6 +315,9 @@ class _OpenUnit:
         self.message_costs = SqlAlchemyMessageCostReport(session)
         # M6d-P7: each clinic's plan and trial (platform data, one row per clinic).
         self.subscriptions = SqlAlchemySubscriptionRepository(session)
+        # M7b: prescription uploads (account-owned) and a prescription's clinic (reviewed read).
+        self.prescription_uploads = SqlAlchemyPrescriptionUploadRepository(session)
+        self.prescription_lookup = SqlAlchemyPrescriptionLookup(session)
 
 
 class SqlAlchemyUnitOfWork:
@@ -443,6 +450,14 @@ class SqlAlchemyUnitOfWork:
     @property
     def message_costs(self) -> SqlAlchemyMessageCostReport:
         return self._require_open().message_costs
+
+    @property
+    def prescription_uploads(self) -> SqlAlchemyPrescriptionUploadRepository:
+        return self._require_open().prescription_uploads
+
+    @property
+    def prescription_lookup(self) -> SqlAlchemyPrescriptionLookup:
+        return self._require_open().prescription_lookup
 
     def tenant(self, clinic_id: UUID) -> SqlAlchemyTenantRepositories:
         return SqlAlchemyTenantRepositories(self._require_open().session, clinic_id)
