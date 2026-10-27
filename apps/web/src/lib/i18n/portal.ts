@@ -139,6 +139,39 @@ export interface PortalStrings {
     readonly cancelled: string;
     readonly conversation: string;
     readonly empty: string;
+    /** M7b (spec prescription-uploads §8): a prescription not in the account, by file or code. */
+    readonly upload: {
+      readonly title: string;
+      readonly intro: string;
+      readonly privacy: string;
+      readonly file: string;
+      readonly fileHelp: string;
+      readonly send: string;
+      readonly sending: string;
+      readonly or: string;
+      readonly code: string;
+      readonly codeHelp: string;
+      readonly verify: string;
+      readonly checking: string;
+      readonly slow: string;
+      readonly challengeTitle: string;
+      readonly challengeHelp: string;
+      readonly last4: string;
+      readonly check: string;
+      readonly attemptsLeft: (n: number) => string;
+      readonly verified: (doctor: string, clinic: string, day: string, version: number) => string;
+      readonly representative: (until: string) => string;
+      readonly historical: (version: number, latest: number, latestDay: string) => string;
+      readonly chooseVersion: string;
+      readonly useUploaded: (version: number) => string;
+      readonly useLatest: (version: number) => string;
+      readonly using: (version: number) => string;
+      readonly asking: string;
+      readonly remove: string;
+      readonly tryAgain: string;
+      readonly rejected: Readonly<Record<string, string>>;
+      readonly rejectedOther: string;
+    };
   };
   /** M6b-P3 (spec R36-R44): the planner's own words; the medicine's come from the API. */
   readonly medicines: {
@@ -369,6 +402,54 @@ const EN: PortalStrings = {
     cancelled: "Nothing was changed.",
     conversation: "Conversation",
     empty: "Ask a question to start.",
+    upload: {
+      title: "A prescription not in your account",
+      intro:
+        "For a family member's prescription, or one you were given on paper: upload a photo or the PDF, or type the verification code printed at the bottom.",
+      privacy:
+        "Only the MediEase code on it is read. The file is deleted once it is checked, and clinic staff never see it. The assistant explains the clinic's own record, not the file.",
+      file: "Photo or PDF of the prescription",
+      fileHelp: "PDF, JPEG or PNG, up to 10 MB. Make sure the square code at the bottom is in the picture.",
+      send: "Upload",
+      sending: "Uploading…",
+      or: "Or",
+      code: "Verification code",
+      codeHelp: "The code printed under “Verification code”, for example 0192f3a4-7c1e-7b2a-9d40-5e6f7a8b9c0d.",
+      verify: "Check code",
+      checking: "Checking your file…",
+      slow: "This is taking longer than usual. You can wait, or type the code instead.",
+      challengeTitle: "Confirm the patient",
+      challengeHelp:
+        "This prescription is not in your account. Enter the last 4 digits of the patient's phone number, as the clinic has it.",
+      last4: "Last 4 digits of the patient's phone",
+      check: "Confirm",
+      attemptsLeft: (n) => (n === 1 ? "That did not match. 1 attempt left." : `That did not match. ${n} attempts left.`),
+      verified: (doctor, clinic, day, version) => `Verified: ${doctor}, ${clinic}, ${day} (version ${version}).`,
+      representative: (until) =>
+        `You can ask about this prescription until ${until}. It has not been added to your account.`,
+      historical: (version, latest, latestDay) =>
+        `This is an older version (version ${version}). The doctor issued version ${latest} on ${latestDay}. Which one should the assistant explain?`,
+      chooseVersion: "Version to explain",
+      useUploaded: (version) => `The one I uploaded (version ${version}, older)`,
+      useLatest: (version) => `The latest (version ${version})`,
+      using: (version) => `The assistant will explain version ${version}.`,
+      asking: "Asking about the verified prescription.",
+      remove: "Remove",
+      tryAgain: "Try another photo or type the code.",
+      rejected: {
+        UPL_INFECTED: "The file was refused by the safety check and deleted.",
+        UPL_SCAN_UNAVAILABLE: "The file could not be checked right now and was deleted. Please try again later.",
+        UPL_NO_IDENTIFIER: "No MediEase code was found on it. Take a clearer photo of the square code, or type the code.",
+        UPL_AMBIGUOUS: "It shows more than one prescription. Upload one prescription at a time.",
+        UPL_UNREADABLE: "The file could not be read.",
+        UPL_LOCKED: "Too many wrong attempts. This upload has been stopped.",
+        UPL_ABANDONED: "The check did not finish and the file was deleted.",
+        UPL_EXPIRED: "This check has expired.",
+        UPL_WITHDRAWN: "Removed.",
+        UPL_FILE_MISSING: "The file could not be found. Please upload it again.",
+      },
+      rejectedOther: "This prescription could not be verified.",
+    },
   },
   medicines: {
     title: "My medicines",
@@ -612,6 +693,53 @@ const HI: PortalStrings = {
     cancelled: "कुछ नहीं बदला गया।",
     conversation: "बातचीत",
     empty: "शुरू करने के लिए कोई सवाल पूछें।",
+    upload: {
+      title: "ऐसा पर्चा जो आपके खाते में नहीं है",
+      intro:
+        "परिवार के किसी सदस्य का पर्चा, या काग़ज़ पर मिला पर्चा: उसकी फ़ोटो या PDF अपलोड करें, या नीचे छपा सत्यापन कोड लिखें।",
+      privacy:
+        "इसमें से सिर्फ़ MediEase कोड पढ़ा जाता है। जाँच के बाद फ़ाइल मिटा दी जाती है, और क्लिनिक का स्टाफ़ इसे कभी नहीं देखता। सहायक फ़ाइल नहीं, क्लिनिक का अपना रिकॉर्ड समझाता है।",
+      file: "पर्चे की फ़ोटो या PDF",
+      fileHelp: "PDF, JPEG या PNG, 10 MB तक। ध्यान रखें कि नीचे वाला चौकोर कोड फ़ोटो में आए।",
+      send: "अपलोड करें",
+      sending: "अपलोड हो रहा है…",
+      or: "या",
+      code: "सत्यापन कोड",
+      codeHelp: "“सत्यापन कोड” के नीचे छपा कोड, जैसे 0192f3a4-7c1e-7b2a-9d40-5e6f7a8b9c0d।",
+      verify: "कोड जाँचें",
+      checking: "आपकी फ़ाइल जाँची जा रही है…",
+      slow: "इसमें सामान्य से ज़्यादा समय लग रहा है। आप रुक सकते हैं, या कोड लिख सकते हैं।",
+      challengeTitle: "मरीज़ की पुष्टि करें",
+      challengeHelp:
+        "यह पर्चा आपके खाते में नहीं है। मरीज़ के फ़ोन नंबर के आख़िरी 4 अंक लिखें, जैसे क्लिनिक के पास दर्ज हैं।",
+      last4: "मरीज़ के फ़ोन के आख़िरी 4 अंक",
+      check: "पुष्टि करें",
+      attemptsLeft: (n) => `यह मेल नहीं खाया। ${n} कोशिश बाकी।`,
+      verified: (doctor, clinic, day, version) => `सत्यापित: ${doctor}, ${clinic}, ${day} (संस्करण ${version})।`,
+      representative: (until) => `आप ${until} तक इस पर्चे के बारे में पूछ सकते हैं। इसे आपके खाते में नहीं जोड़ा गया है।`,
+      historical: (version, latest, latestDay) =>
+        `यह पुराना संस्करण (संस्करण ${version}) है। डॉक्टर ने ${latestDay} को संस्करण ${latest} जारी किया। सहायक कौन-सा समझाए?`,
+      chooseVersion: "कौन-सा संस्करण समझाना है",
+      useUploaded: (version) => `जो मैंने अपलोड किया (संस्करण ${version}, पुराना)`,
+      useLatest: (version) => `सबसे नया (संस्करण ${version})`,
+      using: (version) => `सहायक संस्करण ${version} समझाएगा।`,
+      asking: "सत्यापित पर्चे के बारे में पूछ रहे हैं।",
+      remove: "हटाएँ",
+      tryAgain: "दूसरी फ़ोटो लें या कोड लिखें।",
+      rejected: {
+        UPL_INFECTED: "सुरक्षा जाँच ने फ़ाइल को अस्वीकार किया और उसे मिटा दिया गया।",
+        UPL_SCAN_UNAVAILABLE: "फ़ाइल अभी जाँची नहीं जा सकी और मिटा दी गई। कृपया बाद में फिर कोशिश करें।",
+        UPL_NO_IDENTIFIER: "इसमें कोई MediEase कोड नहीं मिला। चौकोर कोड की साफ़ फ़ोटो लें, या कोड लिखें।",
+        UPL_AMBIGUOUS: "इसमें एक से ज़्यादा पर्चे हैं। एक बार में एक पर्चा अपलोड करें।",
+        UPL_UNREADABLE: "फ़ाइल पढ़ी नहीं जा सकी।",
+        UPL_LOCKED: "बहुत सारी ग़लत कोशिशें। यह अपलोड रोक दिया गया है।",
+        UPL_ABANDONED: "जाँच पूरी नहीं हुई और फ़ाइल मिटा दी गई।",
+        UPL_EXPIRED: "इस जाँच का समय ख़त्म हो गया।",
+        UPL_WITHDRAWN: "हटा दिया गया।",
+        UPL_FILE_MISSING: "फ़ाइल नहीं मिली। कृपया फिर से अपलोड करें।",
+      },
+      rejectedOther: "यह पर्चा सत्यापित नहीं हो सका।",
+    },
   },
   medicines: {
     title: "मेरी दवाइयाँ",
