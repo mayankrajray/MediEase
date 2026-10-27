@@ -62,6 +62,14 @@ x-api-environment: &api-environment
   SMTP_SECURITY: ${SMTP_SECURITY:-none}
   SMTP_USERNAME: ${SMTP_USERNAME:-}
   SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  # M7a (ADR-0013, ADR-0024): the assistant's model. `console` (the default) needs no key;
+  # `groq` needs LLM_API_KEY. Staging and production also need LLM_PATIENT_DATA_ALLOWED=true.
+  LLM_PROVIDER: ${LLM_PROVIDER:-console}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-20}
+  LLM_PATIENT_DATA_ALLOWED: ${LLM_PATIENT_DATA_ALLOWED:-false}
 
 # Least privilege for our own containers (CLAUDE.md): read-only root
 # filesystem, no Linux capabilities, no privilege escalation. Writable scratch
