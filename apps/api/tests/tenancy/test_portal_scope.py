@@ -118,6 +118,34 @@ def _bina_report(scene: Scene) -> str:
     return report
 
 
+def _bina_upload(scene: Scene) -> str:
+    """M7b: Bina verifies her own prescription by its printed code."""
+    made = scene.bina.post(
+        f"{PORTAL}/prescription-uploads/by-code",
+        json={"code": scene.rx_id},
+        headers=portal_csrf(scene.bina),
+    )
+    assert made.status_code == 201 and made.get_json()["state"] == "VERIFIED", made.get_json()
+    return str(made.get_json()["id"])
+
+
+def _bina_pending_upload(scene: Scene) -> str:
+    """M7b: an upload of Bina's waiting for the last-4 check (both accounts verified)."""
+    engine = create_engine(scene.world.app.config["SETTINGS"].DATABASE_URL)
+    try:
+        for email in ("asha.scope@example.test", "bina.scope@example.test"):
+            verify_email(engine, email)
+    finally:
+        engine.dispose()
+    made = scene.bina.post(
+        f"{PORTAL}/prescription-uploads/by-code",
+        json={"code": "00000000-0000-7000-8000-000000000042"},
+        headers=portal_csrf(scene.bina),
+    )
+    assert made.get_json()["state"] == "NEEDS_CHALLENGE", made.get_json()
+    return str(made.get_json()["id"])
+
+
 def _scene(world: World) -> Scene:
     _, visit, rx = _issued(world)
     owner_a = world.client_for(world.a.owner)
@@ -229,15 +257,41 @@ PORTAL_ID_CASES: dict[str, Case] = {
         lambda s: f"{PORTAL}/booking-requests/{_bina_proposal(s)}/decline-proposal",
         "REQ_NOT_FOUND",
     ),
+    # M7b: Bina's uploads; Asha can neither read, choose for, answer for nor withdraw them.
+    "/api/v1/portal/prescription-uploads/<uuid:upload_id>": (
+        "GET",
+        lambda s: f"{PORTAL}/prescription-uploads/{_bina_upload(s)}",
+        "REQ_NOT_FOUND",
+    ),
+    "/api/v1/portal/prescription-uploads/<uuid:upload_id>/selection": (
+        "POST",
+        lambda s: f"{PORTAL}/prescription-uploads/{_bina_upload(s)}/selection",
+        "REQ_NOT_FOUND",
+    ),
+    "/api/v1/portal/prescription-uploads/<uuid:upload_id>/challenge": (
+        "POST",
+        lambda s: f"{PORTAL}/prescription-uploads/{_bina_pending_upload(s)}/challenge",
+        "REQ_NOT_FOUND",
+    ),
 }
+
+# POST bodies the routes validate before they look anything up.
+_BODIES = {
+    "/api/v1/portal/prescription-uploads/<uuid:upload_id>/selection": {"choice": "UPLOADED"},
+    "/api/v1/portal/prescription-uploads/<uuid:upload_id>/challenge": {"phone_last4": "0000"},
+}
+# Bina's own answer to a check on an unknown code is a failed check, not a 404.
+_OWN_STATUS = {"/api/v1/portal/prescription-uploads/<uuid:upload_id>/challenge": 401}
 
 # Token routes have no owner to succeed for once used; Bina's own call is checked for ID routes.
 _TOKEN_RULES = {"/api/v1/portal/invites/<token>", "/api/v1/portal/invites/<token>/accept"}
 
 
-def _call(client: FlaskClient, method: str, url: str) -> TestResponse:
+def _call(
+    client: FlaskClient, method: str, url: str, body: dict[str, str] | None = None
+) -> TestResponse:
     headers = portal_csrf(client) if method != "GET" else {}
-    return client.open(url, method=method, headers=headers)
+    return client.open(url, method=method, headers=headers, json=body)
 
 
 def test_every_portal_route_with_an_id_has_a_cross_account_case(world: World) -> None:
@@ -257,12 +311,14 @@ def test_ac4_nfr_18_another_accounts_resource_is_not_found(world: World, rule: s
     method, url_of, code = PORTAL_ID_CASES[rule]
     url = url_of(scene)
 
-    resp = _call(scene.asha, method, url)
+    body = _BODIES.get(rule)
+    resp = _call(scene.asha, method, url, body)
     assert resp.status_code == 404, resp.get_json()
     assert resp.get_json()["error"]["code"] == code
     if rule not in _TOKEN_RULES:
         # The same URL works for the account it belongs to: the 404 is the scope, not the route.
-        assert _call(scene.bina, method, url).status_code in (200, 204)
+        own = _call(scene.bina, method, url, body).status_code
+        assert own in ((_OWN_STATUS[rule],) if rule in _OWN_STATUS else (200, 204))
 
 
 def test_ac4_ac5_lists_hold_only_the_accounts_own_records(world: World) -> None:

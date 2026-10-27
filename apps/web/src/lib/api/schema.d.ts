@@ -51,6 +51,132 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/portal/prescription-uploads": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Upload a prescription to verify
+         * @description Spec prescription-uploads R1-R4. @patient. multipart/form-data with one part `file`: a
+         *     PDF, JPEG or PNG recognised by its bytes, at most 10 MB (422 UPL_FILE_REJECTED,
+         *     details.reason type, size or missing; a larger request is 413 unread, also through the
+         *     web origin). Held in quarantine and checked in the background: poll GET until the state
+         *     is VERIFIED, NEEDS_CHALLENGE or REJECTED. 10 uploads or codes an hour per account (429
+         *     UPL_RATE_LIMITED); at most 3 being checked at once (409 UPL_TOO_MANY). Needs X-CSRF-Token.
+         */
+        readonly post: operations["uploadPrescription"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/prescription-uploads/by-code": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Verify a prescription by its printed code
+         * @description Spec prescription-uploads R9. @patient. The printed verification code (any case, with or
+         *     without dashes) or the QR payload. Resolved at once: VERIFIED for the account's own
+         *     record, else NEEDS_CHALLENGE, whether or not the prescription exists. 422
+         *     REQ_VALIDATION_FAILED for anything that is not a code. Same hourly limit as uploads.
+         */
+        readonly post: operations["typePrescriptionCode"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/prescription-uploads/{upload_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly upload_id: components["parameters"]["UploadPath"];
+            };
+            readonly cookie?: never;
+        };
+        /**
+         * An upload's state
+         * @description @patient. The account's own upload; another account's is 404 REQ_NOT_FOUND. Says nothing
+         *     about the prescription until it is verified.
+         */
+        readonly get: operations["getPrescriptionUpload"];
+        readonly put?: never;
+        readonly post?: never;
+        /**
+         * Withdraw an upload
+         * @description Spec prescription-uploads R17. @patient. Deletes the file if it is still held and ends any
+         *     access it gave (state REJECTED, UPL_WITHDRAWN). Needs X-CSRF-Token.
+         */
+        readonly delete: operations["withdrawPrescriptionUpload"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/prescription-uploads/{upload_id}/challenge": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly upload_id: components["parameters"]["UploadPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * The last 4 digits of the patient's phone, for someone else's prescription
+         * @description Spec prescription-uploads R11-R14. @patient, verified email (403 PRT_UNVERIFIED_ACCOUNT).
+         *     Checked against the prescription's own link with its lockout. Every failure, whatever
+         *     the reason, is 401 UPL_CHALLENGE_FAILED with details.attempts_left; the fifth rejects the
+         *     upload (UPL_LOCKED). Passing gives that prescription chain for 24 hours and links nothing.
+         *     409 UPL_NOT_AWAITING when the upload is not waiting for the digits.
+         */
+        readonly post: operations["answerUploadChallenge"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/prescription-uploads/{upload_id}/selection": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly upload_id: components["parameters"]["UploadPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Use the uploaded (historical) version or the latest
+         * @description Spec prescription-uploads R15. @patient. A superseded upload is never mapped to the latest
+         *     version silently: the assistant refuses it (409 UPL_SELECTION_REQUIRED) until the user
+         *     chooses. The choice can be changed. 409 UPL_NOT_VERIFIED before verification.
+         */
+        readonly post: operations["choosePrescriptionUploadVersion"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/v1/assistant/turns": {
         readonly parameters: {
             readonly query?: never;
@@ -4127,6 +4253,45 @@ export interface components {
             /** Format: uuid */
             readonly upload_id?: string | null;
         };
+        /**
+         * @description An upload (M7b). Never the file or anything read from it; nothing about the prescription
+         *     until state is VERIFIED.
+         */
+        readonly PrescriptionUpload: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @enum {string} */
+            readonly state: "QUARANTINED" | "SCANNING" | "EXTRACTING" | "NEEDS_CHALLENGE" | "VERIFIED" | "REJECTED";
+            /** @enum {string} */
+            readonly source: "FILE" | "CODE";
+            /** @enum {string|null} */
+            readonly rejection_code: "UPL_INFECTED" | "UPL_SCAN_UNAVAILABLE" | "UPL_NO_IDENTIFIER" | "UPL_AMBIGUOUS" | "UPL_UNREADABLE" | "UPL_LOCKED" | "UPL_ABANDONED" | "UPL_EXPIRED" | "UPL_WITHDRAWN" | "UPL_FILE_MISSING" | null;
+            /** @description Last-4 attempts left, while NEEDS_CHALLENGE only */
+            readonly attempts_left: number | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly verification: components["schemas"]["UploadVerification"] | null;
+        };
+        readonly UploadVerification: {
+            /** @enum {string} */
+            readonly access: "OWN" | "REPRESENTATIVE";
+            readonly clinic_name: string;
+            readonly doctor_name: string;
+            readonly version: number;
+            /** Format: date-time */
+            readonly issued_at: string;
+            readonly superseded: boolean;
+            readonly latest_version: number | null;
+            /** Format: date-time */
+            readonly latest_issued_at: string | null;
+            /**
+             * @description Which version the assistant uses; null until a superseded one is chosen
+             * @enum {string|null}
+             */
+            readonly selected: "UPLOADED" | "LATEST" | null;
+            /** Format: date-time */
+            readonly expires_at: string;
+        };
         readonly StaffAssistantTurn: {
             readonly messages: readonly components["schemas"]["AssistantMessage"][];
         };
@@ -7193,8 +7358,28 @@ export interface components {
             };
         };
         /**
+         * @description M7b. REQ_NOT_FOUND (404: not this account's upload); UPL_CHALLENGE_FAILED (401,
+         *     details.attempts_left); UPL_TOO_MANY, UPL_NOT_AWAITING, UPL_NOT_VERIFIED (409);
+         *     REQ_REQUEST_ENTITY_TOO_LARGE (413); REQ_UNSUPPORTED_MEDIA_TYPE (415); UPL_FILE_REJECTED
+         *     (422, details.reason), REQ_VALIDATION_FAILED (422); UPL_RATE_LIMITED (429, Retry-After);
+         *     UPL_UPLOAD_FAILED (503: the file could not be stored, nothing kept).
+         */
+        readonly UploadError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                /** @description Seconds to wait (429 only) */
+                readonly "Retry-After"?: string;
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
          * @description M7a. REQ_NOT_FOUND (404: a context that is not the caller's); AI_PROPOSAL_INVALID (404);
-         *     AI_PROPOSAL_USED (409); REQ_VALIDATION_FAILED (422); AI_RATE_LIMITED (429, Retry-After);
+         *     AI_PROPOSAL_USED (409); M7b: UPL_NOT_VERIFIED (409: an upload not verified, withdrawn or
+         *     past its 24 hours), UPL_SELECTION_REQUIRED (409: a superseded upload with no version
+         *     chosen); REQ_VALIDATION_FAILED (422); AI_RATE_LIMITED (429, Retry-After);
          *     AI_UNAVAILABLE (503: the model timed out or failed); AI_PROVIDER_BUSY (503, Retry-After:
          *     the provider's own limit); on confirm, the action's own codes.
          */
@@ -7649,6 +7834,7 @@ export interface components {
         };
     };
     parameters: {
+        readonly UploadPath: string;
         readonly ApplicationId: string;
         /** @description Correlation ID. Generated by the API when absent and always echoed back. */
         readonly RequestId: string;
@@ -7773,6 +7959,225 @@ export interface operations {
             readonly 422: components["responses"]["AssistantError"];
             readonly 429: components["responses"]["AssistantError"];
             readonly 503: components["responses"]["AssistantError"];
+        };
+    };
+    readonly uploadPrescription: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "multipart/form-data": {
+                    /** Format: binary */
+                    readonly file: string;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description Received and quarantined (state QUARANTINED) */
+            readonly 202: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PrescriptionUpload"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 409: components["responses"]["UploadError"];
+            readonly 413: components["responses"]["UploadError"];
+            readonly 415: components["responses"]["UploadError"];
+            readonly 422: components["responses"]["UploadError"];
+            readonly 429: components["responses"]["UploadError"];
+            readonly 503: components["responses"]["UploadError"];
+        };
+    };
+    readonly typePrescriptionCode: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": {
+                    readonly code: string;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description Resolved */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PrescriptionUpload"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["UploadError"];
+            readonly 429: components["responses"]["UploadError"];
+        };
+    };
+    readonly getPrescriptionUpload: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path: {
+                readonly upload_id: components["parameters"]["UploadPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The upload */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PrescriptionUpload"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["UploadError"];
+        };
+    };
+    readonly withdrawPrescriptionUpload: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly upload_id: components["parameters"]["UploadPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Withdrawn */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["UploadError"];
+        };
+    };
+    readonly answerUploadChallenge: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly upload_id: components["parameters"]["UploadPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": {
+                    readonly phone_last4: string;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description Verified */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PrescriptionUpload"];
+                };
+            };
+            readonly 401: components["responses"]["UploadError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["UploadError"];
+            readonly 409: components["responses"]["UploadError"];
+            readonly 422: components["responses"]["UploadError"];
+            readonly 429: components["responses"]["UploadError"];
+        };
+    };
+    readonly choosePrescriptionUploadVersion: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly upload_id: components["parameters"]["UploadPath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": {
+                    /** @enum {string} */
+                    readonly choice: "UPLOADED" | "LATEST";
+                };
+            };
+        };
+        readonly responses: {
+            /** @description Chosen */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PrescriptionUpload"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["UploadError"];
+            readonly 409: components["responses"]["UploadError"];
+            readonly 422: components["responses"]["UploadError"];
         };
     };
     readonly staffAssistantTurn: {

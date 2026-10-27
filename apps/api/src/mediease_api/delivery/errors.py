@@ -35,6 +35,7 @@ from mediease_api.domain.messaging.errors import WebhookRateLimited
 from mediease_api.domain.onboarding.application import ApplicationRateLimited
 from mediease_api.domain.prescriptions.errors import PdfBusy
 from mediease_api.domain.shared.errors import DomainError, InvalidValue
+from mediease_api.domain.uploads.errors import UploadRateLimited
 from mediease_api.ports.readiness import DatabaseTimeout, DatabaseUnavailable, ReadinessError
 
 logger = structlog.get_logger(__name__)
@@ -203,6 +204,15 @@ DOMAIN_ERROR_STATUS = {
     "AI_RATE_LIMITED": 429,
     "AI_PROPOSAL_INVALID": 404,
     "AI_PROPOSAL_USED": 409,
+    # M7b (spec prescription-uploads §10): verified uploads.
+    "UPL_FILE_REJECTED": 422,
+    "UPL_RATE_LIMITED": 429,
+    "UPL_TOO_MANY": 409,
+    "UPL_UPLOAD_FAILED": 503,
+    "UPL_CHALLENGE_FAILED": 401,
+    "UPL_NOT_AWAITING": 409,
+    "UPL_NOT_VERIFIED": 409,
+    "UPL_SELECTION_REQUIRED": 409,
 }
 
 
@@ -235,7 +245,8 @@ def domain_error_response(exc: DomainError) -> tuple[Response, int]:
         | BookingRateLimited
         | ApplicationRateLimited
         | AssistantRateLimited
-        | LlmBusy,
+        | LlmBusy
+        | UploadRateLimited,
     ):
         response.headers["Retry-After"] = str(exc.retry_after_seconds)
     return response, status
