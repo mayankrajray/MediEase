@@ -23,6 +23,21 @@ const SAMPLE = {
  * M6b-P3: `items` replaces the sample's lines (the medicine-plan journey).
  */
 export async function issuedLink(request: APIRequestContext, items: readonly object[] = [SAMPLE]): Promise<string> {
+  return (await issuedPrescription(request, items)).linkPath;
+}
+
+export interface IssuedPrescription {
+  /** `/p/<token>`: the patient link the clinic sends. */
+  readonly linkPath: string;
+  readonly rxId: string;
+  readonly clinicId: string;
+}
+
+/** M7b: the issued sample with its ID and clinic, for the upload journeys (the PDF, revisions). */
+export async function issuedPrescription(
+  request: APIRequestContext,
+  items: readonly object[] = [SAMPLE],
+): Promise<IssuedPrescription> {
   const { sessionId } = await sessionRunningNow(request);
   const patient = await newPatient(request, "Isha");
   let csrf = await signInApi(request, DESK);
@@ -59,8 +74,11 @@ export async function issuedLink(request: APIRequestContext, items: readonly obj
   expect(issued.status(), await issued.text()).toBe(200);
   await signInApi(request, DESK);
   const link = (await (await request.get(`/api/v1/prescriptions/${rx.id}/link`)).json()) as { url: string };
-  return new URL(link.url).pathname; // the stack's PUBLIC_BASE_URL may differ from the e2e host
+  // The stack's PUBLIC_BASE_URL may differ from the e2e host.
+  return { linkPath: new URL(link.url).pathname, rxId: rx.id, clinicId };
 }
+
+export { SAMPLE };
 
 /** NFR-02: bytes on the wire for a first visit in a fresh browser with this page's session. */
 export async function firstLoadBytes(browser: Browser, page: Page, path: string, ready: (p: Page) => Promise<void>): Promise<number> {

@@ -27,7 +27,7 @@ from mediease_api.domain.clinics.clinic import PaperSize
 from mediease_api.domain.jobs.job import PROCESS_UPLOAD_KIND, UPLOAD_SWEEP_KIND, ClaimedJob
 from mediease_api.domain.prescriptions.document import build_document
 from mediease_api.domain.uploads.checks import ScannerUnavailable, ScanResult
-from mediease_api.ports.uploads import IdentifierReaderPort
+from mediease_api.ports.uploads import IdentifierReaderPort, MalwareScannerPort
 from tests.conftest import UowFactory
 from tests.integration.test_clinic_applications_http import MemoryStore
 from tests.integration.test_portal_http import portal_csrf
@@ -96,7 +96,7 @@ def process(
     uow_factory: UowFactory,
     store: MemoryStore,
     *,
-    scanner: FakeScanner | None = None,
+    scanner: MalwareScannerPort | None = None,
     reader: IdentifierReaderPort | None = None,
     attempts: int = 1,
     max_attempts: int = 4,
