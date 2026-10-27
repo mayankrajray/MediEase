@@ -29,6 +29,29 @@ Rules:
 
 ---
 
+### 2026-10-27 — journeys fail at set-up during clinic hours once the seeded session is full (`SCH_OVERLAP`)
+
+- **Milestone / area:** M7 final verification / Playwright helper `sessionRunningNow` (`apps/web/e2e/queue-support.ts`)
+- **Symptom:** a full `make e2e` at 11:30 IST failed 24 of 51 journeys at set-up with
+  `SCH_OVERLAP` from `POST /clinic/doctors/{id}/schedule-exceptions`, including the M7 journeys
+  that had passed on their own an hour earlier.
+- **Impact:** local only; no product code involved (every failure is the same set-up call).
+- **Reproduction:** run the journeys between 10:00 and 13:00 IST after earlier runs that day have
+  booked the seeded 10:00-13:00 session to its capacity of 12.
+- **Investigation:** the sessions table showed the seeded session running and 12 of 12 booked, so
+  `running()` found no session with room, and the helper's extra session overlapped the weekly
+  block. The helper's promise to "pass at any time of day" holds only while that block has room.
+- **Root cause:** the helper adds an extra session for "now", which cannot overlap a full
+  regular session.
+- **Fix:** the helper now stops with a plain message (run after the session ends, or reset the
+  local database, RUNBOOK §1) instead of a bare 409. The run was repeated after 13:00 IST.
+- **Guard:** the full `make e2e` after the block ended.
+- **Prevention / follow-up:** backlog: give the e2e doctor a seeded session with a large capacity,
+  or have the journeys use their own doctor, so the time of day never matters.
+- **Search keywords:** e2e, SCH_OVERLAP, sessionRunningNow, full session, clinic hours, capacity
+
+---
+
 ### 2026-10-27 — an oversized upload through the web origin answered 500 (issue #30)
 
 - **Milestone / area:** M7b-P6 / the Next.js `/api` rewrite in front of the API's upload limits

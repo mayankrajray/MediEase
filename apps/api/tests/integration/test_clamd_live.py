@@ -44,7 +44,8 @@ def eicar_pdf(payload: bytes | None = None) -> bytes:
     """A one-page PDF with ``payload`` (EICAR by default) as an embedded file."""
     data = eicar() if payload is None else payload
     objects = [
-        b"<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [(t.txt) 4 0 R] >> >> >>",
+        b"<< /Type /Catalog /Pages 2 0 R"
+        b" /Names << /EmbeddedFiles << /Names [(t.txt) 4 0 R] >> >> >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>",
         b"<< /Type /Filespec /F (t.txt) /EF << /F 5 0 R >> >>",
