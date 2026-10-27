@@ -792,3 +792,22 @@ Staff tools, offered by permission: `today_queue`, `list_sessions`, `find_patien
 `patient_appointments`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`
 (writes). 12 turns a minute per caller. `Cache-Control: no-store`. Errors: `docs/ERRORS.md` "The
 assistant".
+
+### Prescription uploads (M7b)
+
+| Method | Path | Purpose | Req |
+|---|---|---|---|
+| POST | `/api/v1/portal/prescription-uploads` | Upload a photo or PDF (`multipart/form-data`, part `file`) → 202 `QUARANTINED` | FR-UPL-01 |
+| POST | `/api/v1/portal/prescription-uploads/by-code` | `{code}`: the printed code typed instead → 201, resolved at once | FR-UPL-03 |
+| GET | `/api/v1/portal/prescription-uploads/{upload_id}` | The upload's state (polled while checked) | FR-UPL-01 |
+| POST | `/api/v1/portal/prescription-uploads/{upload_id}/challenge` | `{phone_last4}` for someone else's prescription | FR-UPL-04 |
+| POST | `/api/v1/portal/prescription-uploads/{upload_id}/selection` | `{choice: UPLOADED\|LATEST}` for an older version | FR-UPL-05 |
+| DELETE | `/api/v1/portal/prescription-uploads/{upload_id}` | Withdraw: the file and any grant go → 204 | FR-UPL-05 |
+
+Contract 0.51.0. All `@patient`, `Cache-Control: no-store`. The body `PrescriptionUpload` is
+`{id, state, source, rejection_code, attempts_left, created_at, verification}`; `verification`
+is null until `VERIFIED`, then `{access, clinic_name, doctor_name, version, issued_at, superseded,
+latest_version, latest_issued_at, selected, expires_at}`. Nothing from the file is ever returned,
+and no route serves the file back, to the account or to staff. A verified upload is used by
+naming `{upload_id}` as the assistant turn's `context`. Errors: `docs/ERRORS.md` "Prescription
+uploads".

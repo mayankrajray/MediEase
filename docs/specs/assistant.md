@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-AI-01..04, FR-RX-11, NFR-07 |
 | Milestone / phases | M7a / P1–P5 (issue #65) |
-| Status | Approved (developer, 27 Oct 2026: architecture review and decisions D1–D7 in advance); implemented in M7a |
+| Status | Approved (developer, 27 Oct 2026: architecture review and decisions D1–D7 in advance); implemented in M7a on the M7 branch, 27 Oct 2026 (as built: `docs/milestones/M7-assistant-and-verified-uploads.md`) |
 | Owner | MediEase engineering |
 | Last updated | 2026-10-27 |
 

@@ -47,6 +47,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0039` | `patient_links.bill_id` and purpose `RECEIPT`; `prescription_id` nullable | M6d-P4 |
 | `0040` | `visit_attachments` (reports on visits) | M6d-P6 |
 | `0041` | `clinic_subscriptions` (plans and trials); every existing clinic on `PLUS` with no trial | M6d-P7 |
+| `0042` | `prescription_uploads`; `ck_jobs_system_kind` gains `process_prescription_upload` and `purge_prescription_uploads` | M7b-P6 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -1158,3 +1159,34 @@ Spec `docs/specs/plans-and-trial.md` R1–R10. **Platform data**, one row per cl
 | trial_started_at, trial_ends_at | timestamptz null | Both or neither; exactly 14 days apart (CHECKs); set when the clinic first becomes active |
 | plan_changed_at, plan_changed_by | timestamptz, uuid FK users null | The last change by ops |
 | created_at, updated_at | timestamptz not null | |
+
+## M7b — Prescription uploads (migration `0042`, M7b-P6)
+
+Spec `docs/specs/prescription-uploads.md` §3; ADR-0023. **Platform data owned by a patient
+account**, not a clinic's (`SqlAlchemyPrescriptionUploadRepository`, `uow.prescription_uploads`;
+a reviewed exception in `tests/tenancy/test_repository_scoping.py`). The portal reads filter by
+account, the worker by upload ID. An upload is a temporary pointer: it holds a file key only while
+the file is checked, then IDs and a state. Nothing read from the file is stored.
+
+### `prescription_uploads`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | UUIDv7 |
+| account_id | uuid not null, FK patient_accounts (cascade) | The uploader |
+| source | text not null | `FILE` \| `CODE` (a typed code) |
+| state | text not null | `QUARANTINED` → `SCANNING` → `EXTRACTING` → `NEEDS_CHALLENGE` \| `VERIFIED` \| `REJECTED` |
+| content_type, size_bytes, sha256 | text, integer, text null | Set exactly for `FILE` (the type sniffed from the bytes; 1 B–10 MB) |
+| quarantine_key | text null, unique | `uploads/<account>/<upload>`; only in `QUARANTINED`, `SCANNING`, `EXTRACTING` (CHECK); cleared, and the file deleted, as the upload leaves them |
+| candidate_id | uuid null | The ID read, only while `NEEDS_CHALLENGE` (CHECK); never shown |
+| clinic_id, prescription_id | uuid null, FKs | The verified version and its clinic |
+| access | text null | `OWN` \| `REPRESENTATIVE` |
+| selected_id | uuid null, FK prescriptions | The version the assistant uses: the uploaded or the chain's latest; null until a superseded upload is chosen |
+| rejection_code | text null | `UPL_INFECTED`, `UPL_SCAN_UNAVAILABLE`, `UPL_NO_IDENTIFIER`, `UPL_AMBIGUOUS`, `UPL_UNREADABLE`, `UPL_LOCKED`, `UPL_ABANDONED`, `UPL_EXPIRED`, `UPL_WITHDRAWN`, `UPL_FILE_MISSING`; set exactly when `REJECTED` |
+| failed_challenges | smallint not null, 0–5 | Wrong last-4 answers on this upload |
+| verified_at, expires_at | timestamptz null | Set exactly when `VERIFIED` (with clinic, prescription and access); the grant lasts 24 hours |
+| created_at, updated_at, finished_at | timestamptz | |
+
+Indexes: `(account_id, created_at DESC)`; unfinished uploads by `created_at` (partial); all by
+`created_at` for retention. The sweep (`purge_prescription_uploads`, every 10 minutes) rejects
+uploads still checking after 1 hour (`UPL_ABANDONED`) and checks pending for 24 hours
+(`UPL_EXPIRED`), deleting any file, and deletes rows 30 days after creation.

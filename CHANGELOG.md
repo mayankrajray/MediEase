@@ -7,6 +7,16 @@ first production release.
 ## [Unreleased]
 
 ### Added
+- M7b (#65): verified prescription uploads (FR-UPL-01..05, NFR-20; spec prescription-uploads;
+  ADR-0023). On `/portal/assistant` a patient account uploads a photo or PDF of a MediEase
+  prescription, or types its verification code. The file is held in quarantine, scanned by
+  ClamAV on a separate upload worker, reduced to its MediEase ID (QR or the PDF text layer; no
+  OCR) and deleted. The ID is verified against the account's own linked records, or for
+  anyone else's prescription by the patient's last 4 phone digits (24 hours, nothing linked).
+  An older version is never swapped silently: the user chooses it or the latest. The assistant
+  explains only the database record. Uploads are never shown to staff. Migration `0042`,
+  contract 0.51.0, compose services `clamav` and `upload-worker`, settings `WORKER_QUEUE` and
+  `CLAMD_*`.
 - M7a (#65): the assistant (FR-AI-01..04; spec assistant; ADR-0013, ADR-0024). A patient
   assistant at `/portal/assistant` (booking requests by chat, appointments, the chosen
   prescription restated from its record) and a staff assistant at `/assistant` (queue, sessions,
@@ -16,6 +26,10 @@ first production release.
   OpenAI by settings (`LLM_*`). Contract 0.50.0.
 - M7a-P1 (#65): prescriptions issued from now on print layout 3 with the MediEase mark, a
   verification code and a QR code holding only `MEDIEASE-RX:1:<id>` on every page (FR-RX-11).
+
+### Fixed
+- #30: an oversized upload or ops patient import through the web origin now answers the API's
+  413 envelope from a size-checked route handler instead of an occasional 500 from the proxy.
 
 ### Security
 - Next.js 16.4.0 → 16.4.3 (#49): the October 2026 out-of-band release fixing GHSA-2464-fhr4-w9xw

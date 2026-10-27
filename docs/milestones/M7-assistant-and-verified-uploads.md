@@ -79,3 +79,55 @@ The as-built record of each phase is appended below as it lands.
   tests (fake transport and real HTTP), 26 HTTP tests including booking by chat with
   confirmation, bound and single-use tokens and the grounding replacement, a contract test, web
   component tests and the Playwright journey 1 plus the staff journey.
+
+### M7b (27 Oct 2026)
+
+- **P6 Uploads.** Migration `0042`: `prescription_uploads` (platform data owned by a patient
+  account; `clinic_id` and the prescription set only once verified) with CHECKs per state, and
+  the two upload job kinds in `ck_jobs_system_kind`. `domain/uploads/` holds the lifecycle
+  (`QUARANTINED → SCANNING → EXTRACTING → NEEDS_CHALLENGE | VERIFIED | REJECTED`); the file key
+  exists only in the first three states. `UploadPrescription` sniffs the bytes, writes the file
+  under `uploads/<account>/<upload>` and enqueues the job in the same transaction (the outbox),
+  removing the file if the commit fails. `TypePrescriptionCode` resolves a typed code at once.
+  The ports are one module, `ports/uploads.py` (repository, the reviewed lookup, the scanner and
+  the reader), not the three files the plan named.
+- **P7 Scanning.** `ClamdScanner` (clamd `INSTREAM` over a stdlib socket, 64 KB chunks). An
+  unreachable or erroring daemon is retried by the job (4 attempts, 1, 5 and 15 minutes apart)
+  and then rejects the upload `UPL_SCAN_UNAVAILABLE`; it is never treated as clean.
+  `WORKER_QUEUE` filters the claim SQL (`SqlAlchemyJobStore(only=, skip=)`): compose runs
+  `worker` with `default` and `upload-worker` with `uploads`, beside `clamav`
+  (`clamav/clamav:1.5.4`, signatures on the `clamav-db` volume, clamd on `127.0.0.1:3310` for the
+  live test only). The default worker also mounts `blobs` now (it already purged certificates).
+- **P8 Extraction.** `PrescriptionIdentifierReader`: the QR (pdfium render at 216 dpi, zxing-cpp,
+  QR symbols only, `MEDIEASE-RX:1:<uuid>`) and the printed code in a PDF's text layer. No OCR: a
+  photo is read by its QR only, else the user types the code. 40-megapixel cap read from the
+  header before decoding, 50 pages at most, 2 read. It returns IDs and methods, nothing else.
+  `pypdfium2` and `zxing-cpp` are runtime dependencies now; Pillow is named.
+- **P9 Verification.** `verify.py`. Own record: `version_in_scope` (an issued or superseded
+  version of a linked record). Anyone else's code, existing or not: `NEEDS_CHALLENGE`, and the
+  last-4 digits are checked against the chain's own patient link with `check_last4` and its
+  lockout, so a representative needs the prescription's link to exist (the clinic sends it). Five
+  failures on the upload end it (`UPL_LOCKED`); every failure answers the same. A pass grants
+  that chain for 24 hours and links nothing. A superseded version is verified as itself and
+  waits for `ChooseVersion`.
+- **P10 Handoff and UI.** `ReadVerifiedUpload` is the patient assistant's upload reader: the
+  chosen version's database page, re-authorised every turn (`UPL_NOT_VERIFIED`,
+  `UPL_SELECTION_REQUIRED`). `SweepUploads` every 10 minutes: abandoned after 1 hour, a pending
+  check after 24 hours, rows after 30 days. Web: an upload card on `/portal/assistant` (file or
+  code, polling every 2 s, last-4 form, the version choice, Remove), English and Hindi. A new
+  import contract keeps the assistant away from intake, processing, scanning and storage.
+- **Issue #30.** Reproduced as specified (an upload through the web origin is proxied by the
+  rewrite); fixed with size-checked route handlers for the prescription upload and the ops patient
+  import (`lib/api/limited-proxy.ts`): a declared or streamed body over the limit is the API's
+  own 413 envelope. 15 of 15 oversized uploads through `:3000` answered 413; the smoke test checks
+  it. Other upload paths (visit attachments, certificates) still use the rewrite, where the API's
+  auth check answers before the body matters; moving them is backlog.
+- **Tests.** Domain unit tests; reader tests on real layout-3 PDFs and QR images; a socket-level
+  clamd fake; the live clamd test (EICAR, and an EICAR PDF through the real processing job); 24
+  HTTP tests including **the boundary test** (a forged PDF and a photo with edited medicine text
+  and a genuine QR verify, and the model is sent only the database lines); a contract test; the
+  tenancy and portal-scope suites; web component and proxy tests; Playwright journeys 2-5.
+- **Findings.** A bare EICAR file is refused by type (it is not a PDF, JPEG or PNG) before any
+  scan, and ClamAV does not flag EICAR behind a `%PDF-` header; the realistic case is EICAR as a
+  PDF embedded file, which ClamAV extracts and flags (`Eicar-Signature`). `test_access` had not
+  been given the M7a assistant routes; it has them now.

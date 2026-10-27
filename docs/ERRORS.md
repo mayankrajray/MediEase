@@ -20,6 +20,7 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | `PRT_` | Patient portal accounts (M6a-P3) | | `AUD_` | Audit log (M6a-P8) |
 | `SYS_` | Unexpected server errors | | `WEB_` | Web app → API (raised in the browser/web server, never by the API) |
 | `SUB_` | Plans and limits (M6d-P7) | | `AI_` | The assistant (M7a) |
+| `UPL_` | Prescription uploads (M7b) | | | |
 
 ## Platform
 
@@ -362,3 +363,29 @@ prescription or upload) is the generic `REQ_NOT_FOUND` (404); a malformed conver
 | `AI_RATE_LIMITED` | 429 (Retry-After) | Too many messages | More than 12 turns a minute from one account or staff user | `public_rate_limits` bucket `assistant:<caller>:<id>` |
 | `AI_PROPOSAL_INVALID` | 404 | This confirmation is no longer valid | The token expired (10 minutes), was altered, belongs to another account, user or clinic, or names an action the caller no longer has | `assistant.proposal_refused` with `reason` |
 | `AI_PROPOSAL_USED` | 409 | This was already confirmed | The same proposal confirmed twice (a double click, a replay) | `public_rate_limits` bucket `assistant-proposal:<jti>` |
+
+## Prescription uploads (M7b)
+
+Spec `prescription-uploads.md` §10. Another account's upload is the generic `REQ_NOT_FOUND`
+(404). An oversized request is `REQ_REQUEST_ENTITY_TOO_LARGE` (413) on both origins (issue #30);
+a request that is not multipart is `REQ_UNSUPPORTED_MEDIA_TYPE` (415); answering the last-4 check
+needs a verified email (`PRT_UNVERIFIED_ACCOUNT`, 403). Logs carry the upload ID, states, codes
+and counts, never the file name, the code read or anything else from the file.
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `UPL_FILE_REJECTED` | 422 | Upload a PDF, JPEG or PNG of at most 10 MB | `details.reason` `type`, `size` or `missing`: the bytes are not one of the three types | `domain/shared/files.py` |
+| `UPL_RATE_LIMITED` | 429 (Retry-After) | Too many uploads | More than 10 uploads or codes an hour from the account, or 30 from one caller (`challenge`: 20 an hour) | `public_rate_limits` buckets `upl-upload:`, `upl-challenge:`, `upl-ip:` |
+| `UPL_TOO_MANY` | 409 | Wait for your other uploads | Three of the account's uploads are still being checked | `upload.received`; the upload worker's health |
+| `UPL_UPLOAD_FAILED` | 503 | The upload could not be saved | The blob store refused the write; nothing was kept | `upload.store_failed`; storage settings |
+| `UPL_CHALLENGE_FAILED` | 401 | Those digits do not match | Wrong digits, or no link or prescription to check against: the same answer for both (`details.attempts_left`) | `upload.challenge_failed`; the chain's `patient_links` row |
+| `UPL_NOT_AWAITING` | 409 | Not waiting for the digits | The upload is verified, rejected or still being checked | the upload's state |
+| `UPL_NOT_VERIFIED` | 409 | Not verified | The assistant was given an upload that is not verified, was withdrawn or is past its 24 hours | `prescription_uploads.state`, `expires_at` |
+| `UPL_SELECTION_REQUIRED` | 409 | Choose a version first | A superseded upload with no version chosen | `prescription_uploads.selected_id` |
+
+Rejection codes (an upload's `rejection_code`, not HTTP errors): `UPL_INFECTED` (ClamAV found
+malware), `UPL_SCAN_UNAVAILABLE` (clamd unreachable on the last of 4 attempts), `UPL_NO_IDENTIFIER`
+(no MediEase QR or printed code), `UPL_AMBIGUOUS` (two different IDs), `UPL_UNREADABLE` (damaged,
+password-protected, over 50 pages or 40 megapixels), `UPL_LOCKED` (5 wrong digits),
+`UPL_ABANDONED`, `UPL_EXPIRED` (the sweep), `UPL_WITHDRAWN` (the user), `UPL_FILE_MISSING` (the
+quarantined file was gone when the job ran).

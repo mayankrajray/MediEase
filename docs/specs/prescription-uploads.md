@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-UPL-01..05, FR-AI-04, NFR-20, FR-RX-08, NFR-18 |
 | Milestone / phases | M7b / P6–P10 (issue #65) |
-| Status | Approved (developer, 27 Oct 2026: architecture review, decisions D1–D7, approved in advance); implemented in M7b |
+| Status | Approved (developer, 27 Oct 2026: architecture review, decisions D1–D7, approved in advance); implemented in M7b on the M7 branch, 27 Oct 2026 (as built: `docs/milestones/M7-assistant-and-verified-uploads.md`) |
 | Owner | MediEase engineering |
 | Last updated | 2026-10-27 |
 
