@@ -77,6 +77,8 @@ def test_ac1_the_request_is_openai_compatible_with_tools() -> None:
     url, body, headers, timeout = transport.sent[0]
     assert url == "https://api.groq.com/openai/v1/chat/completions"
     assert headers["Authorization"] == "Bearer sk-test" and timeout == 20.0
+    # Groq's edge refuses urllib's default agent (403, Cloudflare error 1010).
+    assert headers["User-Agent"].startswith("MediEase/")
     assert body["model"] == PRESETS["groq"].model and body["tool_choice"] == "auto"
     assert body["tools"][0]["function"]["name"] == "my_appointments"
     assert body["messages"][2]["tool_calls"][0]["function"]["arguments"] == "{}"
