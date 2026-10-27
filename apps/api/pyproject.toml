@@ -27,7 +27,7 @@ dependencies = [
     # directly), and boto3 for the S3-compatible blob store used in production from M6.
     "weasyprint==70.0",
     "jinja2==3.1.6",
-    "boto3==1.43.114",
+    "boto3==1.43.118",
     # M5-P2 (decisions 1A, 2A): PyCA cryptography for Fernet encryption of the phone numbers
     # stored on messages, and PyYAML for the template catalogue (read with yaml.safe_load only).
     # Both were already installed in dev through moto; the runtime now needs them directly.
