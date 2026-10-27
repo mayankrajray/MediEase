@@ -67,11 +67,37 @@ Milestone issue #65 → branch m7/65-assistant-and-verified-uploads (from origin
 
 ## 5. Roadmap after M7
 
-- **M8 Multi-clinic WhatsApp and consolidated billing** — designed (ADR-0014).
-- **M9 Pilot hardening** — deployment, backups, alerts, security review, upload-worker egress
-  restrictions.
-- **M10+** — inventory, the subscription lifecycle and data export (FR-SUB-02, 03), medical stores,
-  the animated landing page.
+**Next plan (proposed 27 Oct 2026, for the developer's approval after the M7 merge).**
+
+1. **M8 — Multi-clinic WhatsApp and consolidated billing** (designed: `docs/milestones/M8-multi-clinic-whatsapp.md`,
+   ADR-0014 Proposed). New issue and branch `m8/<issue>-multi-clinic-whatsapp` from `main` after
+   PR #66 merges. Build the phases that need no provider first, so L-08 does not block the start:
+   - **P1** connections table, encrypted credentials, per-clinic sender lookup with the fallback;
+   - **P5** usage ledger, billing periods, invoices, reconciliation;
+   - **P6** owner billing page, ops billing console, invoice PDF;
+   - then **P2–P4** (onboarding, template provisioning, webhook routing and per-clinic STOP) in
+     Meta's development mode, and live once L-08 (the BSP partner account) is in place.
+   - ADR-0014 moves to Accepted at M8-P1's design.
+   - Exit criterion: two clinics, each on its own number, send and receive independently, and
+     each month's usage appears on that clinic's invoice only.
+2. **M9 — Pilot hardening and deployment** (TASKS M9-P1..P5). Production infra in `infra/`,
+   TLS, secrets, backups and a restore drill, alerts, the security review, and onboarding of the
+   two pilot clinics. M7 adds these to M9's scope:
+   - the ClamAV and upload-worker sizing (about 1.5 GB) and egress limits;
+   - S3 lifecycle rules for `uploads/`;
+   - the trusted proxy forwarding client addresses (ARCHITECTURE A11);
+   - moving the remaining upload paths onto `proxyWithLimit`;
+   - e2e journeys that do not depend on the time of day (their own doctor or a high-capacity
+     seeded session).
+3. **Outside engineering, in parallel:** L-01–L-03 (WhatsApp number, templates, SMS/DLT), L-04
+   (counsel, including upload retention and the model privacy review), L-05 (India-region
+   hosting), L-06 (pilot conversations), L-08 (BSP partner), L-10 (Groq key), and the official
+   MediEase logo for layout 3.
+4. **Decision for the developer:** M8 before M9 follows the PRD order. If the pilot date matters
+   more than per-clinic numbers, run M9 first: the pilot can start on MediEase's shared number,
+   which M5 already supports.
+5. **M10+:** inventory, the subscription lifecycle and data export (FR-SUB-02, 03), medical
+   stores, the animated landing page, OCR only if the pilot's "no identifier" rate needs it.
 
 ## 6. Progress log
 
