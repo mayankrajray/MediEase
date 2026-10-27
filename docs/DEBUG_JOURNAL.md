@@ -44,8 +44,11 @@ Rules:
 - **Root cause:** the helper adds an extra session for "now", which cannot overlap a full
   regular session.
 - **Fix:** the helper now stops with a plain message (run after the session ends, or reset the
-  local database, RUNBOOK §1) instead of a bare 409. The run was repeated after 13:00 IST.
-- **Guard:** the full `make e2e` after the block ended.
+  local database, RUNBOOK §1) instead of a bare 409. The run was repeated after 13:00 IST: 47 of
+  51, the others being two stale menu expectations (fixed) and the M6b `lonelySession` helper
+  finding no free hour among 65 leftover one-place sessions. On a fresh throwaway stack, as CI
+  starts, all 51 passed.
+- **Guard:** the full `make e2e` on a fresh stack (51/51).
 - **Prevention / follow-up:** backlog: give the e2e doctor a seeded session with a large capacity,
   or have the journeys use their own doctor, so the time of day never matters.
 - **Search keywords:** e2e, SCH_OVERLAP, sessionRunningNow, full session, clinic hours, capacity
