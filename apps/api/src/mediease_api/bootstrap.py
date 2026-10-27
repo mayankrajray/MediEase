@@ -30,9 +30,11 @@ from mediease_api.adapters.db.readiness import SqlAlchemyDatabaseCheck
 from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork, build_session_factory
 from mediease_api.adapters.email.console import ConsoleEmailAdapter
 from mediease_api.adapters.email.smtp import SmtpEmailAdapter
+from mediease_api.adapters.extraction.identifier import PrescriptionIdentifierReader
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
 from mediease_api.adapters.llm.console import ConsoleLlm
 from mediease_api.adapters.llm.openai_compatible import OpenAICompatibleLlm
+from mediease_api.adapters.malware.clamd import ClamdScanner
 from mediease_api.adapters.messaging.catalog import YamlTemplateCatalog
 from mediease_api.adapters.messaging.console import ConsoleMessagingAdapter
 from mediease_api.adapters.messaging.console_sms import ConsoleSmsAdapter
@@ -281,6 +283,15 @@ from mediease_api.application.scheduling.exceptions import AddException, RemoveE
 from mediease_api.application.scheduling.schedules import GetSchedule, ReplaceSchedule
 from mediease_api.application.scheduling.sessions import ListSessions
 from mediease_api.application.subscriptions.plans import GetSubscription, SetPlan
+from mediease_api.application.uploads.assistant import ReadVerifiedUpload
+from mediease_api.application.uploads.intake import TypePrescriptionCode, UploadPrescription
+from mediease_api.application.uploads.processing import ProcessUpload, SweepUploads
+from mediease_api.application.uploads.verify import (
+    AnswerChallenge,
+    ChooseVersion,
+    GetUpload,
+    WithdrawUpload,
+)
 from mediease_api.application.visits.attachments import (
     AddAttachment,
     DeleteAttachment,
@@ -335,6 +346,7 @@ from mediease_api.delivery.http.patients import (
 )
 from mediease_api.delivery.http.platform import create_platform_blueprint
 from mediease_api.delivery.http.portal import create_portal_blueprint
+from mediease_api.delivery.http.prescription_uploads import create_prescription_uploads_blueprint
 from mediease_api.delivery.http.prescriptions import create_prescriptions_blueprint
 from mediease_api.delivery.http.public_applications import create_public_applications_blueprint
 from mediease_api.delivery.http.public_clinics import (
@@ -364,10 +376,13 @@ from mediease_api.domain.jobs.job import (
     NO_SHOW_SWEEP_KIND,
     NOTIFY_MEDICINE_DUE_KIND,
     PATIENT_EMAIL_KIND,
+    PROCESS_UPLOAD_KIND,
     PURGE_KIND,
     RECONCILE_KIND,
     REQUEST_EXPIRY_SWEEP_KIND,
     STAFF_INVITE_KIND,
+    UPLOAD_KINDS,
+    UPLOAD_SWEEP_KIND,
     WEBHOOK_KIND,
 )
 from mediease_api.domain.messaging.jobs import (
@@ -448,7 +463,34 @@ class _UseCases:
         )
 
     def patient_assistant(self) -> PatientAssistant:
-        return PatientAssistant(engine=self._assistant_engine(), use_cases=self, clock=self.clock)
+        return PatientAssistant(
+            engine=self._assistant_engine(),
+            use_cases=self,
+            clock=self.clock,
+            # M7b (R16): a verified upload's database prescription, never the file.
+            uploads=ReadVerifiedUpload(uow=self._uow(), clock=self.clock),
+        )
+
+    # --- M7b: verified prescription uploads (spec prescription-uploads) -------------------------
+    def upload_prescription(self) -> UploadPrescription:
+        return UploadPrescription(
+            uow=self._uow(), clock=self.clock, ids=self.ids, storage=self.blob_storage
+        )
+
+    def type_prescription_code(self) -> TypePrescriptionCode:
+        return TypePrescriptionCode(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def get_upload(self) -> GetUpload:
+        return GetUpload(uow=self._uow())
+
+    def answer_upload_challenge(self) -> AnswerChallenge:
+        return AnswerChallenge(uow=self._uow(), clock=self.clock, ids=self.ids)
+
+    def choose_upload_version(self) -> ChooseVersion:
+        return ChooseVersion(uow=self._uow(), clock=self.clock)
+
+    def withdraw_upload(self) -> WithdrawUpload:
+        return WithdrawUpload(uow=self._uow(), clock=self.clock, storage=self.blob_storage)
 
     def staff_assistant(self) -> StaffAssistant:
         return StaffAssistant(engine=self._assistant_engine(), use_cases=self, clock=self.clock)
@@ -1450,10 +1492,16 @@ def build_worker(settings: AppSettings, stop: threading.Event) -> Worker:
     factory = build_session_factory(build_engine(settings))
     clock = SystemClock()
     ids = Uuid7Generator()
-    store = SqlAlchemyJobStore(factory)
+    store = SqlAlchemyJobStore(
+        factory,
+        # M7b (prescription-uploads R4): the upload worker and the default worker split the queue.
+        only=UPLOAD_KINDS if settings.WORKER_QUEUE == "uploads" else frozenset(),
+        skip=UPLOAD_KINDS if settings.WORKER_QUEUE == "default" else frozenset(),
+    )
     # Jitter only spreads retries out; it needs no cryptographic randomness.
     rand = random.SystemRandom().random
     email = build_email(settings)
+    blobs = build_blob_storage(settings)
     handlers: dict[str, JobHandler] = {
         PURGE_KIND: PurgeExpired(uow=SqlAlchemyUnitOfWork(factory), clock=clock, ids=ids),
         AUTH_EMAIL_KIND: SendAuthEmail(
@@ -1485,7 +1533,23 @@ def build_worker(settings: AppSettings, stop: threading.Event) -> Worker:
             public_base_url=settings.PUBLIC_BASE_URL,
         ),
         APPLICATION_PURGE_KIND: PurgeApplications(
-            uow=SqlAlchemyUnitOfWork(factory), clock=clock, storage=build_blob_storage(settings)
+            uow=SqlAlchemyUnitOfWork(factory), clock=clock, storage=blobs
+        ),
+        # M7b (prescription-uploads R4-R8, R18): claimed only where WORKER_QUEUE allows.
+        PROCESS_UPLOAD_KIND: ProcessUpload(
+            uow=SqlAlchemyUnitOfWork(factory),
+            clock=clock,
+            ids=ids,
+            storage=blobs,
+            scanner=ClamdScanner(
+                host=settings.CLAMD_HOST,
+                port=settings.CLAMD_PORT,
+                timeout_seconds=float(settings.CLAMD_TIMEOUT_SECONDS),
+            ),
+            reader=PrescriptionIdentifierReader(),
+        ),
+        UPLOAD_SWEEP_KIND: SweepUploads(
+            uow=SqlAlchemyUnitOfWork(factory), clock=clock, storage=blobs
         ),
         **_messaging_handlers(settings, factory, clock, ids),
     }
@@ -1655,6 +1719,8 @@ def create_app(
     app.register_blueprint(create_audit_log_blueprint(use_cases))
     # M7a (spec assistant): the patient and staff assistants.
     app.register_blueprint(create_assistant_blueprint(use_cases))
+    # M7b (spec prescription-uploads): verified uploads and typed codes.
+    app.register_blueprint(create_prescription_uploads_blueprint(use_cases))
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

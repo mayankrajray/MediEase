@@ -248,6 +248,18 @@ EXPECTED_POLICIES = {
     "public_applications.confirm": (Access.PUBLIC, None),
     # Ops imports patients but cannot browse them (spec patients §2, M2-P4).
     "ops.import_patients": (Access.OPS, None),
+    # M7a (spec assistant R1, R9): the patient and staff assistants.
+    "assistant.patient_turn": (Access.PATIENT, None),
+    "assistant.patient_confirm": (Access.PATIENT, None),
+    "assistant.staff_turn": (Access.CLINIC, Permission.APPOINTMENTS_MANAGE),
+    "assistant.staff_confirm": (Access.CLINIC, Permission.APPOINTMENTS_MANAGE),
+    # M7b (prescription-uploads R1-R17): a patient account's own uploads; no staff route at all.
+    "prescription_uploads.upload": (Access.PATIENT, None),
+    "prescription_uploads.by_code": (Access.PATIENT, None),
+    "prescription_uploads.get_upload": (Access.PATIENT, None),
+    "prescription_uploads.challenge": (Access.PATIENT, None),
+    "prescription_uploads.selection": (Access.PATIENT, None),
+    "prescription_uploads.withdraw": (Access.PATIENT, None),
 }
 
 
