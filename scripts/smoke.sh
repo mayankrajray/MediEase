@@ -24,7 +24,7 @@ text() { get "$1" | sed 's/<[^>]*>//g'; }
 
 echo "Services"
 state() { $COMPOSE ps -a --format '{{.Service}} {{.State}} {{.Health}} {{.ExitCode}}' | awk -v s="$1" '$1 == s'; }
-for svc in db api worker web; do
+for svc in db api worker upload-worker clamav web; do
   [[ "$(state "$svc")" == "$svc running healthy"* ]] && pass "$svc running and healthy" || fail "$svc not healthy: $(state "$svc")"
 done
 [[ "$(state migrate)" == "migrate exited "*" 0" ]] && pass "migrate exited 0" || fail "migrate: $(state migrate)"
@@ -67,8 +67,16 @@ status=$(curl -sS -m 15 -o /dev/null -w '%{http_code}' "$WEB/api/v1/patients?q=r
 status=$(curl -sS -m 15 -o /dev/null -w '%{http_code}' -H 'If-None-Match: *' "$WEB/api/v1/queue")
 [ "$status" = "401" ] && pass "/api/v1/queue without a session is 401, also with If-None-Match" || fail "/api/v1/queue anonymous: $status"
 
+# M7b (NFR-20): the upload scanner answers on the compose network (from the upload worker).
+$COMPOSE exec -T upload-worker python -c "from mediease_api.adapters.malware.clamd import ClamdScanner as C; import sys; sys.exit(0 if C(host='clamav', port=3310, timeout_seconds=10).ping() else 1)" \
+  && pass "clamav answers the upload worker" || fail "clamav unreachable from the upload worker"
+# Uploads through the web origin: an oversized body is 413 (issue #30), not a 500.
+status=$(head -c 11000000 /dev/zero | curl -sS -m 30 -o /dev/null -w '%{http_code}' -X POST \
+  -H 'Content-Type: multipart/form-data; boundary=x' --data-binary @- "$WEB/api/v1/portal/prescription-uploads")
+[ "$status" = "413" ] && pass "an 11 MB upload through the web is 413" || fail "oversized upload through the web: $status"
+
 echo "Least privilege"
-for svc in api worker web; do
+for svc in api worker upload-worker web; do
   uid=$($COMPOSE exec -T "$svc" id -u)
   [[ "$uid" != "0" ]] && pass "$svc runs as uid $uid (not root)" || fail "$svc runs as root"
   if $COMPOSE exec -T "$svc" sh -c 'touch /smoke-write-test' 2>/dev/null; then
