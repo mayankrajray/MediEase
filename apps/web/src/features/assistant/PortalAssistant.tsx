@@ -76,7 +76,7 @@ export function PortalAssistant() {
       )}
       <UploadPanel onChange={setUpload} />
       <Chat
-        key={fromUpload ?? valid}
+        key={fromUpload === null ? valid : `${fromUpload}:${upload?.verification?.selected ?? ""}`}
         s={a}
         onLeave={leave}
         send={async (messages) =>
