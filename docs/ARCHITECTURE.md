@@ -53,6 +53,8 @@ flowchart TB
       WEB[web — Next.js server<br/>renders pages, proxies /api]
       API[api — Flask + Gunicorn<br/>HTTP + webhooks]
       WRK[worker — same codebase<br/>runs jobs]
+      UPW[upload-worker — same codebase<br/>upload jobs only]
+      AV[clamav — clamd<br/>malware scan]
       MIG[migrate — one-off<br/>Alembic]
       DB[(PostgreSQL<br/>data + job table)]
       FS[(Object storage<br/>PDFs, attachments)]
@@ -64,6 +66,9 @@ flowchart TB
     MIG --> DB
     API --> FS
     WRK --> FS
+    UPW --> DB
+    UPW --> FS
+    UPW -->|INSTREAM| AV
     WRK -->|HTTPS| EXT[WhatsApp / SMS]
     EXT -->|webhooks| API
 ```
@@ -74,7 +79,9 @@ flowchart TB
 | `api` | HTTP API, webhook receivers, readiness | M0 |
 | `db` | PostgreSQL: all data, including the job table | M0 |
 | `migrate` | Runs Alembic migrations once, then exits | M0 |
-| `worker` | Claims and runs jobs (reminders, message sends, PDF rendering) | M5 |
+| `worker` | Claims and runs jobs (reminders, message sends, PDF rendering); `WORKER_QUEUE=default` skips the upload jobs | M5 |
+| `upload-worker` | The same worker with `WORKER_QUEUE=uploads`: scans, reads and verifies uploaded prescriptions, deletes the files (ADR-0023) | M7b |
+| `clamav` | ClamAV's clamd, reached only by the upload worker over the compose network | M7b |
 | object storage | Local volume in dev; S3-compatible bucket in production | M4 |
 
 The API and worker share one Python package; only the entrypoint differs.

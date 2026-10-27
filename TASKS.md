@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M7 — AI assistant (M7a) and verified prescription uploads (M7b)** (issue #65, branch `m7/65-assistant-and-verified-uploads` from `main` at `d53f53d`, one PR for the milestone). M6d merged in PR #64 on 26 Oct 2026 (#63 closed) |
-| Active phase | **M7b-P6 — Upload and quarantine** (M7a P1–P5 built 27 Oct 2026; the developer approved every phase design in advance) |
+| Active phase | **M7 complete on its branch** (M7a P1–P5 and M7b P6–P10 built 27 Oct 2026); waiting for the developer's permission to push and open the milestone PR |
 | Design notes | `docs/milestones/M7-assistant-and-verified-uploads.md` and the review `docs/milestones/M7-architecture-review.md`; specs `docs/specs/assistant.md`, `docs/specs/prescription-uploads.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
 | Approved plan | `NEXT_STEPS_PLAN.md` (M7 phases, workflow, progress log) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -224,7 +224,7 @@ reports it cannot open; **D8** the public fee is the consultation price; **D9** 
 | M6d-P6 | Report attachments on visits (FR-VIS-04) | ✅ (built 26 Oct 2026) |
 | M6d-P7 | Plans, trial and limits (FR-SUB-01) | ✅ (built 26 Oct 2026) |
 
-## M7 — AI assistant (M7a) and verified prescription uploads (M7b)  `▶ ACTIVE`
+## M7 — AI assistant (M7a) and verified prescription uploads (M7b)  `▶ ACTIVE (built; PR pending)`
 
 **Covers:** FR-AI-01..04, FR-RX-11, FR-UPL-01..05, NFR-20 (PRD v1.3 C15, C16). Issue #65, branch
 `m7/65-assistant-and-verified-uploads`, one PR. **ADRs:** 0013, 0023, 0024. **Exit:** booking by
@@ -246,11 +246,11 @@ linked patients.
 | M7a-P3 | Assistant core: tools as the caller, signed confirmations, guard rails, explanation (FR-AI-01, 02, 04) | ✅ (built 27 Oct 2026) |
 | M7a-P4 | Patient assistant and the prescription picker (FR-AI-01, 04) | ✅ (built 27 Oct 2026) |
 | M7a-P5 | Staff assistant (FR-AI-01) | ✅ (built 27 Oct 2026) |
-| M7b-P6 | Upload and quarantine; #30 (FR-UPL-01, NFR-20) | ▶ ACTIVE |
-| M7b-P7 | ClamAV on a separate upload worker (FR-UPL-02) | ☐ |
-| M7b-P8 | Identifier extraction, no OCR (FR-UPL-03) | ☐ |
-| M7b-P9 | Verification: own, representative, superseded (FR-UPL-04) | ☐ |
-| M7b-P10 | Handoff to the assistant, cleanup, portal UI, journeys (FR-UPL-05) | ☐ |
+| M7b-P6 | Upload and quarantine; #30 (FR-UPL-01, NFR-20) | ✅ (built 27 Oct 2026) |
+| M7b-P7 | ClamAV on a separate upload worker (FR-UPL-02) | ✅ (built 27 Oct 2026) |
+| M7b-P8 | Identifier extraction, no OCR (FR-UPL-03) | ✅ (built 27 Oct 2026) |
+| M7b-P9 | Verification: own, representative, superseded (FR-UPL-04) | ✅ (built 27 Oct 2026) |
+| M7b-P10 | Handoff to the assistant, cleanup, portal UI, journeys (FR-UPL-05) | ✅ (built 27 Oct 2026) |
 
 ## M8 — Multi-clinic WhatsApp and consolidated billing  `☐ (designed)`
 

@@ -43,6 +43,8 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 30. The daily collection (M6d-P5)
 31. Reports attached to visits (M6d-P6)
 32. Plans, the trial and limits (M6d-P7)
+33. The assistant's model (M7a)
+34. Prescription uploads and ClamAV (M7b)
 
 ---
 
@@ -865,3 +867,31 @@ has_trial, trial_ends_at FROM clinic_subscriptions WHERE clinic_id = '<id>';`
   `AI_PROVIDER_BUSY` is the provider's rate limit: wait, or move to a paid plan.
 - **Nothing is stored.** Conversations live in the browser tab; logs never carry their text, so
   a complaint about an answer needs the person's own screenshot (synthetic data only in tickets).
+
+### 34. Prescription uploads and ClamAV (M7b, ADR-0023)
+
+- **What runs.** `upload-worker` (`WORKER_QUEUE=uploads`) claims only the two upload jobs and
+  scans with `clamav` (`clamav/clamav:1.5.4`); `worker` (`default`) claims everything else, so a
+  slow scan never delays a reminder. `make worker` runs a single foreground worker with the
+  default `WORKER_QUEUE=all`. Both mount `blobs`; uploaded files live under `uploads/` only while
+  they are checked.
+- **ClamAV's first start** loads its signatures (a minute or more; the health check allows
+  180 s). freshclam inside the container keeps them current; they persist on the `clamav-db`
+  volume. ClamAV needs about 1.5 GB of memory. Check it: `make smoke` (*clamav answers the upload
+  worker*), or `docker compose exec upload-worker python -c "from mediease_api.adapters.malware.clamd import ClamdScanner as C; print(C(host='clamav', port=3310, timeout_seconds=10).ping())"`.
+- **Uploads stuck in "Checking your file".** `make ps`: is `upload-worker` healthy? Its log shows
+  `upload.scan_unavailable` while clamd is down; the job retries 1, 5 and 15 minutes apart, then
+  rejects the upload `UPL_SCAN_UNAVAILABLE` (never skipped). Anything still checking after 1 hour
+  is ended by the sweep (`UPL_ABANDONED`) and its file deleted.
+- **"No MediEase code was found"** (`UPL_NO_IDENTIFIER`). Only layout-3 prescriptions (issued from
+  M7) carry the code. A photo is read by its QR only (no OCR): ask for a sharper photo of the square
+  code, or have the person type the code printed under it.
+- **A family member cannot verify.** The last-4 check runs against the prescription's patient link,
+  so the clinic must have sent (or opened, *Copy link*) that prescription's link once. Five wrong
+  answers end the upload and also count on the link's own lockout, which only clinic staff can
+  reset from the prescription.
+- **Staff never see uploads.** There is no staff screen or route. To check a case by hand (IDs
+  only): `SELECT id, state, rejection_code, access, created_at FROM prescription_uploads WHERE
+  account_id = '<id>' ORDER BY created_at DESC;` Rows go 30 days after creation.
+- **Live EICAR test.** With the stack up, `make test-api` runs `tests/integration/test_clamd_live.py`
+  against `127.0.0.1:3310` (`CLAMD_PUBLISH_PORT`); it skips when no clamd answers.

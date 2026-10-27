@@ -86,6 +86,19 @@ Use this list in the M6 security review. Each row names where it is implemented.
 - [x] Daily collection (M6d-P5, FR-BIL-06, spec billing R55-R62): `COLLECTION_VIEW` only (owners and the front desk); amounts, numbers and names, nothing clinical; the CSV export makes formula-like cells safe and is audited (`collection.exported`)
 - [x] Report attachments (M6d-P6, FR-VIS-04, B8, D7, spec visit-attachments R1-R13): clinical content opened only with `CLINICAL_VIEW`; the front desk may attach (`ATTACHMENTS_ADD`) but never list or open; PDF, JPEG or PNG recognised by their first bytes (the shared `domain/shared/files.py` sniffer), never parsed, at most 10 MB, the request capped before it is read; private blobs served only through the API `inline` with their recognised type, `nosniff`, `sandbox; default-src 'none'` and `private, no-store`; every staff open audited; names cleaned, never logged or audited; deletes only by the uploader within 24 hours, the row kept; shown in the portal only when the visit's doctor shares, through `PortalScope` with a cross-account test; tenant table `visit_attachments` with cross-clinic tests. Not scanned for malware (out of scope: three inert types, never run)
 - [x] Plan limits (M6d-P7, FR-SUB-01, spec plans-and-trial R4-R8): enforced by the API, never only the web, in the one check (`require_room`) called inside the transaction of every path that adds or brings back a doctor or a member (ops, owner, approval, invitation acceptance), under the clinic's subscription row lock; only `OPS_ADMIN` sets a plan, never below the clinic's use, audited with the two plan codes; `clinic_subscriptions` is platform data with a reviewed tenancy exception; the trial's end locks nothing (D5)
+- [x] Prescription uploads (M7b, FR-UPL-01..05, NFR-20, ADR-0023, D4, D6): PDF, JPEG or PNG by
+  their first bytes, at most 10 MB, the request capped before parsing on both origins (#30);
+  written write-once to a private quarantine prefix and **scanned by ClamAV before anything
+  parses them** (an unavailable scanner is retried, then the upload rejected; never skipped);
+  read by a separate upload worker under limits (40 megapixels checked from the header, 50
+  pages, 2 read) for the MediEase ID only (QR, the PDF text layer; no OCR, no model); the
+  file deleted before the outcome commits, abandoned ones by the 10-minute sweep, rows after
+  30 days. An ID is resolved only inside the account's `PortalScope`; anyone else's code gets
+  the prescription's own last-4 check and lockout, with one answer whether the prescription
+  exists or not, and grants that chain for 24 hours without linking. Never shown to staff (no
+  route). The assistant receives only the database version (an import contract keeps it
+  away from intake, processing, scanning and storage; a test forges a PDF and a photo with
+  edited medicines and a genuine QR and checks the model sees only the database lines)
 - [x] Secrets scanning in CI (M0-P5: gitleaks over the full git history, pinned image, redacted output)
 
 ### Audit and monitoring
@@ -129,3 +142,6 @@ Use this list in the M6 security review. Each row names where it is implemented.
     staging and production until `LLM_PATIENT_DATA_ALLOWED=true`, which may be set only after a
     provider contract with suitable data terms and this review's counsel sign-off (*Counsel*,
     L-04, L-10); the provider then joins the sub-processor list.
+  - [x] An uploaded file never reaches a model or the assistant's tools: they get a verified
+    upload's chosen version from the database (M7b; `application/uploads/assistant.py`).
+    The printed code and QR hold only `MEDIEASE-RX:1:<id>` and grant nothing by themselves.

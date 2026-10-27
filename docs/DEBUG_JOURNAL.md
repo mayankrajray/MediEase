@@ -29,6 +29,24 @@ Rules:
 
 ---
 
+### 2026-10-27 — an oversized upload through the web origin answered 500 (issue #30)
+
+- **Milestone / area:** M7b-P6 / the Next.js `/api` rewrite in front of the API's upload limits
+- **Symptom:** a body over the API's limit sent to `:3000` sometimes answered 500 instead of 413
+  (first seen with the 2 MB patient import in M2-P4; the new 10 MB prescription upload goes the
+  same way). The web log showed `Failed to proxy … Error: write EPIPE`.
+- **Root cause:** Werkzeug refuses an over-long `Content-Length` at once and the connection
+  closes while the rewrite proxy is still streaming the body; the proxy turns its own write error
+  into a 500. Through `:8000` the 413 always arrives.
+- **Fix:** route handlers for the upload and the import paths (`apps/web/src/lib/api/limited-proxy.ts`)
+  check the size first: a declared `Content-Length` over the limit, or a streamed body passing
+  it, gets the API's 413 envelope from the web server; a body within it is sent on whole.
+  Reproduced and checked on the stack: 15 of 15 11 MB uploads through `:3000` answered 413.
+- **Prevention:** regression tests in `limited-proxy.test.ts`; `make smoke` posts 11 MB through
+  the web origin and expects 413. Any new upload route goes through `proxyWithLimit`.
+
+---
+
 ### 2026-10-24 — a journey's new extra session "is not listed" after waiting (no error code)
 
 - **Milestone / area:** M6a-P8 / Playwright helper `sessionRunningNow` (`apps/web/e2e/queue-support.ts`)
