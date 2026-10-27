@@ -13,6 +13,7 @@ import {
   apiGetConditional,
   apiPatch,
   apiPost,
+  apiPostForm,
   apiPut,
   newRequestId,
   REQUEST_ID_HEADER,
@@ -72,6 +73,18 @@ export function portalPost<P extends PostPath>(
 ): Promise<ApiResult<PostResponse<P>>> {
   return withSessionRefresh(
     () => apiPost(path, body, { ...options, csrfCookie: PORTAL_CSRF_COOKIE }),
+    PORTAL,
+  );
+}
+
+/** M7b-P6: a multipart portal POST (a prescription upload), refreshed once like the others. */
+export function portalPostForm<P extends PostPath>(
+  path: P,
+  form: FormData,
+  options: RequestOptions = {},
+): Promise<ApiResult<PostResponse<P>>> {
+  return withSessionRefresh(
+    () => apiPostForm(path, form, { ...options, csrfCookie: PORTAL_CSRF_COOKIE }),
     PORTAL,
   );
 }

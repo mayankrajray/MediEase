@@ -61,9 +61,11 @@ type SuccessBody<Op> = Op extends { readonly responses: infer R }
     ? JsonOf<A>
     : R extends { readonly 201: infer B }
       ? JsonOf<B>
-      : R extends { readonly 204: object }
-        ? undefined
-        : never
+      : R extends { readonly 202: infer C }
+        ? JsonOf<C>
+        : R extends { readonly 204: object }
+          ? undefined
+          : never
   : never;
 
 type JsonRequestBody<Op> = Op extends {

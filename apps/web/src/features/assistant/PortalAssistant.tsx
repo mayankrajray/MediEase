@@ -10,6 +10,7 @@ import { portalGet, portalPost } from "@/lib/auth/portal-session";
 import { portalDate } from "@/lib/i18n/portal";
 
 import { Chat } from "./Chat";
+import { type Upload, UploadPanel, usableUpload } from "./UploadPanel";
 
 /** A model may take a while; the API itself bounds each provider call (LLM_TIMEOUT_SECONDS). */
 export const ASSISTANT_TIMEOUT_MS = 45_000;
@@ -22,17 +23,22 @@ async function loadChoices() {
 /**
  * The patient assistant (M7a-P4; FR-AI-01, 04; spec assistant R9, §6). The *prescription to ask
  * about* picker lists the account's current prescriptions (decision D7); the chosen one is sent
- * as the turn's context and the API re-checks it every turn.
+ * as the turn's context and the API re-checks it every turn. M7b: anything else (a family
+ * member's, a paper one) is uploaded or its code typed in `UploadPanel`; once verified, with a
+ * version chosen, that upload is the context instead.
  */
 export function PortalAssistant() {
   const { s, leave } = usePortal();
   const params = useSearchParams();
   const loaded = usePortalLoad(loadChoices);
   const [chosen, setChosen] = useState<string>(params.get("rx") ?? "");
+  const [upload, setUpload] = useState<Upload | null>(null);
 
   const items = loaded.status === "ready" ? loaded.data.items : [];
-  const valid = items.some((p) => p.id === chosen) ? chosen : "";
+  const fromUpload = usableUpload(upload);
+  const valid = fromUpload === null && items.some((p) => p.id === chosen) ? chosen : "";
   const a = s.assistant;
+  const context = fromUpload !== null ? { upload_id: fromUpload } : valid === "" ? null : { prescription_id: valid };
 
   return (
     <div className="space-y-5">
@@ -53,6 +59,7 @@ export function PortalAssistant() {
                 id="assistant-prescription"
                 value={valid}
                 onChange={(event) => setChosen(event.target.value)}
+                disabled={fromUpload !== null}
                 className="block min-h-11 w-full rounded-lg border border-slate-300 bg-white p-2"
               >
                 <option value="">{a.noChoice}</option>
@@ -64,17 +71,19 @@ export function PortalAssistant() {
               </select>
             </>
           )}
+          {fromUpload !== null && <p className="text-sm">{a.upload.asking}</p>}
         </PortalCard>
       )}
+      <UploadPanel onChange={setUpload} />
       <Chat
-        key={valid}
+        key={fromUpload ?? valid}
         s={a}
         onLeave={leave}
         send={async (messages) =>
           (
             await portalPost(
               "/api/v1/portal/assistant/turns",
-              { messages: [...messages], language: s.lang, context: valid === "" ? null : { prescription_id: valid } },
+              { messages: [...messages], language: s.lang, context },
               { timeoutMs: ASSISTANT_TIMEOUT_MS },
             )
           ).data
