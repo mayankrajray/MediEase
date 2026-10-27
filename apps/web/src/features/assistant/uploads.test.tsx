@@ -124,7 +124,10 @@ describe("prescription uploads on the assistant page (M7b; FR-UPL-01..05)", () =
     const api = mockApi({
       ...base,
       [`POST ${UPL}/by-code`]: () => json(201, verified(older)),
-      [`POST ${UPL}/${ID}/selection`]: () => json(200, verified({ ...older, selected: "LATEST" })),
+      [`POST ${UPL}/${ID}/selection`]: [
+        () => json(200, verified({ ...older, selected: "LATEST" })),
+        () => json(200, verified({ ...older, selected: "UPLOADED" })),
+      ],
       [TURNS]: () => json(200, { kind: "ANSWER", reply: "ok", proposal: null }),
     });
     await renderPortal(<PortalAssistant />);
@@ -138,6 +141,13 @@ describe("prescription uploads on the assistant page (M7b; FR-UPL-01..05)", () =
     expect(api.calls.find((c) => c.path === `${UPL}/${ID}/selection`)?.body).toEqual({ choice: "LATEST" });
     ask("Explain it");
     await waitFor(() => expect(contextOf(api.calls)).toEqual({ upload_id: ID }));
+    // Choosing the other version starts a new conversation (its history never mixes versions).
+    const log = screen.getByRole("list", { name: "Conversation" });
+    await within(log).findByText("ok");
+    fireEvent.click(within(group).getByRole("button", { name: /The one I uploaded/ }));
+    await waitFor(() =>
+      expect(within(screen.getByRole("list", { name: "Conversation" })).queryByText("ok")).toBeNull(),
+    );
   });
 
   it("NFR-20 a rejected file says why and offers the forms again; Remove withdraws", async () => {
