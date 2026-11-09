@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
+import { Logo } from "@/components/ui/Logo";
 import { apiGet, type GetResponse } from "@/lib/api/client";
 import { rupees } from "@/lib/format/money";
 import { bookingWords, type BookingWords } from "@/lib/i18n/booking-request";
@@ -115,10 +116,7 @@ export function PublicClinicPage({
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-2">
           <span className="flex min-h-11 items-center gap-2 text-lg font-bold text-slate-900">
-            <span aria-hidden="true" className="grid size-8 place-items-center rounded-xl bg-brand-700 text-sm text-white">
-              M
-            </span>
-            MediEase
+            <Logo />
           </span>
           <Link
             href={`/c/${encodeURIComponent(clinic.slug)}${profileOf === undefined ? "" : `/doctors/${encodeURIComponent(profileOf)}`}?lang=${other}`}

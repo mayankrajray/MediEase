@@ -43,6 +43,11 @@ const PUBLIC_PATHS: ReadonlySet<string> = new Set([
   "/find",
   // M6c-P8: the landing page; a visitor with a session is sent on by the page itself.
   "/",
+  // M7c-P7: the app icons (src/app/icon.svg, apple-icon.png) and the design-system showcase,
+  // which shows sample components only, no data.
+  "/icon.svg",
+  "/apple-icon.png",
+  "/design-system",
 ]);
 // /p/<token>: the patient's prescription page (M4-P5); the token and the last-4 check guard it.
 // M6a-P4: emailed reset and verification links; the token in the path is the authority.
@@ -60,6 +65,8 @@ const PUBLIC_PREFIXES: readonly string[] = [
   "/reset-password/",
   "/portal/reset-password/",
   "/portal/verify-email/",
+  // M7c-P7: the logo files (apps/web/public/brand), for emails, documents and social previews.
+  "/brand/",
 ];
 
 /** Pages anyone may open without a session. */

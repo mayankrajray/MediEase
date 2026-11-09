@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { Logo } from "@/components/ui/Logo";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import type { components } from "@/lib/api/schema";
@@ -149,10 +150,7 @@ export function PortalShell({ children }: Readonly<{ children: ReactNode }>) {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-2">
           <Link href="/portal" className="flex min-h-11 items-center gap-2 text-lg font-bold text-slate-900">
-            <span aria-hidden="true" className="grid size-8 place-items-center rounded-xl bg-brand-700 text-sm text-white">
-              M
-            </span>
-            MediEase
+            <Logo />
           </Link>
           {portal !== null && (
             <div className="flex items-center gap-2">

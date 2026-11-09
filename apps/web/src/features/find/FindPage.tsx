@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Logo } from "@/components/ui/Logo";
 import { rupees } from "@/lib/format/money";
 import type { GetResponse } from "@/lib/api/client";
 import { findWords, shortDay } from "@/lib/i18n/find";
@@ -73,10 +74,7 @@ export function FindPage({
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-2">
           <Link href={language === "hi" ? "/?lang=hi" : "/"} className="flex min-h-11 items-center gap-2 text-lg font-bold text-slate-900">
-            <span aria-hidden="true" className="grid size-8 place-items-center rounded-xl bg-brand-700 text-sm text-white">
-              M
-            </span>
-            MediEase
+            <Logo />
           </Link>
           <Link
             href={`/find?${switchQuery.toString()}`}

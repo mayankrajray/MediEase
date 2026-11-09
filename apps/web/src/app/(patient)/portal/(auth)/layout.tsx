@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 
+import { Logo } from "@/components/ui/Logo";
 import { LanguageCookieSwitch } from "@/features/portal/LanguageCookieSwitch";
 import { PORTAL_LANGUAGE_COOKIE, parsePortalLanguage, portalStrings } from "@/lib/i18n/portal";
 
@@ -17,10 +18,7 @@ export default async function PortalAuthLayout({ children }: Readonly<{ children
         <LanguageCookieSwitch language={language} />
       </div>
       <p className="mt-2 flex items-center gap-2 text-xl font-bold text-slate-900">
-        <span aria-hidden="true" className="grid size-9 place-items-center rounded-xl bg-brand-700 text-base text-white">
-          M
-        </span>
-        MediEase
+        <Logo size="md" />
       </p>
       <p className="mt-1 text-sm text-slate-700">{s.brandTagline}</p>
       <div className="mt-6 w-full max-w-md rounded-card border border-slate-200 bg-white shadow-card">{children}</div>

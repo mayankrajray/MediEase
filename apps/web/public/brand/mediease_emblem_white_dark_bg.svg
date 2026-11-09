@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="100%" height="100%">
+  <title>MediEase — White Emblem on Dark/Teal Background</title>
+  <desc>Reversed white emblem inside a rounded app-icon container (#147D72 primary teal / #172B35 dark mode compatible).</desc>
+  <rect width="240" height="240" fill="#FFFFFF" />
+  <rect x="16" y="16" width="208" height="208" rx="46" ry="46" fill="#147D72" />
+  <g id="mediease-emblem-white" transform="translate(20, 20)">
+    <!-- 1. Top Cross Crown & Human Care Head (Primary Teal #147D72) -->
+    <path id="top-care-crown" fill="#FFFFFF" fill-rule="evenodd" d="
+      M 84,16
+      H 116
+      C 127,16 136,25 136,36
+      V 52
+      C 136,59 138.5,62.5 142,64.5
+      C 126,71 111,81.5 100,95
+      C 89,81.5 74,71 58,64.5
+      C 61.5,62.5 64,59 64,52
+      V 36
+      C 64,25 73,16 84,16
+      Z
+      M 100,48.5
+      A 13.5,13.5 0 1,0 100,75.5
+      A 13.5,13.5 0 1,0 100,48.5
+      Z" />
+
+    <!-- 2. Left Sweeping Care Arm & Lower Cross Stem (Primary Teal #147D72) -->
+    <path id="left-care-arm" fill="#FFFFFF" d="
+      M 16,84
+      C 16,71 26,62 39,63.5
+      C 67,67 89,86 91.5,116
+      C 93,137 86,158 73,174.5
+      V 136
+      C 73,128 67,122 59,122
+      H 34
+      C 24,122 16,114 16,104
+      V 84
+      Z" />
+
+    <!-- 3. Right Sweeping Care Arm & Organic Leaf (Soft Mint #DDF3EE) -->
+    <path id="right-care-leaf" fill="#FFFFFF" d="
+      M 161,63.5
+      C 174,62 184,71 184,84
+      V 104
+      C 184,114 176,122 166,122
+      H 146
+      C 146,108 142,95 135,84
+      C 141,97 143,115 139,134
+      C 133,161 109,179 76,184
+      C 91,168 100,147 102,124
+      C 104,98 117,79 136,69.5
+      C 122,81 112,99 109,122
+      C 107,136 103,148 97,158
+      C 113,147 123,130 126,108
+      C 128,95 126,84 123,78
+      C 134,71 147,65 161,63.5
+      Z" />
+  </g>
+</svg>
