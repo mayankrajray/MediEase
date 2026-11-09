@@ -1,3 +1,5 @@
+import type { LucideIcon } from "lucide-react";
+
 import type { components } from "@/lib/api/schema";
 
 export type Permission = components["schemas"]["Permission"];
@@ -5,6 +7,10 @@ export type Permission = components["schemas"]["Permission"];
 export interface NavItem {
   readonly href: string;
   readonly label: string;
+  /** M7c-P7 (M3): a decorative icon beside the label; the label stays the link's name. */
+  readonly icon?: LucideIcon;
+  /** M7c-P7 (M3): the section it belongs to; consecutive items of one group share a heading. */
+  readonly group?: string;
   /** Shown only to roles holding this permission. Omitted = every signed-in member. */
   readonly requires?: Permission;
 }

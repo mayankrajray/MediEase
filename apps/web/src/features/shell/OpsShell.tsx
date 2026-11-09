@@ -1,5 +1,6 @@
 "use client";
 
+import { Building2, ClipboardCheck, MessageSquare } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
@@ -12,9 +13,9 @@ type OpsRole = "OPS_ADMIN" | "OPS_REVIEWER";
 
 // M6c-P2 (decision M3): each link for the ops role that can open it.
 const OPS_LINKS: readonly (ShellLink & { readonly role: OpsRole | null })[] = [
-  { href: "/ops", label: "Home", exact: true, role: null },
-  { href: "/ops/applications", label: "Applications", role: "OPS_REVIEWER" },
-  { href: "/ops/messaging-costs", label: "Messaging costs", role: "OPS_ADMIN" },
+  { href: "/ops", label: "Home", exact: true, role: null, icon: Building2 },
+  { href: "/ops/applications", label: "Applications", role: "OPS_REVIEWER", icon: ClipboardCheck },
+  { href: "/ops/messaging-costs", label: "Messaging costs", role: "OPS_ADMIN", icon: MessageSquare },
 ];
 
 /**
