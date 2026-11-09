@@ -1,5 +1,6 @@
 "use client";
 
+import { CircleAlert } from "lucide-react";
 import type { Ref } from "react";
 
 import { describeError, isRetryable } from "./messages";
@@ -8,7 +9,8 @@ import { describeError, isRetryable } from "./messages";
  * A failed call, in words a clinic can act on: the API's own message and
  * "Ref: <request_id>" to quote when reporting it (apps/web/CLAUDE.md). State is
  * text, not colour alone. `role="alert"` makes screen readers announce it the
- * moment it appears; `tabIndex={-1}` lets us move focus to it.
+ * moment it appears; `tabIndex={-1}` lets us move focus to it. M7c-P7: the design
+ * system's error tone (DESIGN.md §1), with a decorative icon.
  */
 export function ErrorNotice({
   error,
@@ -33,23 +35,26 @@ export function ErrorNotice({
       ref={ref}
       role="alert"
       tabIndex={-1}
-      className="rounded-lg border border-red-700 bg-red-50 p-4 text-red-950"
+      className="flex gap-3 rounded-xl border border-danger-line bg-danger-soft p-4 text-red-950"
     >
-      <p className="font-medium">{message}</p>
-      {requestId !== "" && (
-        <p className="mt-1 text-sm">
-          Ref: <code className="font-mono">{requestId}</code>
-        </p>
-      )}
-      {onRetry !== undefined && isRetryable(error) && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-3 rounded border border-red-900 bg-white px-3 py-1.5 font-medium text-red-950 hover:bg-red-100"
-        >
-          Try again
-        </button>
-      )}
+      <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-danger" />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">{message}</p>
+        {requestId !== "" && (
+          <p className="mt-1 text-sm text-red-900">
+            Ref: <code className="font-mono">{requestId}</code>
+          </p>
+        )}
+        {onRetry !== undefined && isRetryable(error) && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-3 inline-flex min-h-8 items-center rounded-lg border border-red-800 bg-white px-3 py-1 text-sm font-semibold text-red-950 transition-colors duration-200 ease-brand hover:bg-red-50 motion-reduce:transition-none"
+          >
+            Try again
+          </button>
+        )}
+      </div>
     </div>
   );
 }

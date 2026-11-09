@@ -1,6 +1,6 @@
 "use client";
 
-import type { HTMLInputAutoCompleteAttribute, HTMLInputTypeAttribute, ReactNode } from "react";
+import type { HTMLInputAutoCompleteAttribute, HTMLInputTypeAttribute, ReactNode, Ref } from "react";
 
 import { cx } from "./cx";
 
@@ -11,10 +11,10 @@ import { cx } from "./cx";
  * `INPUT`, `LABEL` and `HINT` style a hand-built control the same way.
  */
 export const INPUT =
-  "min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600";
-export const LABEL = "block font-medium text-slate-900";
+  "min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 shadow-xs transition-colors duration-200 ease-brand placeholder:text-slate-500 hover:border-slate-600 focus-visible:border-brand-700 focus-visible:outline-brand-700 aria-[invalid=true]:border-danger aria-[invalid=true]:bg-danger-soft/40 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-slate-600 motion-reduce:transition-none";
+export const LABEL = "block text-sm font-semibold text-slate-900";
 export const HINT = "text-sm text-slate-700";
-export const ERROR = "text-sm font-medium text-red-900";
+export const ERROR = "flex items-start gap-1.5 text-sm font-medium text-danger";
 
 interface Described {
   readonly id: string;
@@ -33,7 +33,7 @@ function describedBy(id: string, hint: string | undefined, error: string | undef
 
 function FieldShell({ id, label, error, hint, required = false, children }: Described & { children: ReactNode }) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <label htmlFor={id} className={LABEL}>
         {label}
         {required && <span className="font-normal text-slate-700"> (required)</span>}
@@ -46,6 +46,9 @@ function FieldShell({ id, label, error, hint, required = false, children }: Desc
       )}
       {error !== undefined && (
         <p id={`${id}-error`} className={ERROR}>
+          <span aria-hidden="true" className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-danger text-[0.625rem] font-bold text-white">
+            !
+          </span>
           {error}
         </p>
       )}
@@ -199,6 +202,50 @@ export function CheckboxField({
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * M7c-P7: a date or a time, as the browser's own control (accessible on phones, keyboard on
+ * desktops; DESIGN.md §5). `value` is `YYYY-MM-DD` or `HH:MM` in the clinic's time zone, as the
+ * API expects; the API still checks it.
+ */
+export function DateField(props: Omit<Parameters<typeof TextField>[0], "type" | "inputMode">) {
+  return <TextField {...props} type="date" />;
+}
+
+export function TimeField(props: Omit<Parameters<typeof TextField>[0], "type" | "inputMode">) {
+  return <TextField {...props} type="time" />;
+}
+
+/**
+ * M7c-P7: the list of a form's errors at its top (DESIGN.md §5), each a link to its field, so a
+ * keyboard or screen-reader user reaches the first problem at once. Give it a `ref` (or use
+ * `useFocusOnError`) to move focus here after a failed submit.
+ */
+export function ErrorSummary({
+  title = "Please correct these fields",
+  errors,
+  ref,
+}: {
+  title?: string;
+  errors: readonly { readonly id: string; readonly message: string }[];
+  ref?: Ref<HTMLDivElement>;
+}) {
+  if (errors.length === 0) return null;
+  return (
+    <div ref={ref} role="alert" tabIndex={-1} className="rounded-xl border border-danger-line bg-danger-soft p-4 text-slate-900">
+      <p className="font-semibold text-danger">{title}</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+        {errors.map((e) => (
+          <li key={e.id}>
+            <a href={`#${e.id}`} className="font-medium text-danger underline underline-offset-2">
+              {e.message}
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -44,9 +44,9 @@ export function Dialog({
         event.preventDefault();
         onClose();
       }}
-      className="me-overlay me-dialog m-auto w-[calc(100%-2rem)] max-w-md rounded-card bg-white p-0 shadow-xl backdrop:bg-slate-900/40"
+      className="me-overlay me-dialog m-auto w-[calc(100%-2rem)] max-w-md rounded-card border border-line bg-surface p-0 shadow-modal backdrop:bg-slate-950/40"
     >
-      <h2 id={titleId} className="border-b border-slate-200 px-5 py-3 text-lg font-semibold">
+      <h2 id={titleId} className="heading-6 border-b border-line px-5 py-4 text-slate-900">
         {title}
       </h2>
       <div className="space-y-4 p-5">{children}</div>
