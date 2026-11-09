@@ -1,28 +1,160 @@
 @import "tailwindcss";
 
-/* M6-P1 design tokens (decision 1A): minimal and calm. One brand colour (teal) over neutral
-   slate, one accent per status (always shown with words as well), an 8 px rhythm (Tailwind's
-   spacing scale), rounded cards with a soft shadow, and the system font stack: nothing is
-   downloaded, and Devanagari renders in the phone's own font. Each brand shade used for text or
-   a filled button meets WCAG 2.1 AA on white (teal-700 is 5.5:1). */
+/* M7c-P7 design tokens (DESIGN.md): Modern Healthcare SaaS. These CSS variables are the single
+   source of truth for colour, type, radius, elevation and motion.
+
+   - The brand scale is built on the logo's teal #147D72 (primary-700, 5.0:1 on white) and its
+     mint #DDF3EE (primary-100). `brand-*` stays the class name, so every screen moved at once.
+   - The neutral palette (`slate-*`) is retuned to the brand's blue-green greys: text #172B35,
+     borders #E8EEF1, page #F5F9F8. Each shade used for text keeps WCAG 2.1 AA on white and on
+     slate-100 (slate-500 4.6:1 there), and slate-400, the input border, keeps 3:1 (WCAG 1.4.11).
+   - Semantic names (`surface`, `line`, `ink`, `success`, …) are for new and redesigned code.
+   - Manrope is self-hosted (src/app/fonts, OFL), 25 KB, Latin only, as `font-brand` on the clinic,
+     ops, sign-in, apply and landing surfaces (src/app/fonts.ts). Patient pages keep the system
+     stack (`font-sans`) to stay inside their 200 KB budget. Devanagari falls back to Noto Sans
+     Devanagari or the phone's own font. */
 @theme {
   --font-sans:
     system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari",
     "Helvetica Neue", Arial, sans-serif;
 
-  --color-brand-50: var(--color-teal-50);
-  --color-brand-100: var(--color-teal-100);
-  --color-brand-200: var(--color-teal-200);
-  --color-brand-600: var(--color-teal-600);
-  --color-brand-700: var(--color-teal-700);
-  --color-brand-800: var(--color-teal-800);
-  --color-brand-900: var(--color-teal-900);
+  --color-brand-50: #f0f9f7;
+  --color-brand-100: #ddf3ee;
+  --color-brand-200: #b8e5dc;
+  --color-brand-300: #86d0c2;
+  --color-brand-400: #4fb3a3;
+  --color-brand-500: #279585;
+  --color-brand-600: #178174;
+  --color-brand-700: #147d72;
+  --color-brand-800: #10645c;
+  --color-brand-900: #0e504a;
+  --color-brand-950: #082f2c;
 
-  /* The page behind cards in the clinic and ops screens. */
-  --color-canvas: var(--color-slate-50);
+  --color-slate-50: #f5f9f8;
+  --color-slate-100: #eef3f5;
+  --color-slate-200: #e8eef1;
+  --color-slate-300: #c9d4da;
+  --color-slate-400: #7d8e97;
+  --color-slate-500: #5f7079;
+  --color-slate-600: #55666f;
+  --color-slate-700: #4a5f6a;
+  --color-slate-800: #20363f;
+  --color-slate-900: #172b35;
+  --color-slate-950: #0f1f27;
+
+  /* Semantic names (DESIGN.md §1). */
+  --color-canvas: #f5f9f8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f1f5f6;
+  --color-line: #e8eef1;
+  --color-line-strong: #7d8e97;
+  --color-ink: #172b35;
+  --color-ink-secondary: #4a5f6a;
+  --color-ink-muted: #5f7079;
+  --color-attention: #e8a23a;
+  --color-success: #166534;
+  --color-success-soft: #e8f6ee;
+  --color-success-line: #a7ddbe;
+  --color-warning: #7a4e09;
+  --color-warning-soft: #fdf3e1;
+  --color-warning-line: #e8a23a;
+  --color-danger: #b42318;
+  --color-danger-soft: #fdecea;
+  --color-danger-line: #f2b8b2;
+  --color-info: #1f5fad;
+  --color-info-soft: #eaf2fc;
+  --color-info-line: #b5cff0;
 
   --radius-card: 0.75rem;
-  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.05), 0 1px 3px rgb(15 23 42 / 0.08);
+  --shadow-card: 0 1px 2px rgb(23 43 53 / 0.05), 0 1px 3px rgb(23 43 53 / 0.06);
+  --shadow-pop: 0 8px 24px rgb(23 43 53 / 0.12);
+  --shadow-modal: 0 16px 48px rgb(23 43 53 / 0.18);
+
+  /* DESIGN.md §4: weighted, decelerating motion. */
+  --ease-brand: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* M7c-P7: the brand font on a surface (src/app/fonts.ts sets --font-manrope on the same element,
+   so the variable resolves there). */
+@utility font-brand {
+  font-family:
+    var(--font-manrope), "Noto Sans Devanagari", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* DESIGN.md §2: named text styles, each from one step of Tailwind's scale. */
+@utility heading-1 {
+  font-size: var(--text-5xl);
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  @media (width >= 40rem) {
+    font-size: var(--text-6xl);
+  }
+}
+@utility heading-2 {
+  font-size: var(--text-4xl);
+  line-height: var(--text-4xl--line-height);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  @media (width >= 40rem) {
+    font-size: var(--text-5xl);
+    line-height: 1;
+  }
+}
+@utility heading-3 {
+  font-size: var(--text-4xl);
+  line-height: var(--text-4xl--line-height);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+@utility heading-4 {
+  font-size: var(--text-3xl);
+  line-height: var(--text-3xl--line-height);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+@utility heading-5 {
+  font-size: var(--text-2xl);
+  line-height: var(--text-2xl--line-height);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+@utility heading-6 {
+  font-size: var(--text-xl);
+  line-height: var(--text-xl--line-height);
+  font-weight: 600;
+  text-wrap: balance;
+}
+@utility title-3 {
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
+  font-weight: 500;
+}
+@utility body-3 {
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
+  font-weight: 400;
+  text-wrap: pretty;
+}
+@utility body-6 {
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  font-weight: 400;
+}
+@utility caption-2 {
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  font-weight: 400;
+}
+@utility caption-5 {
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+  font-weight: 400;
 }
 
 /* Base text and focus styles for every surface. Focus stays visible for
@@ -36,8 +168,27 @@
     @apply bg-white text-slate-900 antialiased;
   }
 
+  /* Numbers line up in tables, tokens and amounts. */
+  table,
+  time,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-brand-700;
+  }
+}
+
+/* M7c-P7: a toast rises into place (Toast.tsx); with reduced motion it simply appears. */
+@keyframes me-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -49,16 +200,16 @@
 @layer components {
   .me-overlay {
     transition:
-      opacity 180ms ease-out,
-      transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-      overlay 220ms allow-discrete,
-      display 220ms allow-discrete;
+      opacity 200ms var(--ease-brand),
+      transform 300ms var(--ease-brand),
+      overlay 300ms allow-discrete,
+      display 300ms allow-discrete;
   }
   .me-overlay::backdrop {
     transition:
-      background-color 220ms ease-out,
-      overlay 220ms allow-discrete,
-      display 220ms allow-discrete;
+      background-color 300ms var(--ease-brand),
+      overlay 300ms allow-discrete,
+      display 300ms allow-discrete;
   }
   @starting-style {
     .me-overlay[open] {

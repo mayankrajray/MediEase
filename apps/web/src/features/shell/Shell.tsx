@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 import { Drawer } from "@/components/Drawer";
 import { Button } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
+import { Logo } from "@/components/ui/Logo";
 import { MotionProvider } from "@/components/ui/Motion";
 
 import { SignOutButton } from "./SignOutButton";
@@ -61,7 +62,7 @@ export function Shell({
           Skip to content
         </a>
 
-        <aside className="hidden border-r border-slate-200 bg-white lg:flex lg:w-60 lg:shrink-0 lg:flex-col">
+        <aside className="hidden border-r border-line bg-surface lg:flex lg:w-60 lg:shrink-0 lg:flex-col">
           <div className="px-5 py-4">
             <Brand />
           </div>
@@ -69,7 +70,7 @@ export function Shell({
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
+          <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/85">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
               <div className="order-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
                 <Button
@@ -122,15 +123,8 @@ export function Shell({
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {
-  return (
-    <span className="flex items-center gap-2 text-lg font-bold text-slate-900">
-      <span aria-hidden="true" className="grid size-7 place-items-center rounded-lg bg-brand-700 text-sm text-white">
-        M
-      </span>
-      {/* On a phone the mark alone, so the clinic and role fit on one line. */}
-      <span className={compact ? "sr-only sm:not-sr-only" : undefined}>MediEase</span>
-    </span>
-  );
+  // On a phone the mark alone, so the clinic and role fit on one line.
+  return <Logo compact={compact} />;
 }
 
 /** The sections, with the one being shown marked as current (a link state, not a colour only). */
@@ -156,8 +150,8 @@ function NavLinks({
                 {...(onNavigate === undefined ? {} : { onClick: onNavigate })}
                 aria-current={current ? "page" : undefined}
                 className={cx(
-                  "flex min-h-10 items-center rounded-lg px-3 py-2 font-medium transition-colors motion-reduce:transition-none",
-                  current ? "bg-brand-50 text-brand-900 ring-1 ring-inset ring-brand-200" : "text-slate-700 hover:bg-slate-100",
+                  "flex min-h-10 items-center rounded-lg px-3 py-2 font-medium transition-colors duration-200 ease-brand motion-reduce:transition-none",
+                  current ? "bg-brand-50 text-brand-900 ring-1 ring-inset ring-brand-200" : "text-slate-700 hover:bg-slate-100 hover:text-slate-900",
                 )}
               >
                 {item.label}

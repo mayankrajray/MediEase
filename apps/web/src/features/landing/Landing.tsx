@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import { BRAND_FONT } from "@/app/fonts";
+import { cx } from "@/components/ui/cx";
+import { Logo } from "@/components/ui/Logo";
 import { PLANS, landingWords } from "@/lib/i18n/landing";
 import type { PortalLanguage } from "@/lib/i18n/portal";
 
@@ -27,7 +30,7 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
   const q = language === "hi" ? "?lang=hi" : "";
 
   return (
-    <div lang={language} className="min-h-screen bg-canvas text-slate-900">
+    <div lang={language} className={cx(BRAND_FONT, "min-h-screen bg-canvas text-slate-900")}>
       <LandingAnalytics lang={language} />
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:rounded focus:bg-white focus:p-2">
         {language === "hi" ? "मुख्य सामग्री पर जाएँ" : "Skip to main content"}
@@ -35,10 +38,7 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
       <header className="border-b border-slate-200 bg-white">
         <nav aria-label="MediEase" className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-2">
           <span className="flex min-h-11 items-center gap-2 text-lg font-bold">
-            <span aria-hidden="true" className="grid size-8 place-items-center rounded-xl bg-brand-700 text-sm text-white">
-              M
-            </span>
-            MediEase
+            <Logo />
           </span>
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium">
             <li>
