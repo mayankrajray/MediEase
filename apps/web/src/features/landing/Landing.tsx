@@ -311,7 +311,10 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
     <header className="sticky top-0 z-40 px-3 pt-3">
       <nav
         aria-label="MediEase"
-        className="mx-auto flex max-w-6xl items-center justify-between gap-2 rounded-2xl border border-line bg-surface/85 px-3 py-2 shadow-card backdrop-blur-md sm:px-4"
+        // While the phone menu is open the bar drops its backdrop blur: a backdrop-filter makes the
+        // bar the containing block of the menu's `position: fixed` panel, which would then be
+        // clipped to the bar instead of covering the screen.
+        className="me-landing-nav mx-auto flex max-w-6xl items-center justify-between gap-2 rounded-2xl border border-line bg-surface/85 px-3 py-2 shadow-card backdrop-blur-md sm:px-4"
       >
         <Link href={other === "hi" ? "/" : "/?lang=hi"} className="inline-flex min-h-11 items-center rounded-lg pr-2">
           <Logo />
@@ -337,9 +340,13 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
           </li>
         </ul>
         <div className="flex items-center gap-2">
-          <Link href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "sm"), "hidden sm:inline-flex")}>
-            {w.footer.apply}
-          </Link>
+          {/* A wrapper hides it on phones: the link's own inline-flex would beat `hidden` (cx does
+              not merge classes). The phone menu has its own Apply button. */}
+          <span className="hidden sm:block">
+            <Link href="/apply" data-analytics="apply" className={buttonClasses("primary", "sm")}>
+              {w.footer.apply}
+            </Link>
+          </span>
           <details className="lg:hidden">
             <summary
               aria-label={w.menu.label}
@@ -352,7 +359,7 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
               </span>
               {w.menu.open}
             </summary>
-            <div className="me-menu-panel fixed inset-x-0 bottom-0 top-[4.75rem] z-30 overflow-y-auto bg-surface/95 px-6 py-6 backdrop-blur-xl">
+            <div className="me-menu-panel fixed inset-x-0 bottom-0 top-[4.75rem] z-30 overflow-y-auto overscroll-contain bg-surface px-6 py-6">
               <ul className="space-y-1 text-lg">
                 {links.map((l, i) => (
                   <li key={l.href} style={{ ["--i" as string]: i }}>

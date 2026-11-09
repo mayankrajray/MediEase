@@ -16,6 +16,17 @@ import { useEffect } from "react";
  * With "reduce motion" nothing moves and every word is at full colour.
  */
 export function LandingMotion() {
+  // The phone menu (a <details> in the header) closes when one of its links is chosen, so the
+  // page scrolls to that section with the menu out of the way.
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      const link = event.target instanceof Element ? event.target.closest(".me-menu-panel a") : null;
+      link?.closest("details")?.removeAttribute("open");
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
   useEffect(() => {
     const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce || typeof IntersectionObserver === "undefined") return;
