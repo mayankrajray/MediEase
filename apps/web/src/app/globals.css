@@ -328,7 +328,8 @@
   }
 
   /* The phone menu (a <details>): its icon's lines turn into a cross, and its links arrive one
-     after another, 60 ms apart (B7). */
+     after another, 60 ms apart (B7). The open-menu rules for the bar are below, outside the
+     layers, so they beat the bar's blur utility. */
   .me-menu-icon span {
     transition: transform 300ms var(--ease-brand), opacity 200ms var(--ease-brand);
   }
@@ -365,4 +366,17 @@
     opacity: 1;
     transform: none;
   }
+}
+
+/* M7c-P7 (M1, the developer's review): while the landing page's phone menu is open, the bar drops
+   its backdrop blur (a backdrop-filter makes the bar the containing block of the menu's fixed
+   panel, which then shrank to the bar's height) and the page behind stops scrolling, so the menu
+   covers the screen in front of the hero. Unlayered, so it beats the bar's utilities. */
+.me-landing-nav:has(details[open]) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background-color: var(--color-surface);
+}
+html:has(.me-landing-nav details[open]) {
+  overflow: hidden;
 }
