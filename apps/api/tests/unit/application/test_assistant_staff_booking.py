@@ -1,6 +1,6 @@
 """The staff assistant books only what can still be booked (M7c-P3; FR-AI-01; spec assistant R19).
 
-The developer's own test (4 Nov 2026): the assistant offered a 3:55 AM session that had ended,
+The developer's own test (9 Nov 2026): the assistant offered a 3:55 AM session that had ended,
 a full 10:00 AM session, and never asked which doctor. Synthetic data only; the clock is fixed at
 10:30 AM clinic time.
 """

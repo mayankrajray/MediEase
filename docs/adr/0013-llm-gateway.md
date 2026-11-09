@@ -54,7 +54,7 @@ about 30 requests a minute) and their data terms may allow use of inputs.
 - Follow-ups and triggers to revisit: a provider contract and a privacy review before any real
   patient data is sent (SECURITY_AND_COMPLIANCE.md §4); a multi-provider fallback if outages hurt.
 
-## Addendum (M7c-P5, 4 Nov 2026): Mistral and NVIDIA
+## Addendum (M7c-P5, 9 Nov 2026): Mistral and NVIDIA
 
 The developer asked for Mistral (Mistral Large 4) and NVIDIA's free hosted models
 (build.nvidia.com) beside Groq, switched by configuration only. Both serve the OpenAI
@@ -62,7 +62,7 @@ chat-completions API with tool calling, so they are two more presets of the same
 adapters: `mistral` (`https://api.mistral.ai/v1`, default `mistral-large-latest`) and `nvidia`
 (`https://integrate.api.nvidia.com/v1`, default `meta/llama-3.3-70b-instruct`). Hugging Face
 Inference Providers listed no provider for `mistralai/Mistral-Large-4-1T-A52B-NVFP4` when
-checked (4 Nov 2026), so Mistral is reached through its own API.
+checked (9 Nov 2026), so Mistral is reached through its own API.
 
 The compatibility differences this ADR expected were found and handled in the reader: Mistral can
 send `content` as a list of chunks (only text chunks are kept, so reasoning is never shown), some
