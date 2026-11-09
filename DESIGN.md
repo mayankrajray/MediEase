@@ -133,10 +133,10 @@ Every interactive component ships default, hover, active (`scale(0.98)` or 1 px 
   `tone="onDark"` on dark fills.
 - Clear space around the logo: the height of the emblem's head circle. Never stretch it or add
   effects.
-- Open (developer): the mint leaf `#DDF3EE` is nearly invisible on white (1.1:1); the emblem then
-  reads as the teal cross alone. The logo's colours are kept as delivered.
 - Next: the wordmark outlined in Manrope for the static files, and the emblem on the prescription
   PDF as layout 4 (M8, Prescriptions module), so issued prescriptions keep their look.
+- The leaf is `#86D0C2` on light backgrounds (developer, 9 Nov 2026: the delivered `#DDF3EE` was
+  nearly invisible on white). `#DDF3EE` stays in the dark and on-dark versions.
 
 ## 7. Voice
 
@@ -149,6 +149,81 @@ filler ("seamless", "revolutionize"). English and Hindi strings live in `src/lib
 WCAG 2.1 AA everywhere (axe in Playwright). Contrast pairs above are checked; any new pair is
 checked before use. Keyboard: every action reachable, visible focus, logical order, Escape closes
 overlays. Status in words, not colour alone.
+
+## 8a. UX principles (developer, 9 Nov 2026; binding for every module)
+
+> Make every interaction predictable, every error actionable, and every screen understandable
+> without users thinking about how the application works.
+
+Six principles, in priority order when they conflict:
+
+1. **Trust over convenience.** Never sacrifice data accuracy, privacy or clarity for speed. Never
+   silently change a prescription, pick a different slot, or report success before the API
+   confirms it.
+2. **Clarity over complexity.** A user understands what they see at first glance.
+3. **Feedback over silence.** Every meaningful action says how it ended.
+4. **Forgiveness over rigidity.** Anticipate mistakes; recover without losing work.
+5. **Progressive disclosure over overload.** Show what is needed now; the rest on request.
+6. **Consistency over novelty.** Familiar patterns, the same everywhere (Jakob's law).
+
+### The four states of every data-driven section
+
+| State | Rule | Component |
+|---|---|---|
+| Loading | A skeleton shaped like the content, with a `role="status"` line saying what is loading ("Loading today's queue"), never a bare spinner | `Skeleton` + status text |
+| Success | The data, and for an action a confirmation naming what changed | content, `Toast`, `Alert tone="success"` |
+| Error | What happened, why when known, what to do next, and a retry when retrying can help; "Ref: <request_id>" for support. Never a stack trace, code name or raw exception | `ErrorNotice`, `Alert tone="danger"` |
+| Empty | What the section is for and how to start; the first action as a button | `EmptyState` with `icon` and `action` |
+
+Each section of a dashboard fetches, loads, fails, empties and retries **on its own**: a failed
+notifications call shows its own error while the queue keeps working. One section never blanks
+the page.
+
+### Where feedback goes
+
+| Placement | When |
+|---|---|
+| Inline (`Field` error, `ErrorSummary`) | Invalid fields and form validation |
+| Toast | Temporary confirmation of a finished action ("Patient updated"); never the only place an error that needs action is shown |
+| Modal (`ConfirmDialog`) | A decision that needs attention before it happens: cancelling, deleting, overriding a hold |
+| Full-page error | Only when the page cannot work at all (the session ended, the record does not exist) |
+
+For important operations, distinguish **processing** (button `loading`, "Saving…"), **saved**
+(after the API answers) and **failed** (in place, with what to do).
+
+Copy for empty states by case: zero appointments → how to book the first; zero patients → how to
+add one; zero notifications → "You're all caught up"; no search results → try other words or
+clear a filter.
+
+### Forms
+
+- Validate inline as the user leaves a field, and again on submit; keep every value when a
+  submit fails.
+- Tell **incomplete** from **invalid**: the submit button stays enabled; pressing it with problems
+  shows the `ErrorSummary` with each problem linked to its field. A disabled button never hides
+  why. (A button may disable while the request is in flight.)
+- Character counts where a limit exists ("120 of 200").
+- Password requirements are listed and tick off as they are met.
+- Accept reasonable formats (phone with spaces, `+91` or a leading 0; dates typed or picked) and
+  normalise; the API remains the authority.
+- Prefill only what is reliable (the clinic, today, the chosen doctor); never guess clinical data.
+- Essential fields first; advanced options behind "More options" (Hick's law). Long forms are split
+  into titled sections.
+
+### Familiarity and choice (Jakob's and Hick's laws)
+
+- Primary action at the end of a form row or the top right of a page; cancel to its left.
+- One primary button per view; other actions secondary or in a `Menu`.
+- The same word for the same thing everywhere (one glossary: `docs/GLOSSARY.md`).
+- Calendar and time choices behave like common calendar apps: days left to right, earliest time
+  first, past times not offered.
+- Group related actions; hide rarely used settings until asked.
+
+### Pointer and hover
+
+Every clickable control shows the pointer cursor and a hover state (colour shift; buttons also lift
+1 px and press 1 px on click, not with reduced motion). Disabled controls show the not-allowed
+cursor and no hover.
 
 ## 9. Component inventory (code)
 
