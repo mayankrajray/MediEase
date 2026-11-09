@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { RichText } from "@/features/assistant/RichText";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import type { components } from "@/lib/api/schema";
 
@@ -120,7 +121,11 @@ export function Chat({
             }
           >
             <span className="block text-xs font-semibold text-slate-700">{line.role === "user" ? s.you : s.bot}</span>
-            <span className="whitespace-pre-line break-words">{line.content}</span>
+            {line.role === "user" ? (
+              <span className="whitespace-pre-line break-words">{line.content}</span>
+            ) : (
+              <RichText text={line.content} />
+            )}
           </li>
         ))}
         <li ref={end} aria-hidden="true" />
