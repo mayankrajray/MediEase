@@ -178,6 +178,26 @@
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-brand-700;
   }
+
+  /* M7c-P7: everything clickable says so with the pointer (Tailwind 4 leaves buttons on the
+     default arrow), and a disabled control says it cannot be used. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="menuitem"],
+  select:not(:disabled),
+  summary,
+  label[for],
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="file"]:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled,
+  select:disabled,
+  input:disabled {
+    cursor: not-allowed;
+  }
 }
 
 /* M7c-P7: a toast rises into place (Toast.tsx); with reduced motion it simply appears. */
@@ -282,5 +302,67 @@
     .me-table > tbody > tr > td[data-label=""]:empty {
       display: none;
     }
+  }
+}
+
+/* M7c-P7, M1 landing (features/landing/LandingMotion.tsx): sections still below the fold rise
+   and fade in once; the tagline's words turn to full colour in reading order. Without
+   JavaScript, or with reduced motion, nothing is ever hidden or muted. */
+@layer components {
+  [data-reveal="pending"] {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  [data-reveal="shown"] {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 700ms var(--ease-brand),
+      transform 700ms var(--ease-brand);
+  }
+  [data-word="muted"] {
+    color: var(--color-slate-400);
+  }
+  [data-word] {
+    transition: color 500ms var(--ease-brand);
+  }
+
+  /* The phone menu (a <details>): its icon's lines turn into a cross, and its links arrive one
+     after another, 60 ms apart (B7). */
+  .me-menu-icon span {
+    transition: transform 300ms var(--ease-brand), opacity 200ms var(--ease-brand);
+  }
+  details[open] .me-menu-icon span:nth-child(1) {
+    transform: translateY(6px) rotate(45deg);
+  }
+  details[open] .me-menu-icon span:nth-child(2) {
+    opacity: 0;
+  }
+  details[open] .me-menu-icon span:nth-child(3) {
+    transform: translateY(-6px) rotate(-45deg);
+  }
+  details[open] .me-menu-panel li {
+    animation: me-menu-in 400ms var(--ease-brand) both;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-word],
+    .me-menu-icon span {
+      transition: none;
+    }
+    details[open] .me-menu-panel li {
+      animation: none;
+    }
+  }
+}
+
+@keyframes me-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }

@@ -43,8 +43,8 @@
       V 84
       Z" />
 
-    <!-- 3. Right Sweeping Care Arm & Organic Leaf (Soft Mint #DDF3EE) -->
-    <path id="right-care-leaf" fill="#DDF3EE" d="
+    <!-- 3. Right Sweeping Care Arm & Organic Leaf (Mint #86D0C2, deepened for light backgrounds (M7c-P7)) -->
+    <path id="right-care-leaf" fill="#86D0C2" d="
       M 161,63.5
       C 174,62 184,71 184,84
       V 104
