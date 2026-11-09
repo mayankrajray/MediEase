@@ -124,6 +124,45 @@ def test_r10_a_reply_that_restates_the_record_passes(world: World) -> None:
     assert "Syrup X" in result["summary"]
 
 
+# --- The doctor's advice and Hinglish (M7c-P1, P2; spec assistant R4, R10) -----------------------
+
+ADVICE_QUESTION = "is there any other advice that doctor mentioned in the prescription?"
+
+
+def test_m7c_p1_the_doctors_advice_is_read_from_the_record(world: World) -> None:
+    patient, rx = _linked(world)  # the console model, the app's default
+    body = patient_turn(
+        patient, user(ADVICE_QUESTION), context={"prescription_id": rx["id"]}
+    ).get_json()
+    assert body["kind"] == "ANSWER", body
+    assert "plenty of fluids" in body["reply"] and "breathing is difficult" in body["reply"]
+
+
+def test_m7c_p1_a_real_model_is_told_the_advice_is_not_an_advice_request(world: World) -> None:
+    llm = ScriptedLlm([call("explain_prescription"), say("The doctor wrote: plenty of fluids.")])
+    w = with_llm(world, llm)
+    patient, rx = _linked(w)
+    body = patient_turn(
+        patient, user(ADVICE_QUESTION), context={"prescription_id": rx["id"]}
+    ).get_json()
+    assert body == {**body, "kind": "ANSWER", "reply": "The doctor wrote: plenty of fluids."}
+    messages, tools = llm.calls[0]
+    assert "never refuse them" in messages[0].content
+    explain = next(t for t in tools if t.name == "explain_prescription")
+    assert "the doctor's advice" in explain.description
+
+
+def test_m7c_p2_hinglish_reaches_the_record_and_advice_in_hinglish_is_referred(
+    world: World,
+) -> None:
+    patient, rx = _linked(world)
+    context = {"prescription_id": rx["id"]}
+    read = patient_turn(patient, user("doctor ne kya likha hai"), context=context).get_json()
+    assert read["kind"] == "ANSWER" and "Syrup X" in read["reply"]
+    refused = patient_turn(patient, user("kya main do goli le lu"), context=context).get_json()
+    assert refused["kind"] == "REFERRAL"
+
+
 # --- Guard rails (R4, R5, AC2; FR-AI-02) ---------------------------------------------------------
 
 

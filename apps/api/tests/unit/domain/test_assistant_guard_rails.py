@@ -52,6 +52,21 @@ ADVICE = [
     ("I have chest pain", ReferralReason.EMERGENCY),
     ("my child is unconscious", ReferralReason.EMERGENCY),
     ("सीने में दर्द है", ReferralReason.EMERGENCY),
+    # M7c-P1: advice words about the doctor still refer when they ask for a change or a new drug
+    ("Did the doctor say I can stop the medicine?", ReferralReason.DOSE_CHANGE),
+    ("Can you suggest a diet for diabetes?", ReferralReason.DRUG_ADVICE),
+    ("What can I eat for a fever?", ReferralReason.TREATMENT),
+    # M7c-P2: Hinglish
+    ("kya main do goli le lu", ReferralReason.DOSE_CHANGE),
+    ("goli chhod du kya", ReferralReason.DOSE_CHANGE),
+    ("dawai bhool gaya ab kya karu", ReferralReason.DOSE_CHANGE),
+    ("khansi ke liye konsi dawai lu", ReferralReason.DRUG_ADVICE),
+    ("ye goli kis liye hai", ReferralReason.DRUG_ADVICE),
+    ("kya mujhe dengue hai", ReferralReason.DIAGNOSIS),
+    ("bukhar me kya khau", ReferralReason.TREATMENT),
+    ("sardi ka gharelu nuskha batao", ReferralReason.TREATMENT),
+    ("mera sugar 180 zyada hai kya", ReferralReason.RESULTS),
+    ("seene mein dard ho raha hai", ReferralReason.EMERGENCY),
 ]
 
 RESTATING = [
@@ -72,6 +87,24 @@ RESTATING = [
     "मेरी अपॉइंटमेंट दिखाओ",
     "show today's queue",
     "find patient Asha",
+    # M7c-P1: the developer's own questions about what the doctor wrote (4 Nov 2026)
+    "is there any other advice that doctor mentioned in the prescription?",
+    "name the medicine that is listed in the prescription",
+    "What did the doctor suggest?",
+    "What did the doctor recommend for food?",
+    "What has the doctor advised about rest?",
+    "What can I eat as per the prescription?",
+    "Should I avoid anything according to my prescription?",
+    "What diet did the doctor tell me to follow?",
+    "डॉक्टर ने क्या सलाह दी है?",
+    # M7c-P2: Hinglish
+    "doctor ne kya likha hai",
+    "doctor ne khane ke liye kya bola",
+    "parche mein aur kya likha hai",
+    "dawai kab leni hai",
+    "kal ka appointment chahiye",
+    "mera appointment dikhao",
+    "Asha ka appointment kal ke liye book karo",
 ]
 
 
