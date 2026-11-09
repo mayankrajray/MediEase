@@ -48,6 +48,28 @@ export interface LandingWords {
   readonly footer: { readonly staff: string; readonly apply: string; readonly find: string };
   readonly switchTo: string;
   readonly switchLabel: string;
+  /** M7c-P7 (M1 landing redesign). */
+  readonly skip: string;
+  readonly menu: { readonly open: string; readonly label: string };
+  readonly proof: readonly string[];
+  readonly preview: {
+    readonly label: string;
+    readonly title: string;
+    readonly doctor: string;
+    readonly rows: readonly { readonly token: string; readonly name: string; readonly status: string; readonly tone: "waiting" | "active" | "done" }[];
+    readonly next: string;
+  };
+  readonly tagline: readonly string[];
+  readonly how: { readonly title: string; readonly steps: readonly { readonly title: string; readonly body: string }[] };
+  readonly final: { readonly title: string; readonly body: string };
+  readonly footerMore: {
+    readonly tagline: string;
+    readonly clinics: string;
+    readonly patients: string;
+    readonly patientSignIn: string;
+    readonly pricing: string;
+    readonly rights: string;
+  };
 }
 
 const EN: LandingWords = {
@@ -129,11 +151,47 @@ const EN: LandingWords = {
       },
       { q: "Can we stay out of the directory?", a: "Yes. Listing is the clinic's choice, and your own page link works either way." },
       { q: "Does MediEase suggest medicines or doses?", a: "Never. The doctor writes every prescription; MediEase only prints and shares it." },
+      {
+        q: "What do WhatsApp messages cost?",
+        a: "Reminders and prescription links go on WhatsApp only with the patient's consent. Messages are charged at cost on the same monthly invoice, with no markup.",
+      },
     ],
   },
   footer: { staff: "Staff sign in", apply: "Apply to join", find: "Find a doctor" },
   switchTo: "हिंदी में देखें",
   switchLabel: "हिंदी में देखें (view this page in Hindi)",
+  skip: "Skip to main content",
+  menu: { open: "Menu", label: "Main menu" },
+  proof: ["Free for 14 days, no card needed", "Every doctor checked by a person", "English and Hindi"],
+  preview: {
+    label: "An example of the MediEase queue screen, with sample patients",
+    title: "Today's queue",
+    doctor: "Dr. Meera Iyer · Morning session",
+    rows: [
+      { token: "#7", name: "Ravi Kumar", status: "Waiting", tone: "waiting" },
+      { token: "#8", name: "Meena Joshi", status: "With the doctor", tone: "active" },
+      { token: "#9", name: "Imran Shaikh", status: "Done", tone: "done" },
+    ],
+    next: "Next: token #10 at 10:45 AM",
+  },
+  tagline: ["Fewer calls to the front desk.", "More time for the patient in front of you."],
+  how: {
+    title: "How joining works",
+    steps: [
+      { title: "Apply", body: "Send your clinic's details and each doctor's registration number." },
+      { title: "We check every doctor", body: "A person at MediEase checks each registration and replies by email within 2 working days." },
+      { title: "Start your first day", body: "Set your doctors' hours, add your team and take your first booking the same day." },
+    ],
+  },
+  final: { title: "Run your clinic's day from one screen", body: "Apply today. Every plan starts with a free trial, and you can stop at any time." },
+  footerMore: {
+    tagline: "The clinic's day, in one place.",
+    clinics: "For clinics",
+    patients: "For patients",
+    patientSignIn: "Patient sign in",
+    pricing: "Pricing",
+    rights: "© 2026 MediEase. Made for small clinics in India.",
+  },
 };
 
 const HI: LandingWords = {
@@ -215,11 +273,47 @@ const HI: LandingWords = {
       },
       { q: "क्या हम डायरेक्टरी से बाहर रह सकते हैं?", a: "हाँ। डायरेक्टरी में आना क्लिनिक की मर्ज़ी है, और आपके पेज का लिंक दोनों हालत में चलता है।" },
       { q: "क्या MediEase दवा या खुराक सुझाता है?", a: "कभी नहीं। हर पर्चा डॉक्टर लिखते हैं; MediEase उसे सिर्फ़ छापता और भेजता है।" },
+      {
+        q: "WhatsApp संदेशों का खर्च कितना है?",
+        a: "रिमाइंडर और पर्चे के लिंक मरीज़ की सहमति से ही WhatsApp पर जाते हैं। संदेश लागत पर उसी महीने के बिल में जुड़ते हैं, बिना किसी मुनाफ़े के।",
+      },
     ],
   },
   footer: { staff: "स्टाफ़ साइन इन", apply: "आवेदन करें", find: "डॉक्टर खोजें" },
   switchTo: "View in English",
   switchLabel: "View in English (इस पेज को अंग्रेज़ी में देखें)",
+  skip: "मुख्य सामग्री पर जाएँ",
+  menu: { open: "मेन्यू", label: "मुख्य मेन्यू" },
+  proof: ["14 दिन मुफ़्त, कार्ड की ज़रूरत नहीं", "हर डॉक्टर की जाँच एक व्यक्ति करता है", "हिंदी और अंग्रेज़ी"],
+  preview: {
+    label: "MediEase की कतार स्क्रीन का एक उदाहरण, नमूना मरीज़ों के साथ",
+    title: "आज की कतार",
+    doctor: "डॉ. मीरा अय्यर · सुबह का सत्र",
+    rows: [
+      { token: "#7", name: "रवि कुमार", status: "इंतज़ार में", tone: "waiting" },
+      { token: "#8", name: "मीना जोशी", status: "डॉक्टर के पास", tone: "active" },
+      { token: "#9", name: "इमरान शेख़", status: "हो गया", tone: "done" },
+    ],
+    next: "अगला: टोकन #10, सुबह 10:45 बजे",
+  },
+  tagline: ["फ़्रंट डेस्क पर कम फ़ोन।", "सामने बैठे मरीज़ के लिए ज़्यादा समय।"],
+  how: {
+    title: "जुड़ना कैसे होता है",
+    steps: [
+      { title: "आवेदन करें", body: "अपने क्लिनिक का ब्योरा और हर डॉक्टर का पंजीकरण नंबर भेजें।" },
+      { title: "हम हर डॉक्टर की जाँच करते हैं", body: "MediEase का एक व्यक्ति हर पंजीकरण जाँचता है और 2 कार्य दिवसों में ईमेल से जवाब देता है।" },
+      { title: "अपना पहला दिन शुरू करें", body: "डॉक्टरों का समय तय करें, अपनी टीम जोड़ें और उसी दिन पहली बुकिंग लें।" },
+    ],
+  },
+  final: { title: "अपने क्लिनिक का पूरा दिन एक स्क्रीन से चलाएँ", body: "आज ही आवेदन करें। हर प्लान मुफ़्त ट्रायल से शुरू होता है, और आप कभी भी रोक सकते हैं।" },
+  footerMore: {
+    tagline: "क्लिनिक का पूरा दिन, एक जगह।",
+    clinics: "क्लिनिकों के लिए",
+    patients: "मरीज़ों के लिए",
+    patientSignIn: "मरीज़ साइन इन",
+    pricing: "कीमत",
+    rights: "© 2026 MediEase. भारत के छोटे क्लिनिकों के लिए।",
+  },
 };
 
 export function landingWords(language: PortalLanguage): LandingWords {

@@ -67,11 +67,14 @@ screen. The assistant restates only what the doctor wrote and never gives medica
 
 ## Product Principles
 
-1. The front desk's next action is always one click away.
-2. Say what happened and what to do next, in the user's language.
-3. Never imply clinical advice; restate only what the doctor wrote.
-4. Light on the patient's phone and data plan.
-5. One coherent product: every screen follows the same design system.
+1. **Trust over convenience**: never silently change clinical data, choose for the user, or claim a
+   save that the API has not confirmed.
+2. The front desk's next action is always one click away.
+3. Say what happened and what to do next, in the user's language.
+4. Never imply clinical advice; restate only what the doctor wrote.
+5. Light on the patient's phone and data plan.
+6. One coherent product: every screen follows the same design system and the UX principles in
+   DESIGN.md §8a.
 
 ## Accessibility & Inclusion
 
