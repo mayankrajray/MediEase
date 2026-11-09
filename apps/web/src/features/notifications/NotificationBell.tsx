@@ -1,5 +1,6 @@
 "use client";
 
+import { Bell, BellOff } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -169,7 +170,7 @@ function NotificationDrawer({
   return (
     <Drawer title="Notifications" onClose={onClose}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href={PREFERENCES_PATH} onClick={onClose} className="font-medium text-brand-800 underline">
+        <Link href={PREFERENCES_PATH} onClick={onClose} className="rounded font-semibold text-brand-800 underline underline-offset-4 hover:text-brand-900">
           Notification settings
         </Link>
         {anyUnread && (
@@ -190,12 +191,12 @@ function NotificationDrawer({
       )}
       {load.status === "failed" && <ErrorNotice error={load.error} onRetry={() => setAttempt((n) => n + 1)} />}
       {load.status === "ready" && items.length === 0 && (
-        <EmptyState title="No notifications yet">
+        <EmptyState icon={<BellOff className="size-5" />} title="No notifications yet">
           You are told here when something needs you: a booking with you, an arrival, a message that failed.
         </EmptyState>
       )}
       {items.length > 0 && (
-        <ul aria-label="Latest notifications" className="divide-y divide-slate-200 rounded-card border border-slate-200">
+        <ul aria-label="Latest notifications" className="divide-y divide-line overflow-hidden rounded-card border border-line">
           {items.map((item) => {
             const unread = item.read_at === null;
             return (
@@ -204,10 +205,12 @@ function NotificationDrawer({
                   href={item.link}
                   onClick={() => openOne(item)}
                   className={cx(
-                    "flex min-h-12 flex-col gap-0.5 px-4 py-3 hover:bg-slate-50",
+                    "relative flex min-h-12 flex-col gap-0.5 py-3 pl-8 pr-4 transition-colors duration-200 ease-brand hover:bg-slate-50 motion-reduce:transition-none",
                     unread ? "bg-brand-50" : undefined,
                   )}
                 >
+                  {/* Unread is said in words below; the dot is a second cue. */}
+                  {unread && <span aria-hidden="true" className="absolute left-3.5 top-[1.15rem] size-2 rounded-full bg-brand-700" />}
                   <span className={cx("text-slate-900", unread ? "font-semibold" : undefined)}>
                     {unread && <span className="sr-only">Unread: </span>}
                     {item.title}
@@ -224,10 +227,5 @@ function NotificationDrawer({
 }
 
 function BellIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-    </svg>
-  );
+  return <Bell aria-hidden="true" className="size-5" />;
 }

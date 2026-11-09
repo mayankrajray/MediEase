@@ -1,5 +1,6 @@
 "use client";
 
+import { UserPlus } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -50,9 +51,9 @@ export function AppShell({ membership, children }: { membership: Membership; chi
             {identity.memberships.length > 1 ? (
               <ClinicSwitcher memberships={identity.memberships} activeClinicId={membership.clinic_id} onSelect={selectClinic} />
             ) : (
-              <span className="truncate font-medium">{membership.clinic_name}</span>
+              <span className="min-w-0 truncate font-medium">{membership.clinic_name}</span>
             )}
-            <RolePill>{ROLE_LABELS[membership.role]}</RolePill>
+            <RolePill className="max-sm:hidden">{ROLE_LABELS[membership.role]}</RolePill>
             {view?.canSwitch === true && <WorkspaceSwitch workspace={workspace} onSwitch={view.switchTo} />}
             {/* M6a-P7: in the identity group, so it stays in the header on a phone. */}
             {clinicReady && <NotificationBell />}
@@ -105,8 +106,10 @@ function PatientTools() {
     <>
       <PatientSearch />
       {openRegister !== null && (
-        <Button variant="primary" className="whitespace-nowrap" onClick={() => openRegister()}>
-          Register patient
+        // M7c-P7 (M3): secondary, so each page keeps one primary action of its own.
+        <Button variant="secondary" className="whitespace-nowrap" icon={<UserPlus className="size-4" />} onClick={() => openRegister()}>
+          {/* On a phone the icon alone; the button keeps its name. */}
+          <span className="max-sm:sr-only">Register patient</span>
         </Button>
       )}
     </>

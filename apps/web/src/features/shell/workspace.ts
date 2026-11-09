@@ -7,6 +7,25 @@
  * chooses Owner or Doctor, remembered per clinic in this browser, Owner by default.
  */
 
+import {
+  BadgeCheck,
+  Bell,
+  CalendarClock,
+  CalendarDays,
+  CircleDollarSign,
+  History,
+  Inbox,
+  IndianRupee,
+  LayoutDashboard,
+  ListOrdered,
+  MessageSquareText,
+  ReceiptText,
+  Store,
+  UserCog,
+  Users,
+  Wallet,
+} from "lucide-react";
+
 import type { Membership, Role } from "@/features/auth/landing";
 
 import type { NavItem } from "./nav";
@@ -53,57 +72,63 @@ export function rememberWorkspace(clinicId: string, workspace: Workspace): void 
  * booking requests (M6b-P4) and payments (M8) join in their phases; notifications joined in P7. A page left
  * out of a workspace stays reachable by URL when the role is allowed (the switch is a view).
  */
+const DAY = "Daily work";
+const PATIENTS = "Patients";
+const MONEY = "Billing";
+const CLINIC = "Clinic";
+const TOOLS = "Help and alerts";
+
 export const WORKSPACE_NAV: Readonly<Record<Workspace, readonly NavItem[]>> = {
   OWNER: [
-    { href: "/today", label: "Today" },
-    { href: "/queue", label: "Queue" },
+    { href: "/today", label: "Today", icon: LayoutDashboard, group: DAY },
+    { href: "/queue", label: "Queue", icon: ListOrdered, group: DAY },
     // M6b-P4 (spec R22): what patients asked for on the clinic page.
-    { href: "/booking-requests", label: "Booking requests", requires: "APPOINTMENTS_MANAGE" },
-    { href: "/patients", label: "Patients", requires: "PATIENTS_MANAGE" },
-    { href: "/follow-ups", label: "Follow-ups", requires: "REMINDERS_SCHEDULE" },
+    { href: "/booking-requests", label: "Booking requests", requires: "APPOINTMENTS_MANAGE", icon: Inbox, group: DAY },
+    { href: "/patients", label: "Patients", requires: "PATIENTS_MANAGE", icon: Users, group: PATIENTS },
+    { href: "/follow-ups", label: "Follow-ups", requires: "REMINDERS_SCHEDULE", icon: CalendarClock, group: PATIENTS },
     // M6d-P2 (FR-BIL-02): bills; a doctor's list holds only their own.
-    { href: "/bills", label: "Bills", requires: "BILLING_MANAGE" },
+    { href: "/bills", label: "Bills", requires: "BILLING_MANAGE", icon: ReceiptText, group: MONEY },
     // M6d-P3 (FR-BIL-05): who owes the clinic, owners and the front desk.
-    { href: "/dues", label: "Dues", requires: "COLLECTION_VIEW" },
+    { href: "/dues", label: "Dues", requires: "COLLECTION_VIEW", icon: CircleDollarSign, group: MONEY },
     // M6d-P5 (FR-BIL-06): the day's collection.
-    { href: "/collection", label: "Collection", requires: "COLLECTION_VIEW" },
-    { href: "/team", label: "Team", requires: "STAFF_MANAGE" },
-    { href: "/settings/schedule", label: "Schedule", requires: "SCHEDULES_MANAGE" },
+    { href: "/collection", label: "Collection", requires: "COLLECTION_VIEW", icon: Wallet, group: MONEY },
+    { href: "/team", label: "Team", requires: "STAFF_MANAGE", icon: UserCog, group: CLINIC },
+    { href: "/settings/schedule", label: "Schedule", requires: "SCHEDULES_MANAGE", icon: CalendarDays, group: CLINIC },
     // M6a-P8 (FR-AUD-03): the clinic's audit log, owners only.
-    { href: "/settings/audit", label: "Audit log", requires: "AUDIT_VIEW" },
+    { href: "/settings/audit", label: "Audit log", requires: "AUDIT_VIEW", icon: History, group: CLINIC },
     // M6c-P4 (FR-ONB-10): the directory listing and doctor visibility, owners only.
-    { href: "/settings/listing", label: "Directory", requires: "CLINIC_MANAGE" },
+    { href: "/settings/listing", label: "Directory", requires: "CLINIC_MANAGE", icon: Store, group: CLINIC },
     // M6d-P1 (FR-BIL-01): the fee schedule, owners only (others reach it by URL to read it).
-    { href: "/settings/fees", label: "Fees", requires: "FEES_MANAGE" },
+    { href: "/settings/fees", label: "Fees", requires: "FEES_MANAGE", icon: IndianRupee, group: CLINIC },
     // M6d-P7 (FR-SUB-01): the plan, its use and the trial, owners only.
-    { href: "/settings/plan", label: "Plan", requires: "CLINIC_MANAGE" },
+    { href: "/settings/plan", label: "Plan", requires: "CLINIC_MANAGE", icon: BadgeCheck, group: CLINIC },
     // M7a-P5 (spec assistant): the staff assistant, with the member's own permissions.
-    { href: "/assistant", label: "Assistant", requires: "APPOINTMENTS_MANAGE" },
-    { href: "/settings/notifications", label: "Notifications" },
+    { href: "/assistant", label: "Assistant", requires: "APPOINTMENTS_MANAGE", icon: MessageSquareText, group: TOOLS },
+    { href: "/settings/notifications", label: "Notifications", icon: Bell, group: TOOLS },
   ],
   DOCTOR: [
-    { href: "/today", label: "Today" },
-    { href: "/queue", label: "My queue" },
-    { href: "/my-patients", label: "My patients", requires: "CLINICAL_VIEW" },
-    { href: "/follow-ups", label: "My follow-ups", requires: "REMINDERS_SCHEDULE" },
-    { href: "/my-schedule", label: "My schedule", requires: "DOCTORS_VIEW" },
-    { href: "/bills", label: "My bills", requires: "BILLING_MANAGE" },
+    { href: "/today", label: "Today", icon: LayoutDashboard, group: DAY },
+    { href: "/queue", label: "My queue", icon: ListOrdered, group: DAY },
+    { href: "/my-patients", label: "My patients", requires: "CLINICAL_VIEW", icon: Users, group: PATIENTS },
+    { href: "/follow-ups", label: "My follow-ups", requires: "REMINDERS_SCHEDULE", icon: CalendarClock, group: PATIENTS },
+    { href: "/my-schedule", label: "My schedule", requires: "DOCTORS_VIEW", icon: CalendarDays, group: CLINIC },
+    { href: "/bills", label: "My bills", requires: "BILLING_MANAGE", icon: ReceiptText, group: MONEY },
     // M7a-P5 (spec assistant): the staff assistant, with the member's own permissions.
-    { href: "/assistant", label: "Assistant", requires: "APPOINTMENTS_MANAGE" },
-    { href: "/settings/notifications", label: "Notifications" },
+    { href: "/assistant", label: "Assistant", requires: "APPOINTMENTS_MANAGE", icon: MessageSquareText, group: TOOLS },
+    { href: "/settings/notifications", label: "Notifications", icon: Bell, group: TOOLS },
   ],
   FRONT_DESK: [
-    { href: "/today", label: "Today" },
-    { href: "/queue", label: "Queue" },
-    { href: "/booking-requests", label: "Booking requests", requires: "APPOINTMENTS_MANAGE" },
-    { href: "/patients", label: "Patients", requires: "PATIENTS_MANAGE" },
-    { href: "/follow-ups", label: "Follow-ups", requires: "REMINDERS_SCHEDULE" },
-    { href: "/bills", label: "Bills", requires: "BILLING_MANAGE" },
-    { href: "/dues", label: "Dues", requires: "COLLECTION_VIEW" },
-    { href: "/collection", label: "Collection", requires: "COLLECTION_VIEW" },
+    { href: "/today", label: "Today", icon: LayoutDashboard, group: DAY },
+    { href: "/queue", label: "Queue", icon: ListOrdered, group: DAY },
+    { href: "/booking-requests", label: "Booking requests", requires: "APPOINTMENTS_MANAGE", icon: Inbox, group: DAY },
+    { href: "/patients", label: "Patients", requires: "PATIENTS_MANAGE", icon: Users, group: PATIENTS },
+    { href: "/follow-ups", label: "Follow-ups", requires: "REMINDERS_SCHEDULE", icon: CalendarClock, group: PATIENTS },
+    { href: "/bills", label: "Bills", requires: "BILLING_MANAGE", icon: ReceiptText, group: MONEY },
+    { href: "/dues", label: "Dues", requires: "COLLECTION_VIEW", icon: CircleDollarSign, group: MONEY },
+    { href: "/collection", label: "Collection", requires: "COLLECTION_VIEW", icon: Wallet, group: MONEY },
     // M7a-P5 (spec assistant): the staff assistant, with the member's own permissions.
-    { href: "/assistant", label: "Assistant", requires: "APPOINTMENTS_MANAGE" },
-    { href: "/settings/notifications", label: "Notifications" },
+    { href: "/assistant", label: "Assistant", requires: "APPOINTMENTS_MANAGE", icon: MessageSquareText, group: TOOLS },
+    { href: "/settings/notifications", label: "Notifications", icon: Bell, group: TOOLS },
   ],
 };
 

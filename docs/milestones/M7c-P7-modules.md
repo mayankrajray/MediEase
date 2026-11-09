@@ -6,8 +6,8 @@ Plan: `docs/milestones/M7c-P7-design-system-plan.md`. System: `DESIGN.md`. Produ
 |---|---|
 | Phase 1 — shared design system | ✅ built 9 Nov 2026 (below) |
 | M1 Marketing landing page | ✅ built 9 Nov 2026; phone header fixed after the developer's review |
-| M2 Authentication | ✅ built 9 Nov 2026, awaiting the developer's review |
-| M3 Clinic dashboard | ☐ |
+| M2 Authentication | ✅ built 9 Nov 2026; approved by the developer 10 Nov 2026 |
+| M3 Clinic dashboard | ✅ built 10 Nov 2026 |
 | M4 Appointments and queue | ☐ |
 | M5 Patient management | ☐ |
 | M6 Appointment booking | ☐ |
@@ -178,3 +178,46 @@ The one failure, `clinic-application`, was the API's limit of 5 applications per
 (`ONB_RATE_LIMITED`, "Too many applications") from today's repeated runs, not this change; it
 passed earlier on 9 Nov. The API suite was last run in full on this branch at `7f4578b` (2,573
 passed, 96.05%); no API file has changed since.
+
+## M3 — Clinic dashboard (built 10 Nov 2026)
+
+The developer approved M2 by asking for M3–M10 in one run (10 Nov 2026): every module built in
+order, the full API suite and `make smoke` after each, and the full `make e2e` once at the end.
+No per-module review gate this time; each module below is reviewable on its own commit.
+
+**Screens:** Today (owner, doctor, front desk, the practising owner's two views), the clinic and
+ops shell (sidebar, phone header, menu drawer), the notification bell's drawer and the
+notification settings page.
+
+**Existing problems (screenshots at 1366 and 375 px, 10 Nov):** five equal count cards and a team
+row of half-width cards (the "hero metric" template); cards inside cards ("Follow-ups and
+messages" held four bordered tiles, each session a bordered box inside "Sessions"); the quick
+actions on a row of their own; a tall empty band under *Next up* because the right column set the
+row height; every list rose in on load (orchestrated entrance, against DESIGN.md §4); two filled
+*Register* buttons on the front desk's screen (header and quick action); fifteen undifferentiated
+sidebar links for an owner; the booking-requests count overlapping its label; on a phone the bell
+wrapped to a line of its own; the team counts failed silently (rendered nothing).
+
+**Changes (behaviour and API calls unchanged):**
+
+| Area | Change |
+|---|---|
+| Page header | The quick actions sit at the top right of the page (the first is the page's one primary action) |
+| Counts | One strip: a single surface with hairlines between the five counts, each still a link named "Waiting 3 …"; every count has a hint ("With the doctor now", "Seen today", "Did not come") |
+| Layout | Two independent columns from 1024 px: the day's work (*Next up*, *Sessions*) wide, what to follow up narrow (*Team*, *Follow-ups and messages*); on a phone the day's work comes first |
+| Follow-ups and messages, Team | List rows (label and hint on the left, the number on the right, a chevron when it opens a screen) instead of cards in a card; `StatTile` gained `layout="segment" | "row"` keeping the reading order label, number, hint |
+| Sessions | One row per session: hours with a clock icon, the doctor (not repeated in a doctor's own view), status in words, the booked line, and a capacity bar that repeats the line for the eye (decorative) |
+| Empty states | *No one is waiting* offers *Book an appointment* (roles that book); *No sessions today* offers *Open schedule settings* (roles that manage schedules) |
+| Team | Its own section with loading, error (with *Try again*) and ready states, so a failure no longer disappears or touches the rest of Today |
+| Last 7 days | Each bar labelled with its number, a baseline, table header on the muted surface |
+| Motion | No entrance stagger; a changed number still slides in; the bars grow when the tab opens |
+| Sidebar | Lucide icons and five groups (Daily work, Patients, Billing, Clinic, Help and alerts) without reordering any link; 36 px rows so an owner's sixteen links fit 768 px; sticky with its own scroll; 256 px wide; the waiting count inline after the label |
+| Header | *Register patient* is secondary with an icon (one primary per page) and icon-only below 640 px (the name stays); the clinic name truncates and the role pill hides below 640 px, so the bell stays on the first line; the clinic switcher fits a phone; *Menu* has an icon; ops links have icons |
+| Notifications | Drawer: Lucide bell, an unread dot beside the "Unread:" words, the empty state's icon. Settings: a saved switch is confirmed in the success tone beside the switches |
+
+**Not added:** `recharts` (planned for M3). The only chart is seven bars with a table beside
+them; drawing them in CSS costs nothing on the clinic bundle and keeps the table as the
+accessible source.
+
+**Tests:** the existing Today, workspace, bell and component tests pass unchanged (link names,
+regions, list names and nav order kept).

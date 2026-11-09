@@ -21,15 +21,15 @@ export function ClinicSwitcher({
     return null;
   }
   return (
-    <div className="flex items-center gap-2">
-      <label htmlFor="clinic-switcher" className="text-sm font-medium">
+    <div className="flex min-w-0 items-center gap-2">
+      <label htmlFor="clinic-switcher" className="max-sm:sr-only text-sm font-medium">
         Clinic
       </label>
       <select
         id="clinic-switcher"
         value={activeClinicId}
         onChange={(event) => onSelect(event.target.value)}
-        className="rounded-lg border border-slate-400 bg-white px-2 py-1"
+        className="min-h-8 min-w-0 max-w-44 cursor-pointer truncate rounded-lg border border-slate-400 bg-white px-2 py-1 text-sm hover:border-slate-600 sm:max-w-none"
       >
         {memberships.map((m) => (
           <option key={m.clinic_id} value={m.clinic_id}>

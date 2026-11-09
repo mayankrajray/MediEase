@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { Alert } from "@/components/ui/Alert";
 import { Card } from "@/components/ui/Card";
 import { CheckboxField } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -67,11 +68,18 @@ export function NotificationPreferences() {
         title="Notifications"
         description="Choose what you are told about in the app. Everything is on until you turn it off."
       />
-      <p role="status" className={load.status === "loading" || message === "" ? "sr-only" : "text-slate-800"}>
-        {load.status === "loading" ? "Loading your notification settings…" : message}
-      </p>
+      {message !== "" && load.status !== "loading" ? (
+        // M7c-P7 (M3): the saved change in the success tone, beside the switches it describes.
+        <Alert tone="success" role="status">
+          {message}
+        </Alert>
+      ) : (
+        <p role="status" className="sr-only">
+          {load.status === "loading" ? "Loading your notification settings…" : ""}
+        </p>
+      )}
       {error !== null && <ErrorNotice error={error} />}
-      {load.status === "loading" && <Skeleton className="h-48" />}
+      {load.status === "loading" && <Skeleton className="h-96" />}
       {load.status === "failed" && <ErrorNotice error={load.error} onRetry={() => setAttempt((n) => n + 1)} />}
       {load.status === "ready" && (
         <Card>

@@ -1,8 +1,9 @@
 "use client";
 
+import { Menu as MenuIcon, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 import { Drawer } from "@/components/Drawer";
 import { Button } from "@/components/ui/Button";
@@ -19,6 +20,10 @@ export interface ShellLink {
   readonly exact?: boolean;
   /** M6b-P5 (R45): a count waiting there, shown beside the label and read as words. */
   readonly badge?: number;
+  /** M7c-P7 (M3): a decorative icon before the label. */
+  readonly icon?: LucideIcon;
+  /** M7c-P7 (M3): consecutive links of one group sit under its heading. */
+  readonly group?: string;
 }
 
 /**
@@ -62,7 +67,7 @@ export function Shell({
           Skip to content
         </a>
 
-        <aside className="hidden border-r border-line bg-surface lg:flex lg:w-60 lg:shrink-0 lg:flex-col">
+        <aside className="hidden border-r border-line bg-surface lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col lg:overflow-y-auto">
           <div className="px-5 py-4">
             <Brand />
           </div>
@@ -72,7 +77,7 @@ export function Shell({
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/85">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
-              <div className="order-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+              <div className="order-1 flex min-w-0 flex-1 items-center gap-x-3 sm:flex-wrap sm:gap-y-2 lg:flex-none">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -80,17 +85,18 @@ export function Shell({
                   aria-haspopup="dialog"
                   aria-expanded={menuOpen}
                   onClick={() => setMenuOpen(true)}
+                  icon={<MenuIcon className="size-4" />}
                 >
                   Menu
                 </Button>
-                <span className="lg:hidden">
+                <span className="shrink-0 lg:hidden">
                   <Brand compact />
                 </span>
                 {identity}
               </div>
 
               <div className="order-2 hidden items-center gap-3 sm:flex lg:order-3">
-                <span>{person}</span>
+                <span className="max-w-48 truncate text-sm font-medium text-slate-800">{person}</span>
                 <SignOutButton />
               </div>
 
@@ -138,46 +144,76 @@ function NavLinks({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  // Consecutive links of one group share a heading (Hick's law: five short lists, not fifteen
+  // links). The order is the workspace's own; grouping never moves a link.
+  const groups: { readonly name: string | undefined; readonly items: ShellLink[] }[] = [];
+  for (const item of links) {
+    const last = groups.at(-1);
+    if (last !== undefined && last.name === item.group) last.items.push(item);
+    else groups.push({ name: item.group, items: [item] });
+  }
+  const headingId = useId();
   return (
     <nav aria-label={label} className="px-3 pb-4">
-      <ul className="space-y-1">
-        {links.map((item) => {
-          const current = pathname === item.href || (item.exact !== true && pathname.startsWith(`${item.href}/`));
-          return (
-            <li key={item.href} className="relative">
-              <Link
-                href={item.href}
-                {...(onNavigate === undefined ? {} : { onClick: onNavigate })}
-                aria-current={current ? "page" : undefined}
-                className={cx(
-                  "flex min-h-10 items-center rounded-lg px-3 py-2 font-medium transition-colors duration-200 ease-brand motion-reduce:transition-none",
-                  current ? "bg-brand-50 text-brand-900 ring-1 ring-inset ring-brand-200" : "text-slate-700 hover:bg-slate-100 hover:text-slate-900",
-                )}
-              >
-                {item.label}
-                {item.badge !== undefined && item.badge > 0 && <span className="sr-only">{`, ${item.badge} waiting`}</span>}
-              </Link>
-              {item.badge !== undefined && item.badge > 0 && (
-                // Visible count beside the link; the link's own name says it in words.
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-amber-100 px-2 text-sm font-semibold text-amber-950 ring-1 ring-inset ring-amber-300"
-                >
-                  {item.badge > 99 ? "99+" : item.badge}
-                </span>
-              )}
-            </li>
-          );
-        })}
+      <ul className="space-y-3">
+        {groups.map((group, g) => (
+          <li key={`${group.name ?? ""}-${g}`}>
+            {group.name !== undefined && groups.length > 1 && (
+              <p id={`${headingId}-${g}`} className="px-3 pb-1 text-xs font-semibold text-slate-600">
+                {group.name}
+              </p>
+            )}
+            <ul className="space-y-0.5" aria-labelledby={group.name !== undefined && groups.length > 1 ? `${headingId}-${g}` : undefined}>
+              {group.items.map((item) => (
+                <NavLink key={item.href} item={item} pathname={pathname} {...(onNavigate === undefined ? {} : { onNavigate })} />
+              ))}
+            </ul>
+          </li>
+        ))}
       </ul>
     </nav>
   );
 }
 
-/** A small pill naming the role or the console ("Owner", "Ops console"). */
-export function RolePill({ children }: { children: ReactNode }) {
+function NavLink({ item, pathname, onNavigate }: { item: ShellLink; pathname: string; onNavigate?: () => void }) {
+  const current = pathname === item.href || (item.exact !== true && pathname.startsWith(`${item.href}/`));
+  const Icon = item.icon;
   return (
-    <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-sm font-medium text-brand-900 ring-1 ring-inset ring-brand-200">
+    <li>
+      <Link
+        href={item.href}
+        {...(onNavigate === undefined ? {} : { onClick: onNavigate })}
+        aria-current={current ? "page" : undefined}
+        className={cx(
+          "flex min-h-9 items-center gap-3 rounded-lg px-3 py-1.5 font-medium transition-colors duration-200 ease-brand motion-reduce:transition-none",
+          current ? "bg-brand-50 text-brand-900 ring-1 ring-inset ring-brand-200" : "text-slate-700 hover:bg-slate-100 hover:text-slate-900",
+        )}
+      >
+        {Icon !== undefined && (
+          <Icon aria-hidden="true" className={cx("size-[1.125rem] shrink-0", current ? "text-brand-700" : "text-slate-500")} />
+        )}
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+        {item.badge !== undefined && item.badge > 0 && (
+          <>
+            <span className="sr-only">{`, ${item.badge} waiting`}</span>
+            {/* The visible count, after the label in the same line; the words above name it. */}
+            <span
+              aria-hidden="true"
+              className="shrink-0 rounded-full bg-amber-100 px-2 text-sm font-semibold tabular-nums text-amber-950 ring-1 ring-inset ring-amber-300"
+            >
+              {item.badge > 99 ? "99+" : item.badge}
+            </span>
+          </>
+        )}
+      </Link>
+    </li>
+  );
+}
+
+/** A small pill naming the role or the console ("Owner", "Ops console"). */
+export function RolePill({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <span className={cx("shrink-0 whitespace-nowrap rounded-full bg-brand-50 px-2.5 py-0.5 text-sm font-medium text-brand-900 ring-1 ring-inset ring-brand-200", className)}>
       {children}
     </span>
   );
