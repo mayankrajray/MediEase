@@ -1,9 +1,14 @@
 """Any OpenAI-compatible chat-completions API with tools (M7a-P2; FR-AI-03; ADR-0013).
 
-Groq, DeepInfra and OpenAI all serve ``POST {base_url}/chat/completions`` with the same request
-and tool-call shapes, so one adapter covers them; the provider is a setting (``PRESETS`` gives
-each one's base URL and default model). The standard library does the HTTP, as for WhatsApp:
-no SDK is needed for one call.
+Groq, DeepInfra, OpenAI and, from M7c-P5, Mistral (its own API) and NVIDIA (build.nvidia.com)
+all serve ``POST {base_url}/chat/completions`` with the same request and tool-call shapes, so one
+adapter covers them; the provider is a setting (``PRESETS`` gives each one's base URL and default
+model). The standard library does the HTTP, as for WhatsApp: no SDK is needed for one call.
+
+Providers differ in small ways the reader tolerates (M7c-P5): Mistral may send ``content`` as a
+list of chunks (text and reasoning; only text is kept), some send a tool call's ``arguments`` as
+an object instead of a JSON string, and some leave out a tool call's ``id`` (one is made up so the
+tool result can still be paired with its call).
 
 Failures: the provider's 429 is ``LlmBusy`` (with its ``Retry-After``); a timeout, a dropped
 connection, any other non-2xx answer, or a body we cannot read is ``LlmUnavailable``. Nothing is
@@ -52,6 +57,13 @@ PRESETS: Mapping[str, Preset] = {
     "groq": Preset("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
     "deepinfra": Preset("https://api.deepinfra.com/v1/openai", "meta-llama/Llama-3.3-70B-Instruct"),
     "openai": Preset("https://api.openai.com/v1", "gpt-4o-mini"),
+    # M7c-P5. Mistral's alias for its newest Large model (Large 4 since Oct 2026); pin one with
+    # LLM_MODEL. Hugging Face lists no inference provider for Mistral Large 4, so Mistral's own
+    # API is the way to it.
+    "mistral": Preset("https://api.mistral.ai/v1", "mistral-large-latest"),
+    # M7c-P5. NVIDIA's hosted NIM endpoints (build.nvidia.com); any of its chat models with tool
+    # calling can be named in LLM_MODEL.
+    "nvidia": Preset("https://integrate.api.nvidia.com/v1", "meta/llama-3.3-70b-instruct"),
 }
 
 
@@ -115,21 +127,44 @@ def _retry_after(value: str | None) -> int:
     return max(1, min(seconds, 300))
 
 
+def _content(value: Any) -> str:
+    """The reply's text: a string, or (Mistral) a list of chunks whose ``text`` ones are kept."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "".join(
+            str(chunk.get("text") or "")
+            for chunk in value
+            if isinstance(chunk, dict) and chunk.get("type", "text") == "text"
+        )
+    raise TypeError("content must be text or chunks")
+
+
+def _arguments(value: Any) -> dict[str, Any]:
+    """A tool call's arguments: a JSON string (the standard) or already an object."""
+    parsed = json.loads(value) if isinstance(value, str) else (value or {})
+    if not isinstance(parsed, dict):
+        raise TypeError("arguments must be an object")
+    return parsed
+
+
 def parse_reply(body: bytes) -> LlmReply:
     """The first choice's text and tool calls, and the usage; ``LlmUnavailable`` if malformed."""
     try:
         data = json.loads(body)
         message = data["choices"][0]["message"]
         calls = []
-        for raw in message.get("tool_calls") or ():
+        for n, raw in enumerate(message.get("tool_calls") or (), 1):
             function = raw["function"]
-            arguments = json.loads(function.get("arguments") or "{}")
-            if not isinstance(arguments, dict):
-                raise TypeError("arguments must be an object")
-            calls.append(ToolCall(str(raw["id"]), str(function["name"]), _json_object(arguments)))
+            arguments = _arguments(function.get("arguments") or "{}")
+            # Mistral wants nine letters or digits; others accept any string.
+            call_id = str(raw.get("id") or f"call{n:05d}")
+            calls.append(ToolCall(call_id, str(function["name"]), _json_object(arguments)))
         usage = data.get("usage") or {}
         return LlmReply(
-            content=str(message.get("content") or ""),
+            content=_content(message.get("content")),
             tool_calls=tuple(calls),
             usage=Usage(
                 prompt_tokens=int(usage.get("prompt_tokens") or 0),
@@ -145,7 +180,8 @@ def _json_object(value: dict[str, Any]) -> dict[str, JsonValue]:
 
 
 class OpenAICompatibleLlm:
-    """``LlmPort`` over HTTP for ``groq``, ``deepinfra`` or ``openai`` (R1)."""
+    """``LlmPort`` over HTTP for ``groq``, ``deepinfra``, ``openai``, ``mistral`` or ``nvidia``
+    (R1)."""
 
     def __init__(
         self,
