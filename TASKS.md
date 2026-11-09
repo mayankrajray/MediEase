@@ -11,13 +11,13 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M7 — AI assistant (M7a) and verified prescription uploads (M7b)** (issue #65, branch `m7/65-assistant-and-verified-uploads` from `main` at `d53f53d`, one PR for the milestone). M6d merged in PR #64 on 26 Oct 2026 (#63 closed) |
-| Active phase | **M7 complete on its branch** (M7a P1–P5 and M7b P6–P10 built 27 Oct 2026); waiting for the developer's permission to push and open the milestone PR |
-| Design notes | `docs/milestones/M7-assistant-and-verified-uploads.md` and the review `docs/milestones/M7-architecture-review.md`; specs `docs/specs/assistant.md`, `docs/specs/prescription-uploads.md`; M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
-| Approved plan | `NEXT_STEPS_PLAN.md` (M7 phases, workflow, progress log) |
+| Active milestone | **M7c — Demo polish, real configuration and Phase 2 deliverables** (issue #69, branch `m7c/69-demo-polish` from `main` at `c2b0274`, one PR for the milestone). M7 merged in PR #66 and its follow-up in PR #68 on 27 Oct 2026 (#65, #67 closed) |
+| Active phase | **M7c P3, P1, P2, P5, P6 (agent's part) and P4** (approved by the developer 4 Nov 2026, built in that order); P6's live tests wait for the developer; P7 waits for the developer's module list |
+| Design notes | `docs/milestones/M7c-demo-polish.md`, progress `docs/milestones/M7c-progress-report.md`; spec `docs/specs/assistant.md` (R15–R21); M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
+| Approved plan | `NEXT_STEPS_PLAN.md` (M7c phases; M7 history) |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | Real email delivery needs L-11 (Brevo account, verified sending domain); locally Mailpit covers it. Real Google sign-in needs L-09 (the fake provider covers local use). The issue #49 title still says "MVP demo" (rename on GitHub by the developer). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test is flaky on CI (150 ms bound) |
+| Open decisions | L-09 (Google sign-in), L-10 (Groq key) and L-11 (Brevo email) are done (4 Nov 2026). The issue #49 title still says "MVP demo" (rename on GitHub by the developer). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test is flaky on CI (150 ms bound) |
 | Last updated | 27 Oct 2026 |
 
 
@@ -38,9 +38,9 @@ done before the pilot.
 | L-06 | Book pilot conversations with Aarogya Hospital (A13), Apollo Diagnostic (A10); Arvind Homoeopathy (A1) as reserve | Founder | M6 | ☐ |
 | L-07 | Collect each pilot clinic's current booking flow, Rx format and patient list format | Product | M4 | ☐ |
 | L-08 | Choose a WhatsApp BSP with a partner-paid (wholesale) model; MediEase's business verification and website for the partnership (ADR-0014) | Founder | M8 | ☐ |
-| L-09 | A Google Cloud OAuth client (free) for Google sign-in, with the local redirect URI | Founder | M6a-P3 | ☐ |
-| L-10 | A Groq API key (free tier) for the assistant | Founder | M7 | ☐ |
-| L-11 | A free-tier transactional email account (Brevo recommended, ADR-0016) with a verified sending domain (SPF, DKIM, DMARC) and SMTP credentials; listed as a processor in the privacy notice (L-04) | Founder | M6a-P4 | ☐ |
+| L-09 | A Google Cloud OAuth client (free) for Google sign-in, with the local redirect URI | Founder | M6a-P3 | ✅ (4 Nov 2026; set in the developer's `.env` and tested by the developer) |
+| L-10 | A Groq API key (free tier) for the assistant | Founder | M7 | ✅ (4 Nov 2026; set in the developer's `.env` and tested by the developer) |
+| L-11 | A free-tier transactional email account (Brevo recommended, ADR-0016) with a verified sending domain (SPF, DKIM, DMARC) and SMTP credentials; listed as a processor in the privacy notice (L-04) | Founder | M6a-P4 | ✅ (4 Nov 2026; account, domain and SMTP set in the developer's `.env` and tested by the developer; the privacy-notice listing stays with L-04) |
 
 ---
 
@@ -224,7 +224,7 @@ reports it cannot open; **D8** the public fee is the consultation price; **D9** 
 | M6d-P6 | Report attachments on visits (FR-VIS-04) | ✅ (built 26 Oct 2026) |
 | M6d-P7 | Plans, trial and limits (FR-SUB-01) | ✅ (built 26 Oct 2026) |
 
-## M7 — AI assistant (M7a) and verified prescription uploads (M7b)  `▶ ACTIVE (built; PR pending)`
+## M7 — AI assistant (M7a) and verified prescription uploads (M7b)  `✅ (merged 27 Oct 2026, PR #66; follow-up PR #68)`
 
 **Covers:** FR-AI-01..04, FR-RX-11, FR-UPL-01..05, NFR-20 (PRD v1.3 C15, C16). Issue #65, branch
 `m7/65-assistant-and-verified-uploads`, one PR. **ADRs:** 0013, 0023, 0024. **Exit:** booking by
@@ -251,6 +251,29 @@ linked patients.
 | M7b-P8 | Identifier extraction, no OCR (FR-UPL-03) | ✅ (built 27 Oct 2026) |
 | M7b-P9 | Verification: own, representative, superseded (FR-UPL-04) | ✅ (built 27 Oct 2026) |
 | M7b-P10 | Handoff to the assistant, cleanup, portal UI, journeys (FR-UPL-05) | ✅ (built 27 Oct 2026) |
+
+## M7c — Demo polish, real configuration and Phase 2 deliverables  `▶ ACTIVE`
+
+**Covers:** FR-AI-01..04 (spec assistant R15–R21) and the developer's feedback of 4 Nov 2026.
+Issue #69, branch `m7c/69-demo-polish`, one PR. **Design:** `docs/milestones/M7c-demo-polish.md`.
+**Exit:** the developer's failing conversations work (the doctor's advice, Hinglish, booking only
+what is still open, asking which doctor); the provider switches between Groq, Mistral and NVIDIA by
+settings only; WhatsApp, Google sign-in and email pass a live test with the developer; the redesigned
+frontend passes `make e2e`; the Phase 2 deliverable documents are drafted with every placeholder in
+`deliverables/PLACEHOLDERS.md`. Phase 2 is due 15 Nov 2026.
+
+Build order (approved): P3 → P1 → P2 → P5 → P6 → P4 → P7 → P8.
+
+| Phase | Scope | Status |
+|---|---|---|
+| M7c-P3 | Staff assistant: hide ended and full sessions and past slots, refuse them before the confirmation, ask which doctor, today and tomorrow in the prompt (R18–R20) | ✅ (built 4 Nov 2026) |
+| M7c-P1 | The doctor's advice is read from the record; the guard lets "what did the doctor suggest" through (R15, R16) | ✅ (built 4 Nov 2026) |
+| M7c-P2 | Hinglish understood; romanised Hindi in the guard rails (R17) | ✅ (built 4 Nov 2026) |
+| M7c-P5 | Mistral and NVIDIA providers beside Groq, by settings only (R1) | ☐ |
+| M7c-P6 | Real configuration: WhatsApp, Google sign-in, Brevo email, live tests with the developer; `.env.example` clean-up | ☐ |
+| M7c-P4 | Safe Markdown in the chat (R21) | ☐ |
+| M7c-P7 | Landing page and frontend redesign (modules from the developer) | ☐ |
+| M7c-P8 | Demo rehearsal, full suites and `make e2e`, Phase 2 deliverable documents | ☐ |
 
 ## M8 — Multi-clinic WhatsApp and consolidated billing  `☐ (designed)`
 
