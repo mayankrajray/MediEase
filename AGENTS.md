@@ -111,6 +111,7 @@ do not exist.
 | `make dev-web` | Next.js dev server on :3000 proxying to the API on localhost (`make up` first) | now |
 | `make contract` / `make contract-check` | Regenerate web types from `contracts/openapi.yaml` / fail if the committed types are stale | now |
 | `make seed` | Load synthetic demo data: one clinic, owner, doctor, front desk, ops user (`APP_ENV=local` only; RUNBOOK §1) | now |
+| `make config-check` | Which real services `.env` selects, secrets shown only as set / not set; `LIVE=1` calls each once, `EMAIL_TO=` / `WHATSAPP_TO=` send one test (RUNBOOK §35) | now (M7c-P6) |
 | `make worker` | Run a job worker in the foreground (`make up` already runs one; a second is safe, `SKIP LOCKED`). `make up` also runs `upload-worker` (`WORKER_QUEUE=uploads`) beside `clamav` (M7b) | now (M5-P1) |
 
 Verification before declaring a phase done: `make lint typecheck test` must pass. API tests include

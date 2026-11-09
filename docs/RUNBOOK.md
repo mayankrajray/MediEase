@@ -45,6 +45,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 32. Plans, the trial and limits (M6d-P7)
 33. The assistant's model (M7a)
 34. Prescription uploads and ClamAV (M7b)
+35. Checking real configuration (M7c-P6)
 
 ---
 
@@ -899,3 +900,30 @@ has_trial, trial_ends_at FROM clinic_subscriptions WHERE clinic_id = '<id>';`
   account_id = '<id>' ORDER BY created_at DESC;` Rows go 30 days after creation.
 - **Live EICAR test.** With the stack up, `make test-api` runs `tests/integration/test_clamd_live.py`
   against `127.0.0.1:3310` (`CLAMD_PUBLISH_PORT`); it skips when no clamd answers.
+
+### 35. Checking real configuration (M7c-P6)
+**When:** after changing `.env`, before a demo, and after every deployment.
+Real values live only in `.env` (or the deployment's secret store). Nobody needs to open it to
+check it:
+
+```bash
+make config-check                       # which adapter each service uses; secrets as set / NOT SET
+make config-check LIVE=1                # also calls each real service once, changing nothing
+make config-check EMAIL_TO=you@example.com      # sends one test email through the relay
+make config-check WHATSAPP_TO=9xxxxxxxxx        # sends Meta's hello_world template
+```
+
+| Service | Real when | `LIVE=1` checks | Needs from the developer |
+|---|---|---|---|
+| WhatsApp Cloud API | `MESSAGING_PROVIDER=whatsapp_cloud` and the five `WHATSAPP_*` values | Reads the number's verified name and quality rating with the token | A system-user token (not the 24-hour test token); approved templates (L-02); the webhook registered at `<public API URL>/webhooks/whatsapp` with `WHATSAPP_VERIFY_TOKEN` and subscribed to `messages` (§9 step 5; locally through a tunnel) |
+| Email (Brevo) | `EMAIL_PROVIDER=smtp`, `SMTP_HOST=smtp-relay.brevo.com`, port 587, `starttls`, login | Logs in to the relay; sends nothing | `EMAIL_FROM` on the sending domain verified in Brevo (SPF, DKIM, DMARC). A free-mail sender such as an `@gmail.com` address fails Gmail's DMARC when sent through Brevo, so mail can be rejected or land in spam |
+| Google sign-in | `GOOGLE_OIDC_PROVIDER=google` and the client ID and secret | Fetches Google's sign-in discovery document | The redirect URI the command prints, registered in the Google Cloud OAuth client; the client and secret are proved only by a real *Continue with Google* |
+| The assistant's model | `LLM_PROVIDER` other than `console`, and `LLM_API_KEY` | Asks the model for one word | §33; staging and production also need `LLM_PATIENT_DATA_ALLOWED=true` after the privacy review (L-04) |
+
+A failed live check makes the command exit 1 and names the cause (`HTTP 401 (OAuthException
+code 190 …)` is an expired or wrong WhatsApp token; `SMTPAuthenticationError` a wrong SMTP login).
+The command prints masked numbers and addresses only, and stores nothing.
+
+**Demo data.** Playwright journeys (`make e2e`) add short extra sessions at the time they run and
+fill sessions with synthetic bookings. Never run them against a database used for a demo or by a
+design partner. For a clean local demo: reset (§1), `make up`, `make seed`.

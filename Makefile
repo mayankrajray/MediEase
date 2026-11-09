@@ -26,7 +26,7 @@ export TEST_DATABASE_URL
 # in pyproject.toml. CI runs the same command (.github/workflows/ci.yml).
 CORE_COVERAGE := --include='*/mediease_api/domain/*,*/mediease_api/application/*' --fail-under=80
 
-.PHONY: help env-check up down ps logs psql migrate seed smoke install-api install-web api-venv-check \
+.PHONY: help env-check up down ps logs psql migrate seed config-check smoke install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
 	typecheck-web dev-web contract contract-check audit e2e worker dose-data
 
@@ -51,6 +51,10 @@ migrate: env-check ## Re-run database migrations (make up already runs them)
 
 seed: env-check ## Load synthetic demo data (APP_ENV=local only; make up first)
 	$(COMPOSE) run --rm --no-deps api python -m mediease_api.delivery.cli.seed
+
+config-check: env-check ## Show which real services .env selects, no secrets (LIVE=1 to call them; EMAIL_TO=, WHATSAPP_TO= to send one test)
+	$(COMPOSE) run --rm --no-deps --build api python -m mediease_api.delivery.cli.config_check \
+		$(if $(LIVE),--live) $(if $(EMAIL_TO),--email-to "$(EMAIL_TO)") $(if $(WHATSAPP_TO),--whatsapp-to "$(WHATSAPP_TO)")
 
 dose-data: env-check ## A patient's dose records on request: ARGS="export <id> --out /exports/<id>.json" or "delete <id> --confirm"
 	@mkdir -p .exports && chmod 700 .exports
