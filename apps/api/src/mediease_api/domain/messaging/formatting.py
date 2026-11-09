@@ -32,6 +32,11 @@ def _time(local: datetime, language: Language) -> str:
     return f"{hour}:{local.minute:02d} {'AM' if local.hour < 12 else 'PM'}"
 
 
+def time_of_day(instant: datetime, *, timezone: str, language: Language) -> str:
+    """``10:30 AM`` (``10:30`` in Hindi) in the clinic's zone (M7c-P3: a session's free times)."""
+    return _time(_local(instant, timezone), language)
+
+
 def appointment_when(
     *, starts_at: datetime, token_number: int | None, timezone: str, language: Language
 ) -> str:
