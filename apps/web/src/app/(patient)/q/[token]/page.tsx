@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
+import { Alert } from "@/components/ui/Alert";
+import { Logo } from "@/components/ui/Logo";
 import { liveProblemOf, liveProblemText } from "@/features/live-queue/problems";
 import { LiveQueueView } from "@/features/live-queue/LiveQueueView";
 import { apiGet, type ApiResult, type GetResponse } from "@/lib/api/client";
@@ -45,11 +47,12 @@ export default async function LiveQueuePage({
   }
   const words = liveWords(language);
   return (
-    <main lang={language} className="mx-auto max-w-md px-4 pt-6 text-base text-slate-900">
-      <h1 className="text-2xl font-bold tracking-tight">{words.heading}</h1>
-      <p role="alert" className="mt-3 font-semibold">
-        {liveProblemText(words, liveProblemOf(first.error))}
-      </p>
+    <main lang={language} className="mx-auto min-h-screen max-w-md space-y-4 bg-canvas px-4 pt-4 text-base text-slate-900">
+      <Logo />
+      <h1 className="heading-4">{words.heading}</h1>
+      <Alert tone="danger" role="alert">
+        <span className="font-semibold">{liveProblemText(words, liveProblemOf(first.error))}</span>
+      </Alert>
     </main>
   );
 }

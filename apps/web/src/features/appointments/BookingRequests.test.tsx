@@ -75,7 +75,10 @@ describe("answering requests (M6b-P5, R34, R36, R39)", () => {
     const drawer = await screen.findByRole("dialog", { name: "Accept request" });
     expect(await within(drawer).findByText("2 no-shows in 12 months")).toBeInTheDocument();
     const confirm = within(drawer).getByRole("button", { name: "Accept and book" });
-    expect(confirm).toBeDisabled(); // nothing is chosen by phone alone
+    // Nothing is chosen by phone alone; M7c-P7 (M4): pressing it says what is missing and sends nothing.
+    fireEvent.click(confirm);
+    expect(within(drawer).getByText("Choose which record this is, or create a new one.")).toBeInTheDocument();
+    expect(api.calls.some((c) => c.method === "POST")).toBe(false);
     fireEvent.click(within(drawer).getByRole("radio", { name: "Create new record" }));
     expect(within(drawer).getByLabelText("Full name")).toHaveValue("Requester One");
     expect(within(drawer).getByLabelText("Sex (required)")).toHaveValue("FEMALE");

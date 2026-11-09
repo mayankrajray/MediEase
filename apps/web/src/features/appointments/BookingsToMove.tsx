@@ -1,12 +1,14 @@
 "use client";
 
+import { CalendarCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { StatusMessage } from "@/components/ui/StatusMessage";
 import { TABLE, TABLE_WRAP, TD, TH, TR } from "@/components/ui/table";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -82,15 +84,14 @@ export function BookingsToMove() {
         title="Bookings to move"
         description="Patients booked in sessions closed by leave or a schedule change. Move or cancel each one."
       />
-      <p role="status" aria-live="polite" className={message === "" ? "sr-only" : "font-medium text-emerald-900"}>
-        {load.status === "loading" ? "Loading bookings to move…" : message}
-      </p>
-      {load.status === "loading" && <Skeleton className="h-40" />}
+      <StatusMessage message={message} loading={load.status === "loading" ? "Loading bookings to move…" : undefined} />
+      {load.status === "loading" && <ListSkeleton label="" rows={3} />}
       {load.status === "failed" && <ErrorNotice error={load.error} onRetry={() => setAttempt((n) => n + 1)} />}
       {load.status === "ready" && load.items.length === 0 && (
-        <EmptyState title="Nothing to move">Everyone booked is in a session that is still open.</EmptyState>
-      )}
-      {load.status === "ready" && load.items.length > 0 && (
+        <EmptyState icon={<CalendarCheck className="size-5" />} title="Nothing to move">
+          Everyone booked is in a session that is still open.
+        </EmptyState>
+      )}      {load.status === "ready" && load.items.length > 0 && (
         <div className={TABLE_WRAP}>
           <table role="table" className={TABLE}>
             <caption className="sr-only">Bookings to move, earliest first</caption>
@@ -107,11 +108,13 @@ export function BookingsToMove() {
               {load.items.map((item) => (
                 <tr key={item.id} role="row" className={TR}>
                   <td role="cell" className={TD} data-label="When">
-                    {formatDay(item.on_date)}, {place(item)}
+                    <span className="font-medium tabular-nums text-slate-900">
+                      {formatDay(item.on_date)}, {place(item)}
+                    </span>
                   </td>
                   <td role="cell" className={TD} data-label="Patient">
                     <span className="font-medium">{who(item)}</span>
-                    <span className="block text-sm text-slate-700">{item.patient.phone_masked}</span>
+                    <span className="block text-sm tabular-nums text-slate-700">{item.patient.phone_masked}</span>
                   </td>
                   <td role="cell" className={TD} data-label="Doctor">
                     {doctorName(item.doctor_id)}
@@ -124,7 +127,7 @@ export function BookingsToMove() {
                       <Button size="sm" variant="primary" aria-label={`Reschedule ${who(item)}`} onClick={() => setOpen({ kind: "reschedule", item })}>
                         Reschedule
                       </Button>
-                      <Button size="sm" variant="danger" aria-label={`Cancel ${who(item)}`} onClick={() => setOpen({ kind: "cancel", item })}>
+                      <Button size="sm" aria-label={`Cancel ${who(item)}`} onClick={() => setOpen({ kind: "cancel", item })}>
                         Cancel
                       </Button>
                     </div>

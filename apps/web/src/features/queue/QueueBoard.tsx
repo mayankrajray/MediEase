@@ -4,8 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock, Stethoscope, TriangleAlert, UserPlus } from "lucide-react";
+
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Dialog } from "@/components/Dialog";
-import { buttonClasses } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
+import { cx } from "@/components/ui/cx";
+import { ListSkeleton } from "@/components/ui/Skeleton";
+import { Spinner } from "@/components/ui/Spinner";
+import { StatusMessage } from "@/components/ui/StatusMessage";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { INPUT, LABEL } from "@/components/ui/Field";
 import { LayoutMotion } from "@/components/ui/LayoutMotion";
@@ -81,6 +88,7 @@ export function QueueBoard({
 
   const [doctors, setDoctors] = useState<readonly Doctor[] | undefined>(undefined);
   const [doctorsError, setDoctorsError] = useState<unknown>(undefined);
+  const [doctorsAttempt, setDoctorsAttempt] = useState(0);
   const [doctorId, setDoctorId] = useState<string | undefined>(undefined);
   const [date, setDate] = useState(initialDate ?? today);
   const [overlay, setOverlay] = useState<Overlay | undefined>(undefined);
@@ -115,7 +123,7 @@ export function QueueBoard({
     return () => {
       cancelled = true;
     };
-  }, [api, identity.user.id, storageKey, endSession, canManage, canMove]);
+  }, [api, identity.user.id, storageKey, endSession, canManage, canMove, doctorsAttempt]);
 
   const { queue, error, refresh } = useQueue({
     date,
@@ -247,89 +255,110 @@ export function QueueBoard({
   const sessions = queue?.sessions ?? [];
   const isToday = date === today;
 
+  const activeDoctors = (doctors ?? []).filter((d) => d.is_active);
+  const doctorName = activeDoctors.find((d) => d.id === doctorId)?.display_name;
+
   return (
     <section aria-labelledby="queue-heading" className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 id="queue-heading" className="text-2xl font-bold tracking-tight text-slate-900">
+      {/* M7c-P7 (M4): the page's title and its two actions; Book is the one primary action. */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 id="queue-heading" className="heading-5 text-slate-900">
             {isToday ? "Today's queue" : `Queue for ${formatDay(date)}`}
           </h1>
-          <p className="text-slate-700">{formatDay(date)}</p>
+          <p className="mt-1 text-slate-700">
+            {formatDay(date)}
+            {doctorName !== undefined && activeDoctors.length > 1 ? ` · ${doctorName}` : ""}
+          </p>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
-          {doctors !== undefined && doctors.filter((d) => d.is_active).length > 1 && (
-            <div>
-              <label htmlFor={pickerId} className={`${LABEL} text-sm`}>
-                Doctor
-              </label>
-              <select id={pickerId} value={doctorId ?? ""} onChange={(event) => chooseDoctor(event.target.value)} className={INPUT}>
-                {doctors
-                  .filter((d) => d.is_active)
-                  .map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.display_name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          )}
-          <nav aria-label="Day" className="flex flex-wrap items-end gap-2">
-            <button type="button" onClick={() => setDate(addDays(date, -1))} className={buttonClasses("secondary")}>
-              Previous day
-            </button>
-            <div>
-              <label htmlFor={dateId} className={`${LABEL} text-sm`}>
-                Date
-              </label>
-              <input id={dateId} type="date" value={date} onChange={(event) => event.target.value !== "" && setDate(event.target.value)} className={INPUT} />
-            </div>
-            <button type="button" onClick={() => setDate(addDays(date, 1))} className={buttonClasses("secondary")}>
-              Next day
-            </button>
-            {!isToday && (
-              <button type="button" onClick={() => setDate(today)} className={buttonClasses("secondary")}>
-                Today
-              </button>
-            )}
-          </nav>
-          {canManage && doctorId !== undefined && (
-            <button type="button" onClick={() => setOverlay({ kind: "book", target: { kind: "book" } })} className={buttonClasses("primary")}>
-              Book
-            </button>
-          )}
+        <div className="flex flex-wrap items-center gap-2">
           {canMove && isToday && doctorId !== undefined && (
-            <button
-              type="button"
-              onClick={() => setOverlay({ kind: "walk-in" })}
-              className={`${buttonClasses("secondary")} border-brand-700 text-brand-800 hover:bg-brand-50`}
-            >
+            <Button onClick={() => setOverlay({ kind: "walk-in" })} icon={<UserPlus className="size-4" />}>
               Add walk-in
-            </button>
+            </Button>
+          )}
+          {canManage && doctorId !== undefined && (
+            <Button variant="primary" onClick={() => setOverlay({ kind: "book", target: { kind: "book" } })} icon={<CalendarPlus className="size-4" />}>
+              Book
+            </Button>
           )}
         </div>
       </div>
 
-      <p role="status" aria-live="polite" className="min-h-6 font-medium text-emerald-900">
-        {message}
-      </p>
+      {/* Which doctor and which day: the board's filters, in one bar. */}
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3 rounded-card border border-line bg-surface p-3 shadow-card">
+        {activeDoctors.length > 1 && (
+          <div className="min-w-48 flex-1 sm:flex-none">
+            <label htmlFor={pickerId} className={LABEL}>
+              Doctor
+            </label>
+            <select id={pickerId} value={doctorId ?? ""} onChange={(event) => chooseDoctor(event.target.value)} className={cx(INPUT, "mt-1.5 cursor-pointer")}>
+              {activeDoctors.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.display_name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <nav aria-label="Day" className="flex flex-wrap items-end gap-2">
+          <Button onClick={() => setDate(addDays(date, -1))} icon={<ChevronLeft className="size-4" />}>
+            <span className="max-sm:sr-only">Previous day</span>
+          </Button>
+          <div>
+            <label htmlFor={dateId} className={LABEL}>
+              Date
+            </label>
+            <input
+              id={dateId}
+              type="date"
+              value={date}
+              onChange={(event) => event.target.value !== "" && setDate(event.target.value)}
+              className={cx(INPUT, "mt-1.5 cursor-pointer tabular-nums")}
+            />
+          </div>
+          <Button onClick={() => setDate(addDays(date, 1))}>
+            <span className="max-sm:sr-only">Next day</span>
+            <ChevronRight aria-hidden="true" className="size-4" />
+          </Button>
+          {!isToday && <Button onClick={() => setDate(today)}>Today</Button>}
+        </nav>
+      </div>
+
+      {/* One live region for every outcome on the board; it says who and when (D29). */}
+      <StatusMessage message={message} />
       {actionError !== undefined && <ErrorNotice error={actionError} />}
       {printer.error !== undefined && <ErrorNotice error={printer.error} />}
-      {printer.printing && <p role="status">Preparing the prescription…</p>}
-      {doctorsError !== undefined && <ErrorNotice error={doctorsError} />}
-      {error !== undefined && (
-        <ErrorNotice error={error} {...(queue === undefined ? {} : { message: "The queue could not be refreshed; it will try again." })} />
-      )}
-
-      {doctors !== undefined && doctorId === undefined && <EmptyState title="No active doctors yet">Ask the clinic owner to add one.</EmptyState>}
-      {doctorId !== undefined && queue === undefined && error === undefined && (
-        <p role="status" className="text-slate-700">
-          Loading the queue…
+      {printer.printing && (
+        <p role="status" className="inline-flex items-center gap-2 text-slate-700">
+          <Spinner /> Preparing the prescription…
         </p>
       )}
-      {queue !== undefined && sessions.length === 0 && (
-        <EmptyState title={`No sessions for this doctor on ${formatDay(date)}.`}>Sessions come from the doctor&apos;s weekly schedule.</EmptyState>
+      {doctorsError !== undefined && <ErrorNotice error={doctorsError} onRetry={() => {
+            setDoctorsError(undefined);
+            setDoctorsAttempt((n) => n + 1);
+          }} />}
+      {error !== undefined && (
+        <ErrorNotice
+          error={error}
+          onRetry={refresh}
+          {...(queue === undefined ? {} : { message: "The queue could not be refreshed; it will try again." })}
+        />
       )}
 
+      {doctors !== undefined && doctorId === undefined && (
+        <EmptyState icon={<Stethoscope className="size-5" />} title="No active doctors yet">
+          Ask the clinic owner to add one.
+        </EmptyState>
+      )}
+      {((doctors === undefined && doctorsError === undefined) || (doctorId !== undefined && queue === undefined && error === undefined)) && (
+        <ListSkeleton label="Loading the queue…" />
+      )}
+      {queue !== undefined && sessions.length === 0 && (
+        <EmptyState icon={<CalendarDays className="size-5" />} title={`No sessions for this doctor on ${formatDay(date)}.`}>
+          Sessions come from the doctor&apos;s weekly schedule.
+        </EmptyState>
+      )}
       {sessions.map((session) => {
         const sessionDay = session.on_date === today || (now >= new Date(session.starts_at).getTime() && now < new Date(session.ends_at).getTime());
         const rows = session.appointments;
@@ -337,28 +366,30 @@ export function QueueBoard({
           <section
             key={session.id}
             aria-label={`Session ${clock(session.starts_at)} to ${clock(session.ends_at)}`}
-            className="overflow-hidden rounded-card border border-slate-200 bg-white shadow-card"
+            className="overflow-hidden rounded-card border border-line bg-surface shadow-card"
           >
-            <h2 className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 px-4 py-3">
-              <span className="font-semibold tabular-nums">
+            <h2 className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+              <span className="inline-flex items-center gap-2 font-semibold tabular-nums text-slate-900">
+                <Clock aria-hidden="true" className="size-4 text-slate-500" />
                 {clock(session.starts_at)}–{clock(session.ends_at)}
               </span>
-              <span className="text-sm text-slate-700">
+              <span className="text-sm tabular-nums text-slate-700">
                 {session.mode === "TOKENS" ? "Tokens" : `${session.slot_minutes ?? ""}-minute slots`} · {session.booked_count} of {session.capacity} booked
                 {session.status === "CLOSED" && " · closed to new bookings"}
               </span>
             </h2>
             {session.status === "CLOSED" && rows.some((r) => r.status === "BOOKED" || r.status === "ARRIVED") && (
               // M6a-P8 (FR-APT-09): leave or a schedule change closed it with people still booked.
-              <p className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-amber-950">
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-warning-line bg-warning-soft px-4 py-2.5 text-slate-900">
+                <TriangleAlert aria-hidden="true" className="size-4 shrink-0 text-warning" />
                 This session was closed by leave or a schedule change.{" "}
-                <Link href="/bookings-to-move" className="font-medium underline">
+                <Link href="/bookings-to-move" className="font-semibold text-slate-900 underline underline-offset-4">
                   Move these bookings
                 </Link>
               </p>
             )}
             {rows.length === 0 ? (
-              <p className="px-4 py-4 text-slate-700">Nobody booked yet.</p>
+              <p className="px-4 py-6 text-center text-slate-700">Nobody booked yet.</p>
             ) : (
               <LayoutMotion>
                 <div className="p-3 md:p-0">
@@ -440,9 +471,7 @@ export function QueueBoard({
             }}
           />
           <div className="flex justify-end">
-            <button type="button" onClick={() => setOverlay(undefined)} className={buttonClasses("secondary")}>
-              Close
-            </button>
+            <Button onClick={() => setOverlay(undefined)}>Close</Button>
           </div>
         </Dialog>
       )}
@@ -455,22 +484,19 @@ export function QueueBoard({
         />
       )}
       {overlay?.kind === "no-show" && (
-        <Dialog title={`Mark ${overlay.entry.patient.full_name} as a no-show?`} onClose={() => setOverlay(undefined)}>
-          <p>
-            {placeText(overlay.entry, clock)} · booked for {clock(overlay.entry.slot_start ?? overlay.entry.session_starts_at)}. If they arrive later today you
-            can still mark them arrived.
-          </p>
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setOverlay(undefined)} className={buttonClasses("secondary")}>
-              Go back
-            </button>
-            <button type="button" disabled={busy} onClick={() => void step(overlay.entry, "NO_SHOW")} className={buttonClasses("danger")}>
-              Mark no-show
-            </button>
-          </div>
-        </Dialog>
-      )}
-      {overlay?.kind === "walk-in" && doctorId !== undefined && <WalkInDialog doctorId={doctorId} onDone={done} onClose={() => setOverlay(undefined)} />}
+        <ConfirmDialog
+          title={`Mark ${overlay.entry.patient.full_name} as a no-show?`}
+          confirmLabel="Mark no-show"
+          cancelLabel="Go back"
+          danger
+          busy={busy}
+          onConfirm={() => void step(overlay.entry, "NO_SHOW")}
+          onClose={() => setOverlay(undefined)}
+        >
+          {placeText(overlay.entry, clock)} · booked for {clock(overlay.entry.slot_start ?? overlay.entry.session_starts_at)}. If they arrive later today you
+          can still mark them arrived.
+        </ConfirmDialog>
+      )}      {overlay?.kind === "walk-in" && doctorId !== undefined && <WalkInDialog doctorId={doctorId} onDone={done} onClose={() => setOverlay(undefined)} />}
     </section>
   );
 }
@@ -499,12 +525,14 @@ function WalkInDialog({ doctorId, onDone, onClose }: { doctorId: string; onDone:
           );
         }}
       />
-      {saving && error === undefined && <p role="status">Adding…</p>}
+      {saving && error === undefined && (
+        <p role="status" className="inline-flex items-center gap-2 text-slate-700">
+          <Spinner /> Adding…
+        </p>
+      )}
       {error !== undefined && <ErrorNotice error={error} />}
       <div className="flex justify-end">
-        <button type="button" onClick={onClose} className={buttonClasses("secondary")}>
-          Close
-        </button>
+        <Button onClick={onClose}>Close</Button>
       </div>
     </Dialog>
   );

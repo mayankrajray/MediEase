@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { useClinic } from "@/features/shell/ClinicGate";
 import { Menu, type MenuItem } from "@/components/Menu";
-import { buttonClasses } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { LIST_ITEM } from "@/components/ui/LayoutMotion";
 import { m } from "@/components/ui/Motion";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -113,7 +113,7 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
           <Link href={patientPath(entry.patient.id)} className="font-semibold text-brand-800 underline-offset-2 hover:underline">
             {who}
           </Link>
-          <span className="block text-sm text-slate-700">
+          <span className="block text-sm tabular-nums text-slate-700">
             {entry.patient.code} · {entry.patient.age_years} y{entry.source === "WALK_IN" ? " · walk-in" : ""}
           </span>
         </div>
@@ -122,7 +122,7 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
         <div>
           <StatusBadge tone={STATUS_TONES[status]}>{STATUS_LABELS[status]}</StatusBadge>
           {entry.prescription !== null && <span className="mt-1 block text-sm font-medium text-slate-800">Prescription issued</span>}
-          {entry.dues_paise > 0 && <span className="mt-1 block text-sm font-medium text-amber-900">Dues {formatPaise(entry.dues_paise)}</span>}
+          {entry.dues_paise > 0 && <span className="mt-1 block text-sm font-medium tabular-nums text-warning">Dues {formatPaise(entry.dues_paise)}</span>}
         </div>
       </td>
       <td role="cell" data-label={waited === null ? "" : "Waiting"} className={`${TD} text-slate-800`}>
@@ -131,26 +131,14 @@ export function QueueRow({ entry, session, actions }: { entry: QueueEntry; sessi
       <td role="cell" data-label="" className={TD}>
         <div className="flex flex-wrap items-center gap-2 pt-1 md:justify-end md:pt-0">
           {mine && status === "IN_CONSULTATION" && (
-            <button
-              type="button"
-              aria-label={`Open ${who}'s consultation`}
-              disabled={actions.busy}
-              onClick={() => actions.onOpen?.(entry)}
-              className={`${buttonClasses("primary")} min-w-24`}
-            >
+            <Button variant="primary" aria-label={`Open ${who}'s consultation`} disabled={actions.busy} onClick={() => actions.onOpen?.(entry)} className="min-w-24">
               Open
-            </button>
+            </Button>
           )}
           {step !== undefined && actions.canMove && (status !== "NO_SHOW" || started) && (
-            <button
-              type="button"
-              aria-label={step.name(who)}
-              disabled={actions.busy}
-              onClick={() => actions.onStep(entry, step.to)}
-              className={`${buttonClasses("primary")} min-w-24`}
-            >
+            <Button variant="primary" aria-label={step.name(who)} disabled={actions.busy} onClick={() => actions.onStep(entry, step.to)} className="min-w-24">
               {step.text}
-            </button>
+            </Button>
           )}
           {menu.length > 0 && <Menu label={`More actions for ${who}`} items={menu} />}
         </div>

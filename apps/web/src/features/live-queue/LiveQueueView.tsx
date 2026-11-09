@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { Alert } from "@/components/ui/Alert";
+import { Logo } from "@/components/ui/Logo";
 import { apiGetConditional, type GetResponse } from "@/lib/api/client";
 import { startPolling } from "@/lib/api/poll";
 import { liveWords } from "@/lib/i18n/patient-notifications";
@@ -66,40 +68,42 @@ export function LiveQueueView({
       : view.now_seeing_slot !== null
         ? words.nowSeeing(time(view.now_seeing_slot))
         : words.nobodyYet;
+  // M7c-P7 (M4): the semantic tones; the words of the state carry it, the colour repeats it.
   const tone =
     view.state === "YOUR_TURN"
-      ? "border-emerald-800 bg-emerald-50 text-emerald-950"
+      ? "border-success-line bg-success-soft"
       : view.state === "CANCELLED"
-        ? "border-red-800 bg-red-50 text-red-950"
-        : "border-slate-300 bg-white text-slate-900";
+        ? "border-danger-line bg-danger-soft"
+        : "border-line bg-surface";
 
   return (
-    <main lang={language} className="mx-auto max-w-md space-y-4 px-4 pb-10 pt-6 text-base text-slate-900">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{words.heading}</h1>
-          <p className="text-slate-700">
-            {view.clinic_name} · {view.doctor_name}
-          </p>
-        </div>
+    <main lang={language} className="mx-auto min-h-screen max-w-md space-y-4 bg-canvas px-4 pb-10 pt-4 text-base text-slate-900">
+      <div className="flex items-center justify-between gap-3">
+        <Logo />
         <a
           href={`?lang=${language === "hi" ? "en" : "hi"}`}
           lang={language === "hi" ? "en" : "hi"}
           aria-label={words.switchLabel}
-          className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-slate-400 bg-white px-3 text-sm font-medium"
+          className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-slate-300 bg-surface px-3 text-sm font-semibold text-slate-800 transition-colors hover:border-brand-300 hover:bg-brand-50"
         >
           {words.switchTo}
         </a>
       </div>
+      <div>
+        <h1 className="heading-4 text-slate-900">{words.heading}</h1>
+        <p className="mt-1 text-slate-700">
+          {view.clinic_name} · {view.doctor_name}
+        </p>
+      </div>
 
       {final ? (
-        <p role="alert" className="font-semibold">
-          {liveProblemText(words, problem ?? "unavailable")}
-        </p>
+        <Alert tone="danger" role="alert">
+          <span className="font-semibold">{liveProblemText(words, problem ?? "unavailable")}</span>
+        </Alert>
       ) : (
         <>
-          <section aria-labelledby="live-place" className={`space-y-2 rounded-card border-2 p-4 ${tone}`}>
-            <h2 id="live-place" className="text-3xl font-bold">
+          <section aria-labelledby="live-place" className={`space-y-3 rounded-card border p-5 shadow-card ${tone}`}>
+            <h2 id="live-place" className="text-3xl font-bold tabular-nums text-slate-900">
               {view.token_number !== null
                 ? words.yourToken(view.token_number)
                 : view.slot_start !== null
@@ -109,15 +113,15 @@ export function LiveQueueView({
             {/* Polite: the place changes every few minutes; a screen reader hears it without a jump. */}
             <div aria-live="polite" className="space-y-1">
               <p className="text-xl font-semibold">{words.states[view.state]}</p>
-              {view.state === "WAITING" && <p className="text-lg">{words.ahead(view.ahead)}</p>}
-              {(view.state === "WAITING" || view.state === "NOT_STARTED") && <p>{seeing}</p>}
-              {view.state === "NOT_STARTED" && <p>{words.startsAt(time(view.session_starts_at))}</p>}
+              {view.state === "WAITING" && <p className="text-lg tabular-nums text-slate-800">{words.ahead(view.ahead)}</p>}
+              {(view.state === "WAITING" || view.state === "NOT_STARTED") && <p className="text-slate-700">{seeing}</p>}
+              {view.state === "NOT_STARTED" && <p className="text-slate-700">{words.startsAt(time(view.session_starts_at))}</p>}
             </div>
           </section>
           {problem !== undefined && (
-            <p role="status" className="font-medium text-amber-950">
+            <Alert tone="warning" role="status">
               {problem === "rate" ? words.rateLimited : words.offline}
-            </p>
+            </Alert>
           )}
           <p className="text-sm text-slate-700">
             {words.refreshNote}
