@@ -56,14 +56,26 @@ _EXPLAIN_WORDS = (
     "how do i take",
     "doctor wrote",
     "instructions",
+    # M7c-P1: the doctor's advice is part of what the doctor wrote.
+    "advice",
+    "advised",
+    "mentioned",
+    "diet",
     "दवा",
     "दवाई",
     "पर्चा",
     "पर्चे",
     "कब",
+    "सलाह",
     "dawa",
     "dawai",
     "goli",
+    # M7c-P2: Hinglish.
+    "likha",
+    "salah",
+    "parcha",
+    "parche",
+    "parchi",
 )
 
 

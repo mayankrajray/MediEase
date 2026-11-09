@@ -67,6 +67,9 @@ _PATTERNS: tuple[tuple[ReferralReason, tuple[str, ...]], ...] = (
             r"सीने में दर्द",
             r"साँस नहीं|सांस नहीं",
             r"बेहोश",
+            r"\bseene (?:me|mein|mai|main) dard\b",
+            r"\bsaa?ns (?:nahi|nahin|nhi)\b",
+            r"\bbehosh\b",
         ),
     ),
     (
@@ -82,6 +85,7 @@ _PATTERNS: tuple[tuple[ReferralReason, tuple[str, ...]], ...] = (
             r"\bwhat does (?:my|the|this) (?:report|result|test|scan)\b",
             r"रिपोर्ट",
             r"शुगर",
+            r"\b(?:report|sugar|bp|pressure|test)\b.*\b(?:zyada|jyada|kam|theek|thik|sahi|kharab)\b",
         ),
     ),
     (
@@ -101,6 +105,10 @@ _PATTERNS: tuple[tuple[ReferralReason, tuple[str, ...]], ...] = (
             r"(?:बंद|छोड़|बढ़ा|घटा) (?:कर|दूँ|दू|दें)",
             r"\b(?:band|chhod|badha|ghata)\b.*\b(?:dawa|dawai|goli)\b",
             r"\b(?:dawa|dawai|goli)\b.*\b(?:band|chhod|badha|ghata|kam|zyada)\b",
+            # M7c-P2: Hinglish (Hindi in Latin letters).
+            r"\b(?:do|2|double|extra|zyada|jyada)\s+(?:goli|goliyan|tablet|dawai|dawa|dose)\b",
+            r"\b(?:goli|dawai|dawa|tablet|dose)\b.*\b(?:chod|skip|miss)\b",
+            r"\b(?:goli|dawai|dawa|dose)\s+(?:bhool|bhul)",
         ),
     ),
     (
@@ -118,7 +126,8 @@ _PATTERNS: tuple[tuple[ReferralReason, tuple[str, ...]], ...] = (
             r"\bpregnan",
             r"\ballerg",
             r"कौन सी दवा|कौनसी दवा|कोई दवा",
-            r"\b(?:kaun si|koi) (?:dawa|dawai|goli)\b",
+            r"\b(?:kaun ?si|kon ?si|konsi|koi)\s+(?:dawa|dawai|goli|medicine|tablet|syrup)\b",
+            r"\b(?:kis|kisliye)\b.*\b(?:dawa|dawai|goli)\b|\b(?:dawa|dawai|goli)\b.*\bkis liye\b",
         ),
     ),
     (
@@ -137,6 +146,9 @@ _PATTERNS: tuple[tuple[ReferralReason, tuple[str, ...]], ...] = (
             r"क्या मुझे .*(?:बीमारी|रोग|इन्फेक्शन|संक्रमण|बुखार|कैंसर|डायबिटीज़|डायबिटीज) है",
             r"(?:कौन सी|क्या) बीमारी",
             r"\bbimari\b",
+            r"\b(?:kya|kyaa) (?:mujhe|muje|mujhko) (?:koi )?(?:bimari|infection|sugar|diabetes"
+            r"|cancer|bukhar|typhoid|dengue|malaria|covid)\b",
+            r"\bmujhe kya (?:hua|hai)\b",
         ),
     ),
     (
@@ -153,9 +165,32 @@ _PATTERNS: tuple[tuple[ReferralReason, tuple[str, ...]], ...] = (
             r"क्या (?:खाऊँ|खाना चाहिए|पीना चाहिए|करूँ)",
             r"इलाज",
             r"\bilaj\b",
+            r"\bkya (?:khau|khaun|khaoon|khana chahiye|piyu|piyun|peena chahiye|karu|karun"
+            r"|karoon)\b",
+            r"\b(?:upay|nuskha|nuskhe|gharelu)\b",
         ),
     ),
 )
+
+# M7c-P1: a question about what the doctor wrote is a restating question, even when it uses
+# advice words ("what did the doctor suggest", "what can I eat as per the prescription"). The
+# answer comes only from the record (R10), so these pass the drug-advice and treatment checks.
+# They never pass the emergency, results, dose-change or diagnosis checks.
+_RESTATES = tuple(
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        r"\b(?:did|has|have)\s+(?:the |my )?(?:doctor|dr\.?)\b.*\b(?:suggest|recommend|prescrib"
+        r"|advis|mention|writ|wrote|say|said|tell|told|ask)",
+        r"\b(?:the |my )?(?:doctor|dr\.?)\s+(?:has\s+)?(?:suggested|recommended|prescribed|advised"
+        r"|mentioned|wrote|written|said|told|asked)\b",
+        r"\b(?:in|on|from|as per|according to|per)\s+(?:the |my |this )?(?:prescription|parcha"
+        r"|parche|parchi)\b",
+        r"\b(?:doctor|dr)\s+ne\b",
+        r"\b(?:parche|parcha|parchi|prescription)\s+(?:me|mein|main|par|pe)\b",
+        r"डॉक्टर ने|पर्चे में|पर्चे पर",
+    )
+)
+_RESTATABLE = frozenset({ReferralReason.DRUG_ADVICE, ReferralReason.TREATMENT})
 
 _COMPILED = tuple(
     (reason, tuple(re.compile(p, re.IGNORECASE) for p in ps)) for reason, ps in _PATTERNS
@@ -167,6 +202,8 @@ def referral_reason(text: str) -> ReferralReason | None:
     normalised = " ".join(text.replace("\u2019", "'").split())
     for reason, patterns in _COMPILED:
         if any(p.search(normalised) for p in patterns):
+            if reason in _RESTATABLE and any(p.search(normalised) for p in _RESTATES):
+                continue
             return reason
     return None
 
