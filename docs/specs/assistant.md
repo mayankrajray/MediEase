@@ -4,9 +4,9 @@
 |---|---|
 | Requirements | FR-AI-01..04, FR-RX-11, NFR-07 |
 | Milestone / phases | M7a / P1–P5 (issue #65) |
-| Status | Approved (developer, 27 Oct 2026: architecture review and decisions D1–D7 in advance); implemented in M7a on the M7 branch, 27 Oct 2026 (as built: `docs/milestones/M7-assistant-and-verified-uploads.md`) |
+| Status | Approved (developer, 27 Oct 2026: architecture review and decisions D1–D7 in advance); implemented in M7a on the M7 branch, 27 Oct 2026 (as built: `docs/milestones/M7-assistant-and-verified-uploads.md`). R15–R21 added for M7c (issue #69), approved by the developer 4 Nov 2026 |
 | Owner | MediEase engineering |
-| Last updated | 2026-10-27 |
+| Last updated | 2026-11-04 |
 
 ## 1. Context
 Patients ask the same few things: when do I take this, for how long, can I book on Friday. Staff
@@ -49,7 +49,8 @@ sequenceDiagram
 
 ## 4. Behaviour
 - **R1 (P2, FR-AI-03)** The model is reached only through `LlmPort`. `LLM_PROVIDER` is `console`
-  (deterministic, offline), `groq`, `deepinfra` or `openai`; the three real ones share one
+  (deterministic, offline), `groq`, `deepinfra`, `openai`, and from M7c-P5 `mistral` or `nvidia`;
+  the real ones share one
   OpenAI-compatible adapter (chat completions with tools, stdlib HTTP, `LLM_TIMEOUT_SECONDS`).
   Base URL and model default per provider and can be overridden. `console` is refused in
   production; a real provider needs `LLM_API_KEY`, and in staging and production also
@@ -104,6 +105,26 @@ sequenceDiagram
   (right). The page number moves to the top margin. Layouts 1 and 2 are frozen (hash tests).
 - **R14** The mark and the QR are inline SVG; the renderer still fetches nothing. The mark is a
   placeholder until the official logo arrives (`assets/SOURCES.md`).
+
+### M7c additions (issue #69; design `docs/milestones/M7c-demo-polish.md`)
+- **R15 (M7c-P1, FR-AI-02, FR-AI-04)** A question about what the doctor wrote passes the
+  drug-advice and treatment checks of R4 even when it uses advice words ("what did the doctor
+  suggest", "what can I eat as per the prescription", "doctor ne kya likha"). It never passes the
+  emergency, results, dose-change or diagnosis checks.
+- **R16 (M7c-P1)** The patient prompt tells the model that the doctor's advice (food, rest,
+  precautions), notes and next visit are part of what the doctor wrote: it answers them with
+  `explain_prescription` and never refuses them, and still gives no advice of its own.
+- **R17 (M7c-P2)** Both prompts tell the model the user may write Hindi in Latin letters; the reply
+  stays in the turn's language. R4's patterns include romanised Hindi for every category.
+- **R18 (M7c-P3, FR-AI-01)** Staff `list_sessions` returns only sessions that are open, have not
+  ended and have room, and in slot mode only free slots whose end is ahead; it refuses a date
+  before the clinic's today and takes an optional `doctor_id`.
+- **R19 (M7c-P3)** Staff `book_appointment` and `reschedule_appointment` refuse an ended session or
+  a slot that is over before a proposal is made (`BAD_ARGUMENTS` for the model to explain).
+- **R20 (M7c-P3)** The staff prompt gives today's and tomorrow's dates and the active doctors with
+  their IDs; with more than one doctor the model asks which before choosing a session.
+- **R21 (M7c-P4)** Replies may use bold, italics and `-` or `1.` lists; the chat renders only
+  those, as React elements. Links, images, tables and HTML are shown as plain text.
 
 ## 5. API surface
 | Method | Path | Request | Success | Errors |

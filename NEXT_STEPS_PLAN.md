@@ -1,4 +1,33 @@
-# NEXT_STEPS_PLAN.md — Plan for M7 (AI assistant and verified prescription uploads)
+# NEXT_STEPS_PLAN.md — Plan for M7c (demo polish), with the M7 plan below as history
+
+## 0. Active: M7c — Demo polish, real configuration and Phase 2 deliverables
+
+| Field | Value |
+|---|---|
+| Status | **Approved by the developer 4 Nov 2026**: the plan, the build order and every recommended design decision up to P6. P7 waits for the developer's module list |
+| Issue / branch | #69 / `m7c/69-demo-polish` from `main` at `c2b0274`; one PR (ADR-0011) |
+| Design | `docs/milestones/M7c-demo-polish.md` (decisions D1–D16); spec `docs/specs/assistant.md` R15–R21 |
+| Progress | `docs/milestones/M7c-progress-report.md` (what is done, what the developer must provide) |
+| Deadline | Phase 2 deliverables due 15 Nov 2026, 11:59 PM IST |
+
+| Order | Phase | Objective | Verify |
+|---|---|---|---|
+| 1 | **P3** | Staff assistant books only what can still be booked; asks which doctor; knows tomorrow | Unit tests on a fixed clock; assistant HTTP suite |
+| 2 | **P1** | The doctor's advice is read from the record, never refused | The developer's own question as a test; guard-rail suite |
+| 3 | **P2** | Hinglish understood; romanised Hindi in the guard rails | Hinglish advice and restating cases |
+| 4 | **P5** | Mistral and NVIDIA beside Groq, by settings only | Fake-server adapter tests; `build_llm` cases |
+| 5 | **P6** | Real configuration, tested live with the developer | WhatsApp, Google sign-in and email checks with the developer |
+| 6 | **P4** | Safe Markdown in the chat | Web unit tests; XSS cases |
+| 7 | **P7** | Landing page and frontend redesign | `make e2e`, accessibility checks, the 200 KB patient-page budget |
+| 8 | **P8** | Rehearsal, full suites, deliverable documents | `make lint typecheck test`, `make e2e`, the "Try this" script run end to end |
+
+Rules agreed with the developer: real values go only into `.env`, which the agent never reads;
+every dummy value and localhost URL in a deliverable is listed in `deliverables/PLACEHOLDERS.md`
+(kept out of git); partner evidence, quotes and pricing results are never written by the agent.
+
+---
+
+# Plan for M7 (AI assistant and verified prescription uploads), merged 27 Oct 2026 (PR #66)
 
 | Field | Value |
 |---|---|
@@ -45,7 +74,7 @@ Milestone issue #65 → branch m7/65-assistant-and-verified-uploads (from origin
 
 | # | Needed | State |
 |---|---|---|
-| L-10 | A Groq API key for the real provider | Open; the console adapter covers local, CI and demos |
+| L-10 | A Groq API key for the real provider | Done (4 Nov 2026; set in the developer's `.env` and tested) |
 | L-04 | Counsel and the privacy review before real patient data reaches a model (`LLM_PATIENT_DATA_ALLOWED`); upload retention | Open; before any production use |
 | — | The official MediEase logo (the PDF mark is a placeholder) | Open (founder) |
 | #30 | Uploads over 2 MB through the web origin | Fixed in M7b-P6 |
