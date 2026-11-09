@@ -8,12 +8,12 @@ export type ButtonSize = "sm" | "md" | "lg";
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    "bg-brand-700 text-white shadow-sm hover:bg-brand-800 disabled:bg-slate-300 disabled:text-slate-700 disabled:shadow-none",
+    "bg-brand-700 text-white shadow-sm hover:bg-brand-800 hover:shadow-md disabled:bg-slate-300 disabled:text-slate-700 disabled:shadow-none",
   secondary:
-    "border border-slate-300 bg-white text-slate-900 shadow-sm hover:border-slate-400 hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none",
-  ghost: "text-slate-800 hover:bg-slate-100 disabled:text-slate-500",
+    "border border-slate-300 bg-white text-slate-900 shadow-sm hover:border-brand-300 hover:bg-brand-50 hover:text-brand-900 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none",
+  ghost: "text-slate-800 hover:bg-slate-100 hover:text-slate-900 disabled:text-slate-500",
   danger:
-    "bg-danger text-white shadow-sm hover:bg-red-800 disabled:bg-slate-300 disabled:text-slate-700 disabled:shadow-none",
+    "bg-danger text-white shadow-sm hover:bg-red-800 hover:shadow-md disabled:bg-slate-300 disabled:text-slate-700 disabled:shadow-none",
 };
 
 const SIZES: Record<ButtonSize, string> = {
@@ -27,8 +27,10 @@ const SIZES: Record<ButtonSize, string> = {
 /** The classes of a button, for a `Link` that should look like one. */
 export function buttonClasses(variant: ButtonVariant = "secondary", size: ButtonSize = "md"): string {
   return cx(
-    "inline-flex select-none items-center justify-center gap-2 rounded-lg font-semibold transition duration-200 ease-brand",
-    "active:translate-y-px disabled:cursor-not-allowed disabled:active:translate-y-0 motion-reduce:transition-none motion-reduce:active:translate-y-0",
+    "inline-flex cursor-pointer select-none items-center justify-center gap-2 rounded-lg font-semibold transition duration-200 ease-brand",
+    // A small lift on hover and a press on click; neither with reduced motion or when disabled.
+    "hover:-translate-y-px active:translate-y-px disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:active:translate-y-0",
+    "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0",
     VARIANTS[variant],
     SIZES[size],
   );

@@ -14,9 +14,11 @@ const SIZES = { sm: "size-7", md: "size-9", lg: "size-12" } as const;
 const WORDS = { sm: "text-lg", md: "text-xl", lg: "text-2xl" } as const;
 
 export function Emblem({ className, tone = "brand" }: { className?: string; tone?: "brand" | "onDark" }) {
-  // The logo's own colours (public/brand/mediease-icon.svg); on dark fills the cross turns mint.
+  // The logo's own colours (public/brand/mediease-icon.svg). M7c-P7: on light backgrounds the leaf
+  // is a deeper mint (#86D0C2) so it stays visible against white (the delivered #DDF3EE was 1.1:1);
+  // on dark fills the cross turns mint and the leaf teal.
   const main = tone === "onDark" ? "#DDF3EE" : "#147D72";
-  const leaf = tone === "onDark" ? "#147D72" : "#DDF3EE";
+  const leaf = tone === "onDark" ? "#147D72" : "#86D0C2";
   return (
     <svg aria-hidden="true" focusable="false" viewBox="12 12 176 176" className={cx("shrink-0", className)}>
       <path
