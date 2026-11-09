@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
+import { Button } from "@/components/ui/Button";
+import { PasswordField, TextField } from "@/components/ui/Field";
 import { ApiError, apiPost } from "@/lib/api/client";
+import { FORM_EN } from "@/lib/i18n/portal";
 
 import { readRememberedClinic } from "./clinic-selection";
 import { ErrorNotice } from "./ErrorNotice";
@@ -22,21 +25,25 @@ import {
 const ERROR_ID = "sign-in-error";
 
 /**
- * FR-AUTH-01 / FR-AUTH-04 in the browser. One identifier field (email or phone;
- * the API normalises it) and a password. The API's error text is shown as is
- * with its Ref; a lock also says how long to wait and disables the button until
- * then. `next` has already passed `safeNextPath` on the server.
+ * Staff sign-in by email or phone (M1-P6, FR-AUTH-01): a lock counts down, a wrong password keeps
+ * the identifier and focuses the password, the reason a session ended is said once.
+ *
+ * M7c-P7 (M2; DESIGN.md §8a): both fields are checked when submitted empty and when the person
+ * leaves them, with the reason under the field; the button shows that it is working; while
+ * locked it is disabled and described by the message that says how long to wait. Labels keep
+ * their words; on a two-field sign-in every field is required, so "(required)" is left out.
  */
 export function SignInForm({ next, reason }: { next: string; reason?: SignInReason }) {
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [touched, setTouched] = useState({ identifier: false, password: false });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [waitSeconds, setWaitSeconds] = useState(0);
 
   const submittingRef = useRef(false);
+  const identifierRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const alertRef = useRef<HTMLDivElement>(null);
 
@@ -56,8 +63,16 @@ export function SignInForm({ next, reason }: { next: string; reason?: SignInReas
     (wrongPassword ? passwordRef.current : alertRef.current)?.focus();
   }, [error]);
 
+  const identifierMissing = identifier.trim() === "";
+  const passwordMissing = password === "";
+
   async function submit() {
     if (submittingRef.current || locked) return;
+    if (identifierMissing || passwordMissing) {
+      setTouched({ identifier: true, password: true });
+      (identifierMissing ? identifierRef : passwordRef).current?.focus();
+      return;
+    }
     submittingRef.current = true;
     setSubmitting(true);
     setError(null);
@@ -77,6 +92,7 @@ export function SignInForm({ next, reason }: { next: string; reason?: SignInReas
         (failure.code === AUTH_INVALID_CREDENTIALS || failure.code === AUTH_LOCKED)
       ) {
         setPassword("");
+        setTouched((t) => ({ ...t, password: false }));
       }
       setError(failure);
       submittingRef.current = false;
@@ -94,15 +110,19 @@ export function SignInForm({ next, reason }: { next: string; reason?: SignInReas
       ? `Too many attempts. Try again in ${formatWait(waitSeconds)}.`
       : undefined;
   const invalid = error instanceof ApiError && error.code === AUTH_INVALID_CREDENTIALS;
+  const errorId = error !== null ? ERROR_ID : undefined;
 
   return (
-    <section aria-labelledby="sign-in-heading" className="space-y-5 p-6 sm:p-8">
-      <h1 id="sign-in-heading" className="text-2xl font-bold tracking-tight">
-        Sign in to MediEase
-      </h1>
+    <section aria-labelledby="sign-in-heading" className="space-y-6 p-6 sm:p-8">
+      <div className="space-y-1">
+        <h1 id="sign-in-heading" className="heading-5">
+          Sign in to MediEase
+        </h1>
+        <p className="text-sm text-slate-700">For clinic staff. Patients sign in to the patient app.</p>
+      </div>
 
       {reason !== undefined && error === null && (
-        <p role="status" className="rounded-lg border border-slate-300 bg-slate-50 p-3">
+        <p role="status" className="rounded-xl border border-info-line bg-info-soft p-4 text-pretty text-slate-900">
           {SIGN_IN_REASONS[reason]}
         </p>
       )}
@@ -117,68 +137,54 @@ export function SignInForm({ next, reason }: { next: string; reason?: SignInReas
         />
       )}
 
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div className="space-y-1">
-          <label htmlFor="identifier" className="block font-medium">
-            Email or phone number
-          </label>
-          <input
-            id="identifier"
-            name="identifier"
-            type="text"
-            autoComplete="username"
-            autoCapitalize="none"
-            spellCheck={false}
-            required
-            value={identifier}
-            onChange={(event) => setIdentifier(event.target.value)}
-            aria-describedby={error !== null ? ERROR_ID : undefined}
-            className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
-          />
-        </div>
+      <form onSubmit={onSubmit} className="space-y-5" noValidate>
+        <TextField
+          id="identifier"
+          label="Email or phone number"
+          required
+          requiredMark={false}
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          value={identifier}
+          onChange={setIdentifier}
+          onBlur={() => setTouched((t) => ({ ...t, identifier: t.identifier || identifier !== "" }))}
+          error={touched.identifier && identifierMissing ? FORM_EN.identifierMissing : undefined}
+          describedBy={errorId}
+          inputRef={identifierRef}
+        />
 
-        <div className="space-y-1">
-          <label htmlFor="password" className="block font-medium">
-            Password
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="password"
-              name="password"
-              ref={passwordRef}
-              type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              aria-invalid={invalid ? true : undefined}
-              aria-describedby={error !== null ? ERROR_ID : undefined}
-              className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
-            />
-            <button
-              type="button"
-              aria-pressed={showPassword}
-              onClick={() => setShowPassword((shown) => !shown)}
-              className="shrink-0 whitespace-nowrap rounded-lg border border-slate-400 px-3 py-2"
-            >
-              {showPassword ? "Hide password" : "Show password"}
-            </button>
-          </div>
-        </div>
+        <PasswordField
+          id="password"
+          label="Password"
+          required
+          requiredMark={false}
+          autoComplete="current-password"
+          value={password}
+          onChange={setPassword}
+          error={touched.password && passwordMissing && !invalid ? FORM_EN.passwordMissing : undefined}
+          invalid={invalid}
+          describedBy={errorId}
+          inputRef={passwordRef}
+        />
 
-        <button
+        <Button
           type="submit"
-          disabled={submitting || locked}
-          className="w-full inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
+          variant="primary"
+          size="lg"
+          className="w-full"
+          loading={submitting}
+          disabled={locked}
+          aria-describedby={locked ? ERROR_ID : undefined}
         >
           {submitting ? "Signing in…" : "Sign in"}
-        </button>
+        </Button>
       </form>
 
       <GoogleButton intent="staff" next={next} email={identifier} />
 
-      <p className="text-sm text-slate-700">
-        <Link href="/forgot-password" className="font-medium text-brand-800 underline">
+      <p className="text-center text-sm text-slate-700">
+        <Link href="/forgot-password" className="font-semibold text-brand-800 underline underline-offset-2">
           Forgot password?
         </Link>
       </p>

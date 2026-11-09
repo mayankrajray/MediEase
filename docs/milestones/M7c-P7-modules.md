@@ -5,8 +5,8 @@ Plan: `docs/milestones/M7c-P7-design-system-plan.md`. System: `DESIGN.md`. Produ
 | Step | Status |
 |---|---|
 | Phase 1 — shared design system | ✅ built 9 Nov 2026 (below) |
-| M1 Marketing landing page | ✅ built 9 Nov 2026, awaiting the developer's review |
-| M2 Authentication | ☐ |
+| M1 Marketing landing page | ✅ built 9 Nov 2026; phone header fixed after the developer's review |
+| M2 Authentication | ✅ built 9 Nov 2026, awaiting the developer's review |
 | M3 Clinic dashboard | ☐ |
 | M4 Appointments and queue | ☐ |
 | M5 Patient management | ☐ |
@@ -127,3 +127,54 @@ pass (one new landing test: one primary action above the fold, the preview, the 
 nothing hidden without motion); Playwright `discovery` (landing at 360 px to a booking request,
 axe) passes; `/` first load **202 KB of the 204.8 KB budget**, so the next landing change must
 measure first; `design-system` journeys pass. Screenshots reviewed at 1366 px.
+
+### M1 follow-up (developer's iPhone SE check, 9 Nov 2026)
+
+"Apply to join" showed in the phone header (`hidden` lost to the button's own `inline-flex`; cx
+does not merge classes): it is now wrapped and hidden below 640 px. The open phone menu was a thin
+strip over the hero: the bar's backdrop-filter made it the containing block of the menu's fixed
+panel. While the menu is open the bar drops its blur and the page stops scrolling; choosing a link
+closes the menu. `e2e/landing.spec.ts` checks both at 375×667 and the desktop header.
+
+## M2 — Authentication (built 9 Nov 2026)
+
+**Screens:** staff sign-in, forgot and reset password, invitation; the clinic chooser; patient
+sign-in, sign-up, forgot and reset password, email confirmation; both signed-out frames.
+
+**Existing problems (inventory):** checks only on submit; the reset form's "not the same" message
+on the wrong field and never cleared; no error summary, focus or announcement for client errors;
+no character counts; the 12-character rule a static hint (and the invitation relied on the
+browser's tooltip); two forms with hand-built inputs; only staff sign-in could show the password;
+native validation on some forms and not others; the locked "Sign in" button not described by the
+lock message.
+
+**Shared changes:** `TextField` gains `onBlur`, a character `counter`, `requiredMark`, an extra
+description and a ref; new `PasswordField` (a *Show password* / *Hide password* button in words,
+`aria-pressed`; rules that tick off as typed, with each rule's state for screen readers; an
+`invalid` state for a wrong password whose words are in the alert; `errorLive` for a message that
+must be announced); `looksLikeEmail`; `formWords` (English and Hindi) for the shared messages.
+
+**Per screen (behaviour and API calls unchanged):**
+
+| Screen | Change |
+|---|---|
+| Staff sign-in | Inline "Enter your email or phone number." / "Enter your password." on an empty submit, focus on the first, nothing sent; loading button; while locked the disabled button is described by the lock message; the labels keep their exact words |
+| Forgot password | The address is checked when leaving the field and before sending; the confirmation is a success message |
+| Reset password | Rules tick off as typed; each field checked on leaving it and re-checked while fixed; "not the same" on the second field; focus to the first problem |
+| Invitation | `PasswordField` with the rules; a short password is caught before sending (it used to go to the API); the mismatch stays an announced alert on the second field; a skeleton while the invitation loads |
+| Patient sign-in | Email checked on leaving it; *Show password*; a wrong password marks the field |
+| Patient sign-up | Every field checked on leaving it, the name's "n of 200" count, the rule ticking off, focus to the first problem, everything kept on failure; the API's own field reasons still show under the fields |
+| Email confirmation | Success message; loading button |
+| Clinic chooser | Clinic cards with initials, hover lift and a chevron; the current clinic ringed |
+| Signed-out frames | The logo links back to the home page; the design system's card |
+
+**Test changed for a real behaviour change:** `AcceptInviteForm.test.tsx`: a short password is now
+caught in the form (no API call, focus on the field); the API's refusal is still tested with a
+long password.
+
+**Verification (9 Nov 2026):** lint, typecheck and contract check clean; `make test-web` 89 files
+passed (5 new M2 tests); `make smoke` passed; Playwright 56 of 57 journeys passed on the CI fakes.
+The one failure, `clinic-application`, was the API's limit of 5 applications per IP per day
+(`ONB_RATE_LIMITED`, "Too many applications") from today's repeated runs, not this change; it
+passed earlier on 9 Nov. The API suite was last run in full on this branch at `7f4578b` (2,573
+passed, 96.05%); no API file has changed since.

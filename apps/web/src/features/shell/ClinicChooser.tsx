@@ -1,9 +1,11 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { AuthFrame } from "@/components/ui/AuthFrame";
+import { Avatar } from "@/components/ui/Avatar";
 import { ROLE_LABELS } from "@/features/auth/labels";
 import { OPS_PATH, TODAY_PATH, type ClinicStatus } from "@/features/auth/landing";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -42,12 +44,14 @@ export function ClinicChooser({ next }: { next: string }) {
 
   return (
     <AuthFrame>
-    <div className="space-y-5 p-6">
-      <h1 className="text-2xl font-bold tracking-tight">Choose a clinic</h1>
-      <p>
-        {identity.user.full_name}, you belong to more than one clinic. Pick the one you want to work in.
-        You can switch at any time from the header.
-      </p>
+    <div className="space-y-6 p-6 sm:p-8">
+      <div className="space-y-1">
+        <h1 className="heading-5">Choose a clinic</h1>
+        <p className="text-pretty text-slate-700">
+          {identity.user.full_name}, you belong to more than one clinic. Pick the one you want to work in.
+          You can switch at any time from the header.
+        </p>
+      </div>
       <ul className="space-y-3">
         {identity.memberships.map((m) => (
           <li key={m.clinic_id}>
@@ -58,14 +62,18 @@ export function ClinicChooser({ next }: { next: string }) {
                 selectClinic(m.clinic_id);
                 router.replace(next);
               }}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 text-left transition-colors hover:border-brand-600 hover:bg-brand-50 motion-reduce:transition-none aria-[current=true]:border-2 aria-[current=true]:border-brand-700"
+              className="group flex w-full items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-left transition duration-200 ease-brand hover:-translate-y-px hover:border-brand-300 hover:bg-brand-50 hover:shadow-card motion-reduce:transition-none motion-reduce:hover:translate-y-0 aria-[current=true]:border-brand-700 aria-[current=true]:ring-1 aria-[current=true]:ring-brand-700"
             >
-              <span className="block text-lg font-semibold">{m.clinic_name}</span>
-              <span className="block text-slate-700">
-                {ROLE_LABELS[m.role]}
-                {STATUS_NOTE[m.clinic_status] !== undefined && ` · ${STATUS_NOTE[m.clinic_status]}`}
-                {m.clinic_id === activeId && " · current"}
+              <Avatar name={m.clinic_name} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold text-slate-900">{m.clinic_name}</span>
+                <span className="block text-sm text-slate-700">
+                  {ROLE_LABELS[m.role]}
+                  {STATUS_NOTE[m.clinic_status] !== undefined && ` · ${STATUS_NOTE[m.clinic_status]}`}
+                  {m.clinic_id === activeId && " · current"}
+                </span>
               </span>
+              <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-slate-500 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" />
             </button>
           </li>
         ))}

@@ -1,5 +1,6 @@
 "use client";
 
+import { CircleCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -41,17 +42,23 @@ export function VerifyEmail({ token, language = "en" }: { token: string; languag
   }
 
   return (
-    <section aria-labelledby="verify-heading" className="space-y-5 p-6 sm:p-8">
-      <h1 id="verify-heading" className="text-2xl font-bold tracking-tight">
+    <section aria-labelledby="verify-heading" className="space-y-6 p-6 sm:p-8">
+      <h1 id="verify-heading" className="heading-5">
         {words.heading}
       </h1>
       {state === "done" ? (
-        <p ref={doneRef} tabIndex={-1} role="status" className="rounded-lg border border-slate-300 bg-slate-50 p-3">
-          {words.done}
+        <p
+          ref={doneRef}
+          tabIndex={-1}
+          role="status"
+          className="flex gap-3 rounded-xl border border-success-line bg-success-soft p-4 text-pretty text-slate-900"
+        >
+          <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-success" />
+          <span>{words.done}</span>
         </p>
       ) : (
         <>
-          <p className="text-slate-700">{words.help}</p>
+          <p className="text-pretty text-slate-700">{words.help}</p>
           {error !== null && (
             <ErrorNotice
               id="verify-error"
@@ -60,13 +67,13 @@ export function VerifyEmail({ token, language = "en" }: { token: string; languag
               {...(isRetryable(error) ? { onRetry: () => void verify() } : {})}
             />
           )}
-          <Button variant="primary" className="w-full" onClick={() => void verify()} disabled={state === "sending"}>
+          <Button variant="primary" size="lg" className="w-full" onClick={() => void verify()} loading={state === "sending"}>
             {state === "sending" ? words.confirming : words.confirm}
           </Button>
         </>
       )}
-      <p className="text-sm text-slate-700">
-        <Link href="/portal" className="font-medium text-brand-800 underline">
+      <p className="text-center text-sm text-slate-700">
+        <Link href="/portal" className="font-semibold text-brand-800 underline underline-offset-2">
           {words.goAccount}
         </Link>
       </p>

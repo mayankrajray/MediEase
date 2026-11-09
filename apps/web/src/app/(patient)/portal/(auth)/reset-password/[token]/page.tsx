@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
 import { ResetPasswordForm } from "@/features/auth/ResetPasswordForm";
-import { PORTAL_LANGUAGE_COOKIE, parsePortalLanguage, resetWords } from "@/lib/i18n/portal";
+import { PORTAL_LANGUAGE_COOKIE, formWords, parsePortalLanguage, resetWords } from "@/lib/i18n/portal";
 
 export const metadata: Metadata = {
   title: "Choose a new password · MediEase for patients",
@@ -20,6 +20,7 @@ export default async function PortalResetPasswordPage({ params }: { params: Prom
       signInPath="/portal/sign-in"
       forgotPath="/portal/forgot-password"
       words={resetWords(language)}
+      form={formWords(language)}
     />
   );
 }

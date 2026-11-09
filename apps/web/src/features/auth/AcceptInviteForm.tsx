@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
+import { Button } from "@/components/ui/Button";
+import { PasswordField } from "@/components/ui/Field";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { ApiError, apiGet, apiPost, type GetResponse } from "@/lib/api/client";
+import { FORM_EN } from "@/lib/i18n/portal";
 
 import { readRememberedClinic } from "./clinic-selection";
 import { ErrorNotice } from "./ErrorNotice";
@@ -42,10 +46,13 @@ export function AcceptInviteForm({ token }: { token: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [mismatch, setMismatch] = useState(false);
+  const [tried, setTried] = useState(false);
   const submittingRef = useRef(false);
   const alertRef = useRef<HTMLDivElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLInputElement>(null);
   const existing = load.status === "ready" && load.invite.has_password;
+  const longEnough = password.length >= MIN_LENGTH;
 
   useEffect(() => {
     let cancelled = false;
@@ -75,8 +82,18 @@ export function AcceptInviteForm({ token }: { token: string }) {
 
   async function submit() {
     if (submittingRef.current) return;
+    setTried(true);
+    if (existing && password === "") {
+      passwordRef.current?.focus();
+      return;
+    }
+    if (!existing && password.length < MIN_LENGTH) {
+      passwordRef.current?.focus();
+      return;
+    }
     if (!existing && password !== confirmation) {
       setMismatch(true);
+      confirmRef.current?.focus();
       return;
     }
     setMismatch(false);
@@ -110,8 +127,13 @@ export function AcceptInviteForm({ token }: { token: string }) {
 
   if (load.status === "loading") {
     return (
-      <section className="p-6 sm:p-8">
-        <p role="status">Checking your invitation…</p>
+      <section className="space-y-4 p-6 sm:p-8">
+        <p role="status" className="text-slate-700">
+          Checking your invitation…
+        </p>
+        <Skeleton className="h-8 w-2/3" />
+        <Skeleton className="h-5 w-full" />
+        <Skeleton className="h-10 w-full" />
       </section>
     );
   }
@@ -120,13 +142,15 @@ export function AcceptInviteForm({ token }: { token: string }) {
     // 404 unknown, 410 expired or already used: the API says which, in words.
     const gone = load.error instanceof ApiError && (load.error.status === 404 || load.error.status === 410);
     return (
-      <section className="space-y-4 p-6 sm:p-8">
-        <h1 className="text-2xl font-bold tracking-tight">Invitation</h1>
+      <section aria-labelledby="invite-heading" className="space-y-5 p-6 sm:p-8">
+        <h1 id="invite-heading" className="heading-5">
+          Invitation
+        </h1>
         <ErrorNotice error={load.error} {...(isRetryable(load.error) ? { onRetry: retryLoad } : {})} />
         {gone && (
-          <p>
+          <p className="text-pretty text-slate-700">
             Ask your clinic for a new invitation, or{" "}
-            <Link href="/sign-in" className="text-brand-800 underline">
+            <Link href="/sign-in" className="font-semibold text-brand-800 underline underline-offset-2">
               sign in
             </Link>{" "}
             if you have already joined.
@@ -143,13 +167,15 @@ export function AcceptInviteForm({ token }: { token: string }) {
       ? `Too many attempts. Try again in ${formatWait(error.retryAfterSeconds)}.`
       : undefined;
   return (
-    <section aria-labelledby="invite-heading" className="space-y-5 p-6 sm:p-8">
-      <h1 id="invite-heading" className="text-2xl font-bold tracking-tight">
-        Join {invite.clinic_name}
-      </h1>
-      <p>
-        {invite.full_name}, you have been invited as <strong>{ROLE_LABELS[invite.role]}</strong>.
-      </p>
+    <section aria-labelledby="invite-heading" className="space-y-6 p-6 sm:p-8">
+      <div className="space-y-1">
+        <h1 id="invite-heading" className="heading-5">
+          Join {invite.clinic_name}
+        </h1>
+        <p className="text-pretty text-slate-700">
+          {invite.full_name}, you have been invited as <strong className="text-slate-900">{ROLE_LABELS[invite.role]}</strong>.
+        </p>
+      </div>
 
       {error !== null && (
         <ErrorNotice
@@ -160,85 +186,65 @@ export function AcceptInviteForm({ token }: { token: string }) {
         />
       )}
 
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={onSubmit} className="space-y-5" noValidate>
         {invite.has_password ? (
           // An account that already exists keeps its password (spec R13): the person proves
           // it is theirs by entering it, and nothing is set or changed.
-          <div className="space-y-1">
-            <p id="existing-hint" className="text-sm text-slate-700">
+          <>
+            <p id="existing-hint" className="rounded-xl border border-info-line bg-info-soft p-4 text-sm text-pretty text-slate-900">
               You already have a MediEase account, so you keep your password. Enter it to join{" "}
               {invite.clinic_name}.
             </p>
-            <label htmlFor="current-password" className="block font-medium">
-              Your MediEase password
-            </label>
-            <input
+            <PasswordField
               id="current-password"
-              ref={passwordRef}
-              type="password"
+              label="Your MediEase password"
               autoComplete="current-password"
               required
+              requiredMark={false}
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              aria-invalid={wrongPassword ? true : undefined}
-              aria-describedby={error !== null ? "invite-error" : "existing-hint"}
-              className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
+              onChange={setPassword}
+              invalid={wrongPassword}
+              error={tried && password === "" ? FORM_EN.passwordMissing : undefined}
+              describedBy={error !== null ? "invite-error" : "existing-hint"}
+              inputRef={passwordRef}
             />
-          </div>
+          </>
         ) : (
           <>
-            <div className="space-y-1">
-              <label htmlFor="new-password" className="block font-medium">
-                Choose a password
-              </label>
-              <input
-                id="new-password"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={MIN_LENGTH}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                aria-describedby="password-hint"
-                className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
-              />
-              <p id="password-hint" className="text-sm text-slate-700">
-                At least {MIN_LENGTH} characters.
-              </p>
-            </div>
-            <div className="space-y-1">
-              <label htmlFor="confirm-password" className="block font-medium">
-                Type it again
-              </label>
-              <input
-                id="confirm-password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmation}
-                onChange={(event) => {
-                  setConfirmation(event.target.value);
-                  setMismatch(false);
-                }}
-                aria-invalid={mismatch ? true : undefined}
-                aria-describedby={mismatch ? "mismatch" : undefined}
-                className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
-              />
-              {mismatch && (
-                <p id="mismatch" role="alert" className="text-sm text-red-900">
-                  The two passwords are not the same.
-                </p>
-              )}
-            </div>
+            <PasswordField
+              id="new-password"
+              label="Choose a password"
+              autoComplete="new-password"
+              required
+              requiredMark={false}
+              hint={`At least ${MIN_LENGTH} characters.`}
+              value={password}
+              onChange={setPassword}
+              error={tried && !longEnough ? `Use at least ${MIN_LENGTH} characters.` : undefined}
+              requirements={[{ label: FORM_EN.ruleLength, met: longEnough }]}
+              inputRef={passwordRef}
+            />
+            <PasswordField
+              id="confirm-password"
+              label="Type it again"
+              autoComplete="new-password"
+              required
+              requiredMark={false}
+              value={confirmation}
+              onChange={(value) => {
+                setConfirmation(value);
+                setMismatch(false);
+              }}
+              error={mismatch ? "The two passwords are not the same." : undefined}
+              errorLive
+              requirements={[{ label: FORM_EN.ruleMatch, met: confirmation !== "" && confirmation === password }]}
+              inputRef={confirmRef}
+            />
           </>
         )}
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
-        >
+        <Button type="submit" variant="primary" size="lg" className="w-full" loading={submitting}>
           {submitting ? "Joining…" : invite.has_password ? "Join" : "Set password and join"}
-        </button>
+        </Button>
       </form>
     </section>
   );
