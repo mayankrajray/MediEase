@@ -1,12 +1,15 @@
 "use client";
 
+import { History, Inbox } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { Segmented } from "@/components/ui/Segmented";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { StatusMessage } from "@/components/ui/StatusMessage";
 import { TABLE, TABLE_WRAP, TD, TH, TR } from "@/components/ui/table";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -91,33 +94,30 @@ export function BookingRequests() {
         description="Times patients asked for on your clinic page. Accept, offer another time or decline before the reply-by time."
       />
       <div className="flex flex-wrap items-center gap-3">
-        <div role="group" aria-label="Which requests" className="inline-flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
-          {(["open", "answered"] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              aria-pressed={state === s}
-              onClick={() => setState(s)}
-              className={`min-h-9 rounded-md px-3 font-medium ${state === s ? "bg-brand-700 text-white" : "text-slate-700 hover:bg-slate-100"}`}
-            >
-              {s === "open" ? "Open" : "Answered"}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Which requests"
+          value={state}
+          onChange={setState}
+          options={[
+            { value: "open", label: "Open" },
+            { value: "answered", label: "Answered" },
+          ]}
+        />
         {current.status === "ready" && (
-          <p className="text-sm text-slate-700">
+          <p className="text-sm tabular-nums text-slate-700">
             {current.inbox.open_count} open · {current.inbox.expired_7d} expired unanswered in the last 7 days
           </p>
         )}
       </div>
-      <p role="status" aria-live="polite" className={message === "" ? "sr-only" : "font-medium text-emerald-900"}>
-        {current.status === "loading" ? "Loading booking requests." : message}
-      </p>
-      {current.status === "loading" && <Skeleton className="h-40" />}
+      <StatusMessage message={message} loading={current.status === "loading" ? "Loading booking requests." : undefined} />
+      {current.status === "loading" && <ListSkeleton label="" rows={3} />}
       {current.status === "failed" && <ErrorNotice error={current.error} onRetry={() => setAttempt((n) => n + 1)} />}
       {current.status === "ready" && current.inbox.items.length === 0 && (
-        <EmptyState title={state === "open" ? "No open requests" : "Nothing answered in the last 7 days"}>
-          Requests from your clinic page appear here and in your notifications.
+        <EmptyState
+          icon={state === "open" ? <Inbox className="size-5" /> : <History className="size-5" />}
+          title={state === "open" ? "No open requests" : "Nothing answered in the last 7 days"}
+        >
+          {state === "open" ? "You're all caught up. " : ""}Requests from your clinic page appear here and in your notifications.
         </EmptyState>
       )}
       {current.status === "ready" && current.inbox.items.length > 0 && (
@@ -137,18 +137,18 @@ export function BookingRequests() {
               {current.inbox.items.map((r) => (
                 <tr key={r.id} role="row" className={TR}>
                   <td role="cell" className={TD} data-label="Asked for">
-                    {dayTime(r.starts_at)}
+                    <span className="font-medium tabular-nums text-slate-900">{dayTime(r.starts_at)}</span>
                     <span className="block text-sm text-slate-700">{r.doctor_name}</span>
                     {r.original_starts_at !== null && <span className="block text-sm text-slate-700">First asked: {dayTime(r.original_starts_at)}</span>}
                   </td>
                   <td role="cell" className={TD} data-label="Patient">
-                    {r.full_name}
+                    <span className="font-medium text-slate-900">{r.full_name}</span>
                     {(r.age_years !== null || r.sex !== null) && (
                       <span className="block text-sm text-slate-700">
                         {[r.age_years === null ? null : `${r.age_years} years`, r.sex === null ? null : SEX[r.sex]].filter((p) => p !== null).join(", ")}
                       </span>
                     )}
-                    <a href={`tel:${r.phone_e164}`} className="block text-sm text-brand-800 underline">
+                    <a href={`tel:${r.phone_e164}`} className="block text-sm tabular-nums text-brand-800 underline underline-offset-2 hover:text-brand-900">
                       {r.phone_e164}
                     </a>
                     {r.patient_code !== null && <span className="block text-sm text-slate-700">Record {r.patient_code}</span>}
@@ -166,7 +166,7 @@ export function BookingRequests() {
                         ) : (
                           <StatusBadge tone="neutral">{r.hold_overridden ? "Booked over" : "Hold ended"}</StatusBadge>
                         )}
-                        <span className="block text-sm text-slate-700">Reply by {formatClock(r.respond_by, clinic.timezone)}</span>
+                        <span className="mt-1 block text-sm tabular-nums text-slate-700">Reply by {formatClock(r.respond_by, clinic.timezone)}</span>
                       </>
                     ) : (
                       <>
@@ -190,7 +190,7 @@ export function BookingRequests() {
                   </td>
                   {state === "open" && (
                     <td role="cell" className={`${TD} text-right`} data-label="Actions">
-                      <div className="flex flex-wrap justify-end gap-2">
+                      <div className="flex flex-wrap justify-end gap-2 md:flex-nowrap">
                         {r.status === "PENDING" && (
                           <>
                             <Button size="sm" variant="primary" onClick={() => setOpen({ kind: "accept", request: r })} aria-label={`Accept ${r.full_name}'s request`}>

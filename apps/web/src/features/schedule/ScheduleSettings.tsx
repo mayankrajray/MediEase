@@ -1,6 +1,15 @@
 "use client";
 
+import { Stethoscope, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useState } from "react";
+
+import { Alert } from "@/components/ui/Alert";
+import { buttonClasses } from "@/components/ui/Button";
+import { cx } from "@/components/ui/cx";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { INPUT, INPUT_BASE, LABEL } from "@/components/ui/Field";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { StatusMessage } from "@/components/ui/StatusMessage";
 
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -82,18 +91,21 @@ function KeptSessions({ sessions }: { sessions: readonly DoctorSession[] }) {
   if (sessions.length === 0) return null;
   const clock = (iso: string) => formatClock(iso, clinic.timezone);
   return (
-    <div role="alert" className="rounded-lg border border-amber-700 bg-amber-50 p-4">
+    <div role="alert" className="flex gap-3 rounded-xl border border-warning-line bg-warning-soft p-4 text-slate-900">
+      <TriangleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-warning" />
+      <div>
       <p className="font-semibold">
         {sessions.length === 1 ? "One session has" : `${sessions.length} sessions have`} bookings and
         {sessions.length === 1 ? " was" : " were"} kept. They take no new bookings; reschedule those patients from the queue.
       </p>
-      <ul className="mt-2 list-disc pl-6">
+      <ul className="mt-2 list-disc pl-6 tabular-nums">
         {sessions.map((s) => (
           <li key={s.id}>
             {formatDay(s.on_date)}, {clock(s.starts_at)}–{clock(s.ends_at)}: {s.booked_count} booked
           </li>
         ))}
       </ul>
+      </div>
     </div>
   );
 }
@@ -179,12 +191,12 @@ export function ScheduleSettings() {
   return (
     <section aria-labelledby="schedule-heading" className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 id="schedule-heading" className="text-2xl font-bold tracking-tight">
+        <h1 id="schedule-heading" className="heading-5 text-slate-900">
           Schedule
         </h1>
         {doctors !== undefined && doctors.length > 0 && (
           <div>
-            <label htmlFor={pickerId} className="block text-sm font-medium">
+            <label htmlFor={pickerId} className={LABEL}>
               Doctor
             </label>
             <select
@@ -195,7 +207,7 @@ export function ScheduleSettings() {
                 setKept([]);
                 setMessage("");
               }}
-              className="rounded-lg border border-slate-400 px-2 py-2"
+              className={cx(INPUT_BASE, "mt-1.5 block cursor-pointer")}
             >
               {doctors.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -207,33 +219,45 @@ export function ScheduleSettings() {
           </div>
         )}
       </div>
-      <p className="text-slate-700">Times are the clinic&apos;s ({clinic.timezone}). An end before the start means the next day, up to 12 hours.</p>
+      <p className="-mt-3 text-slate-700">Times are the clinic&apos;s ({clinic.timezone}). An end before the start means the next day, up to 12 hours.</p>
 
-      <p role="status" aria-live="polite" className="min-h-6 font-medium text-emerald-900">
-        {message}
-      </p>
+      <StatusMessage message={message} />
       {problem !== undefined && (
-        <p role="alert" className="font-semibold text-red-900">
-          {problem}
-        </p>
+        <Alert tone="danger" role="alert">
+          <span className="font-semibold">{problem}</span>
+        </Alert>
       )}
-      {error !== undefined && <ErrorNotice error={error} />}
+      {error !== undefined && <ErrorNotice error={error} onRetry={() => setReload((n) => n + 1)} />}
       <KeptSessions sessions={kept} />
 
-      {doctors !== undefined && doctors.length === 0 && <p>No doctors yet.</p>}
+      {doctors !== undefined && doctors.length === 0 && (
+        <EmptyState icon={<Stethoscope className="size-5" />} title="No doctors yet">
+          Add a doctor on the Team page; their weekly hours are set here.
+        </EmptyState>
+      )}
+      {error === undefined && (doctors === undefined || (doctorId !== undefined && schedule === undefined)) && (
+        <div>
+          <p role="status" className="sr-only">
+            Loading the schedule…
+          </p>
+          <Skeleton className="h-64" />
+        </div>
+      )}
       {schedule !== undefined && doctorId !== undefined && (
         <>
-          <section aria-labelledby="week-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-            <h2 id="week-heading" className="text-lg font-bold">
+          <section aria-labelledby="week-heading" className="space-y-4 rounded-card border border-line bg-surface p-5 shadow-card">
+            <h2 id="week-heading" className="heading-6 text-slate-900">
               Weekly hours for {doctorName}
             </h2>
-            {drafts.length === 0 && <p className="text-slate-700">No weekly hours: nobody can be booked except in extra sessions.</p>}
+            {drafts.length === 0 && (
+              <Alert tone="info">No weekly hours: nobody can be booked except in extra sessions. Add hours to open the week.</Alert>
+            )}
             {drafts.map((d, index) => (
-              <fieldset key={d.key} className="flex flex-wrap items-end gap-3 border-t border-slate-200 pt-3">
+              <fieldset key={d.key} className="flex flex-wrap items-end gap-3 border-t border-line pt-4">
                 <legend className="sr-only">Block {index + 1}</legend>
-                <label className="text-sm">
-                  <span className="block font-medium">Day</span>
-                  <select value={d.weekday} onChange={(e) => set(d.key, "weekday", e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1.5">
+                <label className={LABEL}>
+                  <span className="block">Day</span>
+                  <select value={d.weekday} onChange={(e) => set(d.key, "weekday", e.target.value)} className={cx(INPUT_BASE, "mt-1.5 block cursor-pointer")}>
                     {WEEKDAYS.map((name, i) => (
                       <option key={name} value={i}>
                         {name}
@@ -241,27 +265,27 @@ export function ScheduleSettings() {
                     ))}
                   </select>
                 </label>
-                <label className="text-sm">
-                  <span className="block font-medium">From</span>
-                  <input type="time" value={d.start} onChange={(e) => set(d.key, "start", e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1" />
+                <label className={LABEL}>
+                  <span className="block">From</span>
+                  <input type="time" value={d.start} onChange={(e) => set(d.key, "start", e.target.value)} className={cx(INPUT_BASE, "mt-1.5 block tabular-nums")} />
                 </label>
-                <label className="text-sm">
-                  <span className="block font-medium">To</span>
-                  <input type="time" value={d.end} onChange={(e) => set(d.key, "end", e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1" />
+                <label className={LABEL}>
+                  <span className="block">To</span>
+                  <input type="time" value={d.end} onChange={(e) => set(d.key, "end", e.target.value)} className={cx(INPUT_BASE, "mt-1.5 block tabular-nums")} />
                 </label>
-                <label className="text-sm">
-                  <span className="block font-medium">Slot minutes</span>
-                  <input inputMode="numeric" value={d.slot} onChange={(e) => set(d.key, "slot", e.target.value)} className="w-20 rounded-lg border border-slate-400 px-2 py-1" />
+                <label className={LABEL}>
+                  <span className="block">Slot minutes</span>
+                  <input inputMode="numeric" value={d.slot} onChange={(e) => set(d.key, "slot", e.target.value)} className={cx(INPUT_BASE, "mt-1.5 block w-24 tabular-nums")} />
                 </label>
-                <label className="text-sm">
-                  <span className="block font-medium">Tokens</span>
-                  <input inputMode="numeric" value={d.capacity} onChange={(e) => set(d.key, "capacity", e.target.value)} className="w-20 rounded-lg border border-slate-400 px-2 py-1" />
+                <label className={LABEL}>
+                  <span className="block">Tokens</span>
+                  <input inputMode="numeric" value={d.capacity} onChange={(e) => set(d.key, "capacity", e.target.value)} className={cx(INPUT_BASE, "mt-1.5 block w-24 tabular-nums")} />
                 </label>
                 <button
                   type="button"
                   aria-label={`Remove block ${index + 1}`}
                   onClick={() => setDrafts((list) => list.filter((x) => x.key !== d.key))}
-                  className="rounded-lg border border-slate-400 px-3 py-1.5"
+                  className={buttonClasses("ghost", "sm")}
                 >
                   Remove
                 </button>
@@ -273,7 +297,7 @@ export function ScheduleSettings() {
                 onClick={() =>
                   setDrafts((list) => [...list, { key: newKey(), weekday: "0", start: "10:00", end: "13:00", slot: "15", capacity: "12" }])
                 }
-                className="rounded-lg border border-brand-700 px-3 py-1.5 font-medium text-brand-800"
+                className={buttonClasses("secondary")}
               >
                 Add hours
               </button>
@@ -286,7 +310,7 @@ export function ScheduleSettings() {
                     return { kept: change.kept_sessions, text: `Weekly hours for ${doctorName} saved.` };
                   })
                 }
-                className="rounded-lg bg-brand-700 px-4 py-1.5 font-semibold text-white disabled:bg-slate-400"
+                className={buttonClasses("primary")}
               >
                 Save weekly hours
               </button>
@@ -352,6 +376,8 @@ export function ScheduleSettings() {
   );
 }
 
+const FIRST_EXCEPTIONS = 10;
+
 function ExceptionsSection({
   schedule,
   saving,
@@ -372,17 +398,20 @@ function ExceptionsSection({
   const [slot, setSlot] = useState("15");
   const [note, setNote] = useState("");
   const ids = { kind: useId(), date: useId(), note: useId() };
+  // M7c-P7 (M4): a long list shows its first ten; the rest on request (progressive disclosure).
+  const [showAll, setShowAll] = useState(false);
+  const hidden = schedule.exceptions.length - FIRST_EXCEPTIONS;
 
   return (
-    <section aria-labelledby="exceptions-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-      <h2 id="exceptions-heading" className="text-lg font-bold">
+    <section aria-labelledby="exceptions-heading" className="space-y-4 rounded-card border border-line bg-surface p-5 shadow-card">
+      <h2 id="exceptions-heading" className="heading-6 text-slate-900">
         Leave and extra sessions
       </h2>
       {schedule.exceptions.length === 0 ? (
         <p className="text-slate-700">None coming up.</p>
       ) : (
-        <ul className="divide-y divide-slate-200">
-          {schedule.exceptions.map((e) => (
+        <ul className="divide-y divide-line">
+          {(showAll ? schedule.exceptions : schedule.exceptions.slice(0, FIRST_EXCEPTIONS)).map((e) => (
             <li key={e.id} className="flex items-center justify-between gap-2 py-2">
               <span>
                 {formatDay(e.on_date)}: {e.kind === "LEAVE" ? "on leave all day" : `extra session ${e.start_time ?? ""}–${e.end_time ?? ""}`}
@@ -393,7 +422,7 @@ function ExceptionsSection({
                 disabled={saving}
                 aria-label={`Remove the ${e.kind === "LEAVE" ? "leave" : "extra session"} on ${formatDay(e.on_date)}`}
                 onClick={() => onRemove(e.id, e.on_date)}
-                className="rounded-lg border border-slate-400 px-3 py-1"
+                className={buttonClasses("ghost", "sm")}
               >
                 Remove
               </button>
@@ -401,47 +430,52 @@ function ExceptionsSection({
           ))}
         </ul>
       )}
-      <div className="flex flex-wrap items-end gap-3 border-t border-slate-200 pt-3">
+      {!showAll && hidden > 0 && (
+        <button type="button" onClick={() => setShowAll(true)} className={buttonClasses("ghost", "sm")}>
+          Show all {schedule.exceptions.length}
+        </button>
+      )}
+      <div className="flex flex-wrap items-end gap-3 border-t border-line pt-4">
         <div>
-          <label htmlFor={ids.kind} className="block text-sm font-medium">
+          <label htmlFor={ids.kind} className={LABEL}>
             Add
           </label>
-          <select id={ids.kind} value={kind} onChange={(e) => setKind(e.target.value as "LEAVE" | "EXTRA")} className="rounded-lg border border-slate-400 px-2 py-1.5">
+          <select id={ids.kind} value={kind} onChange={(e) => setKind(e.target.value as "LEAVE" | "EXTRA")} className={cx(INPUT_BASE, "mt-1.5 block cursor-pointer")}>
             <option value="LEAVE">Leave (whole day)</option>
             <option value="EXTRA">Extra session</option>
           </select>
         </div>
         <div>
-          <label htmlFor={ids.date} className="block text-sm font-medium">
+          <label htmlFor={ids.date} className={LABEL}>
             On
           </label>
-          <input id={ids.date} type="date" value={onDate} onChange={(e) => setOnDate(e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1" />
+          <input id={ids.date} type="date" value={onDate} onChange={(e) => setOnDate(e.target.value)} className={cx(INPUT_BASE, "mt-1.5 block tabular-nums")} />
         </div>
         {kind === "EXTRA" && (
           <>
-            <label className="text-sm">
-              <span className="block font-medium">From</span>
-              <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1" />
+            <label className={LABEL}>
+              <span className="block">From</span>
+              <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className={cx(INPUT_BASE, "mt-1.5 block tabular-nums")} />
             </label>
-            <label className="text-sm">
-              <span className="block font-medium">To</span>
-              <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1" />
+            <label className={LABEL}>
+              <span className="block">To</span>
+              <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className={cx(INPUT_BASE, "mt-1.5 block tabular-nums")} />
             </label>
-            <label className="text-sm">
-              <span className="block font-medium">Slot minutes</span>
-              <input inputMode="numeric" value={slot} onChange={(e) => setSlot(e.target.value)} className="w-20 rounded-lg border border-slate-400 px-2 py-1" />
+            <label className={LABEL}>
+              <span className="block">Slot minutes</span>
+              <input inputMode="numeric" value={slot} onChange={(e) => setSlot(e.target.value)} className={cx(INPUT_BASE, "mt-1.5 block w-24 tabular-nums")} />
             </label>
-            <label className="text-sm">
-              <span className="block font-medium">Tokens</span>
-              <input inputMode="numeric" value={capacity} onChange={(e) => setCapacity(e.target.value)} className="w-20 rounded-lg border border-slate-400 px-2 py-1" />
+            <label className={LABEL}>
+              <span className="block">Tokens</span>
+              <input inputMode="numeric" value={capacity} onChange={(e) => setCapacity(e.target.value)} className={cx(INPUT_BASE, "mt-1.5 block w-24 tabular-nums")} />
             </label>
           </>
         )}
         <div>
-          <label htmlFor={ids.note} className="block text-sm font-medium">
+          <label htmlFor={ids.note} className={LABEL}>
             Note (optional)
           </label>
-          <input id={ids.note} maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} className="rounded-lg border border-slate-400 px-2 py-1" />
+          <input id={ids.note} maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} className={cx(INPUT_BASE, "mt-1.5 block tabular-nums")} />
         </div>
         <button
           type="button"
@@ -461,7 +495,7 @@ function ExceptionsSection({
                   },
             )
           }
-          className="rounded-lg bg-brand-700 px-4 py-1.5 font-semibold text-white disabled:bg-slate-400"
+          className={buttonClasses("primary")}
         >
           Add {kind === "LEAVE" ? "leave" : "extra session"}
         </button>
@@ -484,13 +518,13 @@ function BookingModeSection({
   const other: BookingMode = mode === "SLOTS" ? "TOKENS" : "SLOTS";
   const words = (m: BookingMode) => (m === "SLOTS" ? "time slots" : "tokens");
   return (
-    <section aria-labelledby="mode-heading" className="space-y-2 rounded-card border border-slate-200 bg-white p-4">
-      <h2 id="mode-heading" className="text-lg font-bold">
+    <section aria-labelledby="mode-heading" className="space-y-3 rounded-card border border-line bg-surface p-5 shadow-card">
+      <h2 id="mode-heading" className="heading-6 text-slate-900">
         How patients are booked
       </h2>
       <p>The clinic books by {words(mode)}.</p>
       {canSet && (
-        <button type="button" disabled={saving} onClick={() => onSet(other)} className="rounded-lg border border-brand-700 px-3 py-1.5 font-medium text-brand-800 disabled:text-slate-500">
+        <button type="button" disabled={saving} onClick={() => onSet(other)} className={buttonClasses("secondary")}>
           Switch to {words(other)}
         </button>
       )}
@@ -534,34 +568,34 @@ function OnlineRequestsSection({
   }
 
   return (
-    <section aria-labelledby="requests-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4">
-      <h2 id="requests-heading" className="text-lg font-bold">
+    <section aria-labelledby="requests-heading" className="space-y-4 rounded-card border border-line bg-surface p-5 shadow-card">
+      <h2 id="requests-heading" className="heading-6 text-slate-900">
         Online booking requests
       </h2>
       <div className="space-y-1">
-        <label htmlFor={ids.link} className="block font-medium">
+        <label htmlFor={ids.link} className={LABEL}>
           Your clinic page
         </label>
         <div className="flex flex-wrap items-center gap-2">
-          <input id={ids.link} readOnly value={address} className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-400 bg-slate-50 px-3 py-2" />
-          <button type="button" onClick={() => void copy()} className="min-h-10 rounded-lg border border-brand-700 px-3 py-1.5 font-medium text-brand-800">
+          <input id={ids.link} readOnly value={address} className={cx(INPUT, "min-w-0 flex-1 bg-surface-muted")} />
+          <button type="button" onClick={() => void copy()} className={buttonClasses("secondary")}>
             Copy link
           </button>
         </div>
-        <p role="status" aria-live="polite" className={copied ? "text-sm font-medium text-emerald-900" : "sr-only"}>
+        <p role="status" aria-live="polite" className={copied ? "text-sm font-medium text-success" : "sr-only"}>
           {copied ? "Link copied." : ""}
         </p>
         <p className="text-sm text-slate-700">Patients choose a time here and ask for it; you reply. The page is not listed on search engines yet.</p>
       </div>
       <div>
-        <label htmlFor={ids.minutes} className="block font-medium">
+        <label htmlFor={ids.minutes} className={LABEL}>
           Keep a requested time for
         </label>
         <select
           id={ids.minutes}
           value={minutes}
           onChange={(event) => setMinutes(Number(event.target.value))}
-          className="rounded-lg border border-slate-400 px-2 py-2"
+          className={cx(INPUT_BASE, "mt-1.5 block cursor-pointer")}
         >
           {HOLD_MINUTES.map((m) => (
             <option key={m} value={m}>
@@ -595,7 +629,7 @@ function OnlineRequestsSection({
             `Online requests saved: a requested time is kept for ${holdWords(minutes)}; age and sex ${ageSex ? "are asked" : "are optional"}.`,
           )
         }
-        className="rounded-lg bg-brand-700 px-4 py-1.5 font-semibold text-white disabled:bg-slate-400"
+        className={buttonClasses("primary")}
       >
         Save online requests
       </button>
@@ -622,8 +656,8 @@ function RemindersSection({
   const before = hours === 0 ? "no reminder before the visit" : `${hours} hour${hours === 1 ? "" : "s"} before`;
 
   return (
-    <section aria-labelledby="reminders-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4">
-      <h2 id="reminders-heading" className="text-lg font-bold">
+    <section aria-labelledby="reminders-heading" className="space-y-4 rounded-card border border-line bg-surface p-5 shadow-card">
+      <h2 id="reminders-heading" className="heading-6 text-slate-900">
         Appointment reminders
       </h2>
       <p className="text-slate-700">
@@ -643,14 +677,14 @@ function RemindersSection({
         </label>
       </div>
       <div>
-        <label htmlFor={ids.hours} className="block font-medium">
+        <label htmlFor={ids.hours} className={LABEL}>
           Before the visit
         </label>
         <select
           id={ids.hours}
           value={hours}
           onChange={(event) => setHours(Number(event.target.value))}
-          className="rounded-lg border border-slate-400 px-2 py-2"
+          className={cx(INPUT_BASE, "mt-1.5 block cursor-pointer")}
         >
           {HOURS.map((h) => (
             <option key={h} value={h}>
@@ -668,7 +702,7 @@ function RemindersSection({
             `Appointment reminders saved: ${evening ? "the evening before" : "no evening reminder"}, ${before}.`,
           )
         }
-        className="rounded-lg bg-brand-700 px-4 py-1.5 font-semibold text-white disabled:bg-slate-400"
+        className={buttonClasses("primary")}
       >
         Save reminders
       </button>

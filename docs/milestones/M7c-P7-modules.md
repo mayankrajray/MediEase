@@ -8,7 +8,7 @@ Plan: `docs/milestones/M7c-P7-design-system-plan.md`. System: `DESIGN.md`. Produ
 | M1 Marketing landing page | ✅ built 9 Nov 2026; phone header fixed after the developer's review |
 | M2 Authentication | ✅ built 9 Nov 2026; approved by the developer 10 Nov 2026 |
 | M3 Clinic dashboard | ✅ built 10 Nov 2026 |
-| M4 Appointments and queue | ☐ |
+| M4 Appointments and queue | ✅ built 10 Nov 2026 |
 | M5 Patient management | ☐ |
 | M6 Appointment booking | ☐ |
 | M7 Patient portal | ☐ |
@@ -221,3 +221,46 @@ accessible source.
 
 **Tests:** the existing Today, workspace, bell and component tests pass unchanged (link names,
 regions, list names and nav order kept).
+
+## M4 — Appointments and queue (built 10 Nov 2026)
+
+**Screens:** the queue board (front desk and doctor), its walk-in, no-show, cancel and attach
+dialogs, booking requests (open and answered) with *Accept*, *Propose another time* and
+*Decline*, bookings to move, the doctor's *My schedule*, the owner's schedule settings, and the
+patient's live token page (`/q/…`).
+
+**Existing problems:** the queue's title, filters and actions on one wrapping row, with the
+primary *Book* in the middle of the day buttons and *Add walk-in* in a one-off style; the action
+outcome as bare green text; "Loading the queue…" as a line of text; no retry on a failed queue or
+doctor list; the no-show dialog and cancel dialog built by hand; *Cancel appointment*, *Accept and
+book*, *Offer this time* and *Decline request* disabled until complete, so the person was not told
+what was missing (DESIGN.md §8a); the decline and record forms hand-built inputs; schedule
+settings with hand-built inputs and buttons, no loading state, a plain "No doctors yet." and an
+unbounded leave list (63 rows in the demo data); the live token page without the brand.
+
+**Changes (behaviour and API calls unchanged):**
+
+| Area | Change |
+|---|---|
+| Queue header | Title and date left; *Add walk-in* (secondary) then *Book* (the one primary) at the top right, each with an icon |
+| Queue filters | Doctor and day in one bar: *Previous day* and *Next day* with chevrons (icon only below 640 px, names kept), the date, *Today* when away from today |
+| Queue states | Every outcome in one polite `StatusMessage` (success tone, still "Asha Rao marked arrived at 10:42."); a row-shaped skeleton while loading; *Try again* on a failed queue and doctor list; an icon on each empty state |
+| Queue rows | Shared `Button`s; tabular codes and dues; the closed-session warning in the warning tone with an icon |
+| No-show | `ConfirmDialog` (names kept: *Go back*, *Mark no-show*) |
+| Cancel, Decline | Reasons as choice cards; the note a `TextField` with "n of 200"; the action stays enabled and, pressed too early, says "Choose why the appointment is cancelled." / "Say why in the note." / "Choose what the patient should be told." under the field, moves focus there and sends nothing; loading buttons |
+| Accept, Propose | The record and the time as choice cards; the new record on the shared fields; pressed too early, "Choose which record this is, or create a new one.", "Fill in the new record's name, sex and age." or "Choose the time to offer."; loading buttons; a retry when the record lookup fails |
+| Booking requests | `Segmented` (Open, Answered), `StatusMessage`, row skeleton, "You're all caught up." on an empty inbox, actions kept on one line from 768 px |
+| Bookings to move | `StatusMessage`, row skeleton, icon empty state; *Cancel* secondary beside the primary *Reschedule* (the cancel dialog still asks) |
+| My schedule | Every weekday listed, a day off reads "Not working"; leave as a badge; icon empty states with what to do |
+| Schedule settings | Shared inputs, labels and buttons; cards on the design system; a skeleton while loading; *Try again*; a leave list longer than ten collapses behind *Show all N*; the kept-sessions warning in the warning tone |
+| Live token page | The logo and the language switch on top, the place card on the semantic tones (success for "your turn", danger for cancelled), problems as `Alert`s; still the system font and no Motion (patient budget) |
+
+**Shared additions:** `StatusMessage` (the screen's live region, success tone), `ListSkeleton`
+(row-shaped loading with its status line), `Segmented` (toggle group), `CHOICE_CARD` and
+`CHOICE_INPUT` (radio and checkbox cards), `INPUT_BASE` (an input without full width; `cx` does not
+merge classes, so `w-24` beside `w-full` lost).
+
+**Tests changed for a real behaviour change:** `QueueBoard.test.tsx` (D14): the cancel button is
+enabled and an early press shows the two messages, moves focus to the note and sends nothing;
+`BookingRequests.test.tsx` (R36): an early *Accept and book* says to choose the record and sends
+nothing.

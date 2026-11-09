@@ -10,11 +10,21 @@ import { cx } from "./cx";
  * never carried by colour alone (apps/web/CLAUDE.md). Controls are at least 40 px tall.
  * `INPUT`, `LABEL` and `HINT` style a hand-built control the same way.
  */
-export const INPUT =
-  "min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 shadow-xs transition-colors duration-200 ease-brand placeholder:text-slate-500 hover:border-slate-600 focus-visible:border-brand-700 focus-visible:outline-brand-700 aria-[invalid=true]:border-danger aria-[invalid=true]:bg-danger-soft/40 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-slate-600 motion-reduce:transition-none";
+/** M7c-P7 (M4): `INPUT` without its full width, for a control sized by its content or a class. */
+export const INPUT_BASE =
+  "min-h-10 rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 shadow-xs transition-colors duration-200 ease-brand placeholder:text-slate-500 hover:border-slate-600 focus-visible:border-brand-700 focus-visible:outline-brand-700 aria-[invalid=true]:border-danger aria-[invalid=true]:bg-danger-soft/40 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-slate-600 motion-reduce:transition-none";
+export const INPUT = `${INPUT_BASE} w-full`;
 export const LABEL = "block text-sm font-semibold text-slate-900";
 export const HINT = "text-sm text-slate-700";
 export const ERROR = "flex items-start gap-1.5 text-sm font-medium text-danger";
+/**
+ * M7c-P7 (M4): a radio or checkbox shown as a choice card (a bordered row that highlights when
+ * chosen). Put it on the `<label>` that wraps the input.
+ */
+export const CHOICE_CARD =
+  "flex min-h-10 cursor-pointer items-center gap-3 rounded-lg border border-line px-3 py-2 transition-colors duration-200 ease-brand hover:bg-slate-50 has-[:checked]:border-brand-300 has-[:checked]:bg-brand-50 has-[:checked]:text-brand-900 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-700 motion-reduce:transition-none";
+/** The input inside a `CHOICE_CARD`. */
+export const CHOICE_INPUT = "size-4 shrink-0 accent-brand-700";
 
 interface Described {
   readonly id: string;

@@ -98,7 +98,7 @@ describe("queue board (M3-P5, FR-QUE-01)", () => {
     await waitFor(() => expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ from: "BOOKED", to: "NO_SHOW" }));
   });
 
-  it("D14: Cancel needs a reason, and OTHER a note", async () => {
+  it("D14: Cancel needs a reason, and OTHER a note; a submit without them says so and sends nothing", async () => {
     const api = mockApi({
       ...boardRoutes,
       "GET /api/v1/queue": queueRoute(queueOf([{}])),
@@ -109,11 +109,18 @@ describe("queue board (M3-P5, FR-QUE-01)", () => {
     fireEvent.click(screen.getByRole("button", { name: "More actions for Asha Rao" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Cancel…" }));
     const dialog = screen.getByRole("dialog", { name: "Cancel Asha Rao's appointment" });
+    // M7c-P7 (M4): the button stays enabled and explains what is missing (DESIGN.md §8a).
     const submit = within(dialog).getByRole("button", { name: "Cancel appointment" });
-    expect(submit).toBeDisabled();
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+    expect(within(dialog).getByText("Choose why the appointment is cancelled.")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByLabelText("Other (say why)"));
-    expect(submit).toBeDisabled();
+    fireEvent.click(submit);
+    expect(within(dialog).getByText("Say why in the note.")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/^Note/)).toHaveFocus();
+    expect(api.count(`POST /api/v1/appointments/${FIRST}/cancel`)).toBe(0);
     fireEvent.change(within(dialog).getByLabelText(/^Note/), { target: { value: "moved city" } });
+    expect(within(dialog).queryByText("Say why in the note.")).not.toBeInTheDocument();
     fireEvent.click(submit);
 
     expect(await screen.findByText("Asha Rao's appointment cancelled.")).toBeInTheDocument();
