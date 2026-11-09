@@ -14,6 +14,7 @@ from mediease_api.application.context import RequestContext, RequestInfo
 from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.identity.permissions import Permission
 from mediease_api.domain.shared.errors import InvalidValue
+from tests.fakes import FakeClock
 
 
 def _ctx(permissions: frozenset[Permission]) -> RequestContext:
@@ -33,10 +34,16 @@ def test_r6_only_tools_the_role_may_use_are_offered() -> None:
         use_cases=Any,
         ctx=_ctx(frozenset({Permission.APPOINTMENTS_MANAGE})),
         timezone="Asia/Kolkata",
+        clock=FakeClock(),
     )  # type: ignore[arg-type]
     names = {t.name for t in box.tools()}
     assert "find_patient" not in names and "today_queue" in names
-    none = StaffToolbox(use_cases=Any, ctx=_ctx(frozenset()), timezone="Asia/Kolkata")  # type: ignore[arg-type]
+    none = StaffToolbox(
+        use_cases=Any,  # type: ignore[arg-type]
+        ctx=_ctx(frozenset()),
+        timezone="Asia/Kolkata",
+        clock=FakeClock(),
+    )
     assert none.tools() == []
 
 

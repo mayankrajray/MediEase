@@ -14,6 +14,7 @@ No tool reads clinical content. Patient phone numbers are masked to their last d
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Protocol
 from uuid import UUID
@@ -51,7 +52,7 @@ from mediease_api.domain.appointments.status import CancelReason
 from mediease_api.domain.assistant.llm import JsonValue
 from mediease_api.domain.assistant.proposal import CallerKind
 from mediease_api.domain.identity.permissions import Permission
-from mediease_api.domain.messaging.formatting import appointment_when
+from mediease_api.domain.messaging.formatting import appointment_when, time_of_day
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.domain.shared.time import local_date
@@ -76,27 +77,73 @@ class StaffToolUseCases(Protocol):
     def reschedule_appointment(self) -> RescheduleAppointment: ...
 
 
-def system_prompt(today: str, clinic_name: str) -> str:
+def system_prompt(
+    today: str,
+    clinic_name: str,
+    *,
+    tomorrow: str = "",
+    doctors: Sequence[tuple[str, str]] = (),
+) -> str:
+    """M7c-P3: the dates the model needs for "today" and "tomorrow", and the clinic's active
+    doctors as (name, id), so it asks which doctor when there is more than one. M7c-P2: Hinglish
+    is understood."""
+    dates = f"Today is {today}" + (f" and tomorrow is {tomorrow}" if tomorrow else "")
+    if len(doctors) > 1:
+        named = "; ".join(f"{name} (doctor_id {id_})" for name, id_ in doctors)
+        who = (
+            f"The clinic's doctors are: {named}. If the user has not named one, ask which doctor "
+            "before listing or choosing a session, then pass that doctor's doctor_id to "
+            "list_sessions."
+        )
+    elif doctors:
+        who = f"The clinic has one doctor, {doctors[0][0]}; do not ask which doctor."
+    else:
+        who = "The clinic has no active doctor yet."
     return (
         f"You are the MediEase assistant for the staff of {clinic_name}, a small clinic in India. "
-        f"Today is {today} (clinic time). Reply briefly in English.\n"
+        f"{dates} (clinic time). Reply briefly in English. The user may write Hindi in Latin "
+        "letters (Hinglish), for example 'kal ke liye book karo'; understand it and still reply "
+        "in English.\n"
         "Rules you must always follow:\n"
         "1. Never give medical advice and never discuss diagnoses or medicines; you have no "
         "clinical tools.\n"
         "2. Use tools for every fact; never invent patients, sessions, times or IDs. Pass IDs and "
         "times exactly as tools returned them.\n"
         "3. To book: find the patient (find_patient), find the session (list_sessions for the "
-        "day), then call book_appointment. To cancel or move: find the appointment with "
-        "patient_appointments first. The user confirms every change on screen.\n"
-        "4. If something is missing or there are several matches, ask one short question."
+        "day), then call book_appointment. list_sessions shows only sessions and slots that can "
+        "still be booked; offer only those, and never a time that is not in its result. To cancel "
+        "or move: find the appointment with patient_appointments first. The user confirms every "
+        f"change on screen.\n4. {who}\n"
+        "5. If something is missing or there are several matches, ask one short question.\n"
+        "6. You may use simple formatting: **bold**, and lists with '-' or '1.'. No links, "
+        "tables or headings."
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _Chosen:
+    """The session a write names, as the model must have seen it in list_sessions."""
+
+    starts_at: datetime
+    ends_at: datetime
+    doctor: str
+    slot_mode: bool
+    slot_minutes: int | None
+
+
 class StaffToolbox:
-    def __init__(self, *, use_cases: StaffToolUseCases, ctx: RequestContext, timezone: str) -> None:
+    def __init__(
+        self,
+        *,
+        use_cases: StaffToolUseCases,
+        ctx: RequestContext,
+        timezone: str,
+        clock: ClockPort,
+    ) -> None:
         self._uc = use_cases
         self._ctx = ctx
         self._tz = timezone
+        self._clock = clock
         self._doctor_names: dict[UUID, str] | None = None
 
     def tools(self) -> list[Tool]:
@@ -118,8 +165,13 @@ class StaffToolbox:
                 Tool(
                     spec(
                         "list_sessions",
-                        "The doctors' sessions on a day, with free places and session ids.",
-                        {"date": string("YYYY-MM-DD")},
+                        "The sessions on a day that can still be booked (open, not ended, with "
+                        "room), with free places, free slot times and session ids. Ended and "
+                        "full sessions are left out.",
+                        {
+                            "date": string("YYYY-MM-DD, today or later"),
+                            "doctor_id": string("Only this doctor's sessions, optional"),
+                        },
                         ("date",),
                     ),
                     ToolKind.READ,
@@ -221,6 +273,9 @@ class StaffToolbox:
             starts_at=starts_at, token_number=token, timezone=self._tz, language=Language.EN
         )
 
+    def _clock_time(self, instant: datetime) -> str:
+        return time_of_day(instant, timezone=self._tz, language=Language.EN)
+
     def _doctor(self, doctor_id: UUID) -> str:
         if self._doctor_names is None:
             self._doctor_names = {
@@ -228,12 +283,39 @@ class StaffToolbox:
             }
         return self._doctor_names.get(doctor_id, "a doctor")
 
-    def _session_on(self, session_id: UUID, day: date) -> tuple[datetime, str, bool]:
+    def _session_on(self, session_id: UUID, day: date) -> _Chosen:
         for view in self._uc.list_sessions().execute(self._ctx, day):
             s = view.session
             if s.id == session_id:
-                return s.starts_at, self._doctor(s.doctor_id), s.mode.value == "SLOTS"
+                return _Chosen(
+                    starts_at=s.starts_at,
+                    ends_at=s.ends_at,
+                    doctor=self._doctor(s.doctor_id),
+                    slot_mode=s.mode.value == "SLOTS",
+                    slot_minutes=s.slot_minutes,
+                )
         raise ToolArgumentError("no such session on that date; use list_sessions")
+
+    def _still_bookable(self, chosen: _Chosen, slot: datetime | None) -> None:
+        """M7c-P3: refuse an ended session or slot before a confirmation is shown, with words the
+        model can repeat (the domain's APT_IN_PAST stays the final check at confirm)."""
+        now = self._clock.now()
+        if chosen.ends_at <= now:
+            raise ToolArgumentError(
+                "that session has already ended; call list_sessions for today or a later day "
+                "and offer only what it returns"
+            )
+        if (
+            slot is not None
+            and chosen.slot_minutes
+            and slot + timedelta(minutes=chosen.slot_minutes) <= now
+        ):
+            raise ToolArgumentError(
+                "that time has already passed; offer one of the free slots list_sessions returns"
+            )
+
+    def _today(self) -> date:
+        return local_date(self._clock.now(), self._tz)
 
     # --- Reads ----------------------------------------------------------------------------------
 
@@ -277,38 +359,57 @@ class StaffToolbox:
         return ToolResult("\n".join(lines), {"sessions": sessions})
 
     def _sessions(self, args: Args) -> ToolResult:
+        """M7c-P3: only what the booking drawer would offer (BookDrawer ``bookable`` and
+        ``freeSlots``): open, not ended, with room; in slot mode the free slots not yet over."""
         day = args.day("date")
         assert day is not None
-        views = self._uc.list_sessions().execute(self._ctx, day)
-        lines = [f"Sessions on {day.isoformat()}:"]
+        if day < self._today():
+            raise ToolArgumentError("that date has passed; use today or a later date")
+        doctor_id = args.optional_uuid("doctor_id")
+        now = self._clock.now()
+        views = self._uc.list_sessions().execute(self._ctx, day, doctor_id=doctor_id)
+        lines = [f"Sessions you can book on {day.isoformat()}:"]
         data: list[JsonValue] = []
+        hidden = 0
         for view in views:
             s = view.session
+            if not s.is_open or s.ends_at <= now or s.available <= 0:
+                hidden += 1
+                continue
             free: list[str] = []
             if s.mode.value == "SLOTS" and s.slot_minutes:
+                step = timedelta(minutes=s.slot_minutes)
                 held = {h.slot_start for h in view.held if h.slot_start}
                 t = s.starts_at
                 while t < s.ends_at and len(free) < 12:
-                    if t not in view.taken_slots and t not in held:
+                    if t + step > now and t not in view.taken_slots and t not in held:
                         free.append(t.isoformat())
-                    t += timedelta(minutes=s.slot_minutes)
+                    t += step
+                if not free:
+                    hidden += 1
+                    continue
+            shown = ", ".join(self._clock_time(datetime.fromisoformat(t)) for t in free[:6])
             lines.append(
                 f"- {self._doctor(s.doctor_id)}, {self._when(s.starts_at)}"
-                f" ({s.status.value}, {max(s.available, 0)} places left)"
+                f" to {self._clock_time(s.ends_at)}: {s.available} places left"
+                + (f"; free times {shown}" if shown else "")
             )
             data.append(
                 {
                     "session_id": str(s.id),
+                    "doctor_id": str(s.doctor_id),
                     "doctor": self._doctor(s.doctor_id),
                     "starts_at": s.starts_at.isoformat(),
+                    "ends_at": s.ends_at.isoformat(),
                     "mode": s.mode.value,
-                    "status": s.status.value,
-                    "places_left": max(s.available, 0),
+                    "places_left": s.available,
                     "free_slots": list(free),
                 }
             )
-        if not views:
-            lines.append("No sessions that day.")
+        if not data:
+            lines.append("No session can still be booked that day; try another day.")
+        if hidden:
+            lines.append(f"({hidden} ended, closed or full sessions are not shown.)")
         return ToolResult("\n".join(lines), {"date": day.isoformat(), "sessions": data})
 
     def _find_patient(self, args: Args) -> ToolResult:
@@ -358,11 +459,12 @@ class StaffToolbox:
         day = args.day("date")
         assert day is not None
         slot = args.instant("slot_start", required=False)
-        starts_at, doctor, slots = self._session_on(session_id, day)
-        if slots and slot is None:
+        chosen = self._session_on(session_id, day)
+        if chosen.slot_mode and slot is None:
             raise ToolArgumentError("this session books by time: pass slot_start")
+        self._still_bookable(chosen, slot)
         who = self._patient_name(patient_id)
-        when = self._when(slot or starts_at)
+        when = self._when(slot or chosen.starts_at)
         values = {
             "patient_id": str(patient_id),
             "session_id": str(session_id),
@@ -370,7 +472,7 @@ class StaffToolbox:
         }
         if slot is not None:
             values["slot_start"] = slot.isoformat()
-        return Prepared(f"Book {who} with {doctor} on {when}?", values)
+        return Prepared(f"Book {who} with {chosen.doctor} on {when}?", values)
 
     def _book(self, values: Mapping[str, str]) -> str:
         slot = values.get("slot_start")
@@ -424,11 +526,12 @@ class StaffToolbox:
         day = args.day("date")
         assert day is not None
         slot = args.instant("slot_start", required=False)
-        starts_at, doctor, slots = self._session_on(session_id, day)
-        if slots and slot is None:
+        chosen = self._session_on(session_id, day)
+        if chosen.slot_mode and slot is None:
             raise ToolArgumentError("this session books by time: pass slot_start")
+        self._still_bookable(chosen, slot)
         who, old = self._appointment(appointment_id)
-        new = self._when(slot or starts_at)
+        new = self._when(slot or chosen.starts_at)
         values = {
             "appointment_id": str(appointment_id),
             "session_id": str(session_id),
@@ -436,7 +539,7 @@ class StaffToolbox:
         }
         if slot is not None:
             values["slot_start"] = slot.isoformat()
-        return Prepared(f"Move {who} from {old} to {new} with {doctor}?", values)
+        return Prepared(f"Move {who} from {old} to {new} with {chosen.doctor}?", values)
 
     def _reschedule(self, values: Mapping[str, str]) -> str:
         slot = values.get("slot_start")
@@ -472,15 +575,27 @@ class StaffAssistant:
             raise RateLimited(wait)
         clinic = self._uc.get_clinic().execute(ctx)
         today = local_date(self._clock.now(), clinic.timezone)
+        tomorrow = today + timedelta(days=1)
+        doctors = [
+            (d.display_name, str(d.id)) for d in self._uc.list_doctors().execute(ctx) if d.is_active
+        ]
         return self._engine.turn(
             caller=caller,
             messages=messages,
             language=Language.EN,
-            system_prompt=system_prompt(f"{today.isoformat()} ({today:%A})", clinic.name),
-            tools=StaffToolbox(use_cases=self._uc, ctx=ctx, timezone=clinic.timezone).tools(),
+            system_prompt=system_prompt(
+                f"{today.isoformat()} ({today:%A})",
+                clinic.name,
+                tomorrow=f"{tomorrow.isoformat()} ({tomorrow:%A})",
+                doctors=doctors,
+            ),
+            tools=self._toolbox(ctx, clinic.timezone).tools(),
         )
+
+    def _toolbox(self, ctx: RequestContext, timezone: str) -> StaffToolbox:
+        return StaffToolbox(use_cases=self._uc, ctx=ctx, timezone=timezone, clock=self._clock)
 
     def confirm(self, ctx: RequestContext, token: str) -> TurnReply:
         clinic = self._uc.get_clinic().execute(ctx)
-        tools = StaffToolbox(use_cases=self._uc, ctx=ctx, timezone=clinic.timezone).tools()
+        tools = self._toolbox(ctx, clinic.timezone).tools()
         return self._engine.confirm(caller=self._caller(ctx), token=token, tools=tools)
