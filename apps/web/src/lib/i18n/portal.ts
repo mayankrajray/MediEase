@@ -1015,3 +1015,54 @@ export function resetWords(language: PortalLanguage): ResetWords {
 export function verifyWords(language: PortalLanguage): VerifyWords {
   return language === "hi" ? VERIFY_HI : VERIFY_EN;
 }
+
+/**
+ * M7c-P7 (M2): the words the sign-in, sign-up and password forms share for checking fields as the
+ * person leaves them, the password rules that tick off as they are met, and the show and hide
+ * button (DESIGN.md §8a). Staff screens use the English.
+ */
+export interface FormWords {
+  readonly emailMissing: string;
+  readonly emailInvalid: string;
+  readonly identifierMissing: string;
+  readonly nameMissing: string;
+  readonly passwordMissing: string;
+  readonly ruleLength: string;
+  readonly ruleMatch: string;
+  readonly met: string;
+  readonly unmet: string;
+  readonly show: string;
+  readonly hide: string;
+}
+
+export const FORM_EN: FormWords = {
+  emailMissing: "Enter your email address.",
+  emailInvalid: "Enter an email address like name@example.com.",
+  identifierMissing: "Enter your email or phone number.",
+  nameMissing: "Enter your name.",
+  passwordMissing: "Enter your password.",
+  ruleLength: "12 or more characters",
+  ruleMatch: "Both entries match",
+  met: "done",
+  unmet: "not yet",
+  show: "Show password",
+  hide: "Hide password",
+};
+
+const FORM_HI: FormWords = {
+  emailMissing: "अपना ईमेल पता लिखें।",
+  emailInvalid: "ईमेल पता name@example.com जैसा लिखें।",
+  identifierMissing: "अपना ईमेल या फ़ोन नंबर लिखें।",
+  nameMissing: "अपना नाम लिखें।",
+  passwordMissing: "अपना पासवर्ड लिखें।",
+  ruleLength: "12 या ज़्यादा अक्षर",
+  ruleMatch: "दोनों एक जैसे हैं",
+  met: "हो गया",
+  unmet: "अभी नहीं",
+  show: "पासवर्ड दिखाएँ",
+  hide: "पासवर्ड छिपाएँ",
+};
+
+export function formWords(language: PortalLanguage): FormWords {
+  return language === "hi" ? FORM_HI : FORM_EN;
+}

@@ -76,7 +76,7 @@ describe("AcceptInviteForm", () => {
   });
 
   it("shows the API's message when the password is refused, and lets the person retry", async () => {
-    mockApi({
+    const api = mockApi({
       [DESCRIBE]: () => invite(),
       [ACCEPT]: () =>
         apiError(422, "REQ_VALIDATION_FAILED", "The password must be at least 12 characters."),
@@ -84,9 +84,17 @@ describe("AcceptInviteForm", () => {
     render(<AcceptInviteForm token="tok-123" />);
     await screen.findByLabelText("Choose a password");
 
+    // M7c-P7 (M2): the form now catches a short password itself, under the field, and moves
+    // focus there; nothing is sent. The API's own rule still answers anything that gets past it.
     fill("short", "short");
     fireEvent.click(screen.getByRole("button", { name: "Set password and join" }));
+    expect(screen.getByText("Use at least 12 characters.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Choose a password")).toHaveFocus();
+    expect(screen.getByLabelText("Choose a password")).toHaveAttribute("aria-invalid", "true");
+    expect(api.count(ACCEPT)).toBe(0);
 
+    fill(PASSWORD, PASSWORD);
+    fireEvent.click(screen.getByRole("button", { name: "Set password and join" }));
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("The password must be at least 12 characters.");
     expect(alert).toHaveTextContent("Ref: test-ref");

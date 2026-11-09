@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Logo } from "@/components/ui/Logo";
@@ -17,11 +18,11 @@ export default async function PortalAuthLayout({ children }: Readonly<{ children
       <div className="flex w-full max-w-md justify-end">
         <LanguageCookieSwitch language={language} />
       </div>
-      <p className="mt-2 flex items-center gap-2 text-xl font-bold text-slate-900">
+      <Link href="/" className="mt-2 rounded-lg p-1">
         <Logo size="md" />
-      </p>
-      <p className="mt-1 text-sm text-slate-700">{s.brandTagline}</p>
-      <div className="mt-6 w-full max-w-md rounded-card border border-slate-200 bg-white shadow-card">{children}</div>
+      </Link>
+      <p className="mt-2 text-sm text-slate-700">{s.brandTagline}</p>
+      <div className="mt-8 w-full max-w-md rounded-2xl border border-line bg-surface shadow-pop">{children}</div>
     </main>
   );
 }
