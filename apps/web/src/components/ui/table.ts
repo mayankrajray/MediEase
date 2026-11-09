@@ -9,8 +9,8 @@
  *     <tbody role="rowgroup"><tr role="row" className={TR}><td role="cell" data-label="Patient" className={TD}>…</td></tr></tbody>
  *   </table>
  */
-export const TABLE_WRAP = "md:overflow-x-auto md:rounded-card md:border md:border-slate-200 md:bg-white md:shadow-card";
+export const TABLE_WRAP = "md:overflow-x-auto md:rounded-card md:border md:border-line md:bg-surface md:shadow-card";
 export const TABLE = "me-table w-full border-collapse text-left";
-export const TH = "border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700";
-export const TR = "md:border-b md:border-slate-100 md:last:border-b-0";
-export const TD = "align-top md:px-3 md:py-2.5";
+export const TH = "border-b border-line bg-surface-muted px-3 py-2.5 text-sm font-semibold text-slate-700";
+export const TR = "md:border-b md:border-slate-100 md:transition-colors md:hover:bg-brand-50/40 md:last:border-b-0";
+export const TD = "align-top md:px-3 md:py-3";
