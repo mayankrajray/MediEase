@@ -3,10 +3,10 @@
 | Field | Value |
 |---|---|
 | Issue / branch | #69 / `m7c/69-demo-polish` (from `origin/main` at `c2b0274`) |
-| Requirements | FR-AI-01..04 (assistant), the developer's feedback of 4 Nov 2026, the Phase 2 deliverables (due 15 Nov 2026) |
+| Requirements | FR-AI-01..04 (assistant), the developer's feedback of 9 Nov 2026, the Phase 2 deliverables (due 15 Nov 2026) |
 | Specs | `docs/specs/assistant.md` (R15–R21 added for M7c) |
 | ADRs | 0013 (gateway, addendum for Mistral and NVIDIA), 0024 (turns; stored chats stay out) |
-| Status | Approved by the developer, 4 Nov 2026: the plan, the build order and every recommended design decision up to P6. P7 waits for the developer's module list |
+| Status | Approved by the developer, 9 Nov 2026: the plan, the build order and every recommended design decision up to P6. P7 waits for the developer's module list |
 | Progress report | `docs/milestones/M7c-progress-report.md` |
 
 ## Why a polish milestone before M8
@@ -78,7 +78,7 @@ flowchart LR
   speak the OpenAI-compatible chat-completions API with tools, so they are presets of the existing
   adapter, not new adapters. Defaults can be overridden with `LLM_BASE_URL` and `LLM_MODEL`.
 - **D12** Hugging Face Inference Providers lists no provider for Mistral Large 4
-  (`mistralai/Mistral-Large-4-1T-A52B-NVFP4`, checked 4 Nov 2026), so Mistral is reached through
+  (`mistralai/Mistral-Large-4-1T-A52B-NVFP4`, checked 9 Nov 2026), so Mistral is reached through
   its own API.
 - **D13** The adapter accepts tool-call arguments sent as a JSON object as well as a string, and
   makes up a call ID when a provider leaves it out, because providers differ there.

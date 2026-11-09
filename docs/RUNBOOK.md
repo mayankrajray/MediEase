@@ -927,3 +927,9 @@ The command prints masked numbers and addresses only, and stores nothing.
 **Demo data.** Playwright journeys (`make e2e`) add short extra sessions at the time they run and
 fill sessions with synthetic bookings. Never run them against a database used for a demo or by a
 design partner. For a clean local demo: reset (§1), `make up`, `make seed`.
+
+**Journeys need the local fakes.** They sign in through the fake Google provider and expect the
+console model's fixed answers, as CI does. With `GOOGLE_OIDC_PROVIDER=google` or a real
+`LLM_PROVIDER` in `.env` they fail at sign-in or on the reply text. Run them with the API started
+as `LLM_PROVIDER=console GOOGLE_OIDC_PROVIDER=fake docker compose up -d --wait api` (a shell
+variable overrides `.env` for that start), then `docker compose up -d --wait api` to go back.

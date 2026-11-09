@@ -87,7 +87,7 @@ RESTATING = [
     "मेरी अपॉइंटमेंट दिखाओ",
     "show today's queue",
     "find patient Asha",
-    # M7c-P1: the developer's own questions about what the doctor wrote (4 Nov 2026)
+    # M7c-P1: the developer's own questions about what the doctor wrote (9 Nov 2026)
     "is there any other advice that doctor mentioned in the prescription?",
     "name the medicine that is listed in the prescription",
     "What did the doctor suggest?",

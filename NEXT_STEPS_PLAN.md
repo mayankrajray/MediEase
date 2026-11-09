@@ -4,7 +4,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Approved by the developer 4 Nov 2026**: the plan, the build order and every recommended design decision up to P6. P7 waits for the developer's module list |
+| Status | **Approved by the developer 9 Nov 2026**: the plan, the build order and every recommended design decision up to P6. P7 waits for the developer's module list |
 | Issue / branch | #69 / `m7c/69-demo-polish` from `main` at `c2b0274`; one PR (ADR-0011) |
 | Design | `docs/milestones/M7c-demo-polish.md` (decisions D1–D16); spec `docs/specs/assistant.md` R15–R21 |
 | Progress | `docs/milestones/M7c-progress-report.md` (what is done, what the developer must provide) |
@@ -74,7 +74,7 @@ Milestone issue #65 → branch m7/65-assistant-and-verified-uploads (from origin
 
 | # | Needed | State |
 |---|---|---|
-| L-10 | A Groq API key for the real provider | Done (4 Nov 2026; set in the developer's `.env` and tested) |
+| L-10 | A Groq API key for the real provider | Done (9 Nov 2026; set in the developer's `.env` and tested) |
 | L-04 | Counsel and the privacy review before real patient data reaches a model (`LLM_PATIENT_DATA_ALLOWED`); upload retention | Open; before any production use |
 | — | The official MediEase logo (the PDF mark is a placeholder) | Open (founder) |
 | #30 | Uploads over 2 MB through the web origin | Fixed in M7b-P6 |

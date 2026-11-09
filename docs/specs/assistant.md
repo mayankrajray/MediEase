@@ -4,9 +4,9 @@
 |---|---|
 | Requirements | FR-AI-01..04, FR-RX-11, NFR-07 |
 | Milestone / phases | M7a / P1–P5 (issue #65) |
-| Status | Approved (developer, 27 Oct 2026: architecture review and decisions D1–D7 in advance); implemented in M7a on the M7 branch, 27 Oct 2026 (as built: `docs/milestones/M7-assistant-and-verified-uploads.md`). R15–R21 added for M7c (issue #69), approved by the developer 4 Nov 2026 |
+| Status | Approved (developer, 27 Oct 2026: architecture review and decisions D1–D7 in advance); implemented in M7a on the M7 branch, 27 Oct 2026 (as built: `docs/milestones/M7-assistant-and-verified-uploads.md`). R15–R21 added for M7c (issue #69), approved by the developer 9 Nov 2026 |
 | Owner | MediEase engineering |
-| Last updated | 2026-11-04 |
+| Last updated | 2026-11-09 |
 
 ## 1. Context
 Patients ask the same few things: when do I take this, for how long, can I book on Friday. Staff
