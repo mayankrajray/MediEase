@@ -89,7 +89,7 @@ def test_ac1_the_request_is_openai_compatible_with_tools() -> None:
     }
 
 
-@pytest.mark.parametrize("provider", ["groq", "deepinfra", "openai"])
+@pytest.mark.parametrize("provider", ["groq", "deepinfra", "openai", "mistral", "nvidia"])
 def test_ac1_each_provider_is_a_preset_and_overridable(provider: str) -> None:
     transport = FakeTransport(_ok({"content": "x"}))
     OpenAICompatibleLlm(
@@ -117,6 +117,46 @@ def test_r2_tool_calls_are_parsed() -> None:
     }
     reply = _llm(FakeTransport(_ok(message))).complete([ChatMessage.user("x")], [TOOL])
     assert reply.tool_calls == (ToolCall("a", "list_slots", {"doctor_id": "d"}),)
+
+
+@pytest.mark.parametrize(
+    ("provider", "url", "model"),
+    [
+        ("mistral", "https://api.mistral.ai/v1/chat/completions", "mistral-large-latest"),
+        (
+            "nvidia",
+            "https://integrate.api.nvidia.com/v1/chat/completions",
+            "meta/llama-3.3-70b-instruct",
+        ),
+    ],
+)
+def test_m7c_p5_mistral_and_nvidia_defaults(provider: str, url: str, model: str) -> None:
+    transport = FakeTransport(_ok({"content": "x"}))
+    _llm(transport, provider).complete([ChatMessage.user("hi")], [TOOL])
+    sent_url, body, headers, _ = transport.sent[0]
+    assert (sent_url, body["model"]) == (url, model)
+    assert headers["Authorization"] == "Bearer sk-test" and body["tool_choice"] == "auto"
+
+
+def test_m7c_p5_provider_differences_are_read() -> None:
+    # Mistral: content as chunks, reasoning left out.
+    chunks = {
+        "content": [
+            {"type": "thinking", "thinking": [{"type": "text", "text": "secret"}]},
+            {"type": "text", "text": "Hello "},
+            {"type": "text", "text": "there"},
+        ]
+    }
+    assert _llm(FakeTransport(_ok(chunks))).complete([ChatMessage.user("x")], []).content == (
+        "Hello there"
+    )
+    # Arguments as an object, and a missing id.
+    loose = {
+        "content": "",
+        "tool_calls": [{"function": {"name": "list_slots", "arguments": {"doctor_id": "d"}}}],
+    }
+    reply = _llm(FakeTransport(_ok(loose))).complete([ChatMessage.user("x")], [TOOL])
+    assert reply.tool_calls == (ToolCall("call00001", "list_slots", {"doctor_id": "d"}),)
 
 
 @pytest.mark.parametrize(
@@ -325,6 +365,10 @@ def test_r1_build_llm_picks_by_settings_and_refuses_unsafe_combinations() -> Non
     assert isinstance(build_llm(_settings()), ConsoleLlm)
     real = build_llm(_settings(LLM_PROVIDER="groq", LLM_API_KEY=SecretStr("k")))
     assert isinstance(real, OpenAICompatibleLlm) and real.provider == "groq"
+    for provider in ("mistral", "nvidia"):  # M7c-P5: settings only
+        other = build_llm(_settings(LLM_PROVIDER=provider, LLM_API_KEY=SecretStr("k")))
+        assert isinstance(other, OpenAICompatibleLlm) and other.provider == provider
+        assert other.model == PRESETS[provider].model
     with pytest.raises(ValueError, match="refused in production"):
         build_llm(_settings().model_copy(update={"APP_ENV": AppEnv.PRODUCTION}))
     deployed = _settings(

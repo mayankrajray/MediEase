@@ -73,8 +73,8 @@ SmsProvider = Literal["console"]
 OidcProvider = Literal["fake", "google"]
 # M6a-P4: email over SMTP, or the console for tests (ADR-0016).
 EmailProvider = Literal["console", "smtp"]
-# M7a-P2 (ADR-0013): the assistant's model.
-LlmProvider = Literal["console", "groq", "deepinfra", "openai"]
+# M7a-P2 (ADR-0013): the assistant's model; M7c-P5 adds Mistral and NVIDIA.
+LlmProvider = Literal["console", "groq", "deepinfra", "openai", "mistral", "nvidia"]
 SmtpSecurity = Literal["starttls", "tls", "none"]
 # M5-P3: Graph API v26.0 (released July 2026); overridable without a code change.
 _WHATSAPP_API_VERSION = "v26.0"

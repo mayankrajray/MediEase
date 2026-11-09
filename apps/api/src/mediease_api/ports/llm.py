@@ -15,7 +15,7 @@ from mediease_api.domain.assistant.llm import ChatMessage, LlmReply, ToolSpec
 class LlmPort(Protocol):
     @property
     def provider(self) -> str:
-        """``console``, ``groq``, ``deepinfra`` or ``openai`` (for logs)."""
+        """The provider's name, as ``LLM_PROVIDER`` (``console``, ``groq``, ``mistral``, …)."""
         ...
 
     @property
