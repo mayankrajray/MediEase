@@ -1,11 +1,13 @@
 "use client";
 
+import { FileText } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import { INPUT } from "@/components/ui/Field";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { DEFAULT_ZONE, type PortalPrescription, usePortalLoad, zonesOf } from "@/features/portal/data";
-import { PortalCard, ScreenLoading, usePortal } from "@/features/portal/PortalShell";
+import { PortalCard, PortalTitle, ScreenLoading, usePortal } from "@/features/portal/PortalShell";
 import { portalGet, portalPost } from "@/lib/auth/portal-session";
 import { portalDate } from "@/lib/i18n/portal";
 
@@ -42,14 +44,13 @@ export function PortalAssistant() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold tracking-tight">{a.title}</h1>
-      <p className="text-slate-800">{a.intro}</p>
+      <PortalTitle sub={a.intro}>{a.title}</PortalTitle>
       {loaded.status === "loading" && <ScreenLoading label={s.loading} />}
       {loaded.status === "failed" && <ErrorNotice error={loaded.error} onRetry={loaded.retry} />}
       {loaded.status === "ready" && (
-        <PortalCard id="assistant-choice" title={a.choose}>
+        <PortalCard id="assistant-choice" title={a.choose} icon={<FileText />}>
           {items.length === 0 ? (
-            <p>{a.noPrescriptions}</p>
+            <p className="text-slate-700">{a.noPrescriptions}</p>
           ) : (
             <>
               <label htmlFor="assistant-prescription" className="sr-only">
@@ -60,7 +61,7 @@ export function PortalAssistant() {
                 value={valid}
                 onChange={(event) => setChosen(event.target.value)}
                 disabled={fromUpload !== null}
-                className="block min-h-11 w-full rounded-lg border border-slate-300 bg-white p-2"
+                className={`${INPUT} min-h-11`}
               >
                 <option value="">{a.noChoice}</option>
                 {items.map((p) => (
@@ -71,7 +72,7 @@ export function PortalAssistant() {
               </select>
             </>
           )}
-          {fromUpload !== null && <p className="text-sm">{a.upload.asking}</p>}
+          {fromUpload !== null && <p className="text-sm text-slate-700">{a.upload.asking}</p>}
         </PortalCard>
       )}
       <UploadPanel onChange={setUpload} />

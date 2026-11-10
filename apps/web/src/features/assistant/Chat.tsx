@@ -1,7 +1,10 @@
 "use client";
 
+import { Bot, ClipboardCheck, SendHorizontal, TriangleAlert, UserRound } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/Button";
+import { INPUT, LABEL } from "@/components/ui/Field";
 import { RichText } from "@/features/assistant/RichText";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import type { components } from "@/lib/api/schema";
@@ -67,7 +70,12 @@ export function Chat({
   async function submit(event: FormEvent) {
     event.preventDefault();
     const text = draft.trim();
-    if (text === "" || busy !== null) return;
+    if (busy !== null) return;
+    // DESIGN.md §8a: Send stays enabled; with nothing typed it puts the cursor in the box.
+    if (text === "") {
+      document.getElementById("assistant-message")?.focus();
+      return;
+    }
     const next: Line[] = [...lines, { role: "user", content: text }];
     setLines(next);
     setDraft("");
@@ -107,82 +115,106 @@ export function Chat({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="overflow-hidden rounded-card border border-line bg-white shadow-card">
       <h2 className="sr-only">{s.conversation}</h2>
-      <ol aria-label={s.conversation} aria-live="polite" className="space-y-2">
-        {lines.length === 0 && <li className="text-slate-700">{s.empty}</li>}
-        {lines.map((line, index) => (
-          <li
-            key={index}
-            className={
-              line.role === "user"
-                ? "ml-8 rounded-lg bg-brand-50 p-3"
-                : `mr-8 rounded-lg border p-3 ${line.kind === "REFERRAL" ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"}`
-            }
-          >
-            <span className="block text-xs font-semibold text-slate-700">{line.role === "user" ? s.you : s.bot}</span>
-            {line.role === "user" ? (
-              <span className="whitespace-pre-line break-words">{line.content}</span>
-            ) : (
-              <RichText text={line.content} />
-            )}
+      <ol aria-label={s.conversation} aria-live="polite" className="min-h-48 space-y-3 bg-canvas/60 p-3 sm:p-4">
+        {lines.length === 0 && (
+          <li className="flex flex-col items-center gap-2 px-4 py-8 text-center text-slate-700">
+            <span aria-hidden="true" className="grid size-11 place-items-center rounded-full bg-brand-50 text-brand-700">
+              <Bot className="size-5" />
+            </span>
+            <span className="max-w-prose text-pretty">{s.empty}</span>
           </li>
-        ))}
+        )}
+        {lines.map((line, index) => {
+          const mine = line.role === "user";
+          const referral = line.kind === "REFERRAL";
+          return (
+            <li key={index} className={`flex items-end gap-2 ${mine ? "flex-row-reverse" : ""}`}>
+              <span
+                aria-hidden="true"
+                className={`grid size-8 shrink-0 place-items-center rounded-full ${mine ? "bg-brand-700 text-white" : referral ? "bg-warning-soft text-warning" : "bg-white text-brand-700 ring-1 ring-line"}`}
+              >
+                {mine ? <UserRound className="size-4" /> : referral ? <TriangleAlert className="size-4" /> : <Bot className="size-4" />}
+              </span>
+              <div
+                className={`min-w-0 max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-xs sm:max-w-[75%] ${
+                  mine
+                    ? "rounded-br-md bg-brand-700 text-white"
+                    : referral
+                      ? "rounded-bl-md border border-warning-line bg-warning-soft text-slate-900"
+                      : "rounded-bl-md border border-line bg-white text-slate-900"
+                }`}
+              >
+                <span className={`block text-xs font-semibold ${mine ? "text-brand-50" : "text-slate-600"}`}>{mine ? s.you : s.bot}</span>
+                {mine ? <span className="whitespace-pre-line break-words">{line.content}</span> : <RichText text={line.content} />}
+              </div>
+            </li>
+          );
+        })}
+        {busy === "send" && (
+          <li aria-hidden="true" className="flex items-end gap-2">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white text-brand-700 ring-1 ring-line">
+              <Bot className="size-4" />
+            </span>
+            <span className="inline-flex gap-1 rounded-2xl rounded-bl-md border border-line bg-white px-4 py-3.5">
+              {/* Class delays, not a style attribute: the CSP allows no inline styles. */}
+              {["[animation-delay:0ms]", "[animation-delay:150ms]", "[animation-delay:300ms]"].map((delay) => (
+                <span key={delay} className={`size-1.5 animate-pulse rounded-full bg-slate-400 motion-reduce:animate-none ${delay}`} />
+              ))}
+            </span>
+          </li>
+        )}
         <li ref={end} aria-hidden="true" />
       </ol>
 
       {proposal !== null && (
-        <div role="group" aria-label={s.confirm} className="rounded-lg border border-brand-700 bg-white p-3">
-          <p className="font-medium">{proposal.summary}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void accept()}
-              disabled={busy !== null}
-              className="inline-flex min-h-11 items-center rounded-lg bg-brand-700 px-4 font-semibold text-white hover:bg-brand-800 disabled:opacity-60"
-            >
+        <div role="group" aria-label={s.confirm} className="m-3 space-y-3 rounded-xl border border-brand-200 bg-brand-50 p-3 sm:mx-4">
+          <p className="flex items-start gap-2 font-medium text-slate-900">
+            <ClipboardCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-brand-700" />
+            <span>{proposal.summary}</span>
+          </p>
+          <div className="grid gap-2 min-[400px]:flex min-[400px]:flex-wrap">
+            <Button variant="primary" onClick={() => void accept()} disabled={busy !== null} loading={busy === "confirm"} className="min-h-11">
               {busy === "confirm" ? s.confirming : s.confirm}
-            </button>
-            <button
-              type="button"
-              onClick={decline}
-              disabled={busy !== null}
-              className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-4 font-medium"
-            >
+            </Button>
+            <Button onClick={decline} disabled={busy !== null} className="min-h-11">
               {s.cancel}
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
-      {error !== null && <ErrorNotice error={error} />}
+      {error !== null && (
+        <div className="px-3 pb-3 sm:px-4">
+          <ErrorNotice error={error} />
+        </div>
+      )}
 
-      <form onSubmit={(event) => void submit(event)} className="space-y-2">
-        <label htmlFor="assistant-message" className="block font-medium">
+      <form onSubmit={(event) => void submit(event)} className="space-y-2 border-t border-line bg-white p-3 sm:p-4">
+        <label htmlFor="assistant-message" className={LABEL}>
           {s.message}
         </label>
-        <textarea
-          id="assistant-message"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-          maxLength={2000}
-          rows={2}
-          placeholder={s.placeholder}
-          className="block w-full rounded-lg border border-slate-300 p-2"
-        />
-        <button
-          type="submit"
-          disabled={busy !== null || draft.trim() === ""}
-          className="inline-flex min-h-11 items-center rounded-lg bg-brand-700 px-5 font-semibold text-white hover:bg-brand-800 disabled:opacity-60"
-        >
-          {busy === "send" ? s.sending : s.send}
-        </button>
+        <div className="flex items-end gap-2">
+          <textarea
+            id="assistant-message"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+            maxLength={2000}
+            rows={2}
+            placeholder={s.placeholder}
+            className={`${INPUT} min-h-12 flex-1 resize-y`}
+          />
+          <Button type="submit" variant="primary" disabled={busy !== null} loading={busy === "send"} icon={<SendHorizontal className="size-4" />} className="min-h-12 shrink-0">
+            {busy === "send" ? s.sending : s.send}
+          </Button>
+        </div>
       </form>
     </div>
   );
