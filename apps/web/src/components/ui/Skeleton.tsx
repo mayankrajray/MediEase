@@ -10,6 +10,25 @@ export function Skeleton({ className }: { className?: string }) {
 }
 
 /**
+ * M7c-P7 (M5): loading rows for a section that already sits in a card (no second surface), with
+ * its `role="status"` words.
+ */
+export function RowsSkeleton({ label, rows = 2 }: { label: string; rows?: number }) {
+  return (
+    <div>
+      <p role="status" className="sr-only">
+        {label}
+      </p>
+      <div aria-hidden="true" className="space-y-2">
+        {Array.from({ length: rows }, (_, i) => (
+          <Skeleton key={i} className="h-11" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * M7c-P7 (M4): the loading state of a list or table (DESIGN.md §8a): rows shaped like the content
  * on the list's own surface, and a `role="status"` line saying what is loading. Pass `label=""`
  * when the screen's `StatusMessage` already says it.

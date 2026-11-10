@@ -1,5 +1,6 @@
 "use client";
 
+import { RowsSkeleton } from "@/components/ui/Skeleton";
 import { TABLE, TD, TH, TR } from "@/components/ui/table";
 import { useEffect, useState } from "react";
 
@@ -51,13 +52,13 @@ export function PatientMessages({ patient }: Readonly<{ patient: Patient }>) {
   const anyFailed = items?.some((m) => shouldCall(m.status)) ?? false;
 
   return (
-    <section aria-labelledby="message-history-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-      <h2 id="message-history-heading" className="text-lg font-bold">
+    <section aria-labelledby="message-history-heading" className="space-y-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
+      <h2 id="message-history-heading" className="heading-6 text-slate-900">
         Message history
       </h2>
       {error !== undefined && <ErrorNotice error={error} onRetry={() => setReload((n) => n + 1)} />}
-      {items === undefined && error === undefined && <p className="text-slate-700">Loading messages…</p>}
-      {items !== undefined && items.length === 0 && <p className="text-slate-700">No messages sent yet.</p>}
+      {items === undefined && error === undefined && <RowsSkeleton label="Loading messages…" />}
+      {items !== undefined && items.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 px-3 py-5 text-center text-sm text-slate-700">No messages sent yet.</p>}
       {items !== undefined && items.length > 0 && (
         <table role="table" className={TABLE}>
           <caption className="sr-only">Messages sent to the patient, newest first</caption>
@@ -91,7 +92,7 @@ export function PatientMessages({ patient }: Readonly<{ patient: Patient }>) {
       )}
       {anyFailed && (
         <p>
-          <a href={`tel:${patient.phone_e164}`} className="font-medium text-brand-800 underline">
+          <a href={`tel:${patient.phone_e164}`} className="font-medium text-brand-800 underline underline-offset-2 hover:text-brand-900">
             Call patient{" "}<span className="sr-only">on {formatPhone(patient.phone_e164)}</span>
           </a>{" "}
           if a message that did not arrive mattered.

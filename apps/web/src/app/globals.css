@@ -314,6 +314,9 @@
     .me-table > tbody > tr > td[data-label]:not([data-label=""]) > * {
       grid-column: 2;
       min-width: 0;
+      /* A badge or button keeps its own width instead of stretching across the card. */
+      justify-self: start;
+      max-width: 100%;
     }
     .me-table > tbody > tr > td[data-label=""]:empty {
       display: none;

@@ -122,6 +122,33 @@ export function draftIsMinor(draft: PatientDraft, today: string): boolean {
   return years !== undefined && years >= 0 && years < ADULT_AGE;
 }
 
+/** The form's fields, by the API's field names (so its own problems land on the same field). */
+export type DraftField = "full_name" | "phone" | "date_of_birth" | "age_years" | "guardian_name";
+
+/**
+ * M7c-P7 (M5): what is missing or unreadable in the form, checked as each field is left and again
+ * on submit (DESIGN.md §8a). Input hints only: the API checks every rule again and its answer
+ * still lands on the field. Adults are never asked for a guardian here; the API decides that too.
+ */
+export function draftProblems(draft: PatientDraft, today: string): Partial<Record<DraftField, string>> {
+  const problems: Partial<Record<DraftField, string>> = {};
+  if (draft.full_name.trim() === "") problems.full_name = "Enter the patient's full name.";
+  const digits = draft.phone.replace(/\D/g, "");
+  if (draft.phone.trim() === "") problems.phone = "Enter a phone number.";
+  else if (digits.length < 10) problems.phone = "Enter a 10-digit mobile, or the number with its country code.";
+  if (draft.ageMode === "dob") {
+    if (draft.date_of_birth === "") problems.date_of_birth = "Enter the date of birth, or choose “Only the age is known”.";
+    else if (draft.date_of_birth > today) problems.date_of_birth = "The date of birth cannot be after today.";
+  } else {
+    const years = parseYears(draft.age_years);
+    if (years === null || years > 130) problems.age_years = "Enter the age in whole years.";
+  }
+  if (draftIsMinor(draft, today) && draft.guardian_name.trim() === "") {
+    problems.guardian_name = "Enter the parent or guardian's name.";
+  }
+  return problems;
+}
+
 /** The registration body. Exactly one of date of birth and age is sent; blanks are left for the API to refuse. */
 export function newPatientBody(draft: PatientDraft, confirmNew: boolean): NewPatient {
   const guardian = draft.guardian_name.trim();

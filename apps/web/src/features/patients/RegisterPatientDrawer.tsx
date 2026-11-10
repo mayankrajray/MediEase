@@ -4,20 +4,16 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 
 import { Drawer } from "@/components/Drawer";
+import { Button } from "@/components/ui/Button";
+import { ErrorSummary } from "@/components/ui/Field";
 import { useFocusOnError } from "@/components/useFocusOnError";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 
 import { usePatientApi } from "./api";
 import { DuplicateCandidates } from "./DuplicateCandidates";
-import {
-  EMPTY_DRAFT,
-  newPatientBody,
-  patientFieldErrors,
-  phoneCandidates,
-  type PatientDraft,
-} from "./fields";
-import { PatientFields } from "./PatientFields";
+import { EMPTY_DRAFT, newPatientBody, patientFieldErrors, phoneCandidates, type PatientDraft } from "./fields";
+import { PatientFields, usePatientForm } from "./PatientFields";
 
 export interface RegisterPrefill {
   readonly phone?: string;
@@ -32,6 +28,10 @@ export const patientPath = (id: string) => `/patients/${id}`;
  * back as candidates; "Register as a new family member" resends the same details
  * with `confirm_new: true`. The button is disabled while a request is in flight,
  * so a double click cannot register twice.
+ *
+ * M7c-P7 (M5): fields are checked on leaving them and on submit; a submit with problems lists
+ * them at the top, moves focus to the first and sends nothing. The button says "Registering…"
+ * while the call runs.
  */
 export function RegisterPatientDrawer({
   prefill,
@@ -45,21 +45,26 @@ export function RegisterPatientDrawer({
   const router = useRouter();
   const { endSession } = useSession();
   const api = usePatientApi();
-  const [draft, setDraft] = useState<PatientDraft>({ ...EMPTY_DRAFT, ...prefill });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const container = useRef<HTMLDivElement>(null);
   useFocusOnError(error, container);
 
   const candidates = phoneCandidates(error);
-  const problems = patientFieldErrors(error);
-  const alertError = error !== null && candidates === undefined && Object.keys(problems).length === 0;
+  const apiProblems = patientFieldErrors(error);
+  const alertError = error !== null && candidates === undefined && Object.keys(apiProblems).length === 0;
+  const form = usePatientForm({ ...EMPTY_DRAFT, ...prefill }, today, "register", apiProblems);
+  const change = (next: PatientDraft) => {
+    form.setDraft(next);
+    // The API's answer was about the old values; the form checks the new ones itself.
+    if (error !== null && candidates === undefined) setError(null);
+  };
 
   async function submit(confirmNew: boolean) {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const patient = await api.register(newPatientBody(draft, confirmNew));
+      const patient = await api.register(newPatientBody(form.draft, confirmNew));
       onClose();
       router.push(patientPath(patient.id));
     } catch (failure) {
@@ -71,6 +76,7 @@ export function RegisterPatientDrawer({
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    if (!form.check()) return;
     void submit(false);
   }
 
@@ -91,15 +97,17 @@ export function RegisterPatientDrawer({
         ) : (
           <>
             {alertError && <ErrorNotice error={error} />}
-            <form onSubmit={onSubmit} noValidate className="space-y-4">
-              <PatientFields idPrefix="register" draft={draft} onChange={setDraft} today={today} problems={problems} />
-              <button
-                type="submit"
-                disabled={submitting}
-                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
-              >
-                {submitting ? "Registering…" : "Register patient"}
-              </button>
+            <ErrorSummary title="Check these before registering" errors={form.summary.length > 1 ? form.summary : []} />
+            <form onSubmit={onSubmit} noValidate className="space-y-5">
+              <PatientFields idPrefix="register" form={{ ...form, setDraft: change }} today={today} />
+              <div className="flex flex-wrap gap-2 border-t border-line pt-4">
+                <Button type="submit" variant="primary" loading={submitting} className="max-sm:w-full">
+                  {submitting ? "Registering…" : "Register patient"}
+                </Button>
+                <Button onClick={onClose} disabled={submitting} className="max-sm:w-full">
+                  Cancel
+                </Button>
+              </div>
             </form>
           </>
         )}

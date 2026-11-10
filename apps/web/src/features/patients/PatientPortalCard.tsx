@@ -3,6 +3,9 @@
 import QRCode from "qrcode";
 import { useEffect, useRef, useState } from "react";
 
+import { buttonClasses } from "@/components/ui/Button";
+import { INPUT_BASE } from "@/components/ui/Field";
+import { Spinner } from "@/components/ui/Spinner";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { useClinic } from "@/features/shell/ClinicGate";
@@ -16,8 +19,7 @@ const METHOD_LABELS: Readonly<Record<string, string>> = {
   RX_LINK: "from a prescription link",
 };
 
-const SMALL_BUTTON =
-  "inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none";
+const SMALL_BUTTON = buttonClasses("secondary", "sm");
 
 /**
  * The *Patient app* card (M6b-P1 decision 8A, spec R1, R8, R14): whether this record is linked to
@@ -121,14 +123,16 @@ export function PatientPortalCard({ patient }: Readonly<{ patient: Patient }>) {
   return (
     <section
       aria-labelledby="portal-heading"
-      className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card"
+      className="space-y-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5"
     >
-      <h2 id="portal-heading" className="text-lg font-bold">
+      <h2 id="portal-heading" className="heading-6 text-slate-900">
         Patient app
       </h2>
       {error !== null && <ErrorNotice error={error} />}
       {status === undefined && error === null && (
-        <p role="status">Checking the patient app…</p>
+        <p role="status" className="inline-flex items-center gap-2 text-slate-700">
+          <Spinner /> Checking the patient app…
+        </p>
       )}
 
       {status?.status === "NOT_LINKED" && (
@@ -177,18 +181,18 @@ export function PatientPortalCard({ patient }: Readonly<{ patient: Patient }>) {
             .
           </p>
           {confirming ? (
-            <div className="space-y-2 rounded-lg border border-red-800 bg-red-50 p-3">
+            <div className="space-y-3 rounded-lg border border-danger-line bg-danger-soft p-3">
               <p className="font-medium">
                 Unlink? The patient will no longer see this clinic&apos;s
                 appointments and prescriptions in the app. The record itself is
                 not changed.
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={unlink}
                   disabled={busy}
-                  className="rounded px-4 py-2 font-semibold bg-red-700 text-white hover:bg-red-800"
+                  className={buttonClasses("danger", "sm")}
                 >
                   Yes, unlink
                 </button>
@@ -205,7 +209,7 @@ export function PatientPortalCard({ patient }: Readonly<{ patient: Patient }>) {
             <button
               type="button"
               onClick={() => setConfirming(true)}
-              className="rounded-lg border border-red-800 px-4 py-2 font-medium text-red-900 hover:bg-red-50"
+              className={`${buttonClasses("ghost", "sm")} text-danger hover:bg-danger-soft hover:text-danger`}
             >
               Unlink
             </button>
@@ -214,7 +218,7 @@ export function PatientPortalCard({ patient }: Readonly<{ patient: Patient }>) {
       )}
 
       {invitation !== undefined && status?.status === "INVITED" && (
-        <div className="flex flex-wrap items-start gap-4 rounded-lg border border-slate-400 bg-slate-50 p-4">
+        <div className="flex flex-wrap items-start gap-4 rounded-lg border border-line bg-surface-muted p-4">
           {qr?.url === invitation.url && (
             // A data: URL made here; next/image has nothing to optimise.
             // eslint-disable-next-line @next/next/no-img-element
@@ -223,14 +227,14 @@ export function PatientPortalCard({ patient }: Readonly<{ patient: Patient }>) {
               width={192}
               height={192}
               alt="QR code of the patient app invitation"
-              className="rounded-card border border-slate-200 bg-white"
+              className="mx-auto rounded-card border border-line bg-white sm:mx-0"
             />
           )}
           <div className="min-w-0 flex-1 space-y-2">
-            <label htmlFor="portal-invite-link" className="block font-medium">
+            <label htmlFor="portal-invite-link" className="block text-sm font-semibold text-slate-900">
               Invitation link for {patient.full_name}
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <input
                 id="portal-invite-link"
                 ref={field}
@@ -238,7 +242,7 @@ export function PatientPortalCard({ patient }: Readonly<{ patient: Patient }>) {
                 value={invitation.url}
                 onFocus={(e) => e.target.select()}
                 data-testid="portal-invite-link"
-                className="w-full rounded-lg border border-slate-400 bg-white px-3 py-2 font-mono text-sm"
+                className={`${INPUT_BASE} min-w-0 flex-1 font-mono text-sm`}
               />
               <button
                 type="button"
@@ -248,10 +252,10 @@ export function PatientPortalCard({ patient }: Readonly<{ patient: Patient }>) {
                 Copy link
               </button>
             </div>
-            <p role="status" className="min-h-6 text-sm">
+            <p role="status" className={`min-h-6 text-sm font-medium ${copied === "Link copied." ? "text-success" : "text-slate-800"}`}>
               {copied}
             </p>
-            <p className="text-sm text-slate-800">
+            <p className="text-pretty text-sm text-slate-800">
               This link is shown <strong>only now</strong>. The patient scans
               the code or opens the link, signs in to MediEase and confirms. It
               works once and is valid for 7 days; inviting again replaces it.

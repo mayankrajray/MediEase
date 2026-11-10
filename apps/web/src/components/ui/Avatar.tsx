@@ -14,13 +14,13 @@ export function initials(name: string): string {
   return `${first}${last}`.toUpperCase();
 }
 
-export function Avatar({ name, size = "md", className }: { name: string; size?: "sm" | "md"; className?: string }) {
+export function Avatar({ name, size = "md", className }: { name: string; size?: "sm" | "md" | "lg"; className?: string }) {
   return (
     <span
       aria-hidden="true"
       className={cx(
         "inline-grid shrink-0 place-items-center rounded-full bg-brand-100 font-semibold text-brand-900",
-        size === "sm" ? "size-7 text-xs" : "size-9 text-sm",
+        size === "sm" ? "size-7 text-xs" : size === "lg" ? "size-14 text-lg" : "size-9 text-sm",
         className,
       )}
     >

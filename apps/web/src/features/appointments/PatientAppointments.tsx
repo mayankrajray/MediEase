@@ -1,5 +1,8 @@
 "use client";
 
+import { StatusMessage } from "@/components/ui/StatusMessage";
+import { RowsSkeleton } from "@/components/ui/Skeleton";
+import { buttonClasses } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TABLE, TD, TH, TR } from "@/components/ui/table";
 import { useEffect, useState } from "react";
@@ -48,27 +51,25 @@ export function PatientAppointments({ patient }: { patient: Patient }) {
   const clock = (iso: string) => formatClock(iso, clinic.timezone);
 
   return (
-    <section aria-labelledby="appointments-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-      <div className="flex items-center justify-between gap-2">
-        <h2 id="appointments-heading" className="text-lg font-bold">
+    <section aria-labelledby="appointments-heading" className="space-y-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="appointments-heading" className="heading-6 text-slate-900">
           Appointments
         </h2>
         {canManage && active[0] !== undefined && (
           <button
             type="button"
             onClick={() => setBooking(true)}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
+            className={`${buttonClasses("primary")} max-sm:w-full`}
           >
             Book for {patient.full_name}
           </button>
         )}
       </div>
-      <p role="status" className="min-h-6 font-medium text-emerald-900">
-        {message}
-      </p>
+      <StatusMessage message={message} />
       {error !== undefined && <ErrorNotice error={error} />}
-      {items === undefined && error === undefined && <p className="text-slate-700">Loading appointments…</p>}
-      {items !== undefined && items.length === 0 && <p className="text-slate-700">No appointments yet.</p>}
+      {items === undefined && error === undefined && <RowsSkeleton label="Loading appointments…" />}
+      {items !== undefined && items.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 px-3 py-5 text-center text-sm text-slate-700">No appointments yet.</p>}
       {items !== undefined && items.length > 0 && (
         <table role="table" className={TABLE}>
           <thead role="rowgroup">
