@@ -277,27 +277,43 @@
     }
     .me-table > tbody > tr {
       margin-bottom: 0.75rem;
-      border: 1px solid var(--color-slate-200);
+      border: 1px solid var(--color-line);
       border-radius: var(--radius-card);
       background: white;
       padding: 0.5rem 0.75rem;
       box-shadow: var(--shadow-card);
+      /* M7c-P7 (M4 phone fix): a card never grows wider than the screen; long names, codes
+         and phone numbers wrap inside it instead of pushing it sideways. */
+      min-width: 0;
+      max-width: 100%;
+      overflow-wrap: anywhere;
     }
     .me-table > tbody > tr > td,
     .me-table > tbody > tr > th {
       padding: 0.25rem 0;
       border: 0;
+      min-width: 0;
     }
-    /* A named cell is one line: its column's name, then the value. */
+    /* A named cell: its column's name in a narrow first column, and everything the cell holds
+       stacked in the second (M7c-P7: a grid, so a cell's several lines stay together and wrap,
+       where the earlier flex row put them side by side and off the card). */
     .me-table > tbody > tr > td[data-label]:not([data-label=""]) {
-      display: flex;
-      gap: 0.75rem;
+      display: grid;
+      grid-template-columns: 6.5rem minmax(0, 1fr);
+      column-gap: 0.75rem;
+      align-items: start;
     }
     .me-table > tbody > tr > td[data-label]:not([data-label=""])::before {
       content: attr(data-label);
-      flex: 0 0 6.5rem;
+      grid-column: 1;
+      grid-row: 1 / span 12;
       font-size: 0.875rem;
+      line-height: 1.5rem;
       color: var(--color-slate-600);
+    }
+    .me-table > tbody > tr > td[data-label]:not([data-label=""]) > * {
+      grid-column: 2;
+      min-width: 0;
     }
     .me-table > tbody > tr > td[data-label=""]:empty {
       display: none;

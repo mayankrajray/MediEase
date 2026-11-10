@@ -205,7 +205,7 @@ function NotificationDrawer({
                   href={item.link}
                   onClick={() => openOne(item)}
                   className={cx(
-                    "relative flex min-h-12 flex-col gap-0.5 py-3 pl-8 pr-4 transition-colors duration-200 ease-brand hover:bg-slate-50 motion-reduce:transition-none",
+                    "relative flex min-h-12 min-w-0 flex-col gap-0.5 py-3 pl-8 pr-4 break-words transition-colors duration-200 ease-brand hover:bg-slate-50 motion-reduce:transition-none",
                     unread ? "bg-brand-50" : undefined,
                   )}
                 >

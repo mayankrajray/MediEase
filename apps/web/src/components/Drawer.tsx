@@ -51,17 +51,18 @@ export function Drawer({
         event.preventDefault();
         onClose();
       }}
-      className={`me-overlay ${side === "left" ? "me-drawer-left ml-0 mr-auto max-w-xs" : "me-drawer-right ml-auto mr-0 max-w-lg"} h-full max-h-none w-full overflow-y-auto bg-surface p-0 shadow-modal backdrop:bg-slate-950/40`}
+      className={`me-overlay ${side === "left" ? "me-drawer-left ml-0 mr-auto max-w-xs" : "me-drawer-right ml-auto mr-0 max-w-lg"} h-full max-h-none w-full overflow-x-hidden overflow-y-auto overscroll-contain bg-surface p-0 shadow-modal backdrop:bg-slate-950/40`}
     >
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface/95 px-5 py-3 backdrop-blur">
-        <h2 id={titleId} className="heading-6 text-slate-900">
+        <h2 id={titleId} className="heading-6 min-w-0 break-words text-slate-900">
           {title}
         </h2>
         <Button variant="ghost" size="sm" onClick={onClose} className="-mr-2" icon={<X className="size-5" />}>
           <span className="sr-only">Close</span>
         </Button>
       </div>
-      <div className="space-y-4 p-5">{children}</div>
+      {/* M7c-P7 (M4 phone fix): content never scrolls sideways; a long word wraps instead. */}
+      <div className="min-w-0 space-y-4 p-5 [overflow-wrap:anywhere]">{children}</div>
     </dialog>
   );
 }
