@@ -2,10 +2,14 @@
 
 import { useState } from "react";
 
+import { CalendarClock, CircleCheck, PenLine, QrCode } from "lucide-react";
+
+import { Button } from "@/components/ui/Button";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { FollowUpReminder } from "@/features/reminders/FollowUpReminder";
 import { useClinic } from "@/features/shell/ClinicGate";
+import { CARD, CARD_TITLE } from "@/features/visits/card";
 import { ApiError } from "@/lib/api/client";
 import { formatDateTime, formatDay } from "@/lib/format/time";
 
@@ -44,55 +48,56 @@ export function IssuedActions({
 
   const advice = rx.advice;
   return (
-    <section aria-labelledby="rx-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
+    <section aria-labelledby="rx-heading" className={`${CARD} border-success-line`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="rx-heading" className="text-lg font-bold">
+        <h2 id="rx-heading" className={CARD_TITLE}>
+          <CircleCheck aria-hidden="true" className="size-5 text-success" />
           Prescription issued{rx.version > 1 ? ` · version ${rx.version}` : ""}
         </h2>
         <div className="flex flex-wrap items-start gap-2">
           <PrintButton rxId={rx.id} label="Print" name="Print the prescription" />
           {canRevise && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={revise}
-              className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
-            >
+            <Button size="sm" loading={busy} onClick={revise} icon={<PenLine className="size-3.5" />} className="min-h-8">
               Revise
-            </button>
+            </Button>
           )}
         </div>
       </div>
-      {rx.issued_at !== null && <p className="text-slate-800">Issued {formatDateTime(rx.issued_at, clinic.timezone)}. It cannot be changed; Revise makes a new version.</p>}
+      {rx.issued_at !== null && <p className="text-sm text-slate-700">Issued {formatDateTime(rx.issued_at, clinic.timezone)}. It cannot be changed; Revise makes a new version.</p>}
       {error !== undefined && <ErrorNotice error={error} />}
-      <ol aria-label="Medicines issued" className="list-decimal space-y-1 pl-6">
-        {rx.items.map((item) => (
-          <li key={item.id}>{lineSummary(item)}</li>
+      <ol aria-label="Medicines issued" className="divide-y divide-line rounded-lg border border-line">
+        {rx.items.map((item, i) => (
+          <li key={item.id} className="flex gap-2.5 px-3 py-2.5">
+            <span aria-hidden="true" className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-bold text-brand-800">
+              {i + 1}
+            </span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">{lineSummary(item)}</span>
+          </li>
         ))}
       </ol>
       {(advice.diet.length > 0 || advice.activity.length > 0 || advice.return_if.length > 0 || advice.notes !== null) && (
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
+        <dl className="grid gap-x-6 gap-y-1 rounded-lg bg-slate-50 p-3 sm:grid-cols-[max-content_1fr]">
           {advice.diet.length > 0 && (
             <>
-              <dt className="font-medium">Diet</dt>
+              <dt className="text-sm font-semibold text-slate-700">Diet</dt>
               <dd>{advice.diet.join("; ")}</dd>
             </>
           )}
           {advice.activity.length > 0 && (
             <>
-              <dt className="font-medium">Activity</dt>
+              <dt className="text-sm font-semibold text-slate-700">Activity</dt>
               <dd>{advice.activity.join("; ")}</dd>
             </>
           )}
           {advice.return_if.length > 0 && (
             <>
-              <dt className="font-medium">Come back immediately if</dt>
+              <dt className="text-sm font-semibold text-slate-700">Come back immediately if</dt>
               <dd>{advice.return_if.join("; ")}</dd>
             </>
           )}
           {advice.notes !== null && (
             <>
-              <dt className="font-medium">Other advice</dt>
+              <dt className="text-sm font-semibold text-slate-700">Other advice</dt>
               <dd className="whitespace-pre-line">{advice.notes}</dd>
             </>
           )}
@@ -100,11 +105,17 @@ export function IssuedActions({
       )}
       {rx.follow_up_date !== null && (
         <div className="flex flex-wrap items-start gap-3">
-          <p>Follow-up: {formatDay(rx.follow_up_date)}</p>
+          <p className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-brand-50 px-3 text-sm font-semibold text-brand-900">
+            <CalendarClock aria-hidden="true" className="size-4" />
+            Follow-up: {formatDay(rx.follow_up_date)}
+          </p>
           {chainId !== undefined && <FollowUpReminder patientId={rx.patient_id} chainId={chainId} />}
         </div>
       )}
-      <h3 className="font-bold">Patient link</h3>
+      <h3 className="flex items-center gap-2 border-t border-line pt-4 font-bold text-slate-900">
+        <QrCode aria-hidden="true" className="size-4 text-brand-700" />
+        Patient link
+      </h3>
       <LinkPanel rxId={rx.id} />
     </section>
   );

@@ -1,10 +1,12 @@
 "use client";
 
+import { Paperclip } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { buttonClasses } from "@/components/ui/Button";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
+import { CARD, CARD_TITLE } from "@/features/visits/card";
 import { formatDateTime } from "@/lib/format/time";
 
 import { AttachForm } from "./AttachForm";
@@ -62,8 +64,9 @@ export function AttachmentsPanel({ visitId, canShare, timeZone }: Readonly<{ vis
   }
 
   return (
-    <section aria-labelledby="reports-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-      <h2 id="reports-heading" className="text-lg font-bold">
+    <section aria-labelledby="reports-heading" className={CARD}>
+      <h2 id="reports-heading" className={CARD_TITLE}>
+        <Paperclip aria-hidden="true" className="size-5 text-brand-700" />
         Reports
       </h2>
       {load.status === "loading" && <p role="status">Loading the reports…</p>}

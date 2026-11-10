@@ -12,7 +12,7 @@ Plan: `docs/milestones/M7c-P7-design-system-plan.md`. System: `DESIGN.md`. Produ
 | M5 Patient management | ✅ built 10 Nov 2026; approved by the developer 10 Nov |
 | M6 Appointment booking | ✅ built 10 Nov 2026 |
 | M7 Patient portal | ✅ built 10 Nov 2026 |
-| M8 Prescriptions (and the PDF's layout 4 with the MediEase emblem) | ☐ |
+| M8 Prescriptions (and the PDF's layout 4 with the MediEase emblem) | ✅ screens built 10 Nov 2026; the PDF's layout 4 moved to the M7d backlog (B1): an API change |
 | M9 AI assistant | ☐ |
 | M10 Billing | ☐ |
 
@@ -435,3 +435,48 @@ builds move these numbers by about 3 KB.
 
 Playwright journeys on the CI fakes, all passed: `portal-screens`, `portal-linking`,
 `portal-accounts`, `medicine-plan`, `dose-tracking`, `patient-notifications`, `booking-answers`.
+
+## M8 — Prescriptions (built 10 Nov 2026)
+
+**Screens:** the consultation (header, earlier visits, notes and vitals, the prescription builder
+with its entry row, line editor and library, review and issue, the issued card with Print, the
+QR link and Revise, addenda, reports), and the patient's prescription link (`/p/<token>`: the
+last-4 check, the problem page and the prescription, which the portal shows too).
+
+**Not in this module:** the PDF's layout 4 with the MediEase emblem. It changes the API's PDF
+renderer, its assets and a new layout version, so under the developer's no-backend rule (10 Nov
+2026) it is item B1 in `M7d-discovery-booking.md`.
+
+**Existing problems:** at 375 px the consultation scrolled sideways by 354 px (the entry row was a
+fixed six-column grid); the header was bare text with an emerald *Complete visit* outside the
+palette; the medicine lines' controls were tiny text buttons with ↑, ↓ and ☆ as characters; the
+bedtime check as an amber box; inputs in three hand-written styles; *Loading the consultation…*
+as text; the issued medicines as a plain numbered list; the patient page had no logo, its
+language switch was a small underlined link, and the call button was not full width on a phone.
+
+**Changes (behaviour, API calls, words and accessible names unchanged):**
+
+| Area | Change |
+|---|---|
+| Shared | `features/visits/card.ts`: one card frame and heading (icon + title) for every consultation card, the autosave pill and the stale box with *Reload* |
+| Header | A card with the patient's initials, *Consultation* label, name, code, age, sex and language; the visit's state as a badge; *Back to the queue* and *Complete visit* (primary, with a spinner while completing) as design-system buttons; a skeleton while loading; *Visit not found* as an empty state; the read-only notice as an info alert |
+| Earlier visits | A timeline with a dot per visit, the medicines in a quiet box, *Repeat* as a small button with an icon (still named "Repeat the medicines of …") |
+| Notes | One column on a phone, two from 640 px; the shared inputs; vitals in a tinted fieldset, two across on a phone and four from 640 px; the save state as a pill |
+| Builder | Lines as one bordered list with a numbered dot, warnings in the warning tone with an icon, buttons with Lucide icons (chevrons for move, star, trash; names unchanged); keyboard hint as `kbd` keys; *Review and issue* with an icon |
+| Entry row | Two columns with the medicine across both below 1280 px, one row from 1280 px (the Tab order is the same); a dashed brand frame; a search icon in the medicine field; *Add line* with a plus |
+| Advice | One column on a phone; follow-up shortcuts as chips; the chosen date as a pill |
+| Review and issue | The language as a segmented control; the checks as a warning alert; the preview on the canvas tone; *Keep editing* and *Issue* (spinner while issuing) as buttons |
+| Issued | A card with a success border and icon; medicines as a numbered list; advice on a tinted panel; the follow-up as a pill; *Print*, *Revise*, *Copy link* and *Unlock link* with icons; the link in a mono box; the QR and its details wrap below 450 px |
+| Addenda, reports, line editor, library | The shared card, inputs and buttons |
+| Patient link page | Logo and the language switch as a pill in a top bar (the portal shows only the switch); the clinic and doctor as the first card with the date as a pill; each medicine a card with a numbered circle and divided fields; schedule times as chips; advice in a card; the follow-up highlighted; *Call the clinic* full width on a phone; *Save to my MediEase* in a card with the emblem. Still a Server Component with no client code |
+| Last-4 check | One card with a lock icon, a 56 px centred four-digit field and a full-width button; problems in the danger tone; the problem page as a card |
+
+**Checked (10 Nov 2026):** screenshots at 1440, 1366, 1024, 768, 430, 390, 375 and 320 px of the
+draft consultation, the issued one, the review dialog, the last-4 check and the patient page,
+with the overflow audit: no sideways scroll at any width. (Before: 354 px at 375. A first build
+was 42 px wide at 1366 from the entry row's minimum widths, and 5 px at 320 from *Copy link*;
+both fixed.) The patient page is 160.5 KB on first load (`patient-link-360`).
+
+Unit tests: the 13 consultation, prescription, patient-link and portal files pass unchanged.
+Playwright, all passed: `consultation-keyboard`, `patient-link-360`, `portal-screens`,
+`portal-linking`, `uploads`, `reminders-follow-ups`.

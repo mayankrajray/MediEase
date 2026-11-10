@@ -81,7 +81,7 @@ export function PortalAccountPage() {
     <div className="space-y-5">
       <PortalTitle>{s.account.title}</PortalTitle>
       {error !== null && <ErrorNotice error={error} />}
-      <p role="status" className="min-h-0 font-medium text-success empty:hidden">
+      <p role="status" className="min-h-0 font-medium text-success empty:sr-only">
         {status}
       </p>
 

@@ -2,6 +2,9 @@
 
 import { useId } from "react";
 
+import { CalendarClock } from "lucide-react";
+
+import { INPUT, INPUT_BASE, LABEL } from "@/components/ui/Field";
 import { addDays, formatDay } from "@/lib/format/time";
 
 import type { AdviceText } from "./draft";
@@ -13,6 +16,9 @@ const BOXES: readonly { readonly key: keyof AdviceText; readonly label: string; 
   { key: "notes", label: "Other advice", rows: 2 },
 ];
 const SHORTCUTS = [3, 7, 14] as const;
+/** The follow-up shortcuts as compact chips beside the date (40 px, the clinic size). */
+const CHIP =
+  "inline-flex min-h-10 items-center justify-center rounded-full border border-line bg-white px-3 text-sm font-semibold text-slate-800 transition-colors duration-200 ease-brand hover:border-brand-300 hover:bg-brand-50 hover:text-brand-900 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none";
 
 /**
  * Prescription-level advice and the follow-up (FR-RX-03): diet, activity and "come back
@@ -40,10 +46,10 @@ export function AdviceEditor({
   const base = useId();
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {BOXES.map((box) => (
           <div key={box.key}>
-            <label htmlFor={`${base}-${box.key}`} className="block font-medium">
+            <label htmlFor={`${base}-${box.key}`} className={LABEL}>
               {box.label}
               {box.key !== "notes" && <span className="text-sm font-normal text-slate-700"> (one per line)</span>}
             </label>
@@ -55,14 +61,14 @@ export function AdviceEditor({
               value={advice[box.key]}
               onChange={(e) => onAdvice({ ...advice, [box.key]: e.target.value })}
               onBlur={onLeave}
-              className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
+              className={`${INPUT} mt-1`}
             />
           </div>
         ))}
       </div>
       <div className="flex flex-wrap items-end gap-2">
         <div>
-          <label htmlFor={`${base}-follow-up`} className="block font-medium">
+          <label htmlFor={`${base}-follow-up`} className={LABEL}>
             Follow-up
           </label>
           <input
@@ -74,7 +80,7 @@ export function AdviceEditor({
             value={followUp}
             onChange={(e) => onFollowUp(e.target.value)}
             onBlur={onLeave}
-            className="rounded-lg border border-slate-400 px-2 py-1.5"
+            className={`${INPUT_BASE} mt-1`}
           />
         </div>
         {SHORTCUTS.map((days) => (
@@ -84,7 +90,7 @@ export function AdviceEditor({
             disabled={disabled}
             aria-label={`Follow-up in ${days} days`}
             onClick={() => onFollowUp(addDays(today, days))}
-            className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
+            className={CHIP}
           >
             +{days} d
           </button>
@@ -94,12 +100,17 @@ export function AdviceEditor({
             type="button"
             disabled={disabled}
             onClick={() => onFollowUp("")}
-            className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
+            className={CHIP}
           >
             No follow-up
           </button>
         )}
-        {followUp !== "" && <p className="pb-2 text-slate-800">{formatDay(followUp)}</p>}
+        {followUp !== "" && (
+          <p className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-brand-50 px-3 text-sm font-semibold text-brand-900">
+            <CalendarClock aria-hidden="true" className="size-4" />
+            {formatDay(followUp)}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -2,6 +2,11 @@
 
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 
+import { Plus } from "lucide-react";
+
+import { Button } from "@/components/ui/Button";
+import { INPUT, LABEL } from "@/components/ui/Field";
+
 import type { Favourite, Frequency, Suggestion, Timing, Vocabulary } from "./api";
 import { toLine, type Line } from "./draft";
 import { MedicineCombobox } from "./MedicineCombobox";
@@ -107,13 +112,14 @@ export function EntryRow({
   const describe = (name: keyof Entry, hint?: boolean) =>
     [hint === true ? `${fieldId(name)}-hint` : "", errorOf(name) !== undefined ? `${fieldId(name)}-error` : ""].filter(Boolean).join(" ") ||
     undefined;
-  const label = "block text-sm font-medium";
-  const input = "w-full rounded-lg border border-slate-400 px-2 py-1.5";
+  const label = LABEL;
+  const input = `${INPUT} mt-1`;
 
   return (
-    <div role="group" aria-label="New medicine" onKeyDown={onKeyDown} className="space-y-2 rounded-card border border-slate-200 bg-white bg-slate-50 p-3">
-      <div className="grid grid-cols-[minmax(12rem,2fr)_minmax(5rem,1fr)_minmax(7rem,1fr)_minmax(8rem,1fr)_minmax(5rem,0.7fr)_auto] items-start gap-2">
-        <div>
+    <div role="group" aria-label="New medicine" onKeyDown={onKeyDown} className="space-y-2 rounded-lg border border-dashed border-brand-300 bg-brand-50/40 p-3">
+      {/* One row on a wide screen (Tab moves left to right); two columns, the medicine across both, on a narrow one. */}
+      <div className="grid grid-cols-2 items-start gap-x-2 gap-y-3 xl:grid-cols-[minmax(10rem,2fr)_minmax(4rem,1fr)_minmax(6rem,1fr)_minmax(7rem,1fr)_minmax(4rem,0.7fr)_auto] xl:gap-y-2">
+        <div className="col-span-2 xl:col-span-1">
           <label htmlFor={fieldId("name")} className={label}>
             Medicine
           </label>
@@ -146,7 +152,7 @@ export function EntryRow({
             onChange={(e) => set({ frequency: e.target.value })}
             className={input}
           />
-          <p id={`${fieldId("frequency")}-hint`} className="text-xs text-slate-700">
+          <p id={`${fieldId("frequency")}-hint`} className="mt-1 text-xs text-slate-700">
             {code === undefined ? "101, 110, 1-0-1-1, S, O, C" : frequencyLabel(code, null, vocabulary)}
           </p>
           {code === "CUSTOM" && (
@@ -192,22 +198,17 @@ export function EntryRow({
             onChange={(e) => set({ duration: e.target.value })}
             className={input}
           />
-          <p id={`${fieldId("duration")}-hint`} className="text-xs text-slate-700">
+          <p id={`${fieldId("duration")}-hint`} className="mt-1 text-xs text-slate-700">
             5, R, G
           </p>
         </div>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={add}
-          className="mt-5 rounded bg-brand-700 px-3 py-1.5 font-semibold text-white hover:bg-brand-800 disabled:bg-slate-400"
-        >
+        <Button variant="primary" disabled={disabled} onClick={add} icon={<Plus className="size-4" />} className="self-end whitespace-nowrap xl:mt-6 xl:self-start">
           Add line
-        </button>
+        </Button>
       </div>
       {(["name", "frequency", "custom", "duration"] as const).map((name) =>
         errorOf(name) === undefined ? null : (
-          <p key={name} id={`${fieldId(name)}-error`} className="text-sm font-medium text-red-900">
+          <p key={name} id={`${fieldId(name)}-error`} className="text-sm font-medium text-danger">
             {errorOf(name)}
           </p>
         ),

@@ -3,6 +3,8 @@
 import { useId, useState } from "react";
 
 import { Drawer } from "@/components/Drawer";
+import { buttonClasses } from "@/components/ui/Button";
+import { INPUT } from "@/components/ui/Field";
 
 import type { DurationKind, PreparationPhrase, StoragePhrase, Timing, Vocabulary } from "./api";
 import type { Line } from "./draft";
@@ -89,7 +91,7 @@ export function LineEditor({
     });
   }
 
-  const field = "w-full rounded-lg border border-slate-400 px-2 py-1.5";
+  const field = `${INPUT} mt-1`;
   const labelCss = "block font-medium";
   const short = (name: "form" | "strength" | "dose" | "quantity", label: string) => (
     <div>
@@ -101,7 +103,7 @@ export function LineEditor({
   );
   const error = (key: string) =>
     err(key) === undefined ? null : (
-      <p id={id(`${key}-error`)} className="text-sm font-medium text-red-900">
+      <p id={id(`${key}-error`)} className="mt-1 text-sm font-medium text-danger">
         {err(key)}
       </p>
     );
@@ -290,7 +292,7 @@ export function LineEditor({
         <textarea id={id("notes")} rows={2} maxLength={1000} value={draft.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} className={field} />
       </div>
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none">
+        <button type="button" onClick={onClose} className={buttonClasses("secondary", "md")}>
           Cancel
         </button>
         <button type="button" onClick={done} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none">

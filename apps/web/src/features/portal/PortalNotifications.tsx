@@ -70,7 +70,7 @@ export function PortalNotifications() {
           </Button>
         )}
       </div>
-      <p role="status" className="min-h-0 font-medium text-success empty:hidden">
+      <p role="status" className="min-h-0 font-medium text-success empty:sr-only">
         {status}
       </p>
       {error !== null && <ErrorNotice error={error} />}

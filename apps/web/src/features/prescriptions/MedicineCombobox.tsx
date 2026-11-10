@@ -1,7 +1,9 @@
 "use client";
 
+import { Search } from "lucide-react";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type Ref } from "react";
 
+import { INPUT } from "@/components/ui/Field";
 import { useSession } from "@/features/auth/SessionProvider";
 
 import { useRxApi, type Suggestion } from "./api";
@@ -103,7 +105,8 @@ export function MedicineCombobox({
   }
 
   return (
-    <div className="relative">
+    <div className="relative mt-1">
+      <Search aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3 my-auto size-4 text-slate-500" />
       <input
         ref={inputRef}
         id={id}
@@ -124,14 +127,14 @@ export function MedicineCombobox({
         }}
         onKeyDown={onKeyDown}
         onBlur={() => setOpen(false)}
-        className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
+        className={`${INPUT} pl-9`}
       />
       <ul
         id={listId}
         role="listbox"
         aria-label="Suggestions from your favourites and this clinic's prescriptions"
         hidden={!shown}
-        className="absolute z-20 mt-1 max-h-64 w-full min-w-64 overflow-y-auto rounded-lg border border-slate-300 bg-white py-1 shadow-lg"
+        className="absolute z-20 mt-1 max-h-64 w-full min-w-0 overflow-y-auto rounded-lg border border-line bg-white py-1 shadow-lg sm:min-w-64"
       >
         {items.map((s, i) => (
           <li
@@ -144,10 +147,10 @@ export function MedicineCombobox({
               event.preventDefault();
               pick(s);
             }}
-            className="cursor-pointer px-3 py-1.5 aria-selected:bg-brand-100"
+            className="flex min-h-10 cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-slate-50 aria-selected:bg-brand-50 aria-selected:text-brand-900"
           >
             {s.name}{" "}
-            <span className="ml-1 text-sm text-slate-700">{s.source === "FAVOURITE" ? "· favourite" : "· used before"}</span>
+            <span className="text-sm text-slate-600">{s.source === "FAVOURITE" ? "· favourite" : "· used before"}</span>
           </li>
         ))}
       </ul>

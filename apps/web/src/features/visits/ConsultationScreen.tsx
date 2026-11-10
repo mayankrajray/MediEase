@@ -4,7 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ArrowLeft, CircleCheck, FileSearch, Pill } from "lucide-react";
+
 import { Dialog } from "@/components/Dialog";
+import { Alert } from "@/components/ui/Alert";
+import { Avatar } from "@/components/ui/Avatar";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { useAppointmentApi, type Doctor } from "@/features/appointments/api";
@@ -19,6 +27,7 @@ import { useClinic } from "@/features/shell/ClinicGate";
 
 import { Addenda } from "./Addenda";
 import { HistoryTimeline } from "./HistoryTimeline";
+import { CARD_TITLE } from "./card";
 import { VisitNotes } from "./VisitNotes";
 
 type Load =
@@ -81,22 +90,33 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
 
   if (load.status === "loading") {
     return (
-      <p role="status" className="text-slate-700">
-        Loading the consultation…
-      </p>
+      <div className="space-y-4" aria-busy="true">
+        <p role="status" className="sr-only">
+          Loading the consultation…
+        </p>
+        <Skeleton className="h-20 w-full" />
+        <div className="grid gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
+          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-80 w-full" />
+        </div>
+      </div>
     );
   }
   if (load.status === "failed") {
     return isNotFound(load.error) ? (
-      <section className="space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight">Visit not found</h1>
-        <p>
-          This visit is not in {clinic.name}.{" "}
-          <Link href="/queue" className="text-brand-800 underline">
+      <EmptyState
+        title="Visit not found"
+        icon={<FileSearch className="size-5" />}
+        action={
+          <Link href="/queue" className={buttonClasses("secondary", "md")}>
+            <ArrowLeft aria-hidden="true" className="size-4" />
             Back to the queue
           </Link>
-        </p>
-      </section>
+        }
+      >
+        <h1 className="sr-only">Visit not found</h1>
+        This visit is not in {clinic.name}.
+      </EmptyState>
     ) : (
       <ErrorNotice error={load.error} onRetry={() => setGeneration((n) => n + 1)} />
     );
@@ -136,44 +156,39 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
 
   return (
     <article aria-labelledby="consultation-heading" className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-300 pb-3">
-        <div>
-          <p className="text-sm font-medium text-slate-700">Consultation</p>
-          <h1 id="consultation-heading" className="text-2xl font-bold tracking-tight">
-            <Link href={patientPath(patient.id)} className="text-brand-800 underline">
-              {patient.full_name}
-            </Link>
-          </h1>
-          <p className="text-slate-800">
-            {patient.code} · {ageText(patient)} · {SEX_LABELS[patient.sex]} · reads {LANGUAGE_LABELS[patient.language]}
-            {patient.is_minor && " · under 18"}
-          </p>
+      <header className="flex flex-wrap items-center justify-between gap-4 rounded-card border border-line bg-white p-4 shadow-card">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar name={patient.full_name} size="lg" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Consultation</p>
+            <h1 id="consultation-heading" className="text-xl font-bold tracking-tight sm:text-2xl">
+              <Link href={patientPath(patient.id)} className="text-slate-900 underline-offset-4 hover:text-brand-800 hover:underline [overflow-wrap:anywhere]">
+                {patient.full_name}
+              </Link>
+            </h1>
+            <p className="text-sm text-slate-700">
+              {`${patient.code} · ${ageText(patient)} · ${SEX_LABELS[patient.sex]} · reads ${LANGUAGE_LABELS[patient.language]}`}
+              {patient.is_minor && " · under 18"}
+            </p>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="font-medium">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge tone={visit.status === "OPEN" ? "active" : locked ? "neutral" : "done"}>
             {visit.status === "OPEN" ? "In consultation" : locked ? "Completed · locked" : "Completed · notes editable for 24 hours"}
-          </p>
-          <Link href="/queue" className="rounded-lg border border-slate-400 px-3 py-2 hover:bg-slate-100">
+          </StatusBadge>
+          <Link href="/queue" className={buttonClasses("secondary", "md")}>
+            <ArrowLeft aria-hidden="true" className="size-4" />
             Back to the queue
           </Link>
           {writer && visit.status === "OPEN" && (
-            <button
-              type="button"
-              disabled={completing}
-              onClick={() => void complete(false)}
-              className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-800 disabled:bg-slate-400"
-            >
+            <Button variant="primary" loading={completing} onClick={() => void complete(false)} icon={<CircleCheck className="size-4" />}>
               {completing ? "Completing…" : "Complete visit"}
-            </button>
+            </Button>
           )}
         </div>
       </header>
       {completeError !== undefined && <ErrorNotice error={completeError} />}
-      {!writer && (
-        <p className="rounded-lg border border-slate-300 bg-slate-50 p-2">
-          {canWrite ? "This is another doctor's visit: you can read it but not change it." : "Read only."}
-        </p>
-      )}
+      {!writer && <Alert tone="info">{canWrite ? "This is another doctor's visit: you can read it but not change it." : "Read only."}</Alert>}
 
       <div className="grid gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
         <aside className="space-y-4">
@@ -200,8 +215,9 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
           ) : issued !== undefined ? (
             <IssuedActions rx={issued} canRevise={writer} onRevised={reload} chainId={(prescriptions.find((p) => p.version === 1) ?? issued).id} />
           ) : (
-            <section aria-labelledby="rx-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-              <h2 id="rx-heading" className="text-lg font-bold">
+            <section aria-labelledby="rx-heading" className="space-y-3 rounded-card border border-line bg-white p-4 shadow-card">
+              <h2 id="rx-heading" className={CARD_TITLE}>
+                <Pill aria-hidden="true" className="size-5 text-brand-700" />
                 Prescription
               </h2>
               <p className="text-slate-700">{draft !== undefined ? "Being written by the doctor; not issued yet." : "No prescription for this visit."}</p>
@@ -215,22 +231,13 @@ export function ConsultationScreen({ visitId }: Readonly<{ visitId: string }>) {
       {confirming && (
         <Dialog title="Complete without issuing?" onClose={() => setConfirming(false)}>
           <p>The prescription is written but not issued, so the patient gets nothing to print or open. You can still issue it afterwards.</p>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              data-autofocus
-              onClick={() => setConfirming(false)}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
-            >
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button data-autofocus onClick={() => setConfirming(false)}>
               Go back
-            </button>
-            <button
-              type="button"
-              onClick={() => void complete(true)}
-              className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-800"
-            >
+            </Button>
+            <Button variant="primary" onClick={() => void complete(true)}>
               Complete anyway
-            </button>
+            </Button>
           </div>
         </Dialog>
       )}

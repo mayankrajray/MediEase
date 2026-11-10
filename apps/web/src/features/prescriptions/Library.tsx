@@ -4,6 +4,8 @@ import { useId, useState } from "react";
 
 import { Dialog } from "@/components/Dialog";
 import { Drawer } from "@/components/Drawer";
+import { buttonClasses } from "@/components/ui/Button";
+import { INPUT } from "@/components/ui/Field";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 
@@ -55,7 +57,7 @@ function NameDialog({
             maxLength={100}
             aria-describedby={`${id}-hint`}
             onChange={(e) => setName(e.target.value)}
-            className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
+            className={`${INPUT} mt-1`}
           />
           <p id={`${id}-hint`} className="text-sm text-slate-700">
             {hint}
@@ -63,7 +65,7 @@ function NameDialog({
         </div>
         {error !== undefined && <ErrorNotice error={error} />}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none">
+          <button type="button" onClick={onClose} className={buttonClasses("secondary", "md")}>
             Cancel
           </button>
           <button
@@ -206,7 +208,7 @@ export function LibraryDrawer({
                   type="button"
                   aria-label={`Rename template ${t.name}`}
                   onClick={() => setRenaming(t)}
-                  className="rounded-lg border border-slate-400 px-3 py-1 hover:bg-slate-100"
+                  className={buttonClasses("secondary", "sm")}
                 >
                   Rename
                 </button>
@@ -214,7 +216,7 @@ export function LibraryDrawer({
                   type="button"
                   aria-label={`Delete template ${t.name}`}
                   onClick={() => remove(t.id, `Template ${t.name}`, () => api.deleteTemplate(t.id))}
-                  className="inline-flex min-h-8 items-center rounded-lg border border-red-700 bg-white px-3 py-1 text-sm font-medium text-red-900 hover:bg-red-50"
+                  className={`${buttonClasses("secondary", "sm")} text-danger hover:border-danger-line hover:bg-danger-soft hover:text-danger`}
                 >
                   {confirming === t.id ? "Delete?" : "Delete"}
                 </button>
@@ -239,7 +241,7 @@ export function LibraryDrawer({
                 type="button"
                 aria-label={`Delete favourite ${f.name}`}
                 onClick={() => remove(f.id, `Favourite ${f.name}`, () => api.deleteFavourite(f.id))}
-                className="inline-flex min-h-8 items-center rounded-lg border border-red-700 bg-white px-3 py-1 text-sm font-medium text-red-900 hover:bg-red-50"
+                className={`${buttonClasses("secondary", "sm")} text-danger hover:border-danger-line hover:bg-danger-soft hover:text-danger`}
               >
                 {confirming === f.id ? "Delete?" : "Delete"}
               </button>

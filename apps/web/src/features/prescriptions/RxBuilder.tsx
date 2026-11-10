@@ -2,8 +2,13 @@
 
 import { useCallback, useEffect, useId, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from "react";
 
+import { ChevronDown, ChevronUp, FileCheck2, Library, Pill, RefreshCw, Save, Star, Trash2, TriangleAlert } from "lucide-react";
+
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { INPUT_BASE, LABEL } from "@/components/ui/Field";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
+import { CARD, CARD_TITLE, STALE_BOX } from "@/features/visits/card";
 import { saveText, useAutosave } from "@/features/visits/useAutosave";
 import { ApiError } from "@/lib/api/client";
 import { addDays, formatDay } from "@/lib/format/time";
@@ -202,52 +207,62 @@ export function RxBuilder({
     setMessage(`Template ${template.name} applied.`);
   }
 
-  const button = "rounded-lg border border-slate-400 px-2 py-1 text-sm font-medium hover:bg-slate-100 disabled:text-slate-500";
+  const button = `${buttonClasses("secondary", "sm")} min-h-8`;
+  const icon = `${button} w-8 px-0`;
 
   return (
-    <section aria-labelledby="rx-heading" className="space-y-3">
+    <section aria-labelledby="rx-heading" className={CARD}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="rx-heading" className="text-lg font-bold">
+        <h2 id="rx-heading" className={CARD_TITLE}>
+          <Pill aria-hidden="true" className="size-5 text-brand-700" />
           Prescription{draft !== undefined && draft.version > 1 ? ` · version ${draft.version} (revision)` : ""}
         </h2>
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={stale} onClick={() => setOverlay({ kind: "library" })} className={button}>
+            <Library aria-hidden="true" className="size-4" />
             Templates and favourites
           </button>
           <button type="button" disabled={stale || isEmpty(body)} onClick={() => setOverlay({ kind: "template" })} className={button}>
+            <Save aria-hidden="true" className="size-4" />
             Save as template
           </button>
         </div>
       </div>
 
       {stale && (
-        <div role="alert" className="rounded-lg border border-amber-700 bg-amber-50 p-3">
+        <div role="alert" className={STALE_BOX}>
           <p className="font-medium">{saveText(autosave.state)}</p>
-          <button type="button" onClick={onReload} className="mt-2 rounded border border-amber-900 bg-white px-3 py-1.5 font-medium">
+          <Button onClick={onReload} icon={<RefreshCw className="size-4" />}>
             Reload
-          </button>
+          </Button>
         </div>
       )}
 
       {lines.length > 0 && (
-        <ol ref={listRef} aria-label="Medicines" className="space-y-1">
+        <ol ref={listRef} aria-label="Medicines" className="divide-y divide-line overflow-hidden rounded-lg border border-line">
           {lines.map((line, index) => (
             <li
               key={line.key}
               data-line-key={line.key}
               onKeyDown={(event) => onLineKey(event, index, line.key)}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-slate-200 bg-white px-3 py-2"
+              className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 bg-white px-3 py-2.5 transition-colors duration-200 ease-brand focus-within:bg-brand-50/50 hover:bg-slate-50 motion-reduce:transition-none"
             >
-              <span>
-                <span className="font-semibold">{index + 1}.</span> {lineSummary(line)}
-                {(line.preparation?.length ?? 0) + (line.storage?.length ?? 0) > 0 && (
-                  <span className="text-sm text-slate-700"> · with instructions</span>
-                )}
-                {(warnings[index] ?? []).map((w) => (
-                  <span key={w} className="mt-1 block rounded border border-amber-700 bg-amber-50 px-2 py-0.5 text-sm text-amber-950">
-                    Check: {WARNING_TEXT[w]}
-                  </span>
-                ))}
+              <span className="flex min-w-0 flex-1 gap-2.5">
+                <span aria-hidden="true" className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-bold text-brand-800">
+                  {index + 1}
+                </span>
+                <span className="min-w-0 [overflow-wrap:anywhere]">
+                  <span className="sr-only">{index + 1}.</span> {lineSummary(line)}
+                  {(line.preparation?.length ?? 0) + (line.storage?.length ?? 0) > 0 && (
+                    <span className="text-sm text-slate-700"> · with instructions</span>
+                  )}
+                  {(warnings[index] ?? []).map((w) => (
+                    <span key={w} className="mt-1 flex items-start gap-1.5 rounded-md border border-warning-line bg-warning-soft px-2 py-1 text-sm text-slate-900">
+                      <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-warning" />
+                      <span>Check: {WARNING_TEXT[w]}</span>
+                    </span>
+                  ))}
+                </span>
               </span>
               <span className="flex flex-wrap gap-1">
                 <button
@@ -267,9 +282,9 @@ export function RxBuilder({
                   disabled={stale || index === 0}
                   aria-label={`Move line ${index + 1} up`}
                   onClick={() => setLines(moveLine(lines, index, -1))}
-                  className={button}
+                  className={icon}
                 >
-                  ↑
+                  <ChevronUp aria-hidden="true" className="size-4" />
                 </button>
                 <button
                   type="button"
@@ -277,9 +292,9 @@ export function RxBuilder({
                   disabled={stale || index === lines.length - 1}
                   aria-label={`Move line ${index + 1} down`}
                   onClick={() => setLines(moveLine(lines, index, 1))}
-                  className={button}
+                  className={icon}
                 >
-                  ↓
+                  <ChevronDown aria-hidden="true" className="size-4" />
                 </button>
                 <button
                   type="button"
@@ -289,7 +304,8 @@ export function RxBuilder({
                   onClick={() => setOverlay({ kind: "favourite", index })}
                   className={button}
                 >
-                  ☆ Favourite
+                  <Star aria-hidden="true" className="size-3.5" />
+                  Favourite
                 </button>
                 <button
                   type="button"
@@ -297,8 +313,9 @@ export function RxBuilder({
                   disabled={stale}
                   aria-label={`Remove line ${index + 1}, ${line.medicine_name}`}
                   onClick={() => remove(index)}
-                  className={`${button} border-red-800 text-red-900`}
+                  className={`${button} text-danger hover:border-danger-line hover:bg-danger-soft hover:text-danger`}
                 >
+                  <Trash2 aria-hidden="true" className="size-3.5" />
                   Remove
                 </button>
               </span>
@@ -306,7 +323,12 @@ export function RxBuilder({
           ))}
         </ol>
       )}
-      {lines.length > 0 && <p className="text-sm text-slate-700">Alt+↑ and Alt+↓ move the line you are on.</p>}
+      {lines.length > 0 && (
+        <p className="text-sm text-slate-700">
+          <kbd className="rounded border border-line bg-slate-50 px-1 font-sans text-xs">Alt+↑</kbd> and{" "}
+          <kbd className="rounded border border-line bg-slate-50 px-1 font-sans text-xs">Alt+↓</kbd> move the line you are on.
+        </p>
+      )}
 
       <EntryRow
         onAdd={(line) => setLines([...lines, line])}
@@ -316,7 +338,7 @@ export function RxBuilder({
         disabled={stale || lines.length >= MAX_LINES}
       />
 
-      <h3 className="font-bold">Advice and follow-up</h3>
+      <h3 className="border-t border-line pt-4 font-bold text-slate-900">Advice and follow-up</h3>
       <AdviceEditor
         advice={body.advice}
         followUp={body.followUp}
@@ -327,7 +349,7 @@ export function RxBuilder({
         onLeave={() => void flush()}
       />
       <div>
-        <label htmlFor={startId} className="block font-medium">
+        <label htmlFor={startId} className={LABEL}>
           Course starts on
         </label>
         <input
@@ -340,9 +362,9 @@ export function RxBuilder({
           aria-describedby={`${startId}-hint`}
           onChange={(e) => update({ ...body, startsOn: e.target.value })}
           onBlur={() => void flush()}
-          className="rounded-lg border border-slate-400 px-2 py-1.5"
+          className={`${INPUT_BASE} mt-1`}
         />
-        <p id={`${startId}-hint`} className="text-sm text-slate-700">
+        <p id={`${startId}-hint`} className="mt-1 text-sm text-slate-700">
           Leave it empty to start on the day it is issued.
           {draft?.previous_starts_on !== null && draft?.previous_starts_on !== undefined
             ? ` The version this revises started on ${formatDay(draft.previous_starts_on)}.`
@@ -350,18 +372,13 @@ export function RxBuilder({
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-300 pt-3">
-        <p role="status" aria-live="polite" className="text-sm text-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+        <p role="status" aria-live="polite" className="text-sm text-slate-700">
           {stale ? "" : message === "" ? saveText(autosave.state) : `${message} ${saveText(autosave.state)}`}
         </p>
-        <button
-          type="button"
-          disabled={stale || isEmpty(body)}
-          onClick={() => setOverlay({ kind: "review" })}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
-        >
+        <Button variant="primary" disabled={stale || isEmpty(body)} onClick={() => setOverlay({ kind: "review" })} icon={<FileCheck2 className="size-4" />}>
           Review and issue
-        </button>
+        </Button>
       </div>
       {autosave.state.kind === "failed" && <ErrorNotice error={autosave.state.error} />}
 
