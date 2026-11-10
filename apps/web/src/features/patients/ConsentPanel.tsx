@@ -1,6 +1,11 @@
 "use client";
 
+import { MessageSquareQuote } from "lucide-react";
 import { useState, type FormEvent } from "react";
+
+import { Button } from "@/components/ui/Button";
+import { CHOICE_CARD, CHOICE_INPUT } from "@/components/ui/Field";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -74,19 +79,20 @@ export function ConsentPanel({
   }
 
   const who = patient.is_minor ? "the parent or guardian" : "the patient";
-  const button =
-    "rounded px-4 py-2 font-semibold disabled:cursor-not-allowed disabled:bg-slate-500";
+  const summary = consentSummary(patient);
+  const tone = patient.opted_out ? "missed" : patient.consent_recorded_at === null ? "waiting" : summary === "Declined" ? "neutral" : "done";
 
   return (
-    <section aria-labelledby="consent-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-      <h2 id="consent-heading" className="text-lg font-bold">
+    <section aria-labelledby="consent-heading" className="space-y-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
+      <h2 id="consent-heading" className="heading-6 text-slate-900">
         Messages
       </h2>
-      <p className="font-medium" data-testid="consent-summary">
-        {consentSummary(patient)}
+      {/* M7c-P7 (M5): the consent state as a badge in words; when it was recorded under it. */}
+      <p data-testid="consent-summary">
+        <StatusBadge tone={tone}>{summary}</StatusBadge>
       </p>
       {patient.opted_out && patient.opted_out_at !== null && (
-        <p className="text-slate-800">Opted out on {formatDateTime(patient.opted_out_at, timeZone)}.</p>
+        <p className="text-sm text-slate-700">Opted out on {formatDateTime(patient.opted_out_at, timeZone)}.</p>
       )}
       {!patient.opted_out && patient.consent_recorded_at !== null && (
         <p className="text-sm text-slate-700">Recorded {formatDateTime(patient.consent_recorded_at, timeZone)}.</p>
@@ -96,87 +102,71 @@ export function ConsentPanel({
 
       {mode === "record" || mode === "opt-in" ? (
         <form onSubmit={onSubmit} className="space-y-3">
-          <p className="rounded-lg bg-slate-100 p-3">
-            Ask {who}: “May the clinic send you appointment and prescription messages on WhatsApp? And by SMS?
-            You can ask us to stop at any time.”
+          <p className="flex gap-2 rounded-lg border border-line bg-surface-muted p-3 text-slate-800">
+            <MessageSquareQuote aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-slate-500" />
+            <span>
+              Ask {who}: “May the clinic send you appointment and prescription messages on WhatsApp? And by SMS?
+              You can ask us to stop at any time.”
+            </span>
           </p>
-          <label className="flex min-h-10 items-center gap-3 font-medium">
-            <input type="checkbox" className="size-5 accent-brand-700" checked={whatsapp} onChange={(event) => setWhatsapp(event.target.checked)} />
-            WhatsApp: yes
+          <label className={CHOICE_CARD}>
+            <input type="checkbox" className={CHOICE_INPUT} checked={whatsapp} onChange={(event) => setWhatsapp(event.target.checked)} />
+            <span className="font-medium">WhatsApp: yes</span>
           </label>
-          <label className="flex min-h-10 items-center gap-3 font-medium">
-            <input type="checkbox" className="size-5 accent-brand-700" checked={sms} onChange={(event) => setSms(event.target.checked)} />
-            SMS: yes
+          <label className={CHOICE_CARD}>
+            <input type="checkbox" className={CHOICE_INPUT} checked={sms} onChange={(event) => setSms(event.target.checked)} />
+            <span className="font-medium">SMS: yes</span>
           </label>
           <p className="text-sm text-slate-700">Leave both unticked if the answer is no: that is recorded as declined.</p>
-          <div className="flex gap-3">
-            <button type="submit" disabled={submitting} className={`${button} bg-brand-700 text-white hover:bg-brand-800`}>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="primary" loading={submitting}>
               {submitting ? "Saving…" : mode === "opt-in" ? "Opt back in" : "Save answer"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("view")}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
-            >
+            </Button>
+            <Button onClick={() => setMode("view")} disabled={submitting}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       ) : mode === "confirm-opt-out" ? (
-        <div className="space-y-3">
-          <p>Stop all messages to this {patient.is_minor ? "patient's guardian" : "patient"}? They can opt back in later.</p>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => void act(() => api.optOut(patient.id))}
-              className={`${button} bg-red-700 text-white hover:bg-red-800`}
-            >
+        <div className="space-y-3 rounded-lg border border-danger-line bg-danger-soft p-3">
+          <p className="font-medium text-slate-900">
+            Stop all messages to this {patient.is_minor ? "patient's guardian" : "patient"}? They can opt back in later.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="danger" loading={submitting} onClick={() => void act(() => api.optOut(patient.id))}>
               {submitting ? "Saving…" : "Yes, opt out"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("view")}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
-            >
+            </Button>
+            <Button onClick={() => setMode("view")} disabled={submitting} data-autofocus>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2">
           {patient.opted_out ? (
-            <button
-              type="button"
+            <Button
               onClick={() => {
                 setWhatsapp(false);
                 setSms(false);
                 setMode("opt-in");
               }}
-              className="rounded-lg border border-brand-700 px-4 py-2 font-medium text-brand-800 hover:bg-brand-50"
             >
               Opt back in
-            </button>
+            </Button>
           ) : (
             <>
-              <button
-                type="button"
+              <Button
                 onClick={() => {
                   setWhatsapp(patient.whatsapp_consent);
                   setSms(patient.sms_consent);
                   setMode("record");
                 }}
-                className="rounded-lg border border-brand-700 px-4 py-2 font-medium text-brand-800 hover:bg-brand-50"
               >
                 {patient.consent_recorded_at === null ? "Record consent" : "Change consent"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("confirm-opt-out")}
-                className="rounded-lg border border-red-800 px-4 py-2 font-medium text-red-900 hover:bg-red-50"
-              >
+              </Button>
+              <Button variant="ghost" onClick={() => setMode("confirm-opt-out")} className="text-danger hover:bg-danger-soft hover:text-danger">
                 Opt out of all messages
-              </button>
+              </Button>
             </>
           )}
         </div>

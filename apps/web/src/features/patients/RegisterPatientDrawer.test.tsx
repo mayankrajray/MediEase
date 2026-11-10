@@ -194,3 +194,53 @@ describe("register patient drawer", () => {
     expect(api.count(REGISTER)).toBe(0);
   });
 });
+
+describe("register patient checks (M7c-P7, M5; DESIGN.md §8a)", () => {
+  it("an empty submit says what is missing under each field, lists them, focuses the first and sends nothing", async () => {
+    const api = mockApi(workspaceRoutes);
+    const dialog = await openDrawer();
+
+    submit(dialog);
+
+    expect(within(dialog).getAllByText("Enter the patient's full name.").length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText("Enter a phone number.").length).toBeGreaterThan(0);
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("Check these before registering");
+    expect(within(dialog).getByLabelText(/^Full name/)).toHaveFocus();
+    expect(within(dialog).getByLabelText(/^Full name/)).toHaveAttribute("aria-invalid", "true");
+    expect(api.count(REGISTER)).toBe(0);
+  });
+
+  it("a short phone is flagged on leaving the field and cleared as it is fixed; nothing typed is lost", async () => {
+    mockApi(workspaceRoutes);
+    const dialog = await openDrawer();
+    const phone = within(dialog).getByLabelText(/^Phone/);
+
+    type(dialog, /^Phone/, "98765");
+    fireEvent.blur(phone);
+    expect(within(dialog).getByText("Enter a 10-digit mobile, or the number with its country code.")).toBeInTheDocument();
+    expect(phone).toHaveValue("98765");
+
+    type(dialog, /^Phone/, "98765 43210");
+    expect(within(dialog).queryByText("Enter a 10-digit mobile, or the number with its country code.")).not.toBeInTheDocument();
+  });
+
+  it("a date of birth after today is caught before sending", async () => {
+    const api = mockApi(workspaceRoutes);
+    const dialog = await openDrawer();
+    fillAdult(dialog);
+    type(dialog, "Date of birth", "2999-01-01");
+
+    submit(dialog);
+
+    expect(within(dialog).getByText("The date of birth cannot be after today.")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Date of birth")).toHaveFocus();
+    expect(api.count(REGISTER)).toBe(0);
+  });
+
+  it("the name counts its characters", async () => {
+    mockApi(workspaceRoutes);
+    const dialog = await openDrawer();
+    type(dialog, /^Full name/, "Asha");
+    expect(within(dialog).getByText("4 of 200")).toBeInTheDocument();
+  });
+});

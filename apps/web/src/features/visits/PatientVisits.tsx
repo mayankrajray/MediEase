@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { RowsSkeleton } from "@/components/ui/Skeleton";
+import { buttonClasses } from "@/components/ui/Button";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { useRxApi, type VisitSummary } from "@/features/prescriptions/api";
@@ -59,19 +61,19 @@ export function PatientVisits({ patientId }: Readonly<{ patientId: string }>) {
   }
 
   return (
-    <section aria-labelledby="visits-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-      <h2 id="visits-heading" className="text-lg font-bold">
+    <section aria-labelledby="visits-heading" className="space-y-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
+      <h2 id="visits-heading" className="heading-6 text-slate-900">
         Visits
       </h2>
       {error !== undefined && <ErrorNotice error={error} />}
-      {items === undefined && error === undefined && <p className="text-slate-700">Loading visits…</p>}
-      {items !== undefined && items.length === 0 && <p className="text-slate-700">No visits yet.</p>}
+      {items === undefined && error === undefined && <RowsSkeleton label="Loading visits…" />}
+      {items !== undefined && items.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 px-3 py-5 text-center text-sm text-slate-700">No visits yet.</p>}
       {items !== undefined && items.length > 0 && (
         <ol className="space-y-3">
           {items.map((v) => (
-            <li key={v.id} className="rounded-card border border-slate-200 bg-white p-3">
+            <li key={v.id} className="rounded-card border border-line bg-white p-3">
               <p className="flex flex-wrap items-baseline justify-between gap-2">
-                <Link href={visitPath(v.id)} className="font-semibold text-brand-800 underline">
+                <Link href={visitPath(v.id)} className="font-semibold text-brand-800 underline underline-offset-2 hover:text-brand-900">
                   {formatDateTime(v.started_at, clinic.timezone)}
                 </Link>
                 <span className="text-sm text-slate-800">{v.status === "OPEN" ? "In progress" : "Completed"}</span>
@@ -94,7 +96,7 @@ export function PatientVisits({ patientId }: Readonly<{ patientId: string }>) {
           type="button"
           disabled={loading}
           onClick={() => more(next)}
-          className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
+          className={buttonClasses("secondary", "sm")}
         >
           {loading ? "Loading…" : "Show earlier visits"}
         </button>

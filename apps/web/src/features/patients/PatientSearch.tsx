@@ -1,8 +1,13 @@
 "use client";
 
+import { Search as SearchIcon, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
+import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
+import { INPUT } from "@/components/ui/Field";
+import { Spinner } from "@/components/ui/Spinner";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { maskPhone } from "@/lib/format/phone";
@@ -145,7 +150,7 @@ export function PatientSearch({ debounceMs = SEARCH_DEBOUNCE_MS }: { debounceMs?
   }
 
   return (
-    <div className="relative w-full max-w-md">
+    <div className="relative w-full min-w-0 max-w-md">
       <label htmlFor={`${listId}-input`} className="sr-only">
         Find a patient
       </label>
@@ -169,13 +174,14 @@ export function PatientSearch({ debounceMs = SEARCH_DEBOUNCE_MS }: { debounceMs?
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
-        className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
+        className={`${INPUT} pl-9`}
       />
+      <SearchIcon aria-hidden="true" className="pointer-events-none absolute left-3 top-3 size-4 text-slate-500" />
       {expanded && (
         <div
           // Clicks inside the popup must not blur the input before they land.
           onMouseDown={(event) => event.preventDefault()}
-          className="absolute z-20 mt-1 max-h-96 w-full overflow-y-auto rounded-lg border border-slate-300 bg-white shadow-lg"
+          className="absolute z-30 mt-1 max-h-96 w-full overflow-y-auto overflow-x-hidden rounded-xl border border-line bg-surface shadow-pop"
         >
           <ul id={listId} role="listbox" aria-label="Patients" aria-busy={search.status === "loading"}>
             {items.map((patient, index) => (
@@ -185,31 +191,31 @@ export function PatientSearch({ debounceMs = SEARCH_DEBOUNCE_MS }: { debounceMs?
                 role="option"
                 aria-selected={index === active}
                 onClick={() => openPatient(patient)}
-                className="cursor-pointer px-3 py-2 aria-selected:bg-brand-100 hover:bg-slate-100"
+                className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 transition-colors duration-150 hover:bg-slate-50 aria-selected:bg-brand-50 motion-reduce:transition-none"
               >
-                <span className="font-semibold">{patient.full_name}</span>{" "}
-                <span className="text-sm text-slate-700">
-                  {patient.code} · {ageText(patient)} · {maskPhone(patient.phone_e164)}
+                <Avatar name={patient.full_name} size="sm" />
+                <span className="min-w-0">
+                  <span className="block break-words font-semibold text-slate-900">{patient.full_name}</span>{" "}
+                  <span className="block text-sm tabular-nums text-slate-700">
+                    {patient.code} · {ageText(patient)} · {maskPhone(patient.phone_e164)}
+                  </span>
                 </span>
               </li>
             ))}
           </ul>
           {search.status === "loading" && (
-            <p role="status" className="px-3 py-2 text-slate-700">
-              Searching…
+            <p role="status" className="flex items-center gap-2 px-3 py-3 text-slate-700">
+              <Spinner /> Searching…
             </p>
           )}
           {search.status === "done" && items.length === 0 && (
-            <div className="space-y-2 px-3 py-2">
-              <p role="status">No patient matches.</p>
+            <div className="space-y-2 px-3 py-3">
+              <p role="status" className="font-medium text-slate-900">No patient matches.</p>
+              <p className="text-sm text-slate-700">Try the phone number or the code, or register the patient.</p>
               {openRegister !== null && (
-                <button
-                  type="button"
-                  onClick={registerFromSearch}
-                  className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-brand-700 bg-white px-3 py-1 text-sm font-medium text-brand-800 transition-colors hover:bg-brand-50 motion-reduce:transition-none"
-                >
+                <Button size="sm" onClick={registerFromSearch} icon={<UserPlus className="size-4" />}>
                   Register patient
-                </button>
+                </Button>
               )}
             </div>
           )}

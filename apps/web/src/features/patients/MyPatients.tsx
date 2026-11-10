@@ -1,13 +1,15 @@
 "use client";
 
+import { Search, SearchX, Users } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
 
+import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { INPUT, LABEL } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { TABLE, TABLE_WRAP, TD, TH, TR } from "@/components/ui/table";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -91,7 +93,7 @@ export function MyPatients() {
   return (
     <section className="space-y-4">
       <PageHeader title="My patients" description="Patients you have seen in this clinic, latest visit first." />
-      <form role="search" onSubmit={search} className="flex max-w-xl flex-wrap items-end gap-2">
+      <form role="search" onSubmit={search} className="flex max-w-xl flex-wrap items-end gap-2 rounded-card border border-line bg-surface p-3 shadow-card">
         <div className="min-w-0 flex-1">
           <label htmlFor={searchId} className={LABEL}>
             Find one of my patients
@@ -103,21 +105,15 @@ export function MyPatients() {
             maxLength={100}
             onChange={(event) => setText(event.target.value)}
             placeholder="Name, code or phone"
-            className={INPUT}
+            className={`${INPUT} mt-1.5`}
           />
         </div>
-        <Button type="submit">Search</Button>
+        <Button type="submit" icon={<Search className="size-4" />}>
+          Search
+        </Button>
       </form>
 
-      {load.status === "loading" && (
-        <div className="space-y-2">
-          <p role="status" className="sr-only">
-            Loading your patients…
-          </p>
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </div>
-      )}
+      {load.status === "loading" && <ListSkeleton label="Loading your patients…" rows={4} />}
       {load.status === "failed" && (
         <div className="max-w-xl">
           <ErrorNotice
@@ -130,7 +126,10 @@ export function MyPatients() {
         </div>
       )}
       {load.status === "ready" && load.items.length === 0 && (
-        <EmptyState title={q === "" ? "You have not seen any patients here yet." : "None of your patients match."}>
+        <EmptyState
+          icon={q === "" ? <Users className="size-5" /> : <SearchX className="size-5" />}
+          title={q === "" ? "You have not seen any patients here yet." : "None of your patients match."}
+        >
           {q === "" ? "A patient appears here once you start their consultation." : "Try another name, code or phone."}
         </EmptyState>
       )}
@@ -150,15 +149,20 @@ export function MyPatients() {
               {load.items.map((p) => (
                 <tr role="row" key={p.id} className={TR}>
                   <th role="rowheader" scope="row" className={`${TD} font-medium`}>
-                    <Link href={patientPath(p.id)} className="text-brand-800 underline-offset-2 hover:underline">
-                      {p.full_name}
-                    </Link>
-                    <span className="block font-mono text-sm font-normal text-slate-700">{p.code}</span>
+                    <span className="flex items-center gap-3">
+                      <Avatar name={p.full_name} size="sm" />
+                      <span className="min-w-0">
+                        <Link href={patientPath(p.id)} className="break-words font-semibold text-brand-800 underline-offset-2 hover:underline">
+                          {p.full_name}
+                        </Link>
+                        <span className="block text-sm font-normal tabular-nums text-slate-700">{p.code}</span>
+                      </span>
+                    </span>
                   </th>
                   <td role="cell" data-label="Age and sex" className={TD}>
                     {ageText(p)} · {SEX_LABELS[p.sex]}
                   </td>
-                  <td role="cell" data-label="Last visit" className={TD}>
+                  <td role="cell" data-label="Last visit" className={`${TD} tabular-nums`}>
                     {formatDateTime(p.last_visit_at, clinic.timezone)}
                   </td>
                   <td role="cell" data-label="Visits" className={`${TD} tabular-nums`}>
@@ -171,9 +175,11 @@ export function MyPatients() {
         </div>
       )}
       {load.status === "ready" && load.more && (
-        <Button disabled={loadingMore} onClick={() => void showMore(load.items)}>
-          {loadingMore ? "Loading…" : "Show more"}
-        </Button>
+        <div className="flex justify-center">
+          <Button loading={loadingMore} onClick={() => void showMore(load.items)}>
+            {loadingMore ? "Loading…" : "Show more"}
+          </Button>
+        </div>
       )}
     </section>
   );

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { RowsSkeleton } from "@/components/ui/Skeleton";
+import { buttonClasses } from "@/components/ui/Button";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { useClinic } from "@/features/shell/ClinicGate";
@@ -39,20 +41,20 @@ export function PrintablePrescriptions({ patientId }: Readonly<{ patientId: stri
   }, [api, patientId, endSession]);
 
   return (
-    <section aria-labelledby="printable-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-      <h2 id="printable-heading" className="text-lg font-bold">
+    <section aria-labelledby="printable-heading" className="space-y-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
+      <h2 id="printable-heading" className="heading-6 text-slate-900">
         Prescriptions to print
       </h2>
       {error !== undefined && <ErrorNotice error={error} />}
-      {items === undefined && error === undefined && <p className="text-slate-700">Loading prescriptions…</p>}
-      {items !== undefined && items.length === 0 && <p className="text-slate-700">No prescriptions issued yet.</p>}
+      {items === undefined && error === undefined && <RowsSkeleton label="Loading prescriptions…" />}
+      {items !== undefined && items.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 px-3 py-5 text-center text-sm text-slate-700">No prescriptions issued yet.</p>}
       {items !== undefined && items.length > 0 && (
         <ul className="space-y-3">
           {items.map((rx) => {
             const when = formatDateTime(rx.issued_at, clinic.timezone);
             const title = `${when} · ${rx.doctor_display_name}${rx.version > 1 ? ` · version ${rx.version}` : ""}`;
             return (
-              <li key={rx.id} className="space-y-3 rounded-card border border-slate-200 bg-white p-3">
+              <li key={rx.id} className="space-y-3 rounded-card border border-line bg-white p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium">{title}</span>
                   <span className="flex flex-wrap items-start gap-2">
@@ -61,7 +63,7 @@ export function PrintablePrescriptions({ patientId }: Readonly<{ patientId: stri
                       type="button"
                       aria-expanded={showing === rx.id}
                       onClick={() => setShowing(showing === rx.id ? undefined : rx.id)}
-                      className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
+                      className={buttonClasses("secondary", "sm")}
                     >
                       {showing === rx.id ? "Hide link" : "Show link"}
                     </button>

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { RowsSkeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -61,19 +62,19 @@ export function PatientBills({ patientId }: Readonly<{ patientId: string }>) {
   }
 
   return (
-    <section aria-labelledby="patient-bills-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-      <div className="flex items-center justify-between gap-2">
-        <h2 id="patient-bills-heading" className="text-lg font-bold">
+    <section aria-labelledby="patient-bills-heading" className="space-y-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="patient-bills-heading" className="heading-6 text-slate-900">
           Bills
         </h2>
         <Button size="sm" onClick={() => void start()}>
           New bill
         </Button>
       </div>
-      {due !== undefined && due > 0 && <p className="font-semibold text-amber-900">Dues: {formatPaise(due)}</p>}
+      {due !== undefined && due > 0 && <p className="font-semibold tabular-nums text-warning">Dues: {formatPaise(due)}</p>}
       {error !== null && <ErrorNotice error={error} />}
-      {items === undefined && error === null && <p role="status">Loading bills…</p>}
-      {items !== undefined && items.length === 0 && <p>No bills yet.</p>}
+      {items === undefined && error === null && <RowsSkeleton label="Loading bills…" />}
+      {items !== undefined && items.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 px-3 py-5 text-center text-sm text-slate-700">No bills yet.</p>}
       {items !== undefined && items.length > 0 && <BillTable items={items} caption="This patient's bills" />}
     </section>
   );

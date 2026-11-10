@@ -8,8 +8,8 @@ Plan: `docs/milestones/M7c-P7-design-system-plan.md`. System: `DESIGN.md`. Produ
 | M1 Marketing landing page | ✅ built 9 Nov 2026; phone header fixed after the developer's review |
 | M2 Authentication | ✅ built 9 Nov 2026; approved by the developer 10 Nov 2026 |
 | M3 Clinic dashboard | ✅ built 10 Nov 2026 |
-| M4 Appointments and queue | ✅ built 10 Nov 2026 |
-| M5 Patient management | ☐ |
+| M4 Appointments and queue | ✅ built 10 Nov 2026; phone fixes approved by the developer 10 Nov |
+| M5 Patient management | ✅ built 10 Nov 2026 |
 | M6 Appointment booking | ☐ |
 | M7 Patient portal | ☐ |
 | M8 Prescriptions (and the PDF's layout 4 with the MediEase emblem) | ☐ |
@@ -290,3 +290,46 @@ pill; drawers and dialogs let one long word widen the panel.
 booking requests, Today with the notification drawer open, the queue and bookings to move:
 no sideways scroll anywhere (the only element past the edge is the visually hidden table header
 row, clipped). Screenshots at 375 and 1366 px with three fresh requests seeded.
+
+## M5 — Patient management (built 10 Nov 2026)
+
+The developer approved M4 after the phone fixes and asked for the ui-ux-pro-max skill
+(`uipro init --ai kiro`, ui-ux-pro-max-cli 2.15.0, MIT) before M5. It installed into
+`.kiro/steering/` (git-excluded); `ui-ux-pro-max` loads on demand (`inclusion: auto`) and the six
+extra skills it brought (brand, banner, slides, design, design-system, ui-styling) are manual so
+they never load unasked. Its UX search was used for the form and record-page checks.
+
+**Screens:** the header patient search, the search results page, Register patient (drawer) and
+its duplicate-phone step, the patient profile with its edit form, consent, patient app, and the
+appointments, visits, prescriptions, bills, reminders and message-history sections; My patients.
+
+**Existing problems:** registration and editing checked nothing before sending (an empty form
+went to the API); hand-built selects and buttons; the age choice as bare radios; no character
+count; the profile one long column of equal cards with the code in monospace above the name;
+"Loading …" and "No …" as plain lines in every section; results "Searching…" as text and a bare
+"No patient matches" with no next step; the patient app's unlink and consent's opt-out in
+one-off red styles.
+
+**Changes (behaviour and API calls unchanged):**
+
+| Area | Change |
+|---|---|
+| Register and edit | `usePatientForm`: each field checked on leaving it and re-checked as it is fixed ("Enter the patient's full name.", "Enter a 10-digit mobile, or the number with its country code.", "The date of birth cannot be after today.", "Enter the age in whole years.", "Enter the parent or guardian's name." for a minor); a submit with problems shows them under the fields, lists two or more at the top, moves focus to the first and sends nothing; everything typed is kept; the API's own field answers still land on the field. Name counts "n of 200"; phone hint says spaces and a leading 0 are fine; age as two choice cards; shared selects; loading buttons; *Cancel* in the drawer |
+| Duplicate phone | Warning tone with an icon; each person with initials; *Use this patient* full width on a phone |
+| Profile | Breadcrumb; a header with initials, name, the code as a chip, age and sex, *Under 18* and *No messages* badges; from 1024 px the working sections on the left and details, consent and patient app on the right; on a phone details first. The phone link is 44 px tall on a phone. A saved edit says "Details for … saved." A missing patient is an empty state with *Search patients* |
+| Profile sections | One card style, `heading-6` titles, row skeletons with their words, dashed empty boxes, the shared success message, shared buttons and inputs; card headers wrap so *Book for …* goes full width on a phone |
+| Consent | The state as a badge in words; the question in a quoted box; WhatsApp and SMS as choice cards; opt-out confirm in the danger tone with *Cancel* focused |
+| Patient app | Shared buttons, a spinner while checking, the invite link input that wraps on a phone, the QR centred on a phone |
+| Search | A search icon, initials and two-line matches 44 px tall, a spinner while searching, "Try the phone number or the code, or register the patient." when nothing matches |
+| Results page | Header line with the query; empty start as an empty state; no match offers *Register a new patient*; row skeleton; initials |
+| My patients | Search in a filter bar with an icon; row skeleton; initials; icon empty states; *Show more* centred with a loading state |
+| Phone cards (all lists) | A badge or button in a phone card keeps its own width (`justify-self: start`) instead of stretching across the card |
+
+**Shared additions:** `RowsSkeleton`, `Avatar size="lg"`.
+
+**Tests added:** `RegisterPatientDrawer.test.tsx`: an empty submit (messages, summary, focus,
+nothing sent), a short phone flagged on leaving and cleared when fixed, a future date of birth
+caught, the name's count. Existing patient, profile, portal-card and search tests pass unchanged.
+
+**Checked:** screenshots and the overflow audit at 1366 and 375 px on the profile, results (match
+and no match), the register drawer and My patients: no sideways scroll.

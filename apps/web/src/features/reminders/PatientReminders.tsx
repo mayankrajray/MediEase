@@ -2,6 +2,10 @@
 
 import { useEffect, useId, useState } from "react";
 
+import { StatusMessage } from "@/components/ui/StatusMessage";
+import { RowsSkeleton } from "@/components/ui/Skeleton";
+import { INPUT_BASE, LABEL } from "@/components/ui/Field";
+import { buttonClasses } from "@/components/ui/Button";
 import { LIST_ITEM, LayoutMotion } from "@/components/ui/LayoutMotion";
 import { m } from "@/components/ui/Motion";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
@@ -77,24 +81,22 @@ export function PatientReminders({ patient }: Readonly<{ patient: Patient }>) {
   }
 
   return (
-    <section aria-labelledby="reminders-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-      <div className="flex items-center justify-between gap-2">
-        <h2 id="reminders-heading" className="text-lg font-bold">
+    <section aria-labelledby="reminders-heading" className="space-y-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="reminders-heading" className="heading-6 text-slate-900">
           Reminders
         </h2>
         {!adding && active[0] !== undefined && (
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none"
+            className={buttonClasses("secondary", "sm")}
           >
             Add follow-up reminder
           </button>
         )}
       </div>
-      <p role="status" className="min-h-6 font-medium text-emerald-900">
-        {message}
-      </p>
+      <StatusMessage message={message} />
       {error !== undefined && <ErrorNotice error={error} />}
       {adding && active[0] !== undefined && (
         <AddReminder
@@ -107,8 +109,8 @@ export function PatientReminders({ patient }: Readonly<{ patient: Patient }>) {
         />
       )}
       {loadError !== undefined && <ErrorNotice error={loadError} onRetry={() => setReload((n) => n + 1)} />}
-      {items === undefined && loadError === undefined && <p className="text-slate-700">Loading reminders…</p>}
-      {items !== undefined && items.length === 0 && <p className="text-slate-700">No reminders.</p>}
+      {items === undefined && loadError === undefined && <RowsSkeleton label="Loading reminders…" />}
+      {items !== undefined && items.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 px-3 py-5 text-center text-sm text-slate-700">No reminders.</p>}
       {items !== undefined && items.length > 0 && (
         <LayoutMotion>
         <ul className="space-y-3">
@@ -156,7 +158,7 @@ function ReminderRow({
   const visit = reminder.kind === "APPOINTMENT";
 
   return (
-    <m.li {...LIST_ITEM} className="space-y-2 rounded-card border border-slate-200 bg-white p-3">
+    <m.li {...LIST_ITEM} className="space-y-2 rounded-card border border-line bg-white p-3">
       <ReminderChip reminder={reminder} timeZone={timeZone} />
       <p className="text-slate-800">
         {visit ? "Visit on" : "Follow-up on"} {formatDay(reminder.follow_up_date)}
@@ -164,7 +166,7 @@ function ReminderRow({
       </p>
       {shouldCall(reminder.status) && (
         <p>
-          <a href={`tel:${phone}`} className="font-medium text-brand-800 underline">
+          <a href={`tel:${phone}`} className="font-medium text-brand-800 underline underline-offset-2 hover:text-brand-900">
             Call patient{" "}<span className="sr-only">on {formatPhone(phone)}</span>
           </a>
         </p>
@@ -172,11 +174,11 @@ function ReminderRow({
       {scheduled && !moving && (
         <div className="flex flex-wrap gap-2">
           {!visit && (
-            <button type="button" onClick={() => setMoving(true)} className="rounded-lg border border-slate-400 px-3 py-1 hover:bg-slate-100">
+            <button type="button" onClick={() => setMoving(true)} className={buttonClasses("secondary", "sm")}>
               Move
             </button>
           )}
-          <button type="button" onClick={onCancel} className="inline-flex min-h-8 items-center rounded-lg border border-red-700 bg-white px-3 py-1 text-sm font-medium text-red-900 hover:bg-red-50">
+          <button type="button" onClick={onCancel} className={`${buttonClasses("ghost", "sm")} text-danger hover:bg-danger-soft hover:text-danger`}>
             Cancel reminder
           </button>
         </div>
@@ -191,7 +193,7 @@ function ReminderRow({
           }}
         >
           <div>
-            <label htmlFor={id} className="block font-medium">
+            <label htmlFor={id} className={LABEL}>
               New follow-up date
             </label>
             <input
@@ -201,13 +203,13 @@ function ReminderRow({
               min={min}
               value={date}
               onChange={(event) => setDate(event.target.value)}
-              className="rounded-lg border border-slate-400 px-2 py-1"
+              className={`${INPUT_BASE} mt-1.5 block tabular-nums`}
             />
           </div>
-          <button type="submit" className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg bg-brand-700 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none">
+          <button type="submit" className={buttonClasses("primary", "sm")}>
             Save
           </button>
-          <button type="button" onClick={() => setMoving(false)} className="rounded-lg border border-slate-400 px-3 py-1.5">
+          <button type="button" onClick={() => setMoving(false)} className={buttonClasses("secondary", "sm")}>
             Keep it
           </button>
         </form>
@@ -234,21 +236,21 @@ function AddReminder({
   return (
     <form
       aria-label="Add follow-up reminder"
-      className="flex flex-wrap items-end gap-3 rounded-card border border-slate-200 bg-white p-3"
+      className="flex flex-wrap items-end gap-3 rounded-card border border-line bg-white p-3"
       onSubmit={(event) => {
         event.preventDefault();
         onAdd(doctorId, date);
       }}
     >
       <div>
-        <label htmlFor={ids.doctor} className="block font-medium">
+        <label htmlFor={ids.doctor} className={LABEL}>
           Doctor
         </label>
         <select
           id={ids.doctor}
           value={doctorId}
           onChange={(event) => setDoctorId(event.target.value)}
-          className="rounded-lg border border-slate-400 px-2 py-1.5"
+          className={`${INPUT_BASE} mt-1.5 block cursor-pointer`}
         >
           {doctors.map((d) => (
             <option key={d.id} value={d.id}>
@@ -258,7 +260,7 @@ function AddReminder({
         </select>
       </div>
       <div>
-        <label htmlFor={ids.date} className="block font-medium">
+        <label htmlFor={ids.date} className={LABEL}>
           Follow-up date
         </label>
         <input
@@ -268,14 +270,14 @@ function AddReminder({
           min={min}
           value={date}
           onChange={(event) => setDate(event.target.value)}
-          className="rounded-lg border border-slate-400 px-2 py-1"
+          className={`${INPUT_BASE} mt-1.5 block tabular-nums`}
         />
       </div>
       <p className="w-full text-sm text-slate-700">Sent on WhatsApp at 09:00 the day before, if the patient agreed to messages.</p>
-      <button type="submit" className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg bg-brand-700 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none">
+      <button type="submit" className={buttonClasses("primary", "sm")}>
         Add reminder
       </button>
-      <button type="button" onClick={onCancel} className="rounded-lg border border-slate-400 px-3 py-1.5">
+      <button type="button" onClick={onCancel} className={buttonClasses("secondary", "sm")}>
         Cancel
       </button>
     </form>
