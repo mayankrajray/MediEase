@@ -3,14 +3,19 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Bell, Building2, Clock, KeyRound, Languages, LogOut, Mail, MailWarning, MapPin, Phone, Unlink } from "lucide-react";
+
+import { initials } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { CHOICE_CARD, CHOICE_INPUT, INPUT, LABEL } from "@/components/ui/Field";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { PORTAL_SIGN_IN_PATH, portalDelete, portalGet, portalPatch, portalPost, portalPut } from "@/lib/auth/portal-session";
 import { notificationWords } from "@/lib/i18n/patient-notifications";
 import { type PortalLanguage, portalDate } from "@/lib/i18n/portal";
 
 import { type PortalLink, type PortalNotificationPreference, usePortalLoad } from "./data";
-import { PortalCard, ScreenLoading, usePortal } from "./PortalShell";
+import { PortalCard, PortalTitle, ScreenLoading, usePortal } from "./PortalShell";
 
 async function loadLinks(): Promise<readonly PortalLink[]> {
   return (await portalGet("/api/v1/portal/links")).data.items;
@@ -74,37 +79,44 @@ export function PortalAccountPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold tracking-tight">{s.account.title}</h1>
+      <PortalTitle>{s.account.title}</PortalTitle>
       {error !== null && <ErrorNotice error={error} />}
-      <p role="status" className="min-h-6">
+      <p role="status" className="min-h-0 font-medium text-success empty:hidden">
         {status}
       </p>
 
-      <PortalCard id="profile-heading" title={account.full_name}>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-          <dt className="font-medium">{s.account.email}</dt>
-          <dd className="break-all">
-            {account.email} · <span>{account.email_verified ? s.account.verified : s.account.notVerified}</span>
+      <PortalCard id="profile-heading" title={account.full_name} icon={<span className="text-sm font-bold">{initials(account.full_name)}</span>} highlight>
+        <dl className="grid gap-3 sm:grid-cols-[auto_1fr] sm:gap-x-6">
+          <dt className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <Mail aria-hidden="true" className="size-4 shrink-0" />
+            {s.account.email}
+          </dt>
+          <dd className="-mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 sm:mt-0">
+            <span className="break-all text-slate-900">{account.email}</span>
+            <StatusBadge tone={account.email_verified ? "done" : "waiting"}>{account.email_verified ? s.account.verified : s.account.notVerified}</StatusBadge>
           </dd>
-          <dt className="font-medium">{s.account.signsInWith}</dt>
-          <dd>{account.sign_in_method === "GOOGLE" ? s.account.google : s.account.password}</dd>
+          <dt className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <KeyRound aria-hidden="true" className="size-4 shrink-0" />
+            {s.account.signsInWith}
+          </dt>
+          <dd className="-mt-2 text-slate-900 sm:mt-0">{account.sign_in_method === "GOOGLE" ? s.account.google : s.account.password}</dd>
         </dl>
         {!account.email_verified && account.sign_in_method === "PASSWORD" && <VerifyBanner />}
       </PortalCard>
 
-      <PortalCard id="language-heading" title={s.account.language}>
+      <PortalCard id="language-heading" title={s.account.language} icon={<Languages />}>
         <fieldset>
           <legend className="sr-only">{s.account.language}</legend>
-          <div className="flex gap-4">
+          <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
             {LANGUAGES.map((l) => (
-              <label key={l.value} lang={l.value} className="flex min-h-11 items-center gap-2">
+              <label key={l.value} lang={l.value} className={`${CHOICE_CARD} min-h-11 font-medium`}>
                 <input
                   type="radio"
                   name="portal-language"
                   value={l.value}
                   checked={account.language === l.value}
                   onChange={() => void chooseLanguage(l.value)}
-                  className="size-5"
+                  className={CHOICE_INPUT}
                 />
                 {l.label}
               </label>
@@ -117,22 +129,26 @@ export function PortalAccountPage() {
 
       <NotificationSwitches onSaved={(text) => setStatus(text)} />
 
-      <PortalCard id="clinics-heading" title={s.account.clinics}>
+      <PortalCard id="clinics-heading" title={s.account.clinics} icon={<Building2 />}>
         {links.status === "loading" && <ScreenLoading label={s.loading} />}
         {links.status === "failed" && <ErrorNotice error={links.error} onRetry={links.retry} />}
         {links.status === "ready" && shown.length === 0 && <p>{s.account.noClinics}</p>}
-        <ul className="space-y-4" aria-label={s.account.clinics}>
+        <ul className="space-y-3" aria-label={s.account.clinics}>
           {shown.map((link) => (
-            <li key={link.id} className="space-y-1 border-t border-slate-200 pt-3 first:border-t-0 first:pt-0">
-              <p className="font-semibold">{link.clinic.name}</p>
+            <li key={link.id} className="space-y-1.5 rounded-lg border border-line p-3">
+              <p className="font-semibold text-slate-900 [overflow-wrap:anywhere]">{link.clinic.name}</p>
               <p className="text-sm text-slate-700">
                 {link.patient_first_name} · <span className="font-mono">{link.patient_code}</span>
               </p>
               {(link.clinic.address_line !== null || link.clinic.city !== null) && (
-                <p className="text-sm text-slate-700">{[link.clinic.address_line, link.clinic.city].filter(Boolean).join(", ")}</p>
+                <p className="flex items-start gap-1.5 text-sm text-slate-700">
+                  <MapPin aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                  <span className="min-w-0">{[link.clinic.address_line, link.clinic.city].filter(Boolean).join(", ")}</span>
+                </p>
               )}
               {link.clinic.phone_e164 !== null && (
-                <a href={`tel:${link.clinic.phone_e164}`} className="text-sm font-medium text-brand-800 underline">
+                <a href={`tel:${link.clinic.phone_e164}`} className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-brand-800 underline-offset-4 hover:underline">
+                  <Phone aria-hidden="true" className="size-3.5 shrink-0" />
                   {link.clinic.phone_e164}
                 </a>
               )}
@@ -143,24 +159,15 @@ export function PortalAccountPage() {
                 )}
               </p>
               {confirming === link.id ? (
-                <div className="space-y-2 rounded-lg border border-red-800 bg-red-50 p-3">
-                  <p className="font-medium">{s.account.unlinkConfirm(link.clinic.name)}</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void unlink(link)}
-                      disabled={busy}
-                      className="min-h-11 rounded-lg bg-red-700 px-4 font-semibold text-white hover:bg-red-800"
-                    >
+                <div className="space-y-3 rounded-lg border border-danger-line bg-danger-soft p-3">
+                  <p className="font-medium text-slate-900">{s.account.unlinkConfirm(link.clinic.name)}</p>
+                  <div className="grid gap-2 min-[400px]:flex min-[400px]:flex-wrap">
+                    <Button variant="danger" onClick={() => void unlink(link)} loading={busy} className="min-h-11">
                       {s.account.unlinkYes}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirming(null)}
-                      className="min-h-11 rounded-lg border border-slate-400 bg-white px-4 font-medium hover:bg-slate-100"
-                    >
+                    </Button>
+                    <Button onClick={() => setConfirming(null)} className="min-h-11">
                       {s.account.cancel}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -168,8 +175,9 @@ export function PortalAccountPage() {
                   type="button"
                   onClick={() => setConfirming(link.id)}
                   aria-label={`${s.account.unlink} ${link.clinic.name}`}
-                  className="min-h-11 rounded-lg border border-red-800 px-4 font-medium text-red-900 hover:bg-red-50"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-danger-line bg-white px-4 font-semibold text-danger transition-colors duration-200 ease-brand hover:bg-danger-soft motion-reduce:transition-none"
                 >
+                  <Unlink aria-hidden="true" className="size-4" />
                   {s.account.unlink}
                 </button>
               )}
@@ -178,7 +186,7 @@ export function PortalAccountPage() {
         </ul>
       </PortalCard>
 
-      <Button onClick={() => void signOut()} disabled={busy} className="w-full">
+      <Button size="lg" onClick={() => void signOut()} disabled={busy} icon={<LogOut className="size-5" />} className="w-full">
         {busy ? s.account.signingOut : s.account.signOut}
       </Button>
     </div>
@@ -215,14 +223,14 @@ function SlotTimesCard({ onSaved }: Readonly<{ onSaved: (text: string) => void }
   }
 
   return (
-    <PortalCard id="times-heading" title={s.account.times}>
+    <PortalCard id="times-heading" title={s.account.times} icon={<Clock />}>
       <p className="text-sm text-slate-700" id="times-help">
         {s.account.timesHelp}
       </p>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {SLOT_KEYS.map((k) => (
           <div key={k}>
-            <label htmlFor={`slot-time-${k}`} className="block font-medium">
+            <label htmlFor={`slot-time-${k}`} className={LABEL}>
               {s.account.slots[k]}
             </label>
             <input
@@ -235,18 +243,18 @@ function SlotTimesCard({ onSaved }: Readonly<{ onSaved: (text: string) => void }
               aria-describedby={problem ? "times-help times-problem" : "times-help"}
               {...(problem ? { "aria-invalid": true } : {})}
               onChange={(e) => setTimes((old) => ({ ...old, [k]: e.target.value }))}
-              className="min-h-11 w-full rounded-lg border border-slate-400 px-2"
+              className={`${INPUT} mt-1 min-h-11 tabular-nums`}
             />
           </div>
         ))}
       </div>
       {problem && (
-        <p id="times-problem" role="alert" className="text-sm font-medium text-red-900">
+        <p id="times-problem" role="alert" className="text-sm font-medium text-danger">
           {s.account.timesOrder}
         </p>
       )}
       {error !== null && <ErrorNotice error={error} />}
-      <Button size="sm" onClick={() => void save()} disabled={busy}>
+      <Button onClick={() => void save()} loading={busy} className="min-h-11">
         {s.account.saveTimes}
       </Button>
     </PortalCard>
@@ -286,35 +294,35 @@ function NotificationSwitches({ onSaved }: Readonly<{ onSaved: (text: string) =>
   }
 
   return (
-    <PortalCard id="notifications-heading" title={words.switches.title}>
+    <PortalCard id="notifications-heading" title={words.switches.title} icon={<Bell />}>
       <p className="text-sm text-slate-700">{words.switches.help}</p>
       {loaded.status === "loading" && <ScreenLoading label={s.loading} />}
       {loaded.status === "failed" && <ErrorNotice error={loaded.error} onRetry={loaded.retry} />}
       {error !== null && <ErrorNotice error={error} />}
-      <ul className="space-y-2">
+      <ul className="divide-y divide-line">
         {shown.map((p) => (
-          <li key={p.kind} className="border-t border-slate-200 pt-2 first:border-t-0 first:pt-0">
+          <li key={p.kind} className="py-2 first:pt-0 last:pb-0">
             <fieldset>
-              <legend className="font-medium">{words.switches.kinds[p.kind]}</legend>
-              <div className="flex flex-wrap gap-x-6">
-                <label className="flex min-h-11 items-center gap-2">
+              <legend className="py-1 font-medium text-slate-900">{words.switches.kinds[p.kind]}</legend>
+              <div className="mt-1 flex flex-wrap gap-2">
+                <label className={`${CHOICE_CARD} min-h-11 text-sm font-medium`}>
                   <input
                     type="checkbox"
                     checked={p.in_app}
                     disabled={busy}
                     onChange={(e) => void change(p.kind, "IN_APP", e.target.checked)}
-                    className="size-5"
+                    className={CHOICE_INPUT}
                   />
                   {words.switches.inApp}
                 </label>
                 {p.email !== null && (
-                  <label className="flex min-h-11 items-center gap-2">
+                  <label className={`${CHOICE_CARD} min-h-11 text-sm font-medium`}>
                     <input
                       type="checkbox"
                       checked={p.email}
                       disabled={busy}
                       onChange={(e) => void change(p.kind, "EMAIL", e.target.checked)}
-                      className="size-5"
+                      className={CHOICE_INPUT}
                     />
                     {words.switches.email}
                   </label>
@@ -347,19 +355,24 @@ export function VerifyBanner() {
   }
 
   return (
-    <section aria-labelledby="verify-banner-heading" className="space-y-3 rounded-lg border border-amber-700 bg-amber-50 p-4 text-amber-950">
-      <h2 id="verify-banner-heading" className="font-semibold">
-        {s.account.confirmEmail}
-      </h2>
-      <p>{s.account.confirmEmailHelp}</p>
-      {state === "sent" ? (
-        <p role="status">{s.account.sent}</p>
-      ) : (
-        <Button size="sm" onClick={() => void resend()} disabled={state === "sending"}>
-          {state === "sending" ? s.account.sending : s.account.resend}
-        </Button>
-      )}
-      {error !== null && <ErrorNotice error={error} />}
+    <section aria-labelledby="verify-banner-heading" className="flex gap-3 rounded-card border border-warning-line bg-warning-soft p-4 text-slate-900">
+      <MailWarning aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-warning" />
+      <div className="min-w-0 flex-1 space-y-3">
+        <h2 id="verify-banner-heading" className="font-semibold">
+          {s.account.confirmEmail}
+        </h2>
+        <p className="text-slate-800">{s.account.confirmEmailHelp}</p>
+        {state === "sent" ? (
+          <p role="status" className="font-medium">
+            {s.account.sent}
+          </p>
+        ) : (
+          <Button onClick={() => void resend()} loading={state === "sending"} className="min-h-11">
+            {state === "sending" ? s.account.sending : s.account.resend}
+          </Button>
+        )}
+        {error !== null && <ErrorNotice error={error} />}
+      </div>
     </section>
   );
 }

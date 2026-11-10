@@ -1,5 +1,6 @@
 "use client";
 
+import { CalendarDays, CircleUserRound, FileText, House, Languages, Pill } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -43,12 +44,12 @@ type Load =
   | { readonly status: "leaving" };
 
 const TABS = [
-  { href: "/portal", key: "home" },
-  { href: "/portal/appointments", key: "appointments" },
+  { href: "/portal", key: "home", Icon: House },
+  { href: "/portal/appointments", key: "appointments", Icon: CalendarDays },
   // M6b-P3 (spec R36): the medicine plan.
-  { href: "/portal/medicines", key: "medicines" },
-  { href: "/portal/prescriptions", key: "prescriptions" },
-  { href: "/portal/account", key: "account" },
+  { href: "/portal/medicines", key: "medicines", Icon: Pill },
+  { href: "/portal/prescriptions", key: "prescriptions", Icon: FileText },
+  { href: "/portal/account", key: "account", Icon: CircleUserRound },
 ] as const;
 
 function isCurrent(pathname: string, href: string): boolean {
@@ -146,44 +147,61 @@ export function PortalShell({ children }: Readonly<{ children: ReactNode }>) {
   if (load.status === "leaving") return null;
 
   return (
-    <div lang={language} className="min-h-screen bg-canvas pb-20 md:pb-0">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-2">
-          <Link href="/portal" className="flex min-h-11 items-center gap-2 text-lg font-bold text-slate-900">
+    <div lang={language} className="min-h-screen bg-canvas pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+      {/* No backdrop-filter here: it would make the header the containing block of the fixed tab bar. */}
+      <header className="sticky top-0 z-20 border-b border-line bg-white">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-1.5">
+          <Link href="/portal" prefetch={false} className="flex min-h-11 items-center gap-2 text-lg font-bold text-slate-900">
             <Logo />
           </Link>
           {portal !== null && (
-            <div className="flex items-center gap-2">
-            <PortalBell language={language} tick={bellTick} onEnded={leave} />
-            <button
-              type="button"
-              lang={language === "hi" ? "en" : "hi"}
-              aria-label={s.switchLanguageLabel}
-              onClick={() => void switchLanguage()}
-              disabled={switching}
-              className="inline-flex min-h-11 items-center rounded-lg border border-slate-400 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-100"
-            >
-              {s.switchLanguage}
-            </button>
+            <div className="flex items-center gap-1.5">
+              <PortalBell language={language} tick={bellTick} onEnded={leave} />
+              <button
+                type="button"
+                lang={language === "hi" ? "en" : "hi"}
+                aria-label={s.switchLanguageLabel}
+                onClick={() => void switchLanguage()}
+                disabled={switching}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-white px-3 text-sm font-semibold text-slate-900 transition-colors duration-200 ease-brand hover:border-brand-300 hover:bg-brand-50 disabled:opacity-60 motion-reduce:transition-none"
+              >
+                <Languages aria-hidden="true" className="size-4 text-brand-700" />
+                {s.switchLanguage}
+              </button>
             </div>
           )}
         </div>
         {portal !== null && (
-          <nav aria-label={s.nav.label} className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white md:static md:border-t-0">
-            {/* Five tabs at 360 px: each as wide as its word (equal fifths split "Prescriptions"). */}
-            <ul className="mx-auto flex max-w-3xl">
-              {TABS.map((tab) => {
-                const current = isCurrent(pathname, tab.href);
+          <nav
+            aria-label={s.nav.label}
+            className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgb(23_43_53/0.06)] md:static md:border-t md:pb-0 md:shadow-none"
+          >
+            {/* Five tabs at 320 px: an icon over a short word, each tab as wide as its word. */}
+            <ul className="mx-auto flex max-w-3xl md:gap-1 md:px-2">
+              {TABS.map(({ key, href, Icon }) => {
+                const current = isCurrent(pathname, href);
                 return (
-                  <li key={tab.key} className="flex-auto">
+                  <li key={key} className="min-w-0 flex-auto md:flex-none">
                     <Link
-                      href={tab.href}
+                      href={href}
+                      // M7c-P7 (M7): no viewport prefetch of all five tabs on every page (about
+                      // 7 KB of a patient's mobile data, NFR-02); a tap still loads the tab.
+                      prefetch={false}
                       aria-current={current ? "page" : undefined}
-                      className={`flex min-h-14 items-center justify-center whitespace-nowrap px-1 text-center text-xs sm:text-sm ${
-                        current ? "border-t-4 border-brand-700 font-bold text-brand-800 md:border-b-4 md:border-t-0" : "text-slate-800"
+                      className={`relative flex min-h-14 flex-col items-center justify-center gap-0.5 whitespace-nowrap px-1 text-[0.6875rem] leading-tight transition-colors duration-200 ease-brand motion-reduce:transition-none sm:text-xs md:min-h-12 md:flex-row md:gap-2 md:px-3 md:text-sm ${
+                        current ? "font-semibold text-brand-800" : "text-slate-700 hover:text-slate-900"
                       }`}
                     >
-                      {s.nav[tab.key]}
+                      {current && (
+                        <span aria-hidden="true" className="absolute inset-x-3 top-0 h-[3px] rounded-b-full bg-brand-700 md:inset-x-2 md:bottom-0 md:top-auto md:rounded-b-none md:rounded-t-full" />
+                      )}
+                      <span
+                        aria-hidden="true"
+                        className={`grid h-7 w-12 place-items-center rounded-full md:h-auto md:w-auto ${current ? "bg-brand-50 md:bg-transparent" : ""}`}
+                      >
+                        <Icon className="size-5 md:size-[1.125rem]" strokeWidth={current ? 2.25 : 1.75} />
+                      </span>
+                      {s.nav[key]}
                     </Link>
                   </li>
                 );
@@ -192,7 +210,7 @@ export function PortalShell({ children }: Readonly<{ children: ReactNode }>) {
           </nav>
         )}
       </header>
-      <main className="mx-auto max-w-3xl px-4 py-5">
+      <main className="mx-auto max-w-3xl px-4 py-5 md:py-8">
         {load.status === "failed" && (
           <ErrorNotice
             error={load.error}
@@ -221,14 +239,50 @@ export function ScreenLoading({ label }: Readonly<{ label: string }>) {
   );
 }
 
-/** A section card of a portal screen. */
-export function PortalCard({ title, children, id }: Readonly<{ title: string; children: ReactNode; id: string }>) {
+/**
+ * A section card of a portal screen. M7c-P7 (M7): an optional decorative `icon` beside the title,
+ * an `action` (a link such as *See all*) at the heading's end, and `highlight` for the one card
+ * a screen leads with. The title alone names the region.
+ */
+export function PortalCard({
+  title,
+  children,
+  id,
+  icon,
+  action,
+  highlight = false,
+}: Readonly<{ title: string; children: ReactNode; id: string; icon?: ReactNode; action?: ReactNode; highlight?: boolean }>) {
   return (
-    <section aria-labelledby={id} className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-      <h2 id={id} className="text-lg font-bold">
-        {title}
-      </h2>
+    <section
+      aria-labelledby={id}
+      className={`min-w-0 space-y-3 rounded-card border bg-white p-4 shadow-card sm:p-5 ${highlight ? "border-brand-200 ring-1 ring-brand-100" : "border-line"}`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h2 id={id} className="flex min-w-0 items-center gap-2.5 text-lg font-bold text-slate-900">
+          {icon !== undefined && (
+            <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700 [&>svg]:size-[1.125rem]">
+              {icon}
+            </span>
+          )}
+          <span className="min-w-0 [overflow-wrap:anywhere]">{title}</span>
+        </h2>
+        {action}
+      </div>
       {children}
     </section>
   );
 }
+
+/** A screen's one `h1`, with an optional line under it. */
+export function PortalTitle({ children, sub }: Readonly<{ children: ReactNode; sub?: ReactNode }>) {
+  return (
+    <div className="space-y-1">
+      <h1 className="text-2xl font-bold tracking-tight text-slate-900 text-balance">{children}</h1>
+      {sub !== undefined && <p className="text-slate-700">{sub}</p>}
+    </div>
+  );
+}
+
+/** A quiet text link with a chevron (*See all*, *Open*); 44 px tall. */
+export const PORTAL_LINK =
+  "inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md font-semibold text-brand-800 underline-offset-4 hover:underline focus-visible:underline";

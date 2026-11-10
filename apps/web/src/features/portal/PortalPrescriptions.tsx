@@ -1,8 +1,12 @@
 "use client";
 
+import { Building2, ChevronLeft, ChevronRight, Download, FileText, Paperclip, Receipt } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { PrescriptionView } from "@/features/patient-link/PrescriptionView";
 import { stringsFor } from "@/features/patient-link/strings";
@@ -13,7 +17,10 @@ import { formatPaise } from "@/lib/format/money";
 import { type PortalLanguage, portalDate } from "@/lib/i18n/portal";
 
 import { DEFAULT_ZONE, type PortalPrescription, portalErrorText, usePortalLoad, zonesOf } from "./data";
-import { PortalCard, ScreenLoading, usePortal } from "./PortalShell";
+import { PORTAL_LINK, PortalCard, PortalTitle, ScreenLoading, usePortal } from "./PortalShell";
+
+/** A download action that reads as a small secondary button (44 px). */
+const DOWNLOAD = `${buttonClasses("secondary", "md")} min-h-11 shrink-0`;
 
 type Page = components["schemas"]["PatientPrescriptionPage"];
 
@@ -49,23 +56,36 @@ export function PortalPrescriptions() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold tracking-tight">{s.prescriptions.title}</h1>
+      <PortalTitle>{s.prescriptions.title}</PortalTitle>
       {loaded.status === "loading" && <ScreenLoading label={s.loading} />}
       {loaded.status === "failed" && <ErrorNotice error={loaded.error} onRetry={loaded.retry} />}
-      {loaded.status === "ready" && groups.length === 0 && <p>{s.prescriptions.empty}</p>}
+      {loaded.status === "ready" && groups.length === 0 && <EmptyState title={s.prescriptions.empty} icon={<FileText className="size-5" />} />}
       {loaded.status === "ready" &&
         groups.map(([clinicId, items]) => (
-          <PortalCard key={clinicId} id={`rx-${clinicId}`} title={items[0]?.clinic_name ?? ""}>
-            <ul>
+          <PortalCard key={clinicId} id={`rx-${clinicId}`} title={items[0]?.clinic_name ?? ""} icon={<Building2 />}>
+            <ul className="-mx-2 space-y-1">
               {items.map((p) => (
-                <li key={p.id} className="border-t border-slate-200 py-2 first:border-t-0">
-                  <Link href={`/portal/prescriptions/${p.id}`} className="block min-h-11 font-semibold text-brand-800 underline">
-                    {p.doctor_name}
-                  </Link>
-                  <span className="text-sm text-slate-700">
-                    {s.prescriptions.issued(portalDate(p.issued_at, loaded.data.zones.get(clinicId) ?? DEFAULT_ZONE, s))}
-                    {p.version > 1 && ` · ${s.prescriptions.updated}`}
+                <li
+                  key={p.id}
+                  className="relative flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors duration-200 ease-brand focus-within:bg-brand-50 hover:bg-slate-50 motion-reduce:transition-none"
+                >
+                  <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                    <FileText className="size-5" />
                   </span>
+                  <span className="min-w-0 flex-1">
+                    {/* The doctor names the link; the whole row is its target (the after: layer). */}
+                    <Link
+                      href={`/portal/prescriptions/${p.id}`}
+                      className="block font-semibold text-slate-900 outline-none after:absolute after:inset-0 after:rounded-lg after:content-['] focus-visible:after:ring-2 focus-visible:after:ring-brand-600 [overflow-wrap:anywhere]"
+                    >
+                      {p.doctor_name}
+                    </Link>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
+                      {s.prescriptions.issued(portalDate(p.issued_at, loaded.data.zones.get(clinicId) ?? DEFAULT_ZONE, s))}
+                      {p.version > 1 && <StatusBadge tone="active">{s.prescriptions.updated}</StatusBadge>}
+                    </span>
+                  </span>
+                  <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-slate-500" />
                 </li>
               ))}
             </ul>
@@ -100,18 +120,19 @@ function PortalReports({ reports, zones }: Readonly<{ reports: readonly PortalRe
   }
 
   return (
-    <PortalCard id="reports" title={s.reports.title}>
+    <PortalCard id="reports" title={s.reports.title} icon={<Paperclip />}>
       {error !== null && <ErrorNotice error={error} />}
       <ul>
         {reports.map((r) => (
-          <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 py-2 first:border-t-0">
-            <span>
-              <span className="block break-all font-semibold">{r.filename}</span>
+          <li key={r.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line py-3 first:border-t-0 first:pt-0 last:pb-0">
+            <span className="min-w-0 flex-1">
+              <span className="block break-all font-semibold text-slate-900">{r.filename}</span>
               <span className="text-sm text-slate-700">
                 {r.clinic_name} · {s.reports.visitOn(portalDate(r.visit_date, zones.get(r.clinic_id) ?? DEFAULT_ZONE, s))}
               </span>
             </span>
-            <button type="button" onClick={() => void download(r)} className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+            <button type="button" onClick={() => void download(r)} className={DOWNLOAD}>
+              <Download aria-hidden="true" className="size-4" />
               {s.reports.open} <span className="sr-only">{r.filename}</span>
             </button>
           </li>
@@ -141,21 +162,26 @@ function PortalBills({ bills }: Readonly<{ bills: readonly PortalBill[] }>) {
   }
 
   return (
-    <PortalCard id="bills" title={s.bills.title}>
+    <PortalCard id="bills" title={s.bills.title} icon={<Receipt />}>
       {error !== null && <ErrorNotice error={error} />}
       <ul>
         {bills.map((b) => (
-          <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 py-2 first:border-t-0">
-            <span>
-              <span className="block font-semibold">
+          <li key={b.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line py-3 first:border-t-0 first:pt-0 last:pb-0">
+            <span className="min-w-0 flex-1 space-y-1">
+              <span className="block font-semibold text-slate-900 [overflow-wrap:anywhere]">
                 {b.clinic_name} · {b.number}
               </span>
-              <span className="text-sm text-slate-700">
-                {b.bill_date} · {formatPaise(b.total_paise)} ·{" "}
-                {b.cancelled ? s.bills.cancelled : b.balance_paise > 0 ? s.bills.due(formatPaise(b.balance_paise)) : s.bills.settled}
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
+                <span className="tabular-nums">
+                  {b.bill_date} · {formatPaise(b.total_paise)}
+                </span>
+                <StatusBadge tone={b.cancelled ? "neutral" : b.balance_paise > 0 ? "waiting" : "done"}>
+                  {b.cancelled ? s.bills.cancelled : b.balance_paise > 0 ? s.bills.due(formatPaise(b.balance_paise)) : s.bills.settled}
+                </StatusBadge>
               </span>
             </span>
-            <button type="button" onClick={() => void download(b)} className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+            <button type="button" onClick={() => void download(b)} className={DOWNLOAD}>
+              <Download aria-hidden="true" className="size-4" />
               {s.bills.download} <span className="sr-only">{b.number}</span>
             </button>
           </li>
@@ -205,7 +231,8 @@ export function PortalPrescription({ rxId, lang }: Readonly<{ rxId: string; lang
   }
 
   const back = (
-    <Link href="/portal/prescriptions" className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+    <Link href="/portal/prescriptions" className={PORTAL_LINK}>
+      <ChevronLeft aria-hidden="true" className="size-4" />
       {s.prescriptions.back}
     </Link>
   );
@@ -216,8 +243,10 @@ export function PortalPrescription({ rxId, lang }: Readonly<{ rxId: string; lang
       <div className="space-y-4">
         {notFound ? (
           <>
-            <h1 className="text-2xl font-bold tracking-tight">{s.prescriptions.title}</h1>
-            <p role="alert">{s.notFound}</p>
+            <PortalTitle>{s.prescriptions.title}</PortalTitle>
+            <p role="alert" className="rounded-card border border-danger-line bg-danger-soft p-4 text-slate-900">
+              {s.notFound}
+            </p>
           </>
         ) : (
           <ErrorNotice error={loaded.error} onRetry={loaded.retry} />
@@ -232,7 +261,7 @@ export function PortalPrescription({ rxId, lang }: Readonly<{ rxId: string; lang
   return (
     <div className="space-y-4">
       {back}
-      <div className="rounded-card border border-slate-200 bg-white shadow-card">
+      <div className="overflow-hidden rounded-card border border-line bg-white shadow-card">
         <PrescriptionView
           page={page}
           strings={stringsFor(page.language)}
@@ -241,14 +270,9 @@ export function PortalPrescription({ rxId, lang }: Readonly<{ rxId: string; lang
         />
       </div>
       {pdfError !== null && <ErrorNotice error={pdfError} {...(pdfText === undefined ? {} : { message: pdfText })} />}
-      <button
-        type="button"
-        onClick={() => void download()}
-        disabled={downloading}
-        className="inline-flex min-h-12 items-center justify-center rounded-lg border border-brand-700 bg-white px-5 font-semibold text-brand-800 hover:bg-brand-50"
-      >
+      <Button size="lg" onClick={() => void download()} disabled={downloading} icon={<Download className="size-5" />} className="w-full sm:w-auto">
         {downloading ? s.prescriptions.downloading : s.prescriptions.download}
-      </button>
+      </Button>
     </div>
   );
 }

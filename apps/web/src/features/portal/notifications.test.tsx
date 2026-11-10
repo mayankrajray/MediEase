@@ -119,7 +119,9 @@ describe("Notifications (M6b-P6, R55, R68)", () => {
   it("says when there is nothing yet", async () => {
     mockApi({ ...me(), "GET /api/v1/portal/notifications": () => json(200, { items: [] }) });
     await renderPortal(<PortalNotifications />);
-    expect(await screen.findByText(/Nothing yet\./)).toBeInTheDocument();
+    // M7c-P7 (M7): an empty state, its title and what will appear here.
+    expect(await screen.findByText("Nothing yet")).toBeInTheDocument();
+    expect(screen.getByText(/^You are told here when a clinic answers a request/)).toBeInTheDocument();
   });
 });
 
