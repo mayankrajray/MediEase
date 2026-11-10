@@ -268,7 +268,7 @@ function SessionsCard({ today, timeZone, canSchedule }: { today: Today; timeZone
       ) : (
         <ul className="-mx-1 divide-y divide-line">
           {today.sessions.map((s) => (
-            <SessionRow key={s.id} session={s} timeZone={timeZone} named={today.scope !== "DOCTOR"} />
+            <SessionRow key={s.id} session={s} timeZone={timeZone} />
           ))}
         </ul>
       )}
@@ -280,7 +280,7 @@ function SessionsCard({ today, timeZone, canSchedule }: { today: Today; timeZone
  * One session: who and when, its status in words, and how full it is. The bar repeats the
  * "11 of 20 booked" line for the eye; the line is what screen readers read.
  */
-function SessionRow({ session: s, timeZone, named }: { session: TodaySession; timeZone: string; named: boolean }) {
+function SessionRow({ session: s, timeZone }: { session: TodaySession; timeZone: string }) {
   const filled = s.capacity > 0 ? Math.min(100, Math.round((100 * s.counts.total) / s.capacity)) : 0;
   return (
     <li className="grid gap-x-4 gap-y-2 px-1 py-3 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-center">
@@ -290,7 +290,8 @@ function SessionRow({ session: s, timeZone, named }: { session: TodaySession; ti
             <Clock aria-hidden="true" className="size-4 text-slate-500" />
             {sessionHours(s, timeZone)}
           </span>
-          {named && <span className="text-slate-700">· {s.doctor_name}</span>}
+          {/* Also in the doctor's own view: it confirms whose sessions these are (FR-UX-06). */}
+          <span className="text-slate-700">· {s.doctor_name}</span>
           <StatusBadge tone={SESSION_STATUS[s.status].tone}>{SESSION_STATUS[s.status].label}</StatusBadge>
         </div>
         <p className="mt-1 text-sm tabular-nums text-slate-700">
