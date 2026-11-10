@@ -170,7 +170,9 @@ describe("booking over a held time (R18, R18a)", () => {
 
   it("heldUntil: a held slot, a token session whose every free place is held, and neither", () => {
     const now = Date.now();
-    const slotted = session({ mode: "SLOTS", slots: [{ starts_at: iso(10), ends_at: iso(25), available: true }], held: [held(iso(10))] });
+    // One instant for the slot and its hold: two iso(10) calls can differ by a millisecond.
+    const start = iso(10);
+    const slotted = session({ mode: "SLOTS", slots: [{ starts_at: start, ends_at: iso(25), available: true }], held: [held(start)] });
     expect(heldUntil(slotted, { sessionId: slotted.id, slotStart: slotted.slots[0]?.starts_at ?? "" }, now)).toBeDefined();
     const tokens = session({ available: 1, held: [held(null)] });
     expect(heldUntil(tokens, { sessionId: tokens.id }, now)).toBeDefined();
