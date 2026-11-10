@@ -161,7 +161,7 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
               })}
             </ul>
             <div className="mt-10 flex flex-wrap items-center gap-4">
-              <Link href="/apply" data-analytics="apply" className={buttonClasses("primary", "lg")}>
+              <Link prefetch={false} href="/apply" data-analytics="apply" className={buttonClasses("primary", "lg")}>
                 {w.clinics.apply}
               </Link>
               <p className="max-w-md text-pretty text-slate-700">{w.clinics.demo}</p>
@@ -177,10 +177,10 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
               </h2>
               <p className="mt-3 max-w-xl text-pretty text-lg text-slate-700">{w.patients.body}</p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href={`/find${q}`} data-analytics="find" className={buttonClasses("primary", "lg")}>
+                <Link prefetch={false} href={`/find${q}`} data-analytics="find" className={buttonClasses("primary", "lg")}>
                   {w.patients.find}
                 </Link>
-                <Link href="/portal/sign-in" data-analytics="patient_sign_in" className={buttonClasses("secondary", "lg")}>
+                <Link prefetch={false} href="/portal/sign-in" data-analytics="patient_sign_in" className={buttonClasses("secondary", "lg")}>
                   {w.patients.signIn}
                 </Link>
               </div>
@@ -269,7 +269,7 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-pretty text-lg text-brand-100">{w.final.body}</p>
               <div className="mt-8 flex justify-center">
-                <Link
+                <Link prefetch={false}
                   href="/apply"
                   data-analytics="apply"
                   className={cx(buttonClasses("secondary", "lg"), "border-white hover:border-white hover:bg-brand-50")}
@@ -316,7 +316,7 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
         // clipped to the bar instead of covering the screen.
         className="me-landing-nav mx-auto flex max-w-6xl items-center justify-between gap-2 rounded-2xl border border-line bg-surface/85 px-3 py-2 shadow-card backdrop-blur-md sm:px-4"
       >
-        <Link href={other === "hi" ? "/" : "/?lang=hi"} className="inline-flex min-h-11 items-center rounded-lg pr-2">
+        <Link prefetch={false} href={other === "hi" ? "/" : "/?lang=hi"} className="inline-flex min-h-11 items-center rounded-lg pr-2">
           <Logo />
         </Link>
         <ul className="hidden items-center gap-1 lg:flex">
@@ -328,12 +328,12 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
             </li>
           ))}
           <li>
-            <Link href="/sign-in" data-analytics="staff_sign_in" className={NAV_LINK}>
+            <Link prefetch={false} href="/sign-in" data-analytics="staff_sign_in" className={NAV_LINK}>
               {w.nav.signIn}
             </Link>
           </li>
           <li>
-            <Link href={`/?lang=${other}`} lang={other} aria-label={w.switchLabel} data-analytics="language" className={NAV_LINK}>
+            <Link prefetch={false} href={`/?lang=${other}`} lang={other} aria-label={w.switchLabel} data-analytics="language" className={NAV_LINK}>
               <Languages aria-hidden="true" className="mr-1.5 size-4" />
               {w.switchTo}
             </Link>
@@ -343,7 +343,7 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
           {/* A wrapper hides it on phones: the link's own inline-flex would beat `hidden` (cx does
               not merge classes). The phone menu has its own Apply button. */}
           <span className="hidden sm:block">
-            <Link href="/apply" data-analytics="apply" className={buttonClasses("primary", "sm")}>
+            <Link prefetch={false} href="/apply" data-analytics="apply" className={buttonClasses("primary", "sm")}>
               {w.footer.apply}
             </Link>
           </span>
@@ -369,17 +369,17 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
                   </li>
                 ))}
                 <li style={{ ["--i" as string]: 3 }}>
-                  <Link href="/sign-in" className="flex min-h-12 items-center rounded-lg px-3 font-semibold hover:bg-slate-100">
+                  <Link prefetch={false} href="/sign-in" className="flex min-h-12 items-center rounded-lg px-3 font-semibold hover:bg-slate-100">
                     {w.nav.signIn}
                   </Link>
                 </li>
                 <li style={{ ["--i" as string]: 4 }}>
-                  <Link href={`/?lang=${other}`} lang={other} className="flex min-h-12 items-center rounded-lg px-3 font-semibold hover:bg-slate-100">
+                  <Link prefetch={false} href={`/?lang=${other}`} lang={other} className="flex min-h-12 items-center rounded-lg px-3 font-semibold hover:bg-slate-100">
                     {w.switchTo}
                   </Link>
                 </li>
                 <li style={{ ["--i" as string]: 5 }} className="pt-4">
-                  <Link href="/apply" className={cx(buttonClasses("primary", "lg"), "w-full")}>
+                  <Link prefetch={false} href="/apply" className={cx(buttonClasses("primary", "lg"), "w-full")}>
                     {w.hero.apply}
                   </Link>
                 </li>
@@ -408,10 +408,10 @@ function Hero({ w, q }: { w: LandingWords; q: string }) {
           </h1>
           <p className="mt-6 max-w-[680px] text-pretty text-lg text-slate-700 sm:text-xl">{w.hero.body}</p>
           <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
-            <Link href="/apply" data-analytics="apply" className={buttonClasses("primary", "lg")}>
+            <Link prefetch={false} href="/apply" data-analytics="apply" className={buttonClasses("primary", "lg")}>
               {w.hero.apply}
             </Link>
-            <Link href={`/find${q}`} data-analytics="find" className="inline-flex min-h-12 items-center font-semibold text-brand-800 underline-offset-4 hover:underline">
+            <Link prefetch={false} href={`/find${q}`} data-analytics="find" className="inline-flex min-h-12 items-center font-semibold text-brand-800 underline-offset-4 hover:underline">
               {w.hero.find}
               <span aria-hidden="true" className="ml-1">
                 →
@@ -480,7 +480,7 @@ function Footer({ w, q }: { w: LandingWords; q: string }) {
           <h2 className="text-sm font-semibold text-slate-900">{f.clinics}</h2>
           <ul className="mt-2">
             <li>
-              <Link href="/apply" data-analytics="apply" className={LINK}>
+              <Link prefetch={false} href="/apply" data-analytics="apply" className={LINK}>
                 {w.footer.apply}
               </Link>
             </li>
@@ -490,7 +490,7 @@ function Footer({ w, q }: { w: LandingWords; q: string }) {
               </a>
             </li>
             <li>
-              <Link href="/sign-in" data-analytics="staff_sign_in" className={LINK}>
+              <Link prefetch={false} href="/sign-in" data-analytics="staff_sign_in" className={LINK}>
                 {w.footer.staff}
               </Link>
             </li>
@@ -500,12 +500,12 @@ function Footer({ w, q }: { w: LandingWords; q: string }) {
           <h2 className="text-sm font-semibold text-slate-900">{f.patients}</h2>
           <ul className="mt-2">
             <li>
-              <Link href={`/find${q}`} data-analytics="find" className={LINK}>
+              <Link prefetch={false} href={`/find${q}`} data-analytics="find" className={LINK}>
                 {w.footer.find}
               </Link>
             </li>
             <li>
-              <Link href="/portal/sign-in" className={LINK}>
+              <Link prefetch={false} href="/portal/sign-in" className={LINK}>
                 {f.patientSignIn}
               </Link>
             </li>

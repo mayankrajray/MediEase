@@ -30,8 +30,7 @@ const field = `${INPUT} mt-1 min-h-11`;
 const primary = `${buttonClasses("primary", "md")} min-h-11`;
 const secondary = `${buttonClasses("secondary", "md")} min-h-11`;
 /** The file input's own button styled as a secondary button (it stays one native control). */
-const FILE =
-  "block w-full cursor-pointer rounded-lg border border-dashed border-slate-400 bg-slate-50 p-2 text-sm text-slate-800 file:mr-3 file:min-h-10 file:cursor-pointer file:rounded-md file:border-0 file:bg-brand-700 file:px-4 file:font-semibold file:text-white hover:border-brand-300 hover:bg-brand-50";
+const FILE = "block w-full cursor-pointer rounded-lg border border-dashed border-slate-400 bg-slate-50 p-2 text-sm text-slate-800 hover:border-brand-300 hover:bg-brand-50";
 
 /**
  * A prescription that is not in the account (M7b; FR-UPL-01..05; spec prescription-uploads §8;
@@ -204,9 +203,7 @@ export function UploadPanel({ onChange }: Readonly<{ onChange: (upload: Upload |
               {busy ? u.sending : u.send}
             </button>
           </form>
-          <p className="flex items-center gap-3 text-sm font-semibold uppercase tracking-wide text-slate-600 before:h-px before:flex-1 before:bg-line after:h-px after:flex-1 after:bg-line">
-            {u.or}
-          </p>
+          <p className="text-center text-sm font-semibold uppercase tracking-wide text-slate-600">{u.or}</p>
           <form onSubmit={sendCode} className="space-y-2 rounded-lg border border-line p-3">
             <label htmlFor="upload-code" className={LABEL}>
               {u.code}
