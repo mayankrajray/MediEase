@@ -1,5 +1,6 @@
 "use client";
 
+import { Copy, LockOpen, Printer, QrCode } from "lucide-react";
 import QRCode from "qrcode";
 import { useState } from "react";
 
@@ -70,40 +71,45 @@ export function ReceiptPanel({ bill }: Readonly<{ bill: Bill }>) {
   }
 
   return (
-    <section aria-labelledby="receipt-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4">
-      <h2 id="receipt-heading" className="text-lg font-semibold">
+    <section aria-labelledby="receipt-heading" className="space-y-3 rounded-card border border-line bg-white p-4 shadow-card sm:p-5">
+      <h2 id="receipt-heading" className="flex items-center gap-2 text-lg font-bold text-slate-900">
+        <Printer aria-hidden="true" className="size-5 text-brand-700" />
         Receipt
       </h2>
       {error !== null && <ErrorNotice error={error} />}
       <div className="flex flex-wrap gap-2">
-        <Button disabled={busy} onClick={print}>
+        <Button disabled={busy} onClick={print} icon={<Printer className="size-4" />}>
           {busy ? "Preparing…" : "Print bill"}
         </Button>
-        {link === undefined && <Button onClick={() => void share()}>Show QR for the patient</Button>}
+        {link === undefined && (
+          <Button onClick={() => void share()} icon={<QrCode className="size-4" />}>
+            Show QR for the patient
+          </Button>
+        )}
       </div>
       {link !== undefined && (
         <div className="flex flex-wrap items-start gap-4">
           {qr !== undefined && (
             // A data: URL made here; next/image has nothing to optimise.
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={qr} width={192} height={192} alt="QR code of the patient's receipt link" className="rounded-card border border-slate-200 bg-white" />
+            <img src={qr} width={192} height={192} alt="QR code of the patient's receipt link" className="shrink-0 rounded-lg border border-line bg-white p-1 shadow-card" />
           )}
-          <div className="min-w-0 flex-1 space-y-2">
-            <p>The patient scans this, or you send the link. Opening it asks for the last 4 digits of their phone.</p>
-            <p className="break-all font-mono text-sm" data-testid="receipt-link">
+          <div className="min-w-0 flex-1 basis-56 space-y-2">
+            <p className="text-slate-800">The patient scans this, or you send the link. Opening it asks for the last 4 digits of their phone.</p>
+            <p className="break-all rounded-lg border border-line bg-slate-50 px-3 py-2 font-mono text-sm text-slate-900" data-testid="receipt-link">
               {link.url}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => void copy(link.url)}>
+              <Button size="sm" onClick={() => void copy(link.url)} icon={<Copy className="size-3.5" />}>
                 Copy link
               </Button>
               {link.locked && (
-                <Button size="sm" onClick={() => void share(true)}>
+                <Button size="sm" onClick={() => void share(true)} icon={<LockOpen className="size-3.5" />}>
                   Unlock link
                 </Button>
               )}
             </div>
-            <p role="status" className="text-sm">
+            <p role="status" className="text-sm font-medium text-success">
               {copied}
             </p>
           </div>

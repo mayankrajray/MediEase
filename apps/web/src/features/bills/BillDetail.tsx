@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowLeft, FileCheck2, Plus, ReceiptText, Save, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
@@ -7,6 +8,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui/Button";
 import { CheckboxField, SelectField, TextAreaField, TextField } from "@/components/ui/Field";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TABLE, TABLE_WRAP, TD, TH, TR } from "@/components/ui/table";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
@@ -53,34 +55,51 @@ export function BillDetail({ billId, extra }: Readonly<{ billId: string; extra?:
     };
   }, [api, billId, endSession]);
 
-  if (load.status === "loading") return <p role="status">Loading the bill…</p>;
+  if (load.status === "loading")
+    return (
+      <div className="max-w-4xl space-y-4" aria-busy="true">
+        <p role="status" className="sr-only">
+          Loading the bill…
+        </p>
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
   if (load.status === "failed") return <ErrorNotice error={load.error} />;
   const { bill } = load;
   const show = (next: Bill) => setLoad({ status: "ready", bill: next });
 
   return (
     <article aria-labelledby="bill-heading" className="max-w-4xl space-y-6">
-      <header className="space-y-1">
-        <p className="text-sm">
-          <Link href="/bills" className="font-medium text-brand-800 underline">
-            All bills
-          </Link>
-        </p>
-        <h1 id="bill-heading" className="text-2xl font-bold tracking-tight">
-          {bill.number === null ? "Draft bill" : `Bill ${bill.number}`}
-        </h1>
-        <p className="flex flex-wrap items-center gap-2">
+      <header className="space-y-3">
+        <Link href="/bills" className="inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-brand-800 underline-offset-4 hover:underline">
+          <ArrowLeft aria-hidden="true" className="size-4" />
+          All bills
+        </Link>
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-card border border-line bg-white p-4 shadow-card sm:p-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700">
+              <ReceiptText className="size-5" />
+            </span>
+            <div className="min-w-0 space-y-1">
+              <h1 id="bill-heading" className="text-2xl font-bold tracking-tight text-slate-900">
+                {bill.number === null ? "Draft bill" : `Bill ${bill.number}`}
+              </h1>
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
+                {bill.patient !== null && (
+                  <Link href={patientPath(bill.patient.id)} className="font-semibold text-brand-800 underline-offset-4 hover:underline">
+                    {bill.patient.full_name} · {bill.patient.code}
+                  </Link>
+                )}
+                {bill.doctor !== null && <span>· {bill.doctor.display_name}</span>}
+                {bill.bill_date !== null && <span>· {bill.bill_date}</span>}
+              </p>
+            </div>
+          </div>
           <StatusBadge tone={BILL_STATUS_TONES[bill.status]}>{BILL_STATUS_LABELS[bill.status]}</StatusBadge>
-          {bill.patient !== null && (
-            <Link href={patientPath(bill.patient.id)} className="font-medium text-brand-800 underline">
-              {bill.patient.full_name} · {bill.patient.code}
-            </Link>
-          )}
-          {bill.doctor !== null && <span>· {bill.doctor.display_name}</span>}
-          {bill.bill_date !== null && <span>· {bill.bill_date}</span>}
-        </p>
+        </div>
       </header>
-      <p role="status" className="min-h-6 font-medium text-emerald-900">
+      <p role="status" className="font-medium text-success empty:sr-only">
         {message}
       </p>
       {bill.status === "DRAFT" ? <DraftEditor bill={bill} onChange={show} say={say} /> : <IssuedBill bill={bill} onChange={show} say={say} />}
@@ -99,17 +118,17 @@ function Totals({ bill }: Readonly<{ bill: Bill }>) {
     ...(bill.refunded_paise > 0 ? ([["Refunded", formatPaise(bill.refunded_paise)]] as [string, string][]) : []),
   ];
   return (
-    <dl className="ml-auto grid max-w-xs grid-cols-[1fr_auto] gap-x-6 gap-y-1 tabular-nums">
+    <dl className="ml-auto grid w-full max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 rounded-card border border-line bg-white p-4 tabular-nums shadow-card">
       {rows.map(([k, v]) => (
         <div key={k} className="contents">
-          <dt className="font-medium">{k}</dt>
-          <dd className="text-right">{v}</dd>
+          <dt className="text-slate-700">{k}</dt>
+          <dd className="text-right text-slate-900">{v}</dd>
         </div>
       ))}
       {bill.balance_paise !== null && (
-        <div className="contents text-lg font-bold">
-          <dt>Balance</dt>
-          <dd className="text-right">{balanceText(bill)}</dd>
+        <div className={`contents text-lg font-bold ${(bill.balance_paise ?? 0) > 0 ? "text-warning" : "text-slate-900"}`}>
+          <dt className="border-t border-line pt-2">Balance</dt>
+          <dd className="border-t border-line pt-2 text-right">{balanceText(bill)}</dd>
         </div>
       )}
     </dl>
@@ -161,6 +180,7 @@ function DraftEditor({ bill, onChange, say }: Readonly<{ bill: Bill; onChange: (
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [discarding, setDiscarding] = useState(false);
+  const [issueProblem, setIssueProblem] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,13 +253,13 @@ function DraftEditor({ bill, onChange, say }: Readonly<{ bill: Bill; onChange: (
     <form onSubmit={submit} className="space-y-4" noValidate>
       {error !== null && <ErrorNotice error={error} />}
       <fieldset className="space-y-3">
-        <legend className="text-lg font-semibold">Lines</legend>
-        {rows.length === 0 && <p>No lines yet. Add one below.</p>}
+        <legend className="mb-1 text-lg font-bold text-slate-900">Lines</legend>
+        {rows.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 px-3 py-5 text-center text-slate-700">No lines yet. Add one below.</p>}
         {rows.map((row, n) => {
           const e = errors[row.key] ?? {};
           const id = `${bill.id}-${n + 1}`;
           return (
-            <div key={row.key} className="space-y-2 rounded-card border border-slate-200 bg-white p-3">
+            <div key={row.key} className="space-y-3 rounded-card border border-line bg-white p-3 shadow-card sm:p-4">
               <div className="grid gap-2 sm:grid-cols-[2fr_2fr_1fr_1fr]">
                 <SelectField
                   id={`${id}-service`}
@@ -280,13 +300,18 @@ function DraftEditor({ bill, onChange, say }: Readonly<{ bill: Bill; onChange: (
                 onChange={(d) => update(row.key, { discount: d })}
                 error={e.discount}
               />
-              <Button size="sm" onClick={() => setRows((all) => all.filter((r) => r.key !== row.key))}>
+              <Button
+                size="sm"
+                onClick={() => setRows((all) => all.filter((r) => r.key !== row.key))}
+                icon={<Trash2 className="size-3.5" />}
+                className="text-danger hover:border-danger-line hover:bg-danger-soft hover:text-danger"
+              >
                 Remove line {n + 1}
               </Button>
             </div>
           );
         })}
-        <Button size="sm" onClick={() => setRows((all) => [...all, emptyRow()])} disabled={rows.length >= 50}>
+        <Button onClick={() => setRows((all) => [...all, emptyRow()])} disabled={rows.length >= 50} icon={<Plus className="size-4" />}>
           Add a line
         </Button>
       </fieldset>
@@ -305,15 +330,27 @@ function DraftEditor({ bill, onChange, say }: Readonly<{ bill: Bill; onChange: (
           <Totals bill={bill} />
         </section>
       )}
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={busy}>
+      {issueProblem !== undefined && (
+        <p role="alert" className="text-sm font-medium text-danger">
+          {issueProblem}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2 border-t border-line pt-4">
+        <Button type="submit" disabled={busy} icon={<Save className="size-4" />}>
           Save draft
         </Button>
         <Button
           variant="primary"
-          disabled={busy || rows.length === 0}
+          disabled={busy}
+          icon={<FileCheck2 className="size-4" />}
           onClick={() =>
             void run(async () => {
+              // DESIGN.md §8a: the button stays enabled and says what is missing.
+              if (rows.length === 0) {
+                setIssueProblem("Add a line before issuing the bill.");
+                return;
+              }
+              setIssueProblem(undefined);
               if ((await save()) === null) return;
               onChange(await api.issue(bill.id));
               say("Bill issued. It can no longer change.");
@@ -322,7 +359,7 @@ function DraftEditor({ bill, onChange, say }: Readonly<{ bill: Bill; onChange: (
         >
           Issue bill
         </Button>
-        <Button variant="danger" disabled={busy} onClick={() => setDiscarding(true)}>
+        <Button variant="danger" disabled={busy} onClick={() => setDiscarding(true)} icon={<Trash2 className="size-4" />}>
           Discard draft
         </Button>
       </div>
@@ -360,9 +397,12 @@ function IssuedBill({ bill, onChange, say }: Readonly<{ bill: Bill; onChange: (b
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const reasonError = tried && reason.trim() === "" ? "Say why the bill is corrected." : undefined;
+  const [lineTried, setLineTried] = useState(false);
+  const lineError = lineTried && chosen.length === 0 ? "Choose at least one line to credit." : undefined;
 
   async function credit(lineIds: readonly string[] | null) {
     setTried(true);
+    setLineTried(lineIds !== null);
     if (reason.trim() === "" || (lineIds !== null && lineIds.length === 0)) return;
     setBusy(true);
     setError(null);
@@ -372,6 +412,7 @@ function IssuedBill({ bill, onChange, say }: Readonly<{ bill: Bill; onChange: (b
       setChosen([]);
       setReason("");
       setTried(false);
+      setLineTried(false);
       say(next.status === "CANCELLED" ? "Credit note issued. The bill is cancelled." : "Credit note issued.");
     } catch (failure) {
       if (!endSession(failure)) setError(failure);
@@ -421,16 +462,16 @@ function IssuedBill({ bill, onChange, say }: Readonly<{ bill: Bill; onChange: (b
         </table>
       </div>
       <Totals bill={bill} />
-      {bill.notes !== null && <p>Notes: {bill.notes}</p>}
+      {bill.notes !== null && <p className="rounded-lg bg-slate-50 px-3 py-2 text-slate-800">Notes: {bill.notes}</p>}
 
       {bill.credit_notes.length > 0 && (
         <section aria-labelledby="credit-notes-heading" className="space-y-2">
-          <h2 id="credit-notes-heading" className="text-lg font-semibold">
+          <h2 id="credit-notes-heading" className="text-lg font-bold text-slate-900">
             Credit notes
           </h2>
           <ul className="space-y-2">
             {bill.credit_notes.map((note) => (
-              <li key={note.id} className="rounded-card border border-slate-200 bg-white p-3">
+              <li key={note.id} className="rounded-card border border-line border-l-4 border-l-rose-300 bg-white p-3 shadow-card">
                 <p className="font-medium">
                   {note.number} · {note.bill_date} · {formatPaise(note.total_paise)}
                 </p>
@@ -444,15 +485,16 @@ function IssuedBill({ bill, onChange, say }: Readonly<{ bill: Bill; onChange: (b
       )}
 
       {bill.status === "ISSUED" && open.length > 0 && (
-        <section aria-labelledby="credit-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4">
-          <h2 id="credit-heading" className="text-lg font-semibold">
+        <section aria-labelledby="credit-heading" className="space-y-3 rounded-card border border-line bg-white p-4 shadow-card sm:p-5">
+          <h2 id="credit-heading" className="flex items-center gap-2 text-lg font-bold text-slate-900">
+            <Undo2 aria-hidden="true" className="size-5 text-brand-700" />
             Correct this bill
           </h2>
           <p className="text-sm text-slate-700">
             An issued bill never changes. A credit note reverses the lines you choose; reversing all of them cancels the bill.
           </p>
           {error !== null && <ErrorNotice error={error} />}
-          <fieldset>
+          <fieldset aria-describedby={lineError === undefined ? undefined : "credit-lines-error"}>
             <legend className="font-medium">Lines to credit</legend>
             {open.map((line) => (
               <CheckboxField
@@ -464,9 +506,14 @@ function IssuedBill({ bill, onChange, say }: Readonly<{ bill: Bill; onChange: (b
               />
             ))}
           </fieldset>
+          {lineError !== undefined && (
+            <p id="credit-lines-error" className="text-sm font-medium text-danger">
+              {lineError}
+            </p>
+          )}
           <TextField id={`credit-reason-${bill.id}`} label="Reason" value={reason} onChange={setReason} maxLength={200} required error={reasonError} />
           <div className="flex flex-wrap gap-2">
-            <Button disabled={busy || chosen.length === 0} onClick={() => void credit(chosen)}>
+            <Button disabled={busy} onClick={() => void credit(chosen)}>
               Credit the chosen lines
             </Button>
             <Button variant="danger" disabled={busy} onClick={() => void credit(null)}>

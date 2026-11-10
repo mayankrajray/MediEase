@@ -164,6 +164,12 @@ describe("a bill (M6d-P2, billing R13-R30)", () => {
       [`POST /api/v1/clinic/bills/${BILL}/credit-notes`]: () => json(201, credited),
     });
     renderInWorkspace(<BillDetail billId={BILL} />);
+    // M7c-P7 (M10, DESIGN.md §8a): pressed with no line chosen, the button says so and sends nothing.
+    fireEvent.change(await screen.findByLabelText(/^Reason/), { target: { value: "Not done" } });
+    fireEvent.click(screen.getByRole("button", { name: "Credit the chosen lines" }));
+    expect(await screen.findByText("Choose at least one line to credit.")).toBeInTheDocument();
+    expect(api.calls.some((c) => c.method === "POST")).toBe(false);
+    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "" } });
     fireEvent.click(await screen.findByLabelText("Dressing (₹200.00)"));
     fireEvent.click(screen.getByRole("button", { name: "Credit the chosen lines" }));
     expect(await screen.findByText("Say why the bill is corrected.")).toBeInTheDocument();

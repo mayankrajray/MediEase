@@ -1,12 +1,15 @@
 "use client";
 
+import { Plus, ReceiptText, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { INPUT, LABEL } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TABLE, TABLE_WRAP, TD, TH, TR } from "@/components/ui/table";
 import { PatientPicker } from "@/features/appointments/PatientPicker";
@@ -88,14 +91,17 @@ export function BillsList() {
         title="Bills"
         description="Draft, issue and correct bills. An issued bill never changes: correct it with a credit note."
         actions={
-          <Button variant="primary" onClick={() => setPicking((p) => !p)} aria-expanded={picking}>
+          <Button variant="primary" onClick={() => setPicking((p) => !p)} aria-expanded={picking} icon={<Plus className="size-4" />}>
             New bill
           </Button>
         }
       />
       {picking && (
-        <div className="space-y-2 rounded-card border border-slate-200 bg-white p-4">
-          <p className="font-medium">Who is the bill for?</p>
+        <div className="space-y-3 rounded-card border border-brand-200 bg-white p-4 shadow-card">
+          <p className="flex items-center gap-2 font-semibold text-slate-900">
+            <UserRound aria-hidden="true" className="size-4 text-brand-700" />
+            Who is the bill for?
+          </p>
           <PatientPicker onPick={(patient) => void start(patient.id)} />
         </div>
       )}
@@ -113,12 +119,16 @@ export function BillsList() {
           ))}
         </select>
       </div>
-      {load.status === "loading" && <p role="status">Loading bills…</p>}
+      {load.status === "loading" && <ListSkeleton label="Loading bills…" />}
       {load.status === "failed" && <ErrorNotice error={load.error} />}
-      {load.status === "ready" && load.items.length === 0 && <p>No bills yet.</p>}
+      {load.status === "ready" && load.items.length === 0 && (
+        <EmptyState title="No bills yet." icon={<ReceiptText className="size-5" />}>
+          {status === "" ? "New bill starts one for a patient." : "No bill is in this state."}
+        </EmptyState>
+      )}
       {load.status === "ready" && load.items.length > 0 && <BillTable items={load.items} />}
       {load.status === "ready" && load.next !== null && (
-        <Button disabled={more} onClick={() => void loadMore(load.next as string, load.items)}>
+        <Button loading={more} onClick={() => void loadMore(load.next as string, load.items)}>
           Show more
         </Button>
       )}
@@ -144,7 +154,7 @@ export function BillTable({ items, caption = "Bills" }: Readonly<{ items: readon
           {items.map((b) => (
             <tr key={b.id} role="row" className={TR}>
               <td role="cell" data-label="Bill" className={TD}>
-                <Link href={billPath(b.id)} className="font-semibold text-brand-800 underline">
+                <Link href={billPath(b.id)} className="font-semibold text-brand-800 underline-offset-4 hover:underline">
                   {b.number ?? "Draft"}
                 </Link>
               </td>
@@ -160,7 +170,7 @@ export function BillTable({ items, caption = "Bills" }: Readonly<{ items: readon
               <td role="cell" data-label="Total" className={`${TD} tabular-nums`}>
                 {formatPaise(b.total_paise)}
               </td>
-              <td role="cell" data-label="Balance" className={`${TD} tabular-nums`}>
+              <td role="cell" data-label="Balance" className={`${TD} tabular-nums ${(b.balance_paise ?? 0) > 0 ? "font-semibold text-warning" : ""}`}>
                 {balanceText(b)}
               </td>
               <td role="cell" data-label="State" className={TD}>
