@@ -20,7 +20,9 @@ export function StatusBadge({ tone = "neutral", children }: { tone?: Tone; child
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-medium ring-1 ring-inset",
+        // M7c-P7 (M4 phone fix): one line, so a pill never becomes a tall ellipse in a narrow
+        // column; a cell lets the table grow, and the phone card gives it the full width.
+        "inline-flex max-w-full shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-sm font-medium ring-1 ring-inset",
         TONES[tone].badge,
       )}
     >

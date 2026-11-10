@@ -264,3 +264,29 @@ merge classes, so `w-24` beside `w-full` lost).
 enabled and an early press shows the two messages, moves focus to the note and sends nothing;
 `BookingRequests.test.tsx` (R36): an early *Accept and book* says to choose the record and sends
 nothing.
+
+### M4 follow-up (developer's iPhone SE check, 10 Nov 2026)
+
+The developer found booking requests unusable on a 375 px phone: the page scrolled sideways
+(461 px wide), the phone number and reason ran out of their cards, and every badge became a tall
+ellipse; the notification drawer also scrolled sideways. Most users work on a phone, so phone
+quality is not negotiable.
+
+**Causes:** the shared phone-card layout of `me-table` made each named cell a flex row, so a
+cell's several lines (date, doctor, "first asked") sat side by side and long values (names with
+digits, `+91…` numbers) could not shrink; `StatusBadge` wrapped its words inside a fully rounded
+pill; drawers and dialogs let one long word widen the panel.
+
+**Fixes:**
+
+| Where | Change |
+|---|---|
+| Every phone card (`globals.css`, `.me-table`) | A named cell is a grid: the column's name in a 6.5 rem first column, everything the cell holds stacked in the second (`minmax(0, 1fr)`); cards and cells `min-width: 0` and `overflow-wrap: anywhere`, so nothing pushes a card wider than the screen and no data is cut |
+| `StatusBadge` | One line (`white-space: nowrap`, `max-width: 100%`): a pill stays a pill |
+| `Drawer`, `Dialog` | `overflow-x: hidden` on the panel and wrapping content: they scroll only vertically; notification titles wrap |
+| Booking requests (one markup, `max-md:` order) | Below 768 px each request is a card built for a phone, with no column names: the patient first (name, age and record, a tappable phone link 44 px tall with an icon), then when and with whom, the reason when there is one, the hold badge beside "Reply by", then *Accept* full width and *Propose time* and *Decline* side by side, all 44 px tall. From 768 px it stays the table, actions on one line |
+
+**Checked:** an overflow audit (each element's right edge against the viewport) at 375×667 on
+booking requests, Today with the notification drawer open, the queue and bookings to move:
+no sideways scroll anywhere (the only element past the edge is the visually hidden table header
+row, clipped). Screenshots at 375 and 1366 px with three fresh requests seeded.
