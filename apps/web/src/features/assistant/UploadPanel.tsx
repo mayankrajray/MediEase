@@ -1,7 +1,11 @@
 "use client";
 
+import { CircleCheck, ShieldCheck, Trash2, Upload as UploadIcon } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { buttonClasses } from "@/components/ui/Button";
+import { INPUT, INPUT_BASE, LABEL } from "@/components/ui/Field";
+import { Spinner } from "@/components/ui/Spinner";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { DEFAULT_ZONE } from "@/features/portal/data";
 import { PortalCard, usePortal } from "@/features/portal/PortalShell";
@@ -22,10 +26,12 @@ export function usableUpload(upload: Upload | null): string | null {
   return upload?.state === "VERIFIED" && upload.verification?.selected != null ? upload.id : null;
 }
 
-const field = "block min-h-11 w-full rounded-lg border border-slate-300 bg-white p-2";
-const primary =
-  "inline-flex min-h-11 items-center rounded-lg bg-brand-700 px-4 font-semibold text-white hover:bg-brand-800 disabled:opacity-60";
-const secondary = "inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-4 font-medium disabled:opacity-60";
+const field = `${INPUT} mt-1 min-h-11`;
+const primary = `${buttonClasses("primary", "md")} min-h-11`;
+const secondary = `${buttonClasses("secondary", "md")} min-h-11`;
+/** The file input's own button styled as a secondary button (it stays one native control). */
+const FILE =
+  "block w-full cursor-pointer rounded-lg border border-dashed border-slate-400 bg-slate-50 p-2 text-sm text-slate-800 file:mr-3 file:min-h-10 file:cursor-pointer file:rounded-md file:border-0 file:bg-brand-700 file:px-4 file:font-semibold file:text-white hover:border-brand-300 hover:bg-brand-50";
 
 /**
  * A prescription that is not in the account (M7b; FR-UPL-01..05; spec prescription-uploads §8;
@@ -105,7 +111,10 @@ export function UploadPanel({ onChange }: Readonly<{ onChange: (upload: Upload |
 
   function sendCode(event: FormEvent) {
     event.preventDefault();
-    if (code.trim() === "") return;
+    if (code.trim() === "") {
+      document.getElementById("upload-code")?.focus();
+      return;
+    }
     void run(async () => (await portalPost("/api/v1/portal/prescription-uploads/by-code", { code: code.trim() })).data);
   }
 
@@ -161,20 +170,23 @@ export function UploadPanel({ onChange }: Readonly<{ onChange: (upload: Upload |
   const day = (iso: string) => portalDate(iso, DEFAULT_ZONE, s);
 
   return (
-    <PortalCard id="assistant-upload" title={u.title}>
-      <p>{u.intro}</p>
-      <p className="text-sm text-slate-700">{u.privacy}</p>
+    <PortalCard id="assistant-upload" title={u.title} icon={<UploadIcon />}>
+      <p className="text-slate-800">{u.intro}</p>
+      <p className="flex items-start gap-2 text-sm text-slate-700">
+        <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand-700" />
+        <span>{u.privacy}</span>
+      </p>
 
       {(upload === null || upload.state === "REJECTED") && (
         <>
           {upload?.state === "REJECTED" && (
-            <div role="status" className="rounded-lg border border-amber-500 bg-amber-50 p-3">
+            <div role="status" className="rounded-lg border border-warning-line bg-warning-soft p-3 text-slate-900">
               <p className="font-medium">{u.rejected[upload.rejection_code ?? ""] ?? u.rejectedOther}</p>
               {upload.rejection_code !== "UPL_WITHDRAWN" && <p className="text-sm">{u.tryAgain}</p>}
             </div>
           )}
-          <form onSubmit={sendFile} className="space-y-2">
-            <label htmlFor="upload-file" className="block font-medium">
+          <form onSubmit={sendFile} className="space-y-2 rounded-lg border border-line p-3">
+            <label htmlFor="upload-file" className={LABEL}>
               {u.file}
             </label>
             <input
@@ -183,7 +195,7 @@ export function UploadPanel({ onChange }: Readonly<{ onChange: (upload: Upload |
               type="file"
               accept="application/pdf,image/jpeg,image/png"
               aria-describedby="upload-file-help"
-              className={field}
+              className={`${FILE} mt-1`}
             />
             <p id="upload-file-help" className="text-sm text-slate-700">
               {u.fileHelp}
@@ -192,9 +204,11 @@ export function UploadPanel({ onChange }: Readonly<{ onChange: (upload: Upload |
               {busy ? u.sending : u.send}
             </button>
           </form>
-          <p className="font-medium">{u.or}</p>
-          <form onSubmit={sendCode} className="space-y-2">
-            <label htmlFor="upload-code" className="block font-medium">
+          <p className="flex items-center gap-3 text-sm font-semibold uppercase tracking-wide text-slate-600 before:h-px before:flex-1 before:bg-line after:h-px after:flex-1 after:bg-line">
+            {u.or}
+          </p>
+          <form onSubmit={sendCode} className="space-y-2 rounded-lg border border-line p-3">
+            <label htmlFor="upload-code" className={LABEL}>
               {u.code}
             </label>
             <input
@@ -210,7 +224,7 @@ export function UploadPanel({ onChange }: Readonly<{ onChange: (upload: Upload |
             <p id="upload-code-help" className="break-words text-sm text-slate-700">
               {u.codeHelp}
             </p>
-            <button type="submit" disabled={busy || code.trim() === ""} className={secondary}>
+            <button type="submit" disabled={busy} className={secondary}>
               {u.verify}
             </button>
           </form>
@@ -218,19 +232,22 @@ export function UploadPanel({ onChange }: Readonly<{ onChange: (upload: Upload |
       )}
 
       {checking && (
-        <div role="status" aria-busy="true" className="rounded-lg border border-slate-200 p-3">
-          <p>{u.checking}</p>
-          {polls >= SLOW_AFTER_POLLS && <p className="text-sm">{u.slow}</p>}
+        <div role="status" aria-busy="true" className="flex items-start gap-3 rounded-lg border border-info-line bg-info-soft p-3 text-slate-900">
+          <Spinner />
+          <div>
+            <p>{u.checking}</p>
+            {polls >= SLOW_AFTER_POLLS && <p className="text-sm">{u.slow}</p>}
+          </div>
         </div>
       )}
 
       {upload?.state === "NEEDS_CHALLENGE" && (
-        <form onSubmit={answer} className="space-y-2" aria-labelledby="upload-challenge-title">
+        <form onSubmit={answer} className="space-y-2 rounded-lg border border-line p-3" aria-labelledby="upload-challenge-title">
           <h3 id="upload-challenge-title" className="font-semibold">
             {u.challengeTitle}
           </h3>
           <p>{u.challengeHelp}</p>
-          <label htmlFor="upload-last4" className="block font-medium">
+          <label htmlFor="upload-last4" className={LABEL}>
             {u.last4}
           </label>
           <input
@@ -240,10 +257,12 @@ export function UploadPanel({ onChange }: Readonly<{ onChange: (upload: Upload |
             inputMode="numeric"
             autoComplete="off"
             maxLength={4}
-            className={`${field} max-w-32 font-mono`}
+            className={`${INPUT_BASE} mt-1 min-h-12 w-36 text-center font-mono text-xl tracking-[0.3em]`}
           />
           {upload.attempts_left !== null && upload.attempts_left < 5 && (
-            <p role="status">{u.attemptsLeft(upload.attempts_left)}</p>
+            <p role="status" className="text-sm font-medium text-danger">
+              {u.attemptsLeft(upload.attempts_left)}
+            </p>
           )}
           <button type="submit" disabled={busy || digits.length !== 4} className={primary}>
             {u.check}
@@ -252,8 +271,11 @@ export function UploadPanel({ onChange }: Readonly<{ onChange: (upload: Upload |
       )}
 
       {upload?.state === "VERIFIED" && v !== null && (
-        <div className="space-y-2 rounded-lg border border-brand-700 p-3">
-          <p className="font-medium">{u.verified(v.doctor_name, v.clinic_name, day(v.issued_at), v.version)}</p>
+        <div className="space-y-2 rounded-lg border border-success-line bg-success-soft p-3 text-slate-900">
+          <p className="flex items-start gap-2 font-medium">
+            <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" />
+            <span>{u.verified(v.doctor_name, v.clinic_name, day(v.issued_at), v.version)}</span>
+          </p>
           {v.access === "REPRESENTATIVE" && <p>{u.representative(day(v.expires_at))}</p>}
           {v.superseded && v.latest_version !== null && (
             <fieldset className="space-y-2">
@@ -283,7 +305,7 @@ export function UploadPanel({ onChange }: Readonly<{ onChange: (upload: Upload |
             </fieldset>
           )}
           {v.selected !== null && (
-            <p role="status">
+            <p role="status" className="font-semibold">
               {u.using(v.selected === "LATEST" && v.latest_version !== null ? v.latest_version : v.version)}
             </p>
           )}
@@ -293,7 +315,8 @@ export function UploadPanel({ onChange }: Readonly<{ onChange: (upload: Upload |
       {error !== null && <ErrorNotice error={error} />}
 
       {upload !== null && upload.state !== "REJECTED" && (
-        <button type="button" disabled={busy} onClick={() => void remove()} className={secondary}>
+        <button type="button" disabled={busy} onClick={() => void remove()} className={`${secondary} text-danger hover:border-danger-line hover:bg-danger-soft hover:text-danger`}>
+          <Trash2 aria-hidden="true" className="size-4" />
           {u.remove}
         </button>
       )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useSession } from "@/features/auth/SessionProvider";
 import type { RequestOptions } from "@/lib/api/client";
 import { sessionPost } from "@/lib/auth/refresh";
@@ -33,10 +34,7 @@ export function StaffAssistant() {
 
   return (
     <div className="max-w-3xl space-y-4">
-      <h1 className="text-2xl font-bold tracking-tight">Assistant</h1>
-      <p className="text-slate-700">
-        It works only with what your role can already do, and never gives medical advice.
-      </p>
+      <PageHeader title="Assistant" description="It works only with what your role can already do, and never gives medical advice." />
       <Chat
         s={STRINGS}
         onLeave={(error) => endSession(error)}
