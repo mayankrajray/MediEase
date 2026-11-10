@@ -13,8 +13,8 @@ Plan: `docs/milestones/M7c-P7-design-system-plan.md`. System: `DESIGN.md`. Produ
 | M6 Appointment booking | ✅ built 10 Nov 2026 |
 | M7 Patient portal | ✅ built 10 Nov 2026 |
 | M8 Prescriptions (and the PDF's layout 4 with the MediEase emblem) | ✅ screens built 10 Nov 2026; the PDF's layout 4 moved to the M7d backlog (B1): an API change |
-| M9 AI assistant | ☐ |
-| M10 Billing | ☐ |
+| M9 AI assistant | ✅ built 10 Nov 2026 |
+| M10 Billing | ✅ built 10 Nov 2026 |
 
 ## Decisions (developer, 9 Nov 2026)
 
@@ -480,3 +480,63 @@ both fixed.) The patient page is 160.5 KB on first load (`patient-link-360`).
 Unit tests: the 13 consultation, prescription, patient-link and portal files pass unchanged.
 Playwright, all passed: `consultation-keyboard`, `patient-link-360`, `portal-screens`,
 `portal-linking`, `uploads`, `reminders-follow-ups`.
+
+### M3 follow-up (found by the M9 journeys, 10 Nov 2026)
+
+`workspaces.spec.ts` (FR-UX-06) failed: the M3 Today redesign dropped the doctor's name from
+session rows in the doctor's own view, and the journey uses that name to prove the sessions are
+the owner's own as a doctor. The name is back on every row.
+
+## M9 — AI assistant (built 10 Nov 2026)
+
+**Screens:** the patient assistant (`/portal/assistant`: the prescription to ask about, the
+upload panel, the conversation) and the staff assistant (`/assistant`).
+
+**Existing problems:** the conversation was a bare list with no frame; messages as flat boxes;
+nothing showed while the reply was coming; the proposal box and buttons were hand-built; the
+upload panel used three one-off input and button styles and plain text states; *Send* and *Check
+code* were disabled until something was typed, without saying why.
+
+**Changes (behaviour, API calls, words and accessible names unchanged):**
+
+| Area | Change |
+|---|---|
+| Conversation | One card: an empty state with the assistant's icon and its hint; messages as bubbles (the person's on the right in the brand colour, the assistant's on the left), each with an avatar icon and the speaker's name; a referral reply in the warning tone with a warning icon; three pulsing dots while the reply comes (hidden from screen readers; the list stays the live region); the conversation grows with the page (an inner scroll area failed axe's *scrollable-region-focusable*) |
+| Proposal | A tinted card with a checklist icon, *Confirm* (spinner while confirming) and *Cancel* as buttons, stacked on a phone |
+| Composer | The message box and *Send* (with an icon and a spinner) side by side under the conversation. *Send* stays enabled: pressed empty, it puts the cursor in the box (DESIGN.md §8a) |
+| Patient page | `PortalTitle` with the intro; the prescription picker as a card with an icon and the shared input |
+| Upload panel | A card with an upload icon; the privacy line with a shield; the file and code forms as bordered boxes with an "or" divider; the file input's button in the brand colour; *Checking your file…* in the info tone with a spinner; the last-4 field large and centred; attempts left in the danger colour; *Verified* in the success tone with an icon; *Remove* in the danger outline. *Check code* stays enabled; pressed empty, it focuses the code field |
+| Staff page | `PageHeader` with the same line under it |
+
+**Checked:** screenshots at 1366, 375 and 320 px of both pages: no sideways scroll.
+`/portal/assistant` is 189.8 KB on first load. Unit tests unchanged and passing; Playwright
+`assistant` and `uploads` passed after the axe fix.
+
+## M10 — Billing (built 10 Nov 2026)
+
+**Screens:** *Bills* (list, *New bill*), one bill (draft editor, issued bill, credit notes,
+*Correct this bill*, payments, receipt), *Collection*, *Dues*, and a patient's bills card.
+
+**Existing problems:** the module was built in M6d with the first shared components, so the
+gaps were smaller: loading as plain text; empty states as one sentence; the bill's header and
+totals unframed; panels without the card shadow or headings with icons; the payment list as bare
+lines; *Credit the chosen lines*, *Record payment*, *Issue bill* and *Void* disabled until the
+form was complete, without saying why.
+
+**Changes (API calls and accessible names unchanged):**
+
+| Area | Change |
+|---|---|
+| Bills | *New bill* with a plus; the patient picker in a card; a list skeleton; an empty state that says how to start (or that no bill is in the chosen state); a balance that is due in the warning colour; *Show more* with a spinner |
+| One bill | *All bills* as a back link; a header card with a receipt icon, the number, patient, doctor, date and the state badge; a skeleton while loading; lines as cards; *Add a line*, *Remove line n*, *Save draft*, *Issue bill* and *Discard draft* with icons; totals as a card with the balance ruled off (warning colour when due); credit notes with a rose edge; *Correct this bill* with an icon |
+| Payments | A card with a wallet icon; each payment or refund as a row with an in or out arrow; the payment form in a tinted box; *Record payment* with a rupee icon and a spinner |
+| Receipt | Icons on *Print bill*, *Show QR for the patient*, *Copy link* and *Unlock link*; the QR and the link wrap under each other on a phone |
+| Collection | The net in a summary card; section headings; a skeleton; *Export CSV* with an icon; an empty box when nothing was taken |
+| Dues | A list skeleton; an empty state; amounts owed in the warning colour |
+| Enabled buttons (DESIGN.md §8a) | *Credit the chosen lines* with nothing ticked says "Choose at least one line to credit."; *Issue bill* with no lines says "Add a line before issuing the bill."; *Record payment* with no amount focuses the amount (its message is already under it); *Void* without a reason says "Say why the payment is voided." Nothing is sent in any of these cases |
+
+**Test added for a behaviour change:** `BillDetail.test.tsx`: *Credit the chosen lines* pressed
+with no line chosen says so and sends nothing.
+
+**Checked:** screenshots of Bills, Collection and Dues at 1366, 375 and 320 px: no sideways
+scroll. Unit tests passing; Playwright `workspaces` passed.

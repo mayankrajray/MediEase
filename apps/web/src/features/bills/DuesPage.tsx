@@ -1,9 +1,12 @@
 "use client";
 
+import { CircleCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { TABLE, TABLE_WRAP, TD, TH, TR } from "@/components/ui/table";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -41,8 +44,8 @@ export function DuesPage() {
     <section className="space-y-4">
       <PageHeader title="Dues" description={dues === undefined ? undefined : `In all: ${formatPaise(dues.total_paise)}`} />
       {error !== null && <ErrorNotice error={error} />}
-      {dues === undefined && error === null && <p role="status">Loading dues…</p>}
-      {dues !== undefined && dues.items.length === 0 && <p>Nobody owes the clinic anything.</p>}
+      {dues === undefined && error === null && <ListSkeleton label="Loading dues…" />}
+      {dues !== undefined && dues.items.length === 0 && <EmptyState title="Nobody owes the clinic anything." icon={<CircleCheck className="size-5" />} />}
       {dues !== undefined && dues.items.length > 0 && (
         <div className={TABLE_WRAP}>
           <table className={TABLE} role="table">
@@ -63,7 +66,7 @@ export function DuesPage() {
                     {d.patient === null ? (
                       "–"
                     ) : (
-                      <Link href={patientPath(d.patient.id)} className="font-semibold text-brand-800 underline">
+                      <Link href={patientPath(d.patient.id)} className="font-semibold text-brand-800 underline-offset-4 hover:underline">
                         {d.patient.full_name} · {d.patient.code}
                       </Link>
                     )}
@@ -71,7 +74,7 @@ export function DuesPage() {
                   <td role="cell" data-label="Bills" className={TD}>
                     {d.bills}
                   </td>
-                  <td role="cell" data-label="Owes" className={`${TD} font-medium tabular-nums`}>
+                  <td role="cell" data-label="Owes" className={`${TD} font-semibold tabular-nums text-warning`}>
                     {formatPaise(d.due_paise)}
                   </td>
                   <td role="cell" data-label="Oldest bill" className={TD}>

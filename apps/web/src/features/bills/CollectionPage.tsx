@@ -1,10 +1,12 @@
 "use client";
 
+import { Download } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { INPUT, LABEL } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { RowsSkeleton } from "@/components/ui/Skeleton";
 import { TABLE, TABLE_WRAP, TD, TH, TR } from "@/components/ui/table";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -14,6 +16,8 @@ import { formatPaise } from "@/lib/format/money";
 import { formatClock } from "@/lib/format/time";
 
 import { MODE_LABELS, useBillsApi, type CollectionDay } from "./api";
+
+const H2 = "text-lg font-bold text-slate-900";
 
 function Table({ caption, head, rows }: Readonly<{ caption: string; head: readonly string[]; rows: readonly (readonly string[])[] }>) {
   return (
@@ -107,7 +111,7 @@ export function CollectionPage() {
         title="Collection"
         description="Payments and refunds taken on one day. A day's figures stop changing when it ends."
         actions={
-          <Button onClick={() => void exportCsv()} disabled={exporting || data === undefined}>
+          <Button onClick={() => void exportCsv()} disabled={exporting || data === undefined} icon={<Download className="size-4" />}>
             {exporting ? "Preparing…" : "Export CSV"}
           </Button>
         }
@@ -119,22 +123,24 @@ export function CollectionPage() {
         <input id={dayId} type="date" value={day} max={today} onChange={(e) => e.target.value !== "" && setDay(e.target.value)} className={INPUT} />
       </div>
       {error !== null && <ErrorNotice error={error} />}
-      {data === undefined && error === null && <p role="status">Loading the collection…</p>}
+      {data === undefined && error === null && <RowsSkeleton label="Loading the collection…" rows={3} />}
       {data !== undefined && (
         <>
-          <p className="text-2xl font-bold" aria-live="polite">
-            Net {formatPaise(data.total.net_paise)}
-            <span className="block text-base font-normal text-slate-700">
-              {formatPaise(data.total.payments_paise)} taken, {formatPaise(data.total.refunds_paise)} refunded, {data.total.count}{" "}
-              {data.total.count === 1 ? "entry" : "entries"}
-              {data.voided.count > 0 && ` · ${data.voided.count} voided, not counted`}
-            </span>
-          </p>
-          <h2 className="text-lg font-semibold">By mode</h2>
+          <div className="rounded-card border border-line bg-white p-4 shadow-card sm:p-5">
+            <p className="text-3xl font-bold tabular-nums text-slate-900" aria-live="polite">
+              Net {formatPaise(data.total.net_paise)}
+              <span className="mt-1 block text-base font-normal text-slate-700">
+                {formatPaise(data.total.payments_paise)} taken, {formatPaise(data.total.refunds_paise)} refunded, {data.total.count}{" "}
+                {data.total.count === 1 ? "entry" : "entries"}
+                {data.voided.count > 0 && ` · ${data.voided.count} voided, not counted`}
+              </span>
+            </p>
+          </div>
+          <h2 className={H2}>By mode</h2>
           <Table caption="Collection by mode" head={["Mode", "Taken", "Refunded", "Net"]} rows={data.by_mode.map((r) => [MODE_LABELS[r.mode], ...money(r)])} />
-          <h2 className="text-lg font-semibold">By doctor</h2>
+          <h2 className={H2}>By doctor</h2>
           {data.by_doctor.length === 0 ? (
-            <p>Nothing taken on this day.</p>
+            <p className="rounded-lg border border-dashed border-slate-300 px-3 py-5 text-center text-slate-700">Nothing taken on this day.</p>
           ) : (
             <Table
               caption="Collection by doctor"
@@ -144,7 +150,7 @@ export function CollectionPage() {
           )}
           {data.items.length > 0 && (
             <>
-              <h2 className="text-lg font-semibold">Entries</h2>
+              <h2 className={H2}>Entries</h2>
               <Table
                 caption="Every payment and refund of the day"
                 head={["Time", "Entry", "Bill", "Patient", "Amount", "Taken by"]}
