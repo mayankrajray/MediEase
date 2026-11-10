@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { ChevronLeft, ChevronRight, Clock, TriangleAlert } from "lucide-react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 
 import { Drawer } from "@/components/Drawer";
+import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
+import { cx } from "@/components/ui/cx";
+import { CHOICE_CARD, CHOICE_INPUT, ERROR, INPUT_BASE, LABEL, SelectField } from "@/components/ui/Field";
+import { RowsSkeleton } from "@/components/ui/Skeleton";
 import { useNow } from "@/components/useNow";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
-import type { Patient } from "@/features/patients/fields";
+import { clinicToday, type Patient } from "@/features/patients/fields";
 import { useClinic } from "@/features/shell/ClinicGate";
 import { ApiError } from "@/lib/api/client";
-import { formatClock, formatDay } from "@/lib/format/time";
+import { addDays, formatClock, formatDay } from "@/lib/format/time";
 
 import { useAppointmentApi, type Appointment, type Doctor, type DoctorSession } from "./api";
 import { PatientPicker } from "./PatientPicker";
@@ -97,7 +103,9 @@ export function BookDrawer({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(undefined);
   const [override, setOverride] = useState<Override | undefined>(undefined);
+  const [checked, setChecked] = useState(false);
   const ids = { doctor: useId(), date: useId() };
+  const pickerFocus = useId();
   const key = `${doctorId}|${date}|${reload}`;
 
   useEffect(() => {
@@ -161,159 +169,216 @@ export function BookDrawer({
     }
   }
 
+  const needPatient = target.kind === "book" && patient === undefined;
+  const missing = !checked ? undefined : needPatient ? NEED_PATIENT : choice === undefined || chosen === undefined ? NEED_TIME : undefined;
+  const today = clinicToday(clinic.timezone);
+
+  function pressConfirm() {
+    setChecked(true);
+    if (needPatient) {
+      document.getElementById(pickerFocus)?.focus();
+      return;
+    }
+    if (choice === undefined || chosen === undefined) return;
+    void confirm();
+  }
+
   return (
     <Drawer title={target.kind === "book" ? "Book appointment" : `Reschedule ${target.patientName}`} onClose={onClose}>
-      {target.kind === "book" && patient === undefined ? (
-        <PatientPicker onPick={setPatient} />
-      ) : (
-        <p className="flex items-center justify-between gap-2 rounded bg-slate-100 px-3 py-2">
-          <span>
-            <span className="font-semibold">{who}</span>
-            {patient !== undefined && <span className="text-sm text-slate-700"> · {patient.code}</span>}
-          </span>
-          {target.kind === "book" && (
-            <button type="button" onClick={() => setPatient(undefined)} className="text-brand-800 underline">
-              Change patient
-            </button>
-          )}
-        </p>
-      )}
+      {/* M7c-P7 (M6): 1 who, 2 which doctor and day, 3 which time, then one confirm. */}
+      <Step n={1} title="Patient">
+        {needPatient ? (
+          <PatientPicker onPick={setPatient} inputId={pickerFocus} hideLabel />
+        ) : (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface-muted px-3 py-2.5">
+            <Avatar name={who ?? ""} size="sm" />
+            <span className="min-w-0 flex-1">
+              <span className="block break-words font-semibold text-slate-900">{who}</span>
+              {patient !== undefined && (
+                <>
+                  <span className="sr-only"> · </span>
+                  <span className="block text-sm tabular-nums text-slate-700">{patient.code}</span>
+                </>
+              )}
+            </span>
+            {target.kind === "book" && (
+              <Button size="sm" variant="ghost" onClick={() => setPatient(undefined)}>
+                Change patient
+              </Button>
+            )}
+          </div>
+        )}
+      </Step>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label htmlFor={ids.doctor} className="block font-medium">
-            Doctor
-          </label>
-          <select
+      <Step n={2} title="Doctor and day">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <SelectField
             id={ids.doctor}
+            label="Doctor"
             value={doctorId}
-            onChange={(event) => setDoctorId(event.target.value)}
-            className="w-full rounded-lg border border-slate-400 px-2 py-2"
-          >
-            {doctors.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.display_name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor={ids.date} className="block font-medium">
-            Date
-          </label>
-          <input
-            id={ids.date}
-            type="date"
-            value={date}
-            onChange={(event) => event.target.value !== "" && setDate(event.target.value)}
-            className="w-full rounded-lg border border-slate-400 px-2 py-2"
+            onChange={setDoctorId}
+            options={doctors.map((d) => ({ value: d.id, label: d.display_name }))}
           />
+          <div>
+            <label htmlFor={ids.date} className={LABEL}>
+              Date
+            </label>
+            <div className="mt-1.5 flex gap-1.5">
+              <Button
+                size="sm"
+                className="min-h-10 px-2.5"
+                disabled={date <= today}
+                onClick={() => setDate(addDays(date, -1))}
+                aria-label="Day before"
+                icon={<ChevronLeft className="size-4" />}
+              />
+              <input
+                id={ids.date}
+                type="date"
+                min={today}
+                value={date}
+                onChange={(event) => event.target.value !== "" && setDate(event.target.value)}
+                className={cx(INPUT_BASE, "min-w-0 flex-1 cursor-pointer tabular-nums")}
+              />
+              <Button size="sm" className="min-h-10 px-2.5" onClick={() => setDate(addDays(date, 1))} aria-label="Day after" icon={<ChevronRight className="size-4" />} />
+            </div>
+          </div>
         </div>
-      </div>
+        <p className="text-sm text-slate-700">{formatDay(date)}</p>
+      </Step>
 
-      {loadError !== undefined && <ErrorNotice error={loadError} onRetry={() => setReload((n) => n + 1)} />}
-      {day === null && loadError === undefined && (
-        <p role="status" className="text-slate-700">
-          Loading sessions…
-        </p>
-      )}
-      {day !== null && day.length === 0 && <p role="status">The doctor has no sessions on {formatDay(date)}.</p>}
-      {day !== null && day.length > 0 && (
-        <fieldset className="space-y-3">
-          <legend className="font-medium">When</legend>
-          {day.map((session) => {
-            const open = bookable(session, now);
-            const label = `${clock(session.starts_at)}–${clock(session.ends_at)}`;
-            if (session.mode === "TOKENS") {
+      <Step n={3} title="Time">
+        {loadError !== undefined && <ErrorNotice error={loadError} onRetry={() => setReload((n) => n + 1)} />}
+        {day === null && loadError === undefined && <RowsSkeleton label="Loading sessions…" rows={3} />}
+        {day !== null && day.length === 0 && (
+          <p role="status" className="rounded-lg border border-dashed border-slate-300 px-3 py-5 text-center text-sm text-slate-700">
+            The doctor has no sessions on {formatDay(date)}. Try the next day.
+          </p>
+        )}
+        {day !== null && day.length > 0 && (
+          <fieldset className="space-y-4" aria-describedby={missing === NEED_TIME ? `${ids.date}-missing` : undefined}>
+            <legend className="sr-only">When</legend>
+            {day.map((session) => {
+              const open = bookable(session, now);
+              const label = `${clock(session.starts_at)}–${clock(session.ends_at)}`;
+              const holds = liveHolds(session, now).length;
+              if (session.mode === "TOKENS") {
+                return (
+                  <label key={session.id} className={cx(CHOICE_CARD, "items-start", !open && "cursor-not-allowed opacity-60 hover:bg-transparent")}>
+                    <input
+                      type="radio"
+                      name="place"
+                      disabled={!open}
+                      checked={choice?.sessionId === session.id}
+                      onChange={() => {
+                        setChoice({ sessionId: session.id });
+                        setOverride(undefined);
+                      }}
+                      className={cx(CHOICE_INPUT, "mt-1")}
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-semibold tabular-nums text-slate-900">{label}</span>
+                      <span className="block text-sm text-slate-700">
+                        <span className="sr-only"> · </span>
+                        {open ? `next token ${session.next_token ?? ""}, ${session.available} left` : "not taking bookings"}
+                        {open && holds > 0 && ` · ${holds} held for online requests`}
+                      </span>
+                    </span>
+                  </label>
+                );
+              }
+              const slots = freeSlots(session, now);
               return (
-                <label key={session.id} className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="place"
-                    disabled={!open}
-                    checked={choice?.sessionId === session.id}
-                    onChange={() => {
-                      setChoice({ sessionId: session.id });
-                      setOverride(undefined);
-                    }}
-                  />
-                  <span>
-                    {label} · {open ? `next token ${session.next_token ?? ""}, ${session.available} left` : "not taking bookings"}
-                    {open && liveHolds(session, now).length > 0 && ` · ${liveHolds(session, now).length} held for online requests`}
-                  </span>
-                </label>
-              );
-            }
-            const slots = freeSlots(session, now);
-            return (
-              <div key={session.id} className="space-y-1">
-                <p className="text-sm font-medium text-slate-800">
-                  {label}
-                  {!open && " · not taking bookings"}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {open &&
-                    slots.map((slot) => (
-                      <label
-                        key={slot.starts_at}
-                        className="flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1 has-[:checked]:border-brand-700 has-[:checked]:bg-brand-50"
-                      >
-                        <input
-                          type="radio"
-                          name="place"
-                          checked={choice?.slotStart === slot.starts_at}
-                          onChange={() => {
-                            setChoice({ sessionId: session.id, slotStart: slot.starts_at });
-                            setOverride(undefined);
-                          }}
-                        />
-                        {clock(slot.starts_at)}
-                        {liveHolds(session, now).some((h) => h.slot_start === slot.starts_at) && (
-                          <span className="text-xs font-medium text-amber-900"> Held</span>
-                        )}
-                      </label>
-                    ))}
-                  {open && slots.length === 0 && <span className="text-slate-700">No free slots</span>}
+                <div key={session.id} className="space-y-2">
+                  <p className="flex items-center gap-2 text-sm font-semibold tabular-nums text-slate-800">
+                    <Clock aria-hidden="true" className="size-4 text-slate-500" />
+                    {label}
+                    {!open && <span className="font-normal text-slate-600"> · not taking bookings</span>}
+                  </p>
+                  {open && slots.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                      {slots.map((slot) => {
+                        const held = liveHolds(session, now).some((h) => h.slot_start === slot.starts_at);
+                        return (
+                          <label key={slot.starts_at} className={cx(CHOICE_CARD, "min-h-11 justify-center gap-1.5 px-2 text-sm font-semibold tabular-nums", held && "border-warning-line")}>
+                            <input
+                              type="radio"
+                              name="place"
+                              checked={choice?.slotStart === slot.starts_at}
+                              onChange={() => {
+                                setChoice({ sessionId: session.id, slotStart: slot.starts_at });
+                                setOverride(undefined);
+                              }}
+                              className="sr-only"
+                            />
+                            {clock(slot.starts_at)}
+                            {held && <span className="text-xs font-medium text-warning"> Held</span>}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {open && slots.length === 0 && <p className="text-sm text-slate-700">No free slots</p>}
                 </div>
-              </div>
-            );
-          })}
-        </fieldset>
-      )}
+              );
+            })}
+          </fieldset>
+        )}
+      </Step>
 
       {error !== undefined && <ErrorNotice error={error} />}
       {override !== undefined && (
-        <div role="alertdialog" aria-labelledby="override-title" className="space-y-2 rounded-lg border border-amber-700 bg-amber-50 p-3 text-amber-950">
-          <p id="override-title" className="font-semibold">
-            A patient asked for this time online
+        <div role="alertdialog" aria-labelledby="override-title" className="space-y-3 rounded-xl border border-warning-line bg-warning-soft p-4 text-slate-900">
+          <p id="override-title" className="flex items-center gap-2 font-semibold">
+            <TriangleAlert aria-hidden="true" className="size-5 shrink-0 text-warning" />A patient asked for this time online
           </p>
-          <p>
+          <p className="text-slate-800">
             The clinic is holding it until {clock(override.until)}. Book anyway only if you have agreed this with the patient: the request stays open, but it no
             longer holds the time, and this is recorded in the audit log.
           </p>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void confirm(true)}
-              className="min-h-10 rounded bg-amber-800 px-4 py-2 font-semibold text-white hover:bg-amber-900 disabled:bg-slate-400"
-            >
-              Book anyway (override the patient&apos;s request)
-            </button>
-            <button type="button" onClick={() => setOverride(undefined)} className="min-h-10 rounded border border-slate-400 bg-white px-4 py-2 font-medium">
+            <Button onClick={() => setOverride(undefined)} data-autofocus>
               Choose another time
-            </button>
+            </Button>
+            <Button variant="danger" loading={saving} onClick={() => void confirm(true)}>
+              Book anyway (override the patient&apos;s request)
+            </Button>
           </div>
         </div>
       )}
-      <button
-        type="button"
-        disabled={saving || choice === undefined || chosen === undefined || (target.kind === "book" && patient === undefined)}
-        onClick={() => void confirm()}
-        className="w-full rounded bg-brand-700 px-4 py-2 font-semibold text-white hover:bg-brand-800 disabled:bg-slate-400"
-      >
-        {saving ? "Saving…" : target.kind === "book" ? "Confirm booking" : "Confirm new time"}
-      </button>
+      <div className="sticky bottom-0 -mx-5 -mb-5 space-y-2 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur">
+        {missing !== undefined && (
+          <p id={`${ids.date}-missing`} role="alert" className={ERROR}>
+            {missing}
+          </p>
+        )}
+        {chosen !== undefined && choice !== undefined && (
+          <p className="text-sm text-slate-700">
+            {who ?? "Patient"} · {formatDay(chosen.on_date)}, {choice.slotStart === undefined ? `next token ${chosen.next_token ?? ""}` : clock(choice.slotStart)}
+          </p>
+        )}
+        <Button variant="primary" size="lg" className="w-full" loading={saving} onClick={pressConfirm}>
+          {saving ? "Saving…" : target.kind === "book" ? "Confirm booking" : "Confirm new time"}
+        </Button>
+      </div>
     </Drawer>
+  );
+}
+
+export const NEED_PATIENT = "Choose the patient first.";
+export const NEED_TIME = "Choose a time.";
+
+/** A numbered part of the booking: who, then when. */
+function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+        <span aria-hidden="true" className="grid size-6 place-items-center rounded-full bg-brand-50 text-xs font-bold text-brand-800 ring-1 ring-inset ring-brand-200">
+          {n}
+        </span>
+        {title}
+      </h3>
+      {children}
+    </div>
   );
 }

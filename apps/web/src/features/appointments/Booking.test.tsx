@@ -86,6 +86,19 @@ describe("booking drawer (M3-P5, FR-APT-03)", () => {
     });
   });
 
+  it("M7c-P7 (M6): Confirm before choosing a patient says so, returns focus to the search and sends nothing", async () => {
+    const api = mockApi({ ...boardRoutes, "GET /api/v1/sessions": () => json(200, { items: [session()] }) });
+    open();
+    const dialog = await screen.findByRole("dialog", { name: "Book appointment" }, { timeout: 5000 });
+    await within(dialog).findByRole("radio");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm booking" }));
+
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("Choose the patient first.");
+    expect(within(dialog).getByLabelText("Patient")).toHaveFocus();
+    expect(api.calls.some((c) => c.method === "POST")).toBe(false);
+  });
+
   it("R3: in slot mode offers free slots only and sends the chosen one", async () => {
     const s = slotSession();
     const api = mockApi({

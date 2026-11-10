@@ -38,6 +38,9 @@ export interface BookingWords {
     readonly fee: (rupees: string) => string;
     readonly profile: string;
     readonly allDoctors: string;
+    // M7c-P7 (M6): the short visible word of a session's request link, and the day shortcuts.
+    readonly ask: string;
+    readonly jumpTo: string;
   };
   readonly form: {
     readonly title: string;
@@ -64,6 +67,18 @@ export interface BookingWords {
     readonly goAccount: string;
     readonly errors: Readonly<Record<string, string>>;
     readonly rateLimited: (seconds: string | undefined) => string;
+    // M7c-P7 (M6): checks made in the form before sending (DESIGN.md §8a).
+    readonly check: {
+      readonly title: string;
+      readonly phone: string;
+      readonly phoneShort: string;
+      readonly age: string;
+      readonly sex: string;
+      readonly ack: string;
+    };
+    readonly when: string;
+    readonly with: string;
+    readonly at: string;
   };
   readonly mine: {
     readonly title: string;
@@ -117,6 +132,8 @@ const EN: BookingWords = {
     fee: (rupees) => `Consultation fee ₹${rupees}`,
     profile: "Doctor's profile",
     allDoctors: "All doctors at this clinic",
+    ask: "Ask",
+    jumpTo: "Go to a day",
   },
   form: {
     title: "Ask for this time",
@@ -154,6 +171,17 @@ const EN: BookingWords = {
     },
     rateLimited: (seconds) =>
       seconds === undefined ? "Too many attempts. Please wait a little and try again." : `Too many attempts. Please try again in ${seconds} seconds.`,
+    check: {
+      title: "Please check these before sending",
+      phone: "Enter a phone number the clinic can call.",
+      phoneShort: "Enter a 10-digit mobile number, or the number with its country code.",
+      age: "Enter your age in whole years.",
+      sex: "Choose one.",
+      ack: "Please confirm this is not an emergency. In an emergency, go to the nearest hospital.",
+    },
+    when: "When",
+    with: "Doctor",
+    at: "Clinic",
   },
   mine: {
     title: "Requested",
@@ -215,6 +243,8 @@ const HI: BookingWords = {
     fee: (rupees) => `परामर्श शुल्क ₹${rupees}`,
     profile: "डॉक्टर की प्रोफ़ाइल",
     allDoctors: "इस क्लिनिक के सभी डॉक्टर",
+    ask: "माँगें",
+    jumpTo: "किसी दिन पर जाएँ",
   },
   form: {
     title: "यह समय माँगें",
@@ -252,6 +282,17 @@ const HI: BookingWords = {
     },
     rateLimited: (seconds) =>
       seconds === undefined ? "बहुत ज़्यादा कोशिशें। कृपया थोड़ा रुककर फिर कोशिश करें।" : `बहुत ज़्यादा कोशिशें। कृपया ${seconds} सेकंड बाद फिर कोशिश करें।`,
+    check: {
+      title: "भेजने से पहले कृपया इन्हें देखें",
+      phone: "ऐसा फ़ोन नंबर लिखें जिस पर क्लिनिक कॉल कर सके।",
+      phoneShort: "10 अंकों का मोबाइल नंबर लिखें, या देश के कोड के साथ नंबर।",
+      age: "अपनी उम्र पूरे सालों में लिखें।",
+      sex: "एक चुनें।",
+      ack: "कृपया पुष्टि करें कि यह आपात स्थिति नहीं है। आपात स्थिति में सबसे नज़दीकी अस्पताल जाएँ।",
+    },
+    when: "कब",
+    with: "डॉक्टर",
+    at: "क्लिनिक",
   },
   mine: {
     title: "अनुरोध भेजे गए",

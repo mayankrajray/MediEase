@@ -69,7 +69,13 @@ describe("the request form (M6b-P4, FR-PUB-02, FR-BKG-01)", () => {
     expect(within(form).getByLabelText(/^Age in years \(optional\)/)).not.toBeRequired();
 
     const send = within(form).getByRole("button", { name: "Send request" });
-    expect(send).toBeDisabled(); // no phone, no confirmation yet
+    // M7c-P7 (M6): the button stays enabled; pressing it early says what is missing and sends nothing.
+    expect(send).toBeEnabled();
+    fireEvent.click(send);
+    expect(within(form).getAllByText("Enter a phone number the clinic can call.").length).toBeGreaterThan(0);
+    expect(within(form).getAllByText(/Please confirm this is not an emergency/).length).toBeGreaterThan(0);
+    expect(within(form).getByLabelText(/Phone number/)).toHaveFocus();
+    expect(api.calls.some((c) => c.method === "POST")).toBe(false);
     fireEvent.change(within(form).getByLabelText(/Phone number/), { target: { value: "9000000601" } });
     fireEvent.click(within(form).getByLabelText("This is not an emergency."));
     expect(send).toBeEnabled();
