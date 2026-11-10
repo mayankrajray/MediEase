@@ -272,8 +272,14 @@ Build order (approved): P3 → P1 → P2 → P5 → P6 → P4 → P7 → P8.
 | M7c-P5 | Mistral and NVIDIA providers beside Groq, by settings only (R1) | ✅ (built 9 Nov 2026) |
 | M7c-P6 | Real configuration: WhatsApp, Google sign-in, Brevo email, live tests with the developer; `.env.example` clean-up | ◐ Brevo (test email sent), Google sign-in (developer) and Groq pass; WhatsApp reads the number but Meta refuses sends with `OAuthException code 10` (the token's access to the WhatsApp account's payment, a Meta Business setting) |
 | M7c-P4 | Safe Markdown in the chat (R21) | ✅ (built 9 Nov 2026) |
-| M7c-P7 | Landing page and frontend redesign: design system (Phase 1) then modules M1–M10 (`docs/milestones/M7c-P7-modules.md`) | ▶ Phase 1 ✅ (9 Nov 2026); M1 landing next |
+| M7c-P7 | Landing page and frontend redesign: design system (Phase 1) then modules M1–M10 (`docs/milestones/M7c-P7-modules.md`) | ▶ Phase 1 and modules M1–M6 ✅ (9–10 Nov 2026); M7 patient portal next |
 | M7c-P8 | Demo rehearsal, full suites and `make e2e`, Phase 2 deliverable documents | ☐ |
+
+## M7d — Patient discovery, clinic and doctor profiles, booking redesign  `☐ (parked)`
+
+**Design:** `docs/milestones/M7d-discovery-booking.md` (the developer's brief of 10 Nov 2026, the
+audit, data gaps, plan and the reference image `M7d-reference-image.png`). Front end only; starts
+after M7c-P7. Further change requests made during M7c-P7 are recorded in that file.
 
 ## M8 — Multi-clinic WhatsApp and consolidated billing  `☐ (designed)`
 
