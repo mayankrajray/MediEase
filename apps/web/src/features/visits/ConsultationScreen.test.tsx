@@ -122,7 +122,8 @@ describe("consultation screen (M4-P6, spec §6)", () => {
     typeLine("Tab Sample", { frequency: "000" });
     expect(within(entry()).getByLabelText("Frequency")).toHaveAttribute("aria-invalid", "true");
     fireEvent.change(within(entry()).getByLabelText("Frequency"), { target: { value: "110" } });
-    expect(within(entry()).getByText("1-1-0 · morning and afternoon")).toBeInTheDocument();
+    // The words come from the vocabulary, which loads after the screen: wait for it.
+    expect(await within(entry()).findByText("1-1-0 · morning and afternoon")).toBeInTheDocument();
     fireEvent.change(within(entry()).getByLabelText("Timing"), { target: { value: "BEDTIME" } });
     fireEvent.change(within(entry()).getByLabelText("Days"), { target: { value: "r" } });
     fireEvent.keyDown(within(entry()).getByLabelText("Days"), { key: "Enter" });
