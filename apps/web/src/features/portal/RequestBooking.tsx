@@ -1,11 +1,13 @@
 "use client";
 
+import { Building2, CalendarClock, CircleAlert, Stethoscope } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
 
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { CheckboxField, SelectField, TextAreaField, TextField } from "@/components/ui/Field";
+import { CheckboxField, ErrorSummary, SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { ApiError, apiGet, type GetResponse } from "@/lib/api/client";
 import { portalPost } from "@/lib/auth/portal-session";
@@ -121,12 +123,38 @@ function RequestForm({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<unknown>(undefined);
   const [done, setDone] = useState(false);
+  const [left, setLeft] = useState<ReadonlySet<string>>(new Set());
+  const [checked, setChecked] = useState(false);
   const required = clinic.requires_age_sex;
   const optional = required ? undefined : ` ${words.form.optional}`;
+  const leaveField = (field: string) => setLeft((now) => (now.has(field) ? now : new Set([...now, field])));
+
+  // M7c-P7 (M6): what is missing, checked on leaving a field and on submit; the API decides again.
+  const digits = phone.replace(/\D/g, "");
+  const own: Record<string, string | undefined> = {
+    phone: phone.trim() === "" ? words.form.check.phone : digits.length < 10 ? words.form.check.phoneShort : undefined,
+    age: required && !/^\d{1,3}$/.test(age.trim()) ? words.form.check.age : age.trim() !== "" && !/^\d{1,3}$/.test(age.trim()) ? words.form.check.age : undefined,
+    sex: required && sex === "" ? words.form.check.sex : undefined,
+    ack: ack ? undefined : words.form.check.ack,
+  };
+  const shown = (field: string) => (checked || left.has(field) ? own[field] : undefined);
+  const order = [
+    ["phone", ids.phone],
+    ["age", ids.age],
+    ["sex", ids.sex],
+    ["ack", ids.ack],
+  ] as const;
+  const problems = checked ? order.filter(([f]) => own[f] !== undefined).map(([f, id]) => ({ id, message: own[f] ?? "" })) : [];
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (sending) return;
+    setChecked(true);
+    const first = order.find(([f]) => own[f] !== undefined);
+    if (first !== undefined) {
+      document.getElementById(first[1])?.focus();
+      return;
+    }
     setSending(true);
     setError(undefined);
     try {
@@ -152,8 +180,13 @@ function RequestForm({
   if (done) {
     return (
       <PortalCard id="request-done" title={words.form.doneTitle}>
-        <p role="status">{words.form.doneBody(`${doctorName}, ${when}`)}</p>
-        <Link href="/portal/appointments" className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+        <Alert tone="success" role="status">
+          {words.form.doneBody(`${doctorName}, ${when}`)}
+        </Alert>
+        <Link
+          href="/portal/appointments"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-brand-700 px-4 font-semibold text-white transition-colors hover:bg-brand-800 sm:w-auto"
+        >
           {words.form.goAppointments}
         </Link>
       </PortalCard>
@@ -168,46 +201,84 @@ function RequestForm({
 
   return (
     <PortalCard id="request-title" title={words.form.title}>
-      <p className="font-medium">{words.form.summary(doctorName, clinic.name, when)}</p>
+      {/* What is being asked for, in one glance: doctor, clinic and time. */}
+      <p className="sr-only">{words.form.summary(doctorName, clinic.name, when)}</p>
+      <dl aria-hidden="true" className="grid gap-2 rounded-lg border border-line bg-surface-muted p-3 text-sm sm:grid-cols-3">
+        <div className="flex gap-2">
+          <Stethoscope aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-slate-500" />
+          <div className="min-w-0">
+            <dt className="text-slate-600">{words.form.with}</dt>
+            <dd className="break-words font-semibold text-slate-900">{doctorName}</dd>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Building2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-slate-500" />
+          <div className="min-w-0">
+            <dt className="text-slate-600">{words.form.at}</dt>
+            <dd className="break-words font-semibold text-slate-900">{clinic.name}</dd>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <CalendarClock aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-slate-500" />
+          <div className="min-w-0">
+            <dt className="text-slate-600">{words.form.when}</dt>
+            <dd className="font-semibold tabular-nums text-slate-900">{when}</dd>
+          </div>
+        </div>
+      </dl>
       <p className="text-sm text-slate-700">{words.page.howItWorks}</p>
       {!verified && (
-        <div role="note" className="space-y-2 rounded-lg border border-amber-700 bg-amber-50 p-3 text-amber-950">
+        <div role="note" id={`${ids.phone}-verify`} className="space-y-2 rounded-xl border border-warning-line bg-warning-soft p-3 text-slate-900">
           <p>{words.form.verify}</p>
-          <Link href="/portal/account" className="inline-flex min-h-11 items-center font-medium underline">
+          <Link href="/portal/account" className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
             {words.form.goAccount}
           </Link>
         </div>
       )}
-      <form onSubmit={(event) => void submit(event)} className="space-y-4" noValidate={false}>
+      <ErrorSummary title={words.form.check.title} errors={problems.length > 1 ? problems : []} />
+      <form onSubmit={(event) => void submit(event)} className="space-y-4" noValidate>
         <TextField
           id={ids.phone}
           label={words.form.phone}
           hint={words.form.phoneHelp}
           value={phone}
           onChange={setPhone}
+          onBlur={() => leaveField("phone")}
+          error={shown("phone")}
           required
+          requiredMark={false}
           type="tel"
           inputMode="tel"
           autoComplete="tel"
           maxLength={20}
         />
-        <TextField
-          id={ids.age}
-          label={`${words.form.age}${optional ?? ""}`}
-          value={age}
-          onChange={setAge}
-          required={required}
-          inputMode="numeric"
-          maxLength={3}
-        />
-        <SelectField
-          id={ids.sex}
-          label={`${words.form.sex}${optional ?? ""}`}
-          value={sex}
-          onChange={setSex}
-          required={required}
-          options={[{ value: "", label: words.form.choose }, ...SEXES.map((v) => ({ value: v, label: words.form.sexes[v] }))]}
-        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            id={ids.age}
+            label={`${words.form.age}${optional ?? ""}`}
+            value={age}
+            onChange={setAge}
+            onBlur={() => leaveField("age")}
+            error={shown("age")}
+            required={required}
+            requiredMark={false}
+            inputMode="numeric"
+            maxLength={3}
+          />
+          <SelectField
+            id={ids.sex}
+            label={`${words.form.sex}${optional ?? ""}`}
+            value={sex}
+            onChange={(v) => {
+              setSex(v);
+              leaveField("sex");
+            }}
+            error={shown("sex")}
+            required={required}
+            requiredMark={false}
+            options={[{ value: "", label: words.form.choose }, ...SEXES.map((v) => ({ value: v, label: words.form.sexes[v] }))]}
+          />
+        </div>
         <TextAreaField
           id={ids.reason}
           label={`${words.form.reason} ${words.form.optional}`}
@@ -216,15 +287,35 @@ function RequestForm({
           onChange={setReason}
           maxLength={200}
         />
-        <CheckboxField id={ids.ack} label={words.form.ack} checked={ack} onChange={setAck} />
+        <div className="rounded-lg border border-line p-3">
+          <CheckboxField id={ids.ack} label={words.form.ack} checked={ack} onChange={setAck} error={shown("ack")} />
+        </div>
         <p className="text-sm text-slate-700">{words.form.holdNote}</p>
-        {error !== undefined && (message !== undefined ? <p role="alert" className="rounded-lg border border-red-700 bg-red-50 p-3 font-medium text-red-950">{message}</p> : <ErrorNotice error={error} />)}
+        {error !== undefined &&
+          (message !== undefined ? (
+            <p role="alert" className="flex gap-2 rounded-xl border border-danger-line bg-danger-soft p-3 font-medium text-slate-900">
+              <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-danger" />
+              <span>{message}</span>
+            </p>
+          ) : (
+            <ErrorNotice error={error} />
+          ))}
         {error !== undefined && message !== undefined && !limited && (
-          <Link href={`/c/${encodeURIComponent(clinic.slug)}`} className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+          <Link href={`/c/${encodeURIComponent(clinic.slug)}`} className="inline-flex min-h-11 items-center font-semibold text-brand-800 underline underline-offset-2">
             {words.form.chooseAnother}
           </Link>
         )}
-        <Button type="submit" variant="primary" disabled={sending || !ack || phone.trim() === "" || !verified} className="w-full min-h-11">
+        {/* Enabled while anything is missing (the checks say what); disabled only for an unconfirmed
+            email, which the note above explains, and while sending. */}
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          loading={sending}
+          disabled={!verified}
+          aria-describedby={verified ? undefined : `${ids.phone}-verify`}
+          className="w-full"
+        >
           {sending ? words.form.sending : words.form.submit}
         </Button>
       </form>

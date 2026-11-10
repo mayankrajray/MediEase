@@ -276,13 +276,16 @@ export function SelectField({
   error,
   hint,
   required = false,
+  requiredMark = true,
 }: Described & {
   value: string;
   onChange: (value: string) => void;
   options: readonly { readonly value: string; readonly label: string }[];
+  /** M7c-P7 (M6): `false` where optional fields are marked instead (and on Hindi pages). */
+  requiredMark?: boolean;
 }) {
   return (
-    <FieldShell id={id} label={label} error={error} {...(hint === undefined ? {} : { hint })} required={required}>
+    <FieldShell id={id} label={label} error={error} {...(hint === undefined ? {} : { hint })} required={required} requiredMark={requiredMark}>
       <select
         id={id}
         name={id}

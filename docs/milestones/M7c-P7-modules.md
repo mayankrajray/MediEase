@@ -9,8 +9,8 @@ Plan: `docs/milestones/M7c-P7-design-system-plan.md`. System: `DESIGN.md`. Produ
 | M2 Authentication | ✅ built 9 Nov 2026; approved by the developer 10 Nov 2026 |
 | M3 Clinic dashboard | ✅ built 10 Nov 2026 |
 | M4 Appointments and queue | ✅ built 10 Nov 2026; phone fixes approved by the developer 10 Nov |
-| M5 Patient management | ✅ built 10 Nov 2026 |
-| M6 Appointment booking | ☐ |
+| M5 Patient management | ✅ built 10 Nov 2026; approved by the developer 10 Nov |
+| M6 Appointment booking | ✅ built 10 Nov 2026 |
 | M7 Patient portal | ☐ |
 | M8 Prescriptions (and the PDF's layout 4 with the MediEase emblem) | ☐ |
 | M9 AI assistant | ☐ |
@@ -333,3 +333,43 @@ caught, the name's count. Existing patient, profile, portal-card and search test
 
 **Checked:** screenshots and the overflow audit at 1366 and 375 px on the profile, results (match
 and no match), the register drawer and My patients: no sideways scroll.
+
+## M6 — Appointment booking (built 10 Nov 2026)
+
+The developer approved M5 on a phone (profile and Register patient) and asked for M6.
+
+**Screens:** the staff booking drawer (book and reschedule, opened from the queue, a profile,
+follow-ups and bookings to move) and its patient picker; the patient side of booking: Find a
+doctor, the public clinic page and a doctor's profile with their free times, and the request form
+behind them. Patient pages keep the system font and no Motion (200 KB budget).
+
+**Existing problems:** the drawer was one undivided column of hand-built controls, slots as bare
+radios with small text, the online-request override in a one-off amber style, and *Confirm
+booking* disabled until complete without saying why; the picker without icons or 44 px rows; on
+a phone the clinic page put every time below every doctor (a tap on *See times* showed nothing
+new on screen), and each session took a full-width button, so a fortnight of times ran to about
+6,000 px at 375 px; find, clinic and request pages used one-off borders and text-only problems;
+the request form's *Send request* stayed disabled until the phone and the emergency box were
+filled, without saying so.
+
+**Changes (behaviour and API calls unchanged):**
+
+| Area | Change |
+|---|---|
+| Booking drawer | Three numbered steps (Patient, Doctor and day, Time); the chosen patient as a row with initials and *Change patient*; shared doctor select; the date with *Day before* / *Day after* buttons, today as the earliest; sessions as choice cards (token sessions show the next token and places left), slots as a 3–4 column grid of 44 px time chips with *Held* marked; row skeleton; "No sessions on … Try the next day." |
+| Confirm | A sticky footer with the choice in words ("Bina Shah · Tue, 10 Nov, next token 2") and a full-width *Confirm booking* (or *Confirm new time*) that stays enabled: pressed too early it says "Choose the patient first." (focus back to the search) or "Choose a time." and sends nothing |
+| Override | The held-time question in the warning tone; *Choose another time* (focused) beside a danger *Book anyway …* |
+| Patient picker | Search icon, initials, 44 px rows, a spinner, a dashed "No patient matches" box |
+| Clinic and doctor page | Sticky header (logo links home); the emergency note in the warning tone with an icon; the clinic card with address icon, *Call*, *Directions*, *Share*, *Copy link* as a two-column grid on a phone, and how requests work in an info box; doctor cards with initials, the fee as a chip, hours and languages with icons, *See times* as the primary button, the chosen doctor ringed; choosing a doctor scrolls their times into view (a jump with reduced motion) |
+| Free times | *Go to a day* shortcuts (4 a row on a phone); each day one card with one row per session: the time span and places left beside a short *Ask* (its accessible name is still "Ask for this session"); slot sessions a grid of time chips; skeletons while loading, a danger box with *Try again*, a dashed box when nothing is free |
+| Find a doctor | The form as one card with icons in the search and place fields, a full-width *Search* on a phone; *Doctors* and *Clinics* as a segmented switch; result cards with initials, place, a "Free from …" line with an icon, and the profile as a full-width button; problems in the danger tone; an icon empty state |
+| Request form | The request summarised as Doctor, Clinic, When (one sentence for screen readers); *Send request* enabled: pressed with problems it says under each field what is missing ("Enter a phone number the clinic can call.", "Enter a 10-digit mobile number…", "Please confirm this is not an emergency…"; age and sex when the clinic asks), lists two or more, focuses the first and sends nothing. Still disabled for an unconfirmed email, described by the note that says so. Sent: a success notice and *Go to My appointments* as a button. New words in English and Hindi (`booking-request.ts`; the Hindi needs the same native review, L-07) |
+| Shared | `SelectField` gains `requiredMark`; `PortalCard` on the design tokens |
+
+**Tests changed for a real behaviour change:** `booking-requests.test.tsx` (R9): *Send request*
+is enabled; an early press shows both messages, focuses the phone and sends nothing.
+**Added:** `Booking.test.tsx`: Confirm before choosing a patient.
+
+**Checked:** screenshots at 375 and 1366 px (drawer, clinic page, times, find) with the overflow
+audit: no sideways scroll. First-load transfer at 360 px: `/c/sample-clinic` 184.6 KB (183.5
+before the times rework), `/find` 163.9 KB, `/find?q=Sample` 166.2 KB, all under 200 KB.
