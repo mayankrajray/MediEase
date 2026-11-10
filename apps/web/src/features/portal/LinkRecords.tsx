@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
-import { Button } from "@/components/ui/Button";
+import { CircleCheck, UserRound } from "lucide-react";
+
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { INPUT_BASE, LABEL } from "@/components/ui/Field";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { ApiError } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
@@ -21,12 +24,17 @@ export const PRT_INVITE_INVALID = "PRT_INVITE_INVALID";
 function Done({ linked }: Readonly<{ linked: Linked }>) {
   const { s } = usePortal();
   return (
-    <section aria-labelledby="link-done-heading" className="space-y-4">
-      <h1 id="link-done-heading" className="text-2xl font-bold tracking-tight">
+    <section aria-labelledby="link-done-heading" className="space-y-4 rounded-card border border-success-line bg-white p-5 shadow-card">
+      <span aria-hidden="true" className="grid size-12 place-items-center rounded-full bg-success-soft text-success">
+        <CircleCheck className="size-6" />
+      </span>
+      <h1 id="link-done-heading" className="text-2xl font-bold tracking-tight text-slate-900">
         {s.link.done}
       </h1>
-      <p role="status">{s.link.doneHelp(linked.clinic_name, `${linked.patient_first_name} · ${linked.patient_code}`)}</p>
-      <Link href={PORTAL_HOME_PATH} className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+      <p role="status" className="text-slate-800">
+        {s.link.doneHelp(linked.clinic_name, `${linked.patient_first_name} · ${linked.patient_code}`)}
+      </p>
+      <Link href={PORTAL_HOME_PATH} className={buttonClasses("primary", "lg")}>
         {s.link.goAccount}
       </Link>
     </section>
@@ -72,7 +80,7 @@ export function AcceptInvite({ token }: Readonly<{ token: string }>) {
           {invalid ? s.link.invalidTitle : s.link.couldNotOpen}
         </h1>
         {invalid ? <p>{s.link.invalid}</p> : <ErrorNotice error={invite.error} onRetry={invite.retry} />}
-        <Link href={PORTAL_HOME_PATH} className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+        <Link href={PORTAL_HOME_PATH} className={buttonClasses("secondary", "lg")}>
           {s.link.goAccount}
         </Link>
       </section>
@@ -81,19 +89,24 @@ export function AcceptInvite({ token }: Readonly<{ token: string }>) {
   const text = portalErrorText(error, s);
   return (
     <section aria-labelledby="invite-heading" className="space-y-5">
-      <h1 id="invite-heading" className="text-2xl font-bold tracking-tight">
+      <h1 id="invite-heading" className="text-2xl font-bold tracking-tight text-balance text-slate-900">
         {s.link.heading(invite.data.clinic_name)}
       </h1>
-      <p className="text-lg font-semibold">
-        {invite.data.patient_first_name} · <span className="font-mono">{invite.data.patient_code}</span>
-      </p>
+      <div className="flex items-center gap-3 rounded-card border border-brand-200 bg-white p-4 shadow-card">
+        <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700">
+          <UserRound className="size-5" />
+        </span>
+        <p className="text-lg font-semibold text-slate-900">
+          {invite.data.patient_first_name} · <span className="font-mono">{invite.data.patient_code}</span>
+        </p>
+      </div>
       <p className="text-slate-800">{s.link.help(invite.data.clinic_name)}</p>
       {error !== null && <ErrorNotice error={error} {...(text === undefined ? {} : { message: text })} />}
-      <div className="flex flex-wrap gap-3">
-        <Button variant="primary" onClick={() => void accept()} disabled={submitting}>
+      <div className="grid gap-3 min-[400px]:flex min-[400px]:flex-wrap">
+        <Button variant="primary" size="lg" onClick={() => void accept()} disabled={submitting}>
           {submitting ? s.link.linking : s.link.link}
         </Button>
-        <Button onClick={() => router.replace(PORTAL_HOME_PATH)} disabled={submitting}>
+        <Button size="lg" onClick={() => router.replace(PORTAL_HOME_PATH)} disabled={submitting}>
           {s.link.notMe}
         </Button>
       </div>
@@ -143,7 +156,7 @@ export function LinkFromPrescription({ token }: Readonly<{ token: string }>) {
           {s.link.verifyFirst}
         </h1>
         <p>{s.link.verifyFirstHelp}</p>
-        <Link href="/portal/account" className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+        <Link href="/portal/account" className={buttonClasses("primary", "lg")}>
           {s.nav.account}
         </Link>
       </section>
@@ -158,9 +171,9 @@ export function LinkFromPrescription({ token }: Readonly<{ token: string }>) {
       </h1>
       <p className="text-slate-800">{s.link.rxHelp}</p>
       {error !== null && <ErrorNotice ref={alertRef} error={error} {...(text === undefined ? {} : { message: text })} />}
-      <form onSubmit={(e) => void submit(e)} className="space-y-4">
+      <form onSubmit={(e) => void submit(e)} className="space-y-4 rounded-card border border-line bg-white p-4 shadow-card sm:p-5">
         <div>
-          <label htmlFor="phone_last4" className="block font-medium">
+          <label htmlFor="phone_last4" className={LABEL}>
             {s.link.last4}
           </label>
           <input
@@ -175,10 +188,10 @@ export function LinkFromPrescription({ token }: Readonly<{ token: string }>) {
             required
             value={digits}
             onChange={(e) => setDigits(e.target.value)}
-            className="mt-1 min-h-11 w-32 rounded border border-slate-600 p-2 text-xl tracking-widest"
+            className={`${INPUT_BASE} mt-1 min-h-12 w-36 text-center font-mono text-xl tracking-[0.4em]`}
           />
         </div>
-        <Button type="submit" variant="primary" disabled={submitting}>
+        <Button type="submit" variant="primary" size="lg" disabled={submitting} className="w-full sm:w-auto">
           {submitting ? s.link.saving : s.link.save}
         </Button>
       </form>

@@ -58,6 +58,8 @@ export interface PortalStrings {
     readonly noAppointments: string;
     readonly freshHelp: string;
     readonly findDoctor: string;
+    /** M7c-P7 (M7): the line under *Find a doctor* on a linked account's Home. */
+    readonly findHelp: string;
     readonly haveInvitation: string;
     readonly howToLink: string;
     readonly nextAppointment: string;
@@ -313,6 +315,7 @@ const EN: PortalStrings = {
     noAppointments: "No appointments yet",
     freshHelp: "Find a doctor to book a visit, or link the records your clinic already keeps for you.",
     findDoctor: "Find a doctor",
+    findHelp: "Search by doctor, clinic or specialty.",
     haveInvitation: "Have an invitation from your clinic?",
     howToLink:
       "Open the invitation link or scan the code your clinic gave you, or choose “Save to my MediEase” on a prescription link from your clinic. Your appointments and prescriptions from that clinic then appear here.",
@@ -604,6 +607,7 @@ const HI: PortalStrings = {
     noAppointments: "अभी कोई अपॉइंटमेंट नहीं",
     freshHelp: "डॉक्टर ढूँढकर अपॉइंटमेंट लें, या आपके क्लिनिक के पास जो रिकॉर्ड हैं उन्हें जोड़ें।",
     findDoctor: "डॉक्टर ढूँढें",
+    findHelp: "डॉक्टर, क्लिनिक या विशेषज्ञता से खोजें।",
     haveInvitation: "क्या आपके क्लिनिक ने आमंत्रण दिया है?",
     howToLink:
       "क्लिनिक का दिया आमंत्रण लिंक खोलें या कोड स्कैन करें, या क्लिनिक के पर्चे के लिंक पर “मेरे MediEase में सहेजें” चुनें। फिर उस क्लिनिक के अपॉइंटमेंट और पर्चे यहाँ दिखेंगे।",
@@ -903,6 +907,15 @@ export function portalTime(iso: string, timeZone: string, s: PortalStrings): str
 /** "19 Oct 2026" for an instant, on the clinic's calendar. */
 export function portalDate(iso: string, timeZone: string, s: PortalStrings): string {
   return zoned(iso, timeZone, s.locale, { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** M7c-P7 (M7): the parts of a day for a date tile ("Tue", "10", "Nov"), on the clinic's calendar. */
+export function portalDayParts(iso: string, timeZone: string, s: PortalStrings): { weekday: string; day: string; month: string } {
+  return {
+    weekday: zoned(iso, timeZone, s.locale, { weekday: "short" }),
+    day: zoned(iso, timeZone, s.locale, { day: "numeric" }),
+    month: zoned(iso, timeZone, s.locale, { month: "short" }),
+  };
 }
 
 /** "19 Oct 2026" for a calendar date (`YYYY-MM-DD`, no zone). */

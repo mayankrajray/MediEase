@@ -1,15 +1,18 @@
 "use client";
 
+import { Bell, CheckCheck, Settings } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { portalGet, portalPost } from "@/lib/auth/portal-session";
 import { notificationWords } from "@/lib/i18n/patient-notifications";
 import { portalDay, portalTime } from "@/lib/i18n/portal";
 
 import { DEFAULT_ZONE, type PortalNotification, usePortalLoad } from "./data";
-import { ScreenLoading, usePortal } from "./PortalShell";
+import { PORTAL_LINK, PortalTitle, ScreenLoading, usePortal } from "./PortalShell";
 
 async function loadNotifications(): Promise<readonly PortalNotification[]> {
   return (await portalGet("/api/v1/portal/notifications")).data.items;
@@ -60,26 +63,22 @@ export function PortalNotifications() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">{words.title}</h1>
+        <PortalTitle>{words.title}</PortalTitle>
         {anyUnread && (
-          <button
-            type="button"
-            onClick={() => void readAll()}
-            className="inline-flex min-h-11 items-center rounded-lg bg-brand-700 px-4 font-semibold text-white hover:bg-brand-800"
-          >
+          <Button onClick={() => void readAll()} icon={<CheckCheck className="size-4" />} className="min-h-11">
             {words.markAll}
-          </button>
+          </Button>
         )}
       </div>
-      <p role="status" className="min-h-6">
+      <p role="status" className="min-h-0 font-medium text-success empty:hidden">
         {status}
       </p>
       {error !== null && <ErrorNotice error={error} />}
       {loaded.status === "loading" && <ScreenLoading label={s.loading} />}
       {loaded.status === "failed" && <ErrorNotice error={loaded.error} onRetry={loaded.retry} />}
-      {loaded.status === "ready" && items.length === 0 && <p>{words.empty}</p>}
+      {loaded.status === "ready" && items.length === 0 && <EmptyState title={words.emptyTitle} icon={<Bell className="size-5" />}>{words.empty}</EmptyState>}
       {items.length > 0 && (
-        <ul aria-label={words.title} className="divide-y divide-slate-200 rounded-card border border-slate-200 bg-white">
+        <ul aria-label={words.title} className="divide-y divide-line overflow-hidden rounded-card border border-line bg-white shadow-card">
           {items.map((n) => {
             const unread = isUnread(n);
             return (
@@ -87,22 +86,32 @@ export function PortalNotifications() {
                 <Link
                   href={n.link}
                   onClick={() => openOne(n)}
-                  className={`flex min-h-14 flex-col gap-0.5 px-4 py-3 hover:bg-slate-50 ${unread ? "bg-brand-50" : ""}`}
+                  className={`flex min-h-16 items-start gap-3 px-4 py-3 transition-colors duration-200 ease-brand hover:bg-slate-50 motion-reduce:transition-none ${unread ? "bg-brand-50/70" : ""}`}
                 >
-                  <span className={unread ? "font-semibold text-slate-900" : "text-slate-900"}>
-                    {unread && <span className="sr-only">{words.unread}</span>}
-                    {n.title}
+                  <span
+                    aria-hidden="true"
+                    className={`mt-0.5 grid size-9 shrink-0 place-items-center rounded-full ${unread ? "bg-brand-700 text-white" : "bg-slate-100 text-slate-600"}`}
+                  >
+                    <Bell className="size-4" />
                   </span>
-                  <span className="text-sm text-slate-700">
-                    {portalDay(n.created_at, DEFAULT_ZONE, s)}, {portalTime(n.created_at, DEFAULT_ZONE, s)}
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className={`[overflow-wrap:anywhere] ${unread ? "font-semibold text-slate-900" : "text-slate-900"}`}>
+                      {unread && <span className="sr-only">{words.unread}</span>}
+                      {n.title}
+                    </span>
+                    <span className="text-sm text-slate-700">
+                      {portalDay(n.created_at, DEFAULT_ZONE, s)}, {portalTime(n.created_at, DEFAULT_ZONE, s)}
+                    </span>
                   </span>
+                  {unread && <span aria-hidden="true" className="mt-2 size-2.5 shrink-0 rounded-full bg-brand-600" />}
                 </Link>
               </li>
             );
           })}
         </ul>
       )}
-      <Link href="/portal/account#notifications-heading" className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+      <Link href="/portal/account#notifications-heading" className={PORTAL_LINK}>
+        <Settings aria-hidden="true" className="size-4" />
         {words.settings}
       </Link>
     </div>

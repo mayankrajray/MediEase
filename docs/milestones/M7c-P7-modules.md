@@ -11,7 +11,7 @@ Plan: `docs/milestones/M7c-P7-design-system-plan.md`. System: `DESIGN.md`. Produ
 | M4 Appointments and queue | ✅ built 10 Nov 2026; phone fixes approved by the developer 10 Nov |
 | M5 Patient management | ✅ built 10 Nov 2026; approved by the developer 10 Nov |
 | M6 Appointment booking | ✅ built 10 Nov 2026 |
-| M7 Patient portal | ☐ |
+| M7 Patient portal | ✅ built 10 Nov 2026 |
 | M8 Prescriptions (and the PDF's layout 4 with the MediEase emblem) | ☐ |
 | M9 AI assistant | ☐ |
 | M10 Billing | ☐ |
@@ -373,3 +373,65 @@ is enabled; an early press shows both messages, focuses the phone and sends noth
 **Checked:** screenshots at 375 and 1366 px (drawer, clinic page, times, find) with the overflow
 audit: no sideways scroll. First-load transfer at 360 px: `/c/sample-clinic` 184.6 KB (183.5
 before the times rework), `/find` 163.9 KB, `/find?q=Sample` 166.2 KB, all under 200 KB.
+
+## M7 — Patient portal (built 10 Nov 2026)
+
+The developer asked (10 Nov 2026) to finish M7–M10 with no backend change, and to park the
+discovery and booking redesign as its own milestone, M7d (`M7d-discovery-booking.md`). Find a
+doctor, the clinic and doctor pages and the request form are therefore not in this module.
+
+**Screens:** the signed-in portal shell (header, language switch, bell, tab bar), Home (fresh and
+linked), My appointments (requests, clinic groups, live queue), My medicines (Today and Courses,
+dose marks, reminders, history), My prescriptions (list, reports, bills, the frame of one
+prescription), Notifications, Account, and the two record-linking screens. The prescription
+itself (`PrescriptionView`) is M8.
+
+**Existing problems:** text-only tabs in 12 px words; links as underlined text with no target
+shape; every card the same weight, so the next appointment did not lead; status pills as outlined
+ovals in three ad hoc colours; *Previous day* and *Next day* wrapped to two lines at 375 px; dose
+states as plain text; checkboxes and radios as bare 20 px inputs; empty states as one sentence;
+the verify banner and the unlink confirmation in one-off amber and red.
+
+**Changes (behaviour, API calls, words and accessible names unchanged unless listed):**
+
+| Area | Change |
+|---|---|
+| Shell | Tabs with a Lucide icon over the word (the icon in a pill when current, a 3 px bar above it); on 768 px and wider one row under the header with the bar below. Safe-area padding for phones with a home bar. Sticky header; the language switch as a pill with an icon; the bell is the Lucide bell with a ringed count. No prefetch of the tab, logo and bell targets (it cost about 7 KB on every first visit; a tap still loads the page) |
+| Shared | `PortalCard` gains a decorative `icon`, an `action` at the heading's end and `highlight`; `PortalTitle`; `PORTAL_LINK` (a 44 px text link with a chevron); `DateTile` (weekday, day, month); appointment, request, dose and bill states use `StatusBadge` tones, the word always saying the state |
+| Home | The next appointment leads as the highlighted card with *See all* at its heading, the clinic, a date tile and the badge; the latest prescription with *Open* beside it; *Find a doctor* as a whole-card link with one line under it (linked accounts); the assistant as a card. The fresh dashboard keeps one primary action and the invitation question as a disclosure with a chevron |
+| My appointments | Clinic cards with *Call the clinic* as a button at the heading; *Upcoming* and *Past* as small labels; rows with date tiles (muted when past); *Live queue* as a primary button with an icon; requests with their badge, the clinic's suggestion in an info box, *Accept this time* and *No thanks* as buttons with a spinner on the one pressed; an empty state with *Find a doctor* |
+| My medicines | *Today* / *Courses* as one segmented control; the day as a card with round arrow buttons (named *Previous day* and *Next day*; the words show from 640 px) and the date in the middle, *Today* above it; slot cards with a sunrise, sun, sunset or moon icon; each medicine with a pill icon; the dose state as a badge; *Taken* and *Skipped* as equal buttons; the safety note in the info tone with *Contact your clinic* as a call button; courses, reminder choices and history on the design tokens; empty states |
+| My prescriptions | Rows with a document icon, the doctor's name as the link and the whole row as its target, the date and an *Updated by the doctor* badge, a chevron; reports and bills with icons, the bill's state as a badge, *Open* and *Receipt (PDF)* as small buttons; the one-prescription frame with *Back* and a full-width *Download PDF* on a phone |
+| Notifications | Rows with a bell avatar (filled when unread) and an unread dot; *Mark all as read* as a button; the empty state with a title (*Nothing yet*) and what will appear |
+| Account | The person's card with initials, email and a *Verified* badge, sign-in method; languages, notification switches as choice cards (44 px); times in the shared input style, four across from 640 px; each clinic as a bordered card with address and phone icons; *Unlink* in the danger outline with an icon, the confirmation in the danger tone; *Sign out* full width with an icon; the verify banner in the warning tone |
+| Record linking | The invite's person in a card; the last-4 input centred in large monospace; buttons 48 px; *Linked* as a success card |
+
+**Words changed:** `findHelp` ("Search by doctor, clinic or specialty.") under *Find a doctor*;
+the notification empty text split into `emptyTitle` ("Nothing yet") and `empty` (what will appear),
+English and Hindi (the Hindi needs the same native review, L-07).
+
+**Test changed for a real behaviour change:** `notifications.test.tsx`: the empty state's title
+and text are separate.
+
+**Accessibility:** `axe` caught *label-content-name-mismatch* on the first version of the
+*Find a doctor* tile (named by its title only); the tile's visible words now name it.
+
+**Checked (10 Nov 2026):** screenshots of the seven screens at 320, 375, 768 and 1366 px with the
+overflow audit: no sideways scroll. First-load transfer at 360 px, before → after:
+
+| Page | Before | After |
+|---|---|---|
+| `/portal` | 191.8 KB | 193.7 KB |
+| `/portal/appointments` | 193.3 KB | 192.4 KB |
+| `/portal/medicines` | 189.8 KB | 190.9 KB |
+| `/portal/prescriptions` | 189.6 KB | 190.9 KB |
+| one prescription | 186.7 KB | 190.2 KB |
+| `/portal/notifications` | 182.1 KB | 185.4 KB |
+| `/portal/account` | 187.8 KB | 190.4 KB |
+
+The first build measured 197–200 KB: the tab bar's five links and the header's two prefetched
+their pages on load. Ten decorative icons were also dropped from the medicines screen. Repeated
+builds move these numbers by about 3 KB.
+
+Playwright journeys on the CI fakes, all passed: `portal-screens`, `portal-linking`,
+`portal-accounts`, `medicine-plan`, `dose-tracking`, `patient-notifications`, `booking-answers`.

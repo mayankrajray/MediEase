@@ -1,16 +1,24 @@
 "use client";
 
+import { Building2, CalendarDays, ChevronRight, Phone, Radio, Send } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { StatusBadge, type Tone } from "@/components/ui/StatusBadge";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { portalGet, portalPost } from "@/lib/auth/portal-session";
 
 import { type PortalAppointment, type PortalAppointmentGroup, type PortalBookingRequest, type PortalReminder, usePortalLoad } from "./data";
-import { PortalCard, ScreenLoading, usePortal } from "./PortalShell";
-import { AppointmentRow, ReminderRow } from "./Rows";
+import { PORTAL_LINK, PortalCard, PortalTitle, ScreenLoading, usePortal } from "./PortalShell";
+import { AppointmentRow, DateTile, ReminderRow } from "./Rows";
 import { bookingWords } from "@/lib/i18n/booking-request";
 import { notificationWords } from "@/lib/i18n/patient-notifications";
 import { portalDay, portalTime } from "@/lib/i18n/portal";
+
+/** A call link that looks like a small secondary button (44 px on a phone). */
+const CALL = `${buttonClasses("secondary", "md")} min-h-11 shrink-0`;
 
 /**
  * Open and recently answered booking requests (M6b-P4, P5; spec R48, R49): *Requested*,
@@ -21,7 +29,7 @@ function RequestedList({ requests, onChanged }: Readonly<{ requests: readonly Po
   const { s } = usePortal();
   const words = bookingWords(s.lang);
   return (
-    <PortalCard id="requested" title={words.mine.title}>
+    <PortalCard id="requested" title={words.mine.title} icon={<Send />}>
       <ul>
         {requests.map((r) => (
           <RequestRow key={r.id} r={r} onChanged={onChanged} />
@@ -31,16 +39,18 @@ function RequestedList({ requests, onChanged }: Readonly<{ requests: readonly Po
   );
 }
 
+const REQUEST_TONE: Record<string, Tone> = { PROPOSED: "active", DECLINED: "danger", EXPIRED: "neutral" };
+
 function RequestRow({ r, onChanged }: Readonly<{ r: PortalBookingRequest; onChanged: () => void }>) {
   const { s, leave } = usePortal();
   const words = bookingWords(s.lang);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"accept-proposal" | "decline-proposal" | null>(null);
   const [result, setResult] = useState<string | undefined>(undefined);
   const when = (iso: string) => `${portalDay(iso, r.timezone, s)}${r.mode === "SLOTS" ? `, ${portalTime(iso, r.timezone, s)}` : ""}`;
 
   async function answer(action: "accept-proposal" | "decline-proposal") {
-    if (busy) return;
-    setBusy(true);
+    if (busy !== null) return;
+    setBusy(action);
     try {
       const path =
         action === "accept-proposal"
@@ -52,7 +62,7 @@ function RequestRow({ r, onChanged }: Readonly<{ r: PortalBookingRequest; onChan
     } catch (failure) {
       if (!leave(failure)) setResult(words.mine.answerFailed);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
@@ -60,48 +70,53 @@ function RequestRow({ r, onChanged }: Readonly<{ r: PortalBookingRequest; onChan
     r.status === "PROPOSED" ? words.mine.proposed : r.status === "DECLINED" ? words.mine.declined : r.status === "EXPIRED" ? words.mine.expired : words.mine.requested;
   const call =
     r.clinic_phone_e164 !== null && (r.status === "DECLINED" || r.status === "EXPIRED") ? (
-      <a href={`tel:${r.clinic_phone_e164}`} className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
+      <a href={`tel:${r.clinic_phone_e164}`} className={CALL}>
+        <Phone aria-hidden="true" className="size-4" />
         {words.mine.call}
       </a>
     ) : null;
-  const button = "inline-flex min-h-11 items-center rounded-lg px-4 font-semibold";
 
   return (
-    <li className="space-y-1 border-t border-slate-200 py-2 first:border-t-0">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span>
-          <span className="block font-semibold">{when(r.starts_at)}</span>
-          <span className="block text-sm text-slate-700">
-            {r.doctor_name} · {r.clinic_name}
+    <li className="flex gap-3 border-t border-line py-3 first:border-t-0 first:pt-0 last:pb-0">
+      <DateTile iso={r.starts_at} zone={r.timezone} s={s} muted={r.status === "DECLINED" || r.status === "EXPIRED"} />
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+          <span className="min-w-0">
+            <span className="block font-semibold text-slate-900">{when(r.starts_at)}</span>
+            <span className="block text-sm text-slate-700 [overflow-wrap:anywhere]">
+              {r.doctor_name} · {r.clinic_name}
+            </span>
           </span>
-        </span>
-        <span className="rounded-full border border-amber-800 px-2 py-0.5 text-sm font-medium text-amber-950">{badge}</span>
-      </div>
-      {r.status === "REQUESTED" ? <p className="text-sm text-slate-700">{words.mine.waiting}</p> : null}
-      {r.status === "PROPOSED" && (
-        <div className="space-y-2">
-          <p>{words.mine.proposedBody(when(r.starts_at), r.original_starts_at === null ? "" : when(r.original_starts_at))}</p>
-          {r.respond_by !== null && <p className="text-sm text-slate-700">{words.mine.replyBy(`${portalDay(r.respond_by, r.timezone, s)}, ${portalTime(r.respond_by, r.timezone, s)}`)}</p>}
-          {result === undefined && (
-            <div className="flex flex-wrap gap-2">
-              <button type="button" disabled={busy} onClick={() => void answer("accept-proposal")} className={`${button} bg-brand-700 text-white disabled:bg-slate-400`}>
-                {words.mine.acceptTime}
-              </button>
-              <button type="button" disabled={busy} onClick={() => void answer("decline-proposal")} className={`${button} border border-slate-400 bg-white text-slate-900`}>
-                {words.mine.noThanks}
-              </button>
-            </div>
-          )}
+          <StatusBadge tone={REQUEST_TONE[r.status] ?? "waiting"}>{badge}</StatusBadge>
         </div>
-      )}
-      {r.status === "DECLINED" && r.decline_reason !== null && <p>{words.mine.reasons[r.decline_reason] ?? words.mine.reasons["OTHER"]}</p>}
-      {r.status === "EXPIRED" && <p>{words.mine.expiredBody}</p>}
-      {result !== undefined && (
-        <p role="status" className="font-medium">
-          {result}
-        </p>
-      )}
-      {call}
+        {r.status === "REQUESTED" ? <p className="text-sm text-slate-700">{words.mine.waiting}</p> : null}
+        {r.status === "PROPOSED" && (
+          <div className="space-y-2 rounded-lg border border-sky-200 bg-sky-50 p-3">
+            <p className="text-slate-900">{words.mine.proposedBody(when(r.starts_at), r.original_starts_at === null ? "" : when(r.original_starts_at))}</p>
+            {r.respond_by !== null && (
+              <p className="text-sm text-slate-700">{words.mine.replyBy(`${portalDay(r.respond_by, r.timezone, s)}, ${portalTime(r.respond_by, r.timezone, s)}`)}</p>
+            )}
+            {result === undefined && (
+              <div className="grid gap-2 min-[400px]:flex min-[400px]:flex-wrap">
+                <Button variant="primary" loading={busy === "accept-proposal"} disabled={busy !== null} onClick={() => void answer("accept-proposal")} className="min-h-11">
+                  {words.mine.acceptTime}
+                </Button>
+                <Button loading={busy === "decline-proposal"} disabled={busy !== null} onClick={() => void answer("decline-proposal")} className="min-h-11">
+                  {words.mine.noThanks}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+        {r.status === "DECLINED" && r.decline_reason !== null && <p className="text-slate-800">{words.mine.reasons[r.decline_reason] ?? words.mine.reasons["OTHER"]}</p>}
+        {r.status === "EXPIRED" && <p className="text-slate-800">{words.mine.expiredBody}</p>}
+        {result !== undefined && (
+          <p role="status" className="font-medium text-slate-900">
+            {result}
+          </p>
+        )}
+        {call}
+      </div>
     </li>
   );
 }
@@ -131,13 +146,24 @@ export function MyAppointments() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold tracking-tight">{s.appointments.title}</h1>
+      <PortalTitle>{s.appointments.title}</PortalTitle>
       {loaded.status === "loading" && <ScreenLoading label={s.loading} />}
       {loaded.status === "failed" && <ErrorNotice error={loaded.error} onRetry={loaded.retry} />}
       {loaded.status === "ready" && loaded.data.requests.length > 0 && <RequestedList requests={loaded.data.requests} onChanged={loaded.retry} />}
       {loaded.status === "ready" &&
         (loaded.data.groups.length === 0 ? (
-          loaded.data.requests.length === 0 && <p>{s.appointments.empty}</p>
+          loaded.data.requests.length === 0 && (
+            <EmptyState
+              title={s.appointments.empty}
+              icon={<CalendarDays className="size-5" />}
+              action={
+                <Link href="/portal/find" className={PORTAL_LINK}>
+                  {s.home.findDoctor}
+                  <ChevronRight aria-hidden="true" className="size-4" />
+                </Link>
+              }
+            />
+          )
         ) : (
           loaded.data.groups.map((g) => (
             <ClinicGroup key={g.clinic_id} group={g} now={loaded.data.now} reminders={loaded.data.reminders.filter((r) => r.clinic_id === g.clinic_id)} />
@@ -185,18 +211,17 @@ function LiveQueueButton({ appointmentId }: Readonly<{ appointmentId: string }>)
   }
 
   return (
-    <div className="w-full">
-      <button
-        type="button"
-        onClick={() => void open()}
-        disabled={busy}
-        className="inline-flex min-h-11 items-center rounded-lg bg-brand-700 px-4 font-semibold text-white hover:bg-brand-800 disabled:bg-slate-400"
-      >
+    <div className="space-y-2">
+      <Button variant="primary" onClick={() => void open()} disabled={busy} icon={<Radio className="size-4" />} className="min-h-11">
         {busy ? words.liveOpening : words.liveButton}
-      </button>
+      </Button>
       {error !== null && <ErrorNotice error={error} />}
     </div>
   );
+}
+
+function PartHeading({ children }: Readonly<{ children: string }>) {
+  return <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{children}</h3>;
 }
 
 function ClinicGroup({
@@ -209,24 +234,31 @@ function ClinicGroup({
   const past = group.appointments.filter((a) => Date.parse(a.session_ends_at) <= now);
   const id = `clinic-${group.clinic_id}`;
   return (
-    <PortalCard id={id} title={group.clinic_name}>
-      {group.phone_e164 !== null && (
-        <a href={`tel:${group.phone_e164}`} className="inline-flex min-h-11 items-center font-medium text-brand-800 underline">
-          {s.appointments.call}
-        </a>
-      )}
+    <PortalCard
+      id={id}
+      title={group.clinic_name}
+      icon={<Building2 />}
+      action={
+        group.phone_e164 !== null && (
+          <a href={`tel:${group.phone_e164}`} className={CALL}>
+            <Phone aria-hidden="true" className="size-4" />
+            {s.appointments.call}
+          </a>
+        )
+      }
+    >
       {[
-        { title: s.appointments.upcoming, rows: upcoming },
-        { title: s.appointments.past, rows: past },
+        { title: s.appointments.upcoming, rows: upcoming, past: false },
+        { title: s.appointments.past, rows: past, past: true },
       ].map((part) => (
-        <div key={part.title}>
-          <h3 className="font-semibold text-slate-800">{part.title}</h3>
+        <div key={part.title} className="space-y-2 border-t border-line pt-3">
+          <PartHeading>{part.title}</PartHeading>
           {part.rows.length === 0 ? (
             <p className="text-sm text-slate-700">{s.appointments.none}</p>
           ) : (
             <ul>
               {part.rows.map((a) => (
-                <AppointmentRow key={a.id} a={a} zone={group.timezone} s={s}>
+                <AppointmentRow key={a.id} a={a} zone={group.timezone} s={s} past={part.past}>
                   {isLiveToday(a, group.timezone, now) && <LiveQueueButton appointmentId={a.id} />}
                 </AppointmentRow>
               ))}
@@ -235,8 +267,8 @@ function ClinicGroup({
         </div>
       ))}
       {reminders.length > 0 && (
-        <div>
-          <h3 className="font-semibold text-slate-800">{s.appointments.reminders}</h3>
+        <div className="space-y-2 border-t border-line pt-3">
+          <PartHeading>{s.appointments.reminders}</PartHeading>
           <ul>
             {reminders.map((r) => (
               <ReminderRow key={r.id} r={r} zone={group.timezone} s={s} />

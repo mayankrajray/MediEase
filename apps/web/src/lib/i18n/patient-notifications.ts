@@ -15,6 +15,8 @@ export interface NotificationWords {
   readonly bell: (unread: number) => string;
   readonly arrived: (unread: number) => string;
   readonly title: string;
+  /** M7c-P7 (M7): the empty list's title; `empty` says what will appear. */
+  readonly emptyTitle: string;
   readonly empty: string;
   readonly unread: string;
   readonly markAll: string;
@@ -58,7 +60,8 @@ const EN: NotificationWords = {
   bell: (n) => (n === 0 ? "Notifications" : `Notifications, ${n} unread`),
   arrived: (n) => (n === 1 ? "1 unread notification" : `${n} unread notifications`),
   title: "Notifications",
-  empty: "Nothing yet. You are told here when a clinic answers a request, books or moves an appointment, or a prescription is ready.",
+  emptyTitle: "Nothing yet",
+  empty: "You are told here when a clinic answers a request, books or moves an appointment, or a prescription is ready.",
   unread: "Unread: ",
   markAll: "Mark all as read",
   allRead: "All notifications marked as read.",
@@ -89,7 +92,8 @@ const HI: NotificationWords = {
   bell: (n) => (n === 0 ? "सूचनाएँ" : `सूचनाएँ, ${n} बिना पढ़ी`),
   arrived: (n) => (n === 1 ? "1 बिना पढ़ी सूचना" : `${n} बिना पढ़ी सूचनाएँ`),
   title: "सूचनाएँ",
-  empty: "अभी कुछ नहीं। क्लिनिक आपके अनुरोध का जवाब दे, अपॉइंटमेंट बुक करे या बदले, या पर्चा तैयार हो, तो यहाँ बताया जाएगा।",
+  emptyTitle: "अभी कुछ नहीं",
+  empty: "क्लिनिक आपके अनुरोध का जवाब दे, अपॉइंटमेंट बुक करे या बदले, या पर्चा तैयार हो, तो यहाँ बताया जाएगा।",
   unread: "बिना पढ़ी: ",
   markAll: "सब पढ़ी हुई करें",
   allRead: "सभी सूचनाएँ पढ़ी हुई कर दी गईं।",
