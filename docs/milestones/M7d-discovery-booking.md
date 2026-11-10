@@ -113,3 +113,8 @@ Estimate: about 5–6 hours.
 
 _(Changes the developer asks for while M7–M10 are being redesigned, and any backend change those
 modules turn out to need, are recorded here.)_
+
+| # | Item | Why it waits | Found in |
+|---|---|---|---|
+| B1 | **Prescription PDF layout 4 with the MediEase emblem** (approved 9 Nov 2026, plan §9 Q3): replace the placeholder mark `apps/api/.../pdf/assets/mediease-mark.svg` with the outlined emblem, as a new layout version so issued prescriptions keep their look (spec R13–R14) | It is an API change (PDF renderer, assets, layout version, tests); the developer asked for no backend change in M7c-P7 (10 Nov 2026) | M8 |
+| B2 | **Portal page weight headroom**: portal pages are at 185–194 KB of the 200 KB budget (NFR-02), most of it the shared framework chunks (about 140 KB). Any new portal feature should be measured; options are a lighter data layer for the portal or splitting the bell's polling out of the first load | Needs a measured design, not a restyle | M7 |

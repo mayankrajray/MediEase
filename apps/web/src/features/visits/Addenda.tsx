@@ -2,10 +2,16 @@
 
 import { useId, useState } from "react";
 
+import { FilePlus2 } from "lucide-react";
+
+import { Button } from "@/components/ui/Button";
+import { INPUT, LABEL } from "@/components/ui/Field";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { useRxApi, type Visit } from "@/features/prescriptions/api";
 import { formatDateTime } from "@/lib/format/time";
+
+import { CARD, CARD_TITLE } from "./card";
 
 const ADDENDUM_MAX = 5000;
 
@@ -46,15 +52,16 @@ export function Addenda({
   }
 
   return (
-    <section aria-labelledby="addenda-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-      <h2 id="addenda-heading" className="text-lg font-bold">
+    <section aria-labelledby="addenda-heading" className={CARD}>
+      <h2 id="addenda-heading" className={CARD_TITLE}>
+        <FilePlus2 aria-hidden="true" className="size-5 text-brand-700" />
         Addenda
       </h2>
       {visit.addenda.length > 0 && (
         <ol className="space-y-2">
           {visit.addenda.map((a) => (
-            <li key={a.id} className="rounded-card border border-slate-200 bg-white p-2">
-              <p className="text-sm text-slate-700">Added {formatDateTime(a.created_at, timeZone)}</p>
+            <li key={a.id} className="rounded-lg border-l-4 border-brand-200 bg-slate-50 px-3 py-2">
+              <p className="text-sm font-medium text-slate-700">Added {formatDateTime(a.created_at, timeZone)}</p>
               <p className="whitespace-pre-line">{a.body}</p>
             </li>
           ))}
@@ -68,7 +75,7 @@ export function Addenda({
           }}
           className="space-y-2"
         >
-          <label htmlFor={id} className="block font-medium">
+          <label htmlFor={id} className={LABEL}>
             New addendum
           </label>
           <textarea
@@ -77,16 +84,12 @@ export function Addenda({
             maxLength={ADDENDUM_MAX}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
+            className={`${INPUT} mt-1`}
           />
           {error !== undefined && <ErrorNotice error={error} />}
-          <button
-            type="submit"
-            disabled={body.trim() === "" || saving}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
-          >
+          <Button type="submit" variant="primary" disabled={body.trim() === ""} loading={saving}>
             {saving ? "Adding…" : "Add addendum"}
-          </button>
+          </Button>
         </form>
       )}
     </section>

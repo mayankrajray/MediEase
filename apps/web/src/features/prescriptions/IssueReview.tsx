@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+import { Send } from "lucide-react";
+
 import { Dialog } from "@/components/Dialog";
+import { Alert } from "@/components/ui/Alert";
+import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { ApiError } from "@/lib/api/client";
@@ -92,7 +97,7 @@ export function IssueReview({
 
   return (
     <Dialog title="Review and issue" onClose={onClose}>
-      <div role="group" aria-label="Preview language" className="flex gap-2">
+      <div role="group" aria-label="Preview language" className="inline-flex gap-1 rounded-lg border border-line bg-surface p-1 shadow-card">
         {(["en", "hi"] as const).map((l) => (
           <button
             key={l}
@@ -100,38 +105,39 @@ export function IssueReview({
             {...(l === language ? { "data-autofocus": true } : {})}
             aria-pressed={lang === l}
             onClick={() => setLang(l)}
-            className="rounded-lg border border-slate-400 px-3 py-1 aria-pressed:bg-brand-700 aria-pressed:text-white"
+            className="min-h-9 rounded-md px-3 font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900 aria-pressed:bg-brand-700 aria-pressed:text-white motion-reduce:transition-none"
           >
             {l === "en" ? "English" : "हिन्दी (Hindi)"}
           </button>
         ))}
       </div>
       {notes.length > 0 && (
-        <div className="rounded-lg border border-amber-700 bg-amber-50 p-2">
-          <p className="font-semibold">Please check (issuing is still allowed)</p>
+        <Alert tone="warning" title="Please check (issuing is still allowed)">
           <ul className="list-disc pl-5 text-sm">
             {notes.map((n) => (
               <li key={n}>{n}</li>
             ))}
           </ul>
-        </div>
+        </Alert>
       )}
-      {target === null && <p role="alert">The prescription could not be saved, so it cannot be issued yet. Close this and check the message.</p>}
-      {target !== null && page === undefined && error === undefined && <p role="status">Preparing the preview…</p>}
+      {target === null && (
+        <Alert tone="danger" role="alert">
+          The prescription could not be saved, so it cannot be issued yet. Close this and check the message.
+        </Alert>
+      )}
+      {target !== null && page === undefined && error === undefined && (
+        <p role="status" className="flex items-center gap-2 text-slate-700">
+          <Spinner />
+          Preparing the preview…
+        </p>
+      )}
       {page !== undefined && <Preview page={page} />}
       {error !== undefined && <ErrorNotice error={error} {...(special === undefined ? {} : { message: special })} />}
-      <div className="flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-400 bg-white px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500 motion-reduce:transition-none">
-          Keep editing
-        </button>
-        <button
-          type="button"
-          disabled={page === undefined || issuing}
-          onClick={issue}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-700 px-4 py-2 font-medium text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-400 motion-reduce:transition-none"
-        >
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button onClick={onClose}>Keep editing</Button>
+        <Button variant="primary" disabled={page === undefined} loading={issuing} onClick={issue} icon={<Send className="size-4" />}>
           {issuing ? "Issuing…" : "Issue"}
-        </button>
+        </Button>
       </div>
     </Dialog>
   );
@@ -140,7 +146,7 @@ export function IssueReview({
 /** The patient page's content (the same model as `/p/<token>`), framed as a preview. */
 function Preview({ page }: Readonly<{ page: PatientPage }>) {
   return (
-    <section lang={page.language} aria-label="What the patient will see" className="max-h-[50vh] space-y-3 overflow-y-auto rounded-card border border-slate-200 bg-white p-3">
+    <section lang={page.language} aria-label="What the patient will see" className="max-h-[50vh] space-y-3 overflow-y-auto rounded-lg border border-line bg-canvas p-3">
       <div>
         <p className="font-bold">{page.clinic_name}</p>
         <p className="font-semibold">{page.doctor_name}</p>
@@ -153,13 +159,13 @@ function Preview({ page }: Readonly<{ page: PatientPage }>) {
           <span className="font-semibold">{page.issued_on.label}:</span> {page.issued_on.value}
         </p>
       </div>
-      {page.updated_note !== null && <p className="rounded-lg border border-amber-700 bg-amber-50 p-2 font-semibold">{page.updated_note}</p>}
+      {page.updated_note !== null && <p className="rounded-lg border border-warning-line bg-warning-soft p-2 font-semibold">{page.updated_note}</p>}
       {page.medicines.length > 0 && (
         <div>
           <h3 className="font-bold">{page.medicines_heading}</h3>
           <ol className="space-y-2">
             {page.medicines.map((m) => (
-              <li key={m.number} className="rounded-lg border border-slate-200 p-2">
+              <li key={m.number} className="rounded-lg border border-line bg-white p-2.5">
                 <p className="font-bold">
                   {m.number}. {m.name}
                   {m.form_strength !== null && <span className="font-normal"> ({m.form_strength})</span>}
@@ -220,11 +226,11 @@ export function ScheduleTable({ page }: Readonly<{ page: PatientPage }>) {
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th scope="col" className="border border-slate-300 p-1 text-left">
+              <th scope="col" className="border border-line p-1.5 text-left">
                 {page.medicines_heading}
               </th>
               {page.schedule_columns.map((c) => (
-                <th key={c} scope="col" className="border border-slate-300 p-1 text-center">
+                <th key={c} scope="col" className="border border-line p-1.5 text-center">
                   {c}
                 </th>
               ))}
@@ -233,7 +239,7 @@ export function ScheduleTable({ page }: Readonly<{ page: PatientPage }>) {
           <tbody>
             {page.schedule.map((row) => (
               <tr key={row.number}>
-                <th scope="row" className="border border-slate-300 p-1 text-left font-normal">
+                <th scope="row" className="border border-line p-1.5 text-left font-normal">
                   <span className="font-semibold">
                     {row.number}. {row.name}
                   </span>
@@ -247,12 +253,12 @@ export function ScheduleTable({ page }: Readonly<{ page: PatientPage }>) {
                   )}
                 </th>
                 {row.as_written !== null ? (
-                  <td colSpan={page.schedule_columns.length} className="border border-slate-300 p-1">
+                  <td colSpan={page.schedule_columns.length} className="border border-line p-1.5">
                     <span className="font-semibold">{page.schedule_as_written}:</span> {row.as_written}
                   </td>
                 ) : (
                   row.marks.map((marked, i) => (
-                    <td key={i} className="border border-slate-300 p-1 text-center">
+                    <td key={i} className="border border-line p-1.5 text-center">
                       <span aria-hidden="true">{marked ? "\u25CF" : "\u2014"}</span>
                       {marked && <span className="sr-only">{page.schedule_columns[i]}</span>}
                     </td>

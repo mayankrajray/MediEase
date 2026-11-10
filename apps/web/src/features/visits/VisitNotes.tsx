@@ -2,10 +2,15 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
+import { HeartPulse, NotebookPen, RefreshCw } from "lucide-react";
+
+import { Button } from "@/components/ui/Button";
+import { INPUT, LABEL } from "@/components/ui/Field";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { useRxApi, type Visit, type VisitChange, type Vitals } from "@/features/prescriptions/api";
 
+import { CARD, CARD_TITLE, SAVE_PILL, STALE_BOX } from "./card";
 import { saveText, useAutosave } from "./useAutosave";
 
 type VitalKey = keyof Vitals;
@@ -108,19 +113,20 @@ export function VisitNotes({
 
   if (!editable) {
     return (
-      <section aria-labelledby="notes-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-        <h2 id="notes-heading" className="text-lg font-bold">
+      <section aria-labelledby="notes-heading" className={CARD}>
+        <h2 id="notes-heading" className={CARD_TITLE}>
+          <NotebookPen aria-hidden="true" className="size-5 text-brand-700" />
           Notes
         </h2>
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
+        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-[max-content_1fr]">
           {TEXTS.map((t) => (
             <div key={t.key} className="contents">
-              <dt className="font-medium">{t.label}</dt>
-              <dd className="whitespace-pre-line">{notes[t.key] === "" ? "—" : notes[t.key]}</dd>
+              <dt className="text-sm font-semibold text-slate-700">{t.label}</dt>
+              <dd className="-mt-1 whitespace-pre-line text-slate-900 [overflow-wrap:anywhere] sm:mt-0">{notes[t.key] === "" ? "—" : notes[t.key]}</dd>
             </div>
           ))}
-          <dt className="font-medium">Vitals</dt>
-          <dd>
+          <dt className="text-sm font-semibold text-slate-700">Vitals</dt>
+          <dd className="-mt-1 text-slate-900 sm:mt-0">
             {VITALS.filter((v) => notes.vitals[v.key] !== "")
               .map((v) => `${v.label} ${notes.vitals[v.key]} ${v.unit}`)
               .join(" · ") || "—"}
@@ -132,27 +138,28 @@ export function VisitNotes({
 
   const vitalError = (v: (typeof VITALS)[number]) => vitalProblem(v, notes.vitals[v.key]);
   return (
-    <section aria-labelledby="notes-heading" className="space-y-3 rounded-card border border-slate-200 bg-white p-4 shadow-card">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 id="notes-heading" className="text-lg font-bold">
+    <section aria-labelledby="notes-heading" className={CARD}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="notes-heading" className={CARD_TITLE}>
+          <NotebookPen aria-hidden="true" className="size-5 text-brand-700" />
           Notes
         </h2>
-        <p role="status" aria-live="polite" className="text-sm text-slate-800">
+        <p role="status" aria-live="polite" className={`${SAVE_PILL} empty:sr-only`}>
           {stale ? "" : saveText(autosave.state)}
         </p>
       </div>
       {stale && (
-        <div role="alert" className="rounded-lg border border-amber-700 bg-amber-50 p-3">
+        <div role="alert" className={STALE_BOX}>
           <p className="font-medium">{saveText(autosave.state)}</p>
-          <button type="button" onClick={onReload} className="mt-2 rounded border border-amber-900 bg-white px-3 py-1.5 font-medium">
+          <Button onClick={onReload} icon={<RefreshCw className="size-4" />}>
             Reload
-          </button>
+          </Button>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {TEXTS.map((t) => (
           <div key={t.key}>
-            <label htmlFor={`${base}-${t.key}`} className="block font-medium">
+            <label htmlFor={`${base}-${t.key}`} className={LABEL}>
               {t.label}
             </label>
             {t.rows === 1 ? (
@@ -163,7 +170,7 @@ export function VisitNotes({
                 disabled={stale}
                 onChange={(e) => update({ ...notes, [t.key]: e.target.value })}
                 onBlur={() => void flush()}
-                className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
+                className={`${INPUT} mt-1`}
               />
             ) : (
               <textarea
@@ -174,21 +181,24 @@ export function VisitNotes({
                 disabled={stale}
                 onChange={(e) => update({ ...notes, [t.key]: e.target.value })}
                 onBlur={() => void flush()}
-                className="min-h-10 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 placeholder:text-slate-500 hover:border-slate-500 aria-[invalid=true]:border-red-700 disabled:bg-slate-100 disabled:text-slate-600"
+                className={`${INPUT} mt-1`}
               />
             )}
           </div>
         ))}
       </div>
-      <fieldset>
-        <legend className="font-medium">Vitals</legend>
-        <div className="grid grid-cols-4 gap-2">
+      <fieldset className="rounded-lg border border-line bg-slate-50 p-3">
+        <legend className="flex items-center gap-1.5 px-1 text-sm font-semibold text-slate-900">
+          <HeartPulse aria-hidden="true" className="size-4 text-brand-700" />
+          Vitals
+        </legend>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
           {VITALS.map((v) => {
             const problem = vitalError(v);
             const id = `${base}-${v.key}`;
             return (
               <div key={v.key}>
-                <label htmlFor={id} className="block text-sm font-medium">
+                <label htmlFor={id} className="block text-sm font-medium text-slate-800">
                   {v.label} ({v.unit})
                 </label>
                 <input
@@ -201,10 +211,10 @@ export function VisitNotes({
                   aria-describedby={problem === undefined ? undefined : `${id}-error`}
                   onChange={(e) => update({ ...notes, vitals: { ...notes.vitals, [v.key]: e.target.value } })}
                   onBlur={() => void flush()}
-                  className="w-full rounded-lg border border-slate-400 px-2 py-1"
+                  className={`${INPUT} mt-1 tabular-nums`}
                 />
                 {problem !== undefined && (
-                  <p id={`${id}-error`} className="text-xs font-medium text-red-900">
+                  <p id={`${id}-error`} className="mt-1 text-xs font-medium text-danger">
                     {problem}; vitals not saved until it is fixed
                   </p>
                 )}
