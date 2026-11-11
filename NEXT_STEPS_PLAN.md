@@ -23,8 +23,10 @@
 screenshots and weights recorded in the design §8; specs updated (`discovery.md` R16–R21,
 `booking-requests.md` R13a).
 
-M7e (#73, PR #74) and then M9 (deployment: Vercel, Supabase and an Oracle Cloud VM, design to be
-written at M9's start) follow. M8 is skipped for now (developer, 11 Nov 2026).
+M7d merged 12 Nov 2026 (PR #72, #71 closed). M7e (#73, PR #74) is now active; its plan,
+`docs/milestones/M7e-pwa-push.md`, replaces this section once the developer approves it. Then M9
+(deployment: Vercel, Supabase and an Oracle Cloud VM, design to be written at M9's start). M8 is
+skipped for now (developer, 11 Nov 2026).
 
 ---
 
