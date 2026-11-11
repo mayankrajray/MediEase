@@ -22,7 +22,10 @@ async function home(page: Page): Promise<{ nav: string[]; actions: string[] }> {
   await expect(quick.getByRole("listitem")).toHaveCount(3);
   return {
     // M6b-P5: the open-request count rides on its link's name and depends on the data; drop it.
-    nav: (await page.getByRole("navigation", { name: "Main" }).getByRole("link").allTextContents()).map((t) => t.replace(/, \d+ waiting$/, "")),
+    // M7c-P7 (M3): the visible count (hidden from screen readers) follows the words.
+    nav: (await page.getByRole("navigation", { name: "Main" }).getByRole("link").allTextContents()).map((t) =>
+      t.replace(/, \d+ waiting(?:\d+|99\+)?$/, ""),
+    ),
     actions: await quick.getByRole("listitem").allTextContents(),
   };
 }
