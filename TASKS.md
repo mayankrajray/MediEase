@@ -275,11 +275,13 @@ Build order (approved): P3 → P1 → P2 → P5 → P6 → P4 → P7 → P8.
 | M7c-P7 | Landing page and frontend redesign: design system (Phase 1) then modules M1–M10 (`docs/milestones/M7c-P7-modules.md`) | ✅ Phase 1 and modules M1–M10 built and gated (9–10 Nov 2026); full `make e2e` 57/57; report `docs/milestones/M7c-P7-final-report.md` |
 | M7c-P8 | Demo rehearsal, full suites and `make e2e`, Phase 2 deliverable documents | ☐ |
 
-## M7d — Patient discovery, clinic and doctor profiles, booking redesign  `☐ (parked)`
+## M7d — Patient discovery, clinic and doctor profiles, booking redesign  `☐ (planned; not started)`
 
 **Design:** `docs/milestones/M7d-discovery-booking.md` (the developer's brief of 10 Nov 2026, the
 audit, data gaps, plan and the reference image `M7d-reference-image.png`). Front end only; starts
 after M7c-P7. Further change requests made during M7c-P7 are recorded in that file.
+Issue #71, branch `m7d/71-discovery-booking` (from `m7c/69-demo-polish`; its PR targets that
+branch until M7c is merged), one PR. Decisions recorded 11 Nov 2026 (§4 of the design).
 
 ## M8 — Multi-clinic WhatsApp and consolidated billing  `☐ (designed)`
 
