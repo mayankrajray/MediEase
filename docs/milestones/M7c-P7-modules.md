@@ -540,3 +540,36 @@ with no line chosen says so and sends nothing.
 
 **Checked:** screenshots of Bills, Collection and Dues at 1366, 375 and 320 px: no sideways
 scroll. Unit tests passing; Playwright `workspaces` passed.
+
+## Assistant follow-up (developer's conversations, 11 Nov 2026)
+
+The developer asked to fix the patient assistant in this milestone: some turns failed with a
+reference number, the same question got different answers on 10 and 11 Nov, a numbered choice
+("1", "phla wala", "yahi kardo") re-listed the clinics, and a search with a date in it found
+nothing. This is the one backend change of M7c-P7, approved by the developer. Root causes are in
+`docs/DEBUG_JOURNAL.md` (11 Nov 2026); the rules are assistant R22–R26.
+
+| Area | Change |
+|---|---|
+| Provider | Optional tool arguments accept `null` (Groq refused `"city": null` with `tool_use_failed`, the cause of the 400s); `tool_use_failed` is retried once; the provider's short error code is logged |
+| Engine | If the provider fails after a tool ran in the same turn, the reply is that tool's own summary instead of an error |
+| Tools | `search_clinics` with an empty query lists and counts the clinics taking bookings; an exact name wins ("Sample Clinic" is not "Sample Clinic Two"); a clinic or doctor named inside a phrase is found. `list_slots` and `request_booking` take names, `date`, `part_of_day` and `time`, resolved on the server against what is free now. New `my_profile` |
+| Prompt | Today's and tomorrow's dates, "kal"/"subah"/"dopahar"/"shaam", the rule that "1", "yes" or "pehla wala" refers to the list just shown, one answer per question |
+| Console model | Hindi help and questions, choices from a numbered clinic list, clinic count, no dates in searches |
+| Web | A failed turn says why and what to do in plain words (EN and HI) by code; the unanswered message goes back in the box and out of the conversation; patient pages show no `Ref:` (staff pages keep it) |
+
+**Why the answers differed:** on 10 Nov the stack was still on the console rules model from the
+journey runs (`LLM_PROVIDER=console`); on 11 Nov it was Groq from `.env`. After any journey run
+the API and workers are now restarted on `.env`.
+
+**Checked (11 Nov 2026):** the developer's English and Hinglish conversations replayed through the
+portal against Groq (`openai/gpt-oss-120b`): no failed turn; "how many clinics" answered "3" both
+times; "kal dopahar ... sample clinic me Dr. Sample Doctor" looked at that clinic's afternoon;
+"pehla wala, <phone>" reached the confirmation for the shown time. API: 154 assistant tests
+pass (new: `test_r22_*`, `test_r23_*`, `test_assistant_finder.py`); web assistant tests pass.
+
+**WhatsApp (pending, Meta setting):** `make config-check LIVE=1` reads the number with the token
+(quality GREEN), but a test send still fails with `OAuthException code 10` "Viewer cannot access
+the provided Paid Message Account". In Meta Business settings, the system user behind the token
+needs full control of the WhatsApp Business Account, and the account a payment method. `.env` was
+last changed on 10 Nov 05:34 UTC, so the new token may not be in this `.env` yet.
