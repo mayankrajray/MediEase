@@ -1,4 +1,4 @@
-import { CalendarCheck, ChevronRight, CircleAlert, Languages, MapPin, Search, SearchX, TriangleAlert } from "lucide-react";
+import { CalendarCheck, CalendarX, ChevronRight, CircleAlert, Languages, MapPin, Search, SearchX, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 
 import { Avatar } from "@/components/ui/Avatar";
@@ -43,10 +43,19 @@ export function findHref(query: FindQuery, language: PortalLanguage, kind: Searc
 
 // Server-rendered: the field styles are written here (the client `Field` module's constants are
 // client references in a Server Component). They match `INPUT` and `LABEL` (M7c-P7, M6).
-const FIELD =
-  "mt-1.5 min-h-11 w-full rounded-lg border border-slate-400 bg-white px-3 text-base text-slate-900 transition-colors hover:border-slate-600 focus-visible:border-brand-700 focus-visible:outline-brand-700";
+const CONTROL =
+  "min-h-11 w-full rounded-lg border border-slate-400 bg-white px-3 text-base text-slate-900 transition-colors hover:border-slate-600 focus-visible:border-brand-700 focus-visible:outline-brand-700";
+const FIELD = `mt-1.5 ${CONTROL}`;
+// M7d-P1: the box holds the input alone (the label's gap is the box's margin), so the icon is
+// centred on the input's own height, whatever the label or the font size.
+const ICON_BOX = "relative mt-1.5";
+const ICON = "pointer-events-none absolute inset-y-0 left-3 my-auto size-4 text-slate-500";
 const LABEL = "block text-sm font-semibold text-slate-900";
 const CARD = "rounded-card border border-line bg-surface p-4 shadow-card sm:p-5";
+// M7d-P1: a result's facts (fee, languages, specialties) as compact chips, not lines of text.
+const FACT = "rounded-md bg-surface-muted px-2 py-1 break-words";
+// A clinic card names its first doctors; the profile lists them all.
+const DOCTORS_NAMED = 3;
 const LINK =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-brand-300 bg-brand-50 px-4 font-semibold text-brand-900 transition-colors hover:border-brand-700 hover:bg-brand-100 max-sm:w-full";
 
@@ -56,8 +65,9 @@ const LINK =
  * English or Hindi, 360 px first. A result opens the profile, where the patient picks a time (P7).
  *
  * M7c-P7 (M6): the form as one card with the main search first and the filters under it; Doctors
- * and Clinics as a segmented switch; each result a card with initials, the clinic and place, a
- * "free from" line with an icon, and the profile as a full-width button on a phone.
+ * and Clinics as a segmented switch; each result a card with initials, the clinic and place, an
+ * availability line with an icon, and the profile as a full-width button on a phone. M7d-P1: the
+ * search icons centred on their inputs, and one "Next available" line per card (no schedules).
  */
 export function FindPage({
   query,
@@ -78,10 +88,11 @@ export function FindPage({
   );
   const switchQuery = new URLSearchParams(findHref(query, other).split("?")[1] ?? "");
   if (other === "en") switchQuery.set("lang", "en");
-  const free = (next: string | null) => (
-    <p className={`flex items-center gap-1.5 text-sm font-medium ${next === null ? "text-slate-700" : "text-success"}`}>
-      <CalendarCheck aria-hidden="true" className="size-4 shrink-0" />
-      {next === null ? w.noFreeTime : w.freeFrom(shortDay(next, language))}
+  // M7d-P1: one availability line per card.
+  const next = (day: string | null) => (
+    <p className={`flex items-center gap-1.5 text-sm font-medium ${day === null ? "text-slate-700" : "text-success"}`}>
+      {day === null ? <CalendarX aria-hidden="true" className="size-4 shrink-0" /> : <CalendarCheck aria-hidden="true" className="size-4 shrink-0" />}
+      {day === null ? w.noneAvailable : w.nextAvailable(shortDay(day, language))}
     </p>
   );
 
@@ -120,9 +131,9 @@ export function FindPage({
             <label htmlFor="find-q" className={LABEL}>
               {w.what}
             </label>
-            <div className="relative">
-              <input id="find-q" name="q" type="search" defaultValue={query.q} maxLength={100} aria-describedby="find-q-hint" className={`${FIELD} pl-9`} />
-              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-[1.6rem] size-4 text-slate-500" />
+            <div className={ICON_BOX}>
+              <input id="find-q" name="q" type="search" defaultValue={query.q} maxLength={100} aria-describedby="find-q-hint" className={`${CONTROL} pl-9`} />
+              <Search aria-hidden="true" className={ICON} />
             </div>
             <p id="find-q-hint" className="mt-1 text-sm text-slate-700">
               {w.whatHint}
@@ -132,9 +143,9 @@ export function FindPage({
             <label htmlFor="find-where" className={LABEL}>
               {w.where}
             </label>
-            <div className="relative">
-              <input id="find-where" name="where" defaultValue={query.where} maxLength={100} aria-describedby="find-where-hint" className={`${FIELD} pl-9`} />
-              <MapPin aria-hidden="true" className="pointer-events-none absolute left-3 top-[1.6rem] size-4 text-slate-500" />
+            <div className={ICON_BOX}>
+              <input id="find-where" name="where" defaultValue={query.where} maxLength={100} aria-describedby="find-where-hint" className={`${CONTROL} pl-9`} />
+              <MapPin aria-hidden="true" className={ICON} />
             </div>
             <p id="find-where-hint" className="mt-1 text-sm text-slate-700">
               {w.whereHint}
@@ -203,25 +214,32 @@ export function FindPage({
           )}
           {result.status === "doctors" && (
             <ul className="space-y-3">
-              {result.items.map((d) => (
+                {result.items.map((d) => {
+                const about = [d.qualification, d.specialty].filter((p) => p !== null && p !== "").join(" · ");
+                return (
                 <li key={d.id} className={`${CARD} space-y-3`}>
                   <div className="flex items-start gap-3">
                     <Avatar name={d.display_name} />
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <p className="break-words text-lg font-semibold text-slate-900">{d.display_name}</p>
-                      <p className="text-sm text-slate-800">{[d.qualification, d.specialty].filter((p) => p !== null && p !== "").join(" · ")}</p>
-                      <p className="text-sm text-slate-800">{[d.clinic.name, d.clinic.city].filter((p) => p !== null && p !== "").join(", ")}</p>
+                      {about !== "" && <p className="break-words text-sm text-slate-800">{about}</p>}
+                      <p className="flex gap-1.5 text-sm text-slate-700">
+                        <MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-slate-500" />
+                        <span className="min-w-0 break-words">{[d.clinic.name, d.clinic.city].filter((p) => p !== null && p !== "").join(", ")}</span>
+                      </p>
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    {d.languages.length > 0 && (
-                      <p className="text-sm text-slate-700">
-                        {w.speaks}: {d.languages.join(", ")}
-                      </p>
-                    )}
-                    {d.fee_paise !== null && <p className="text-sm text-slate-700">{w.fee(rupees(d.fee_paise))}</p>}
-                    {free(d.next_available)}
-                  </div>
+                  {(d.fee_paise !== null || d.languages.length > 0) && (
+                    <ul className="flex flex-wrap gap-2 text-sm text-slate-800">
+                      {d.fee_paise !== null && <li className={FACT}>{w.fee(rupees(d.fee_paise))}</li>}
+                      {d.languages.length > 0 && (
+                        <li className={FACT}>
+                          {w.speaks}: {d.languages.join(", ")}
+                        </li>
+                      )}
+                    </ul>
+                  )}
+                  {next(d.next_available)}
                   <Link
                     href={`/c/${encodeURIComponent(d.clinic.slug)}/doctors/${encodeURIComponent(d.id)}?via=directory${language === "hi" ? "&lang=hi" : ""}`}
                     className={LINK}
@@ -231,27 +249,42 @@ export function FindPage({
                     <ChevronRight aria-hidden="true" className="size-4" />
                   </Link>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
           {result.status === "clinics" && (
             <ul className="space-y-3">
-              {result.items.map((c) => (
-                <li key={c.slug} className={`${CARD} space-y-3`}>
-                  <div className="space-y-0.5">
-                    <p className="break-words text-lg font-semibold text-slate-900">{c.name}</p>
-                    <p className="text-sm text-slate-800">{[c.address_line, c.city, c.pincode].filter((p) => p !== null && p !== "").join(", ")}</p>
-                    {c.specialties.length > 0 && <p className="text-sm text-slate-700">{c.specialties.join(", ")}</p>}
-                    {c.doctors.length > 0 && <p className="text-sm text-slate-700">{c.doctors.map((d) => d.display_name).join(", ")}</p>}
-                  </div>
-                  {free(c.next_available)}
-                  <Link href={`/c/${encodeURIComponent(c.slug)}?via=directory${language === "hi" ? "&lang=hi" : ""}`} className={LINK}>
-                    {w.viewClinic}
-                    <span className="sr-only">: {c.name}</span>
-                    <ChevronRight aria-hidden="true" className="size-4" />
-                  </Link>
-                </li>
-              ))}
+              {result.items.map((c) => {
+                const address = [c.address_line, c.city, c.pincode].filter((p) => p !== null && p !== "").join(", ");
+                const named = c.doctors.slice(0, DOCTORS_NAMED).map((d) => d.display_name);
+                const more = c.doctors.length - named.length;
+                return (
+                  <li key={c.slug} className={`${CARD} space-y-3`}>
+                    <div className="space-y-1">
+                      <p className="break-words text-lg font-semibold text-slate-900">{c.name}</p>
+                      {address !== "" && (
+                        <p className="flex gap-1.5 text-sm text-slate-700">
+                          <MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-slate-500" />
+                          <span className="min-w-0 break-words">{address}</span>
+                        </p>
+                      )}
+                    </div>
+                    {(c.specialties.length > 0 || named.length > 0) && (
+                      <ul className="flex flex-wrap gap-2 text-sm text-slate-800">
+                        {c.specialties.length > 0 && <li className={FACT}>{c.specialties.join(", ")}</li>}
+                        {named.length > 0 && <li className={FACT}>{more > 0 ? w.doctorsAndMore(named.join(", "), more) : named.join(", ")}</li>}
+                      </ul>
+                    )}
+                    {next(c.next_available)}
+                    <Link href={`/c/${encodeURIComponent(c.slug)}?via=directory${language === "hi" ? "&lang=hi" : ""}`} className={LINK}>
+                      {w.viewClinic}
+                      <span className="sr-only">: {c.name}</span>
+                      <ChevronRight aria-hidden="true" className="size-4" />
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

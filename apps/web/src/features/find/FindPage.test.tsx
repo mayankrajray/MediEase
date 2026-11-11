@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { FindPage, findHref, type FindQuery } from "./FindPage";
+import { FindPage, findHref, type ClinicHits, type FindQuery } from "./FindPage";
 import { apiFilters, readQuery } from "./query";
 
 const QUERY: FindQuery = { kind: "doctors", q: "mehta", where: "560001", specialty: "", language: "Hindi", available: true };
@@ -27,17 +27,55 @@ describe("directory search (M6c-P6, discovery R1-R10)", () => {
     expect(findHref(QUERY, "hi", "clinics")).toBe("/find?type=clinics&q=mehta&where=560001&language=Hindi&available=true&lang=hi");
   });
 
-  it("lists doctors with their clinic, languages, fee and first free day, linking to the profile", () => {
+  it("lists doctors with their clinic, languages, fee and next available day, linking to the profile", () => {
     render(<FindPage query={QUERY} result={{ status: "doctors", items: [DOCTOR] }} options={OPTIONS} language="en" />);
     expect(screen.getByRole("search")).toBeInTheDocument();
     expect(screen.getByLabelText("Doctor, clinic or specialty")).toHaveValue("mehta");
-    expect(screen.getByLabelText("Free in the next 7 days")).toBeChecked();
-    const item = screen.getByRole("listitem");
+    expect(screen.getByLabelText("Available in the next 7 days")).toBeChecked();
+    // The first list item is the card; its facts are a list inside it.
+    const item = screen.getAllByRole("listitem")[0] as HTMLElement;
     expect(within(item).getByText("Sample Clinic, Pune")).toBeInTheDocument();
     expect(within(item).getByText("Fee ₹300")).toBeInTheDocument();
-    expect(within(item).getByText(/^Free from /)).toBeInTheDocument();
+    // M7d-P1: one availability line, "Next available: Wed, 28 Oct", and no weekly schedule.
+    expect(within(item).getByText("Next available: Wed, 28 Oct")).toBeInTheDocument();
+    expect(item).not.toHaveTextContent(/Free from|Mon |hours/i);
     expect(within(item).getByRole("link", { name: /See profile and times/ })).toHaveAttribute("href", `/c/sample-clinic/doctors/${DOCTOR.id}?via=directory`);
     expect(screen.getByRole("link", { name: "Doctors" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("centres each search icon on its input, not on the label above it (M7d-P1)", () => {
+    render(<FindPage query={QUERY} result={{ status: "doctors", items: [] }} options={OPTIONS} language="en" />);
+    for (const label of ["Doctor, clinic or specialty", "City or PIN code"]) {
+      const input = screen.getByLabelText(label);
+      const box = input.parentElement;
+      // The positioned box holds the input and its icon only, so `inset-y-0 my-auto` centres it.
+      expect(box?.children).toHaveLength(2);
+      const icon = box?.querySelector("svg");
+      expect(icon).toHaveClass("inset-y-0", "my-auto");
+      expect(icon?.getAttribute("class")).not.toMatch(/top-\[/);
+      expect(input).not.toHaveClass("mt-1.5");
+    }
+  });
+
+  it("says when a doctor has no time soon, and names a clinic's first three doctors", () => {
+    const clinic: ClinicHits["items"][number] = {
+      slug: "sample-clinic",
+      name: "Sample Clinic",
+      address_line: "1 Sample Road",
+      city: "Pune",
+      state: "MH",
+      pincode: "411001",
+      specialties: ["General Medicine"],
+      doctors: ["A", "B", "C", "D", "E"].map((n, i) => ({ id: `0192f0a0-0000-7000-8000-00000000000${i}`, display_name: `Dr. ${n}`, specialty: null })),
+      next_available: null,
+    };
+    const { rerender } = render(<FindPage query={QUERY} result={{ status: "doctors", items: [{ ...DOCTOR, next_available: null }] }} options={OPTIONS} language="en" />);
+    expect(screen.getByText("No available times in the next 7 days")).toBeInTheDocument();
+    rerender(<FindPage query={{ ...QUERY, kind: "clinics" }} result={{ status: "clinics", items: [clinic] }} options={OPTIONS} language="en" />);
+    expect(screen.getByText("Dr. A, Dr. B, Dr. C and 2 more")).toBeInTheDocument();
+    expect(screen.getByText("No available times in the next 7 days")).toBeInTheDocument();
+    rerender(<FindPage query={QUERY} result={{ status: "doctors", items: [DOCTOR] }} options={OPTIONS} language="hi" />);
+    expect(screen.getByText(/^अगला उपलब्ध समय: /)).toBeInTheDocument();
   });
 
   it("says when nothing matches, and when search is limited, in Hindi too", () => {

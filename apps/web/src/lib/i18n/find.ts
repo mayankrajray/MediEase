@@ -24,8 +24,9 @@ export interface FindWords {
   readonly failed: string;
   readonly tooMany: string;
   readonly badFilter: string;
-  readonly freeFrom: (day: string) => string;
-  readonly noFreeTime: string;
+  readonly nextAvailable: (day: string) => string;
+  readonly noneAvailable: string;
+  readonly doctorsAndMore: (names: string, more: number) => string;
   readonly fee: (rupees: string) => string;
   readonly speaks: string;
   readonly viewProfile: string;
@@ -46,7 +47,7 @@ const EN: FindWords = {
   specialty: "Specialty",
   language: "Language",
   any: "Any",
-  available: "Free in the next 7 days",
+  available: "Available in the next 7 days",
   search: "Search",
   doctors: "Doctors",
   clinics: "Clinics",
@@ -55,8 +56,9 @@ const EN: FindWords = {
   failed: "Search is not working right now. Please try again.",
   tooMany: "Too many searches. Please wait a minute and try again.",
   badFilter: "Please check the PIN code: it has six digits.",
-  freeFrom: (day) => `Free from ${day}`,
-  noFreeTime: "No free time in the next 7 days",
+  nextAvailable: (day) => `Next available: ${day}`,
+  noneAvailable: "No available times in the next 7 days",
+  doctorsAndMore: (names, more) => `${names} and ${more} more`,
   fee: (rupees) => `Fee ₹${rupees}`,
   speaks: "Speaks",
   viewProfile: "See profile and times",
@@ -77,7 +79,7 @@ const HI: FindWords = {
   specialty: "विशेषज्ञता",
   language: "भाषा",
   any: "कोई भी",
-  available: "अगले 7 दिनों में खाली समय",
+  available: "अगले 7 दिनों में उपलब्ध",
   search: "खोजें",
   doctors: "डॉक्टर",
   clinics: "क्लिनिक",
@@ -86,8 +88,9 @@ const HI: FindWords = {
   failed: "खोज अभी काम नहीं कर रही है। कृपया फिर कोशिश करें।",
   tooMany: "बहुत ज़्यादा खोजें। एक मिनट रुककर फिर कोशिश करें।",
   badFilter: "कृपया पिन कोड जाँचें: उसमें छह अंक होते हैं।",
-  freeFrom: (day) => `${day} से खाली`,
-  noFreeTime: "अगले 7 दिनों में कोई खाली समय नहीं",
+  nextAvailable: (day) => `अगला उपलब्ध समय: ${day}`,
+  noneAvailable: "अगले 7 दिनों में कोई समय उपलब्ध नहीं",
+  doctorsAndMore: (names, more) => `${names} और ${more} अन्य`,
   fee: (rupees) => `शुल्क ₹${rupees}`,
   speaks: "भाषाएँ",
   viewProfile: "प्रोफ़ाइल और समय देखें",
