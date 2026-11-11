@@ -26,7 +26,41 @@ from mediease_api.domain.assistant.llm import (
 
 ASK_CLINIC = "Which clinic or doctor would you like to book with?"
 ASK_PHONE = "Please tell me the number of the time you want and your phone number."
-_FREE_TIMES = re.compile(r"^Free times with (?P<doctor>.+?) at (?P<clinic>.+?):", re.MULTILINE)
+# M7c-P7 (assistant R25): the rules model answers in Hindi when the prompt asks for it.
+ASK_CLINIC_HI = "आप किस क्लिनिक या डॉक्टर के साथ बुक करना चाहेंगे?"
+ASK_PHONE_HI = "कृपया जो समय चाहिए उसका नंबर और अपना फ़ोन नंबर बताइए।"
+_FREE_TIMES = re.compile(
+    r"^(?:Free times with (?P<doctor>.+?) at (?P<clinic>.+?)|(?P<clinic_hi>.+?) में "
+    r"(?P<doctor_hi>.+?) के खाली समय):",
+    re.MULTILINE,
+)
+# A numbered clinic list ("1. Sample Clinic (Sample City): Dr. Sample Doctor").
+_CLINIC_LINE = re.compile(
+    r"^(?P<n>\d{1,2})\. (?P<name>.+?) \((?P<city>[^)]*)\): (?P<doctors>.+)$", re.MULTILINE
+)
+_ORDINALS = {
+    "first": 1,
+    "pehla": 1,
+    "pahla": 1,
+    "phla": 1,
+    "pehle": 1,
+    "पहला": 1,
+    "second": 2,
+    "dusra": 2,
+    "doosra": 2,
+    "दूसरा": 2,
+    "third": 3,
+    "teesra": 3,
+    "tisra": 3,
+    "तीसरा": 3,
+}
+# Words about when, which a clinic search must not contain.
+_WHEN_WORDS = re.compile(
+    r"\b(today|tomorrow|morning|afternoon|evening|night|free|time|times|slot|slots|booking|book|"
+    r"appointment|for|with|at|in|a|an|the|me|mujhe|kal|aaj|subah|dopahar|dophar|shaam|ki|ka|ke|"
+    r"karni|karna|hai|find|search|available)\b",
+    re.IGNORECASE,
+)
 _PHONE = re.compile(r"(?:\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}")
 _DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 _TODAY = re.compile(r"Today is (\d{4}-\d{2}-\d{2})")
@@ -35,6 +69,10 @@ _MEDICINE_NUMBER = re.compile(r"(?:medicine|number|no\.?|#|दवा)\s*(\d{1,2}
 _HELP = (
     "I can explain the prescription you chose, show your appointments and booking requests, "
     "find a clinic and its free times, and send a booking request for you to confirm."
+)
+_HELP_HI = (
+    "मैं आपके चुने हुए पर्चे को समझा सकता हूँ, आपकी अपॉइंटमेंट और बुकिंग अनुरोध दिखा सकता हूँ, "
+    "क्लिनिक और उसके खाली समय ढूँढ सकता हूँ, और आपकी पुष्टि के लिए बुकिंग अनुरोध भेज सकता हूँ।"
 )
 _STAFF_HELP = (
     "I can show today's queue, list a day's sessions, find a patient, show a patient's "
@@ -81,6 +119,33 @@ _EXPLAIN_WORDS = (
 
 def _has(text: str, words: Sequence[str]) -> bool:
     return any(w in text for w in words)
+
+
+def _free(previous: str) -> tuple[str, str] | None:
+    """The clinic and doctor of the free times the last reply listed, in either language."""
+    match = _FREE_TIMES.search(previous)
+    if match is None:
+        return None
+    clinic = match.group("clinic") or match.group("clinic_hi")
+    doctor = match.group("doctor") or match.group("doctor_hi")
+    return clinic, doctor
+
+
+def _chosen(text: str) -> int | None:
+    """A choice from a list: a bare number ("1") or an ordinal word ("pehla wala")."""
+    bare = re.fullmatch(r"\s*(?:no\.?\s*)?(\d{1,2})\s*[.)]?\s*", text)
+    if bare:
+        return int(bare.group(1))
+    for word, n in _ORDINALS.items():
+        if re.search(rf"(?<!\w){word}(?!\w)", text):
+            return n
+    return None
+
+
+def _clinic_words(text: str) -> str:
+    """The words of a request that can name a clinic or doctor, without when or how."""
+    words = _WHEN_WORDS.sub(" ", re.sub(r"[?.,!]", " ", text))
+    return " ".join(words.split())[:100]
 
 
 def _result(message: ChatMessage) -> dict[str, JsonValue]:
@@ -135,33 +200,69 @@ class ConsoleLlm:
         text = user.lower()
         if "today_queue" in names:
             return self._staff(user, text, system, names)
-        free = _FREE_TIMES.search(previous)
+        hi = "Reply briefly in Hindi" in system
+        free = _free(previous)
         if free and "request_booking" in names and re.search(r"\b\d{1,2}\b", text):
             if not _PHONE.search(user):
-                return _say(ASK_PHONE)
-            return _call("search_clinics", 1, query=free.group("clinic"))
-        if previous.startswith(ASK_CLINIC) and "search_clinics" in names:
-            return _call("search_clinics", 1, query=user.strip()[:100])
+                return _say(ASK_PHONE_HI if hi else ASK_PHONE)
+            return _call("list_slots", 1, clinic=free[0], doctor=free[1])
+        listed = [m.groupdict() for m in _CLINIC_LINE.finditer(previous)]
+        number = _chosen(text)
+        if listed and number is not None and "list_slots" in names:
+            # R25: "1", "the first one", "pehla wala" pick from the clinics just listed.
+            if not 1 <= number <= len(listed):
+                return _say(f"Please choose a number between 1 and {len(listed)}.")
+            line = listed[number - 1]
+            doctors = [d.strip() for d in line["doctors"].split(",") if d.strip() != "-"]
+            if len(doctors) == 1:
+                return _call("list_slots", 1, clinic=line["name"], doctor=doctors[0])
+            return _say(
+                (
+                    f"{line['name']} में किस डॉक्टर के साथ? "
+                    if hi
+                    else f"Which doctor at {line['name']}? "
+                )
+                + ", ".join(doctors)
+            )
+        if previous.startswith((ASK_CLINIC, ASK_CLINIC_HI)) and "search_clinics" in names:
+            return _call("search_clinics", 1, query=_clinic_words(user))
+        if _has(
+            text,
+            (
+                "how many clinic",
+                "which clinics",
+                "all clinics",
+                "list clinics",
+                "clinics are there",
+                "kitne clinic",
+                "kaun se clinic",
+                "registered",
+            ),
+        ):
+            return _call("search_clinics", 1, query="")
+        if _has(text, ("my name", "mera naam", "मेरा नाम")) and "my_profile" in names:
+            return _call("my_profile", 1)
         if _has(text, ("my prescriptions", "list my prescriptions", "which prescriptions")):
             return _call("my_prescriptions", 1)
         if "explain_prescription" in names and _has(text, _EXPLAIN_WORDS):
-            number = _MEDICINE_NUMBER.search(user)
-            if number:
-                return _call("explain_prescription", 1, medicine_number=int(number.group(1)))
+            medicine = _MEDICINE_NUMBER.search(user)
+            if medicine:
+                return _call("explain_prescription", 1, medicine_number=int(medicine.group(1)))
             return _call("explain_prescription", 1)
         if _has(text, ("request", "proposal", "proposed")):
             return _call("my_booking_requests", 1)
-        if _has(text, ("book", "appointment with", "बुक")):
+        if _has(text, ("book", "appointment with", "बुक", "booking")):
             match = re.search(r"\b(?:at|with)\s+(.+)$", user, re.IGNORECASE)
-            if match and "search_clinics" in names:
-                return _call("search_clinics", 1, query=match.group(1).strip(" ?.")[:100])
-            return _say(ASK_CLINIC)
+            words = _clinic_words(match.group(1) if match else user)
+            names_one = match is not None or re.search(r"\b(?:clinic|dr\.?|doctor)\b", words, re.I)
+            if words and names_one and "search_clinics" in names:
+                return _call("search_clinics", 1, query=words)
+            return _say(ASK_CLINIC_HI if hi else ASK_CLINIC)
         if _has(text, ("appointment", "visit", "अपॉइंटमेंट")):
             return _call("my_appointments", 1)
         if _has(text, ("clinic", "doctor", "find")) and "search_clinics" in names:
-            query = re.sub(r"\b(find|a|the|clinic|doctor|search|for|me)\b", " ", text).strip()
-            return _call("search_clinics", 1, query=(query or user)[:100])
-        return _say(_HELP)
+            return _call("search_clinics", 1, query=_clinic_words(user))
+        return _say(_HELP_HI if hi else _HELP)
 
     def _staff(self, user: str, text: str, system: str, names: set[str]) -> LlmReply:
         today = _TODAY.search(system)
@@ -195,16 +296,12 @@ class ConsoleLlm:
             return _say(f"Sorry, that did not work: {last.get('message', '')}")
         data = last.get("data")
         data = data if isinstance(data, dict) else {}
-        free = _FREE_TIMES.search(previous)
+        free = _free(previous)
         choosing = free is not None and _PHONE.search(user) is not None
         if name == "search_clinics" and "list_slots" in names:
             clinics = data.get("clinics")
-            pick = self._pick_doctor(
-                clinics,
-                free.group("clinic") if free else None,
-                free.group("doctor") if free else None,
-            )
-            if pick is not None and (choosing or self._single(clinics)):
+            pick = self._pick_doctor(clinics, None, None)
+            if pick is not None and self._single(clinics):
                 slug, doctor_id = pick
                 return _call("list_slots", n, clinic_slug=slug, doctor_id=doctor_id)
         if name == "list_slots" and choosing and "request_booking" in names:

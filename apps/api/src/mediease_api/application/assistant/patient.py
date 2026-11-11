@@ -15,9 +15,10 @@ every turn.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Protocol
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -29,6 +30,17 @@ from mediease_api.application.assistant.engine import (
     TurnReply,
 )
 from mediease_api.application.assistant.errors import RateLimited
+from mediease_api.application.assistant.finder import (
+    Named,
+    clock,
+    find_offer,
+    in_part,
+    offers_of,
+    part_of_day,
+    pick,
+    plain,
+    resolve_doctor,
+)
 from mediease_api.application.assistant.tools import (
     Args,
     Prepared,
@@ -43,14 +55,19 @@ from mediease_api.application.assistant.tools import (
     string,
 )
 from mediease_api.application.booking.answers import AcceptProposal, DeclineProposal
-from mediease_api.application.booking.public import GetAvailability, GetPublicClinic
+from mediease_api.application.booking.public import (
+    GetAvailability,
+    GetPublicClinic,
+    PublicClinic,
+    PublicDoctor,
+)
 from mediease_api.application.booking.requests import (
     BookingRequestCommand,
     CreateBookingRequest,
     ListMyBookingRequests,
 )
 from mediease_api.application.context import RequestInfo
-from mediease_api.application.discovery.search import SearchClinics, SearchQuery
+from mediease_api.application.discovery.search import ClinicHit, SearchClinics, SearchQuery
 from mediease_api.application.portal.records import (
     GetPortalPrescription,
     ListPortalAppointments,
@@ -61,10 +78,9 @@ from mediease_api.domain.assistant.explain import explain
 from mediease_api.domain.assistant.llm import JsonValue
 from mediease_api.domain.assistant.proposal import CallerKind
 from mediease_api.domain.booking.request import RequestStatus
-from mediease_api.domain.messaging.formatting import appointment_when
+from mediease_api.domain.messaging.formatting import appointment_when, follow_up_date_text
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.prescriptions.patient_view import PatientPage
-from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.domain.shared.phone import PhoneNumber
 from mediease_api.ports.clock import ClockPort
@@ -73,6 +89,10 @@ TURNS_PER_MINUTE = 12
 INDIA = "Asia/Kolkata"
 MAX_DAYS = 3
 MAX_SLOTS_PER_SESSION = 8
+# R22: how many clinics a reply lists; a count reaches MAX_LISTED (the search's own limit).
+MAX_CLINICS = 10
+MAX_LISTED = 20
+_SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,7 +130,9 @@ class PatientToolUseCases(Protocol):
 UploadReader = Callable[[PatientPrincipal, UUID, Language], ChosenPrescription]
 
 
-def system_prompt(language: Language, today: str, has_prescription: bool) -> str:
+def system_prompt(
+    language: Language, today: str, has_prescription: bool, tomorrow: str = ""
+) -> str:
     reply_in = "Hindi (Devanagari)" if language is Language.HI else "English"
     chosen = (
         "The user has chosen one prescription; call explain_prescription to read it."
@@ -118,11 +140,13 @@ def system_prompt(language: Language, today: str, has_prescription: bool) -> str
         else "No prescription is chosen; if asked about one, tell the user to choose it from "
         "'My prescriptions' or upload it first."
     )
+    days = f"Today is {today}" + (f" and tomorrow is {tomorrow}" if tomorrow else "")
     return (
         "You are the MediEase assistant for patients of small clinics in India. "
-        f"Today is {today} (India time). Reply briefly in {reply_in}. The user may write Hindi "
+        f"{days} (India time). Reply briefly in {reply_in}. The user may write Hindi "
         "in Latin letters (Hinglish), for example 'doctor ne kya likha hai' or 'kal ka "
-        f"appointment chahiye'; understand it and still reply in {reply_in}.\n"
+        f"appointment chahiye'; understand it and still reply in {reply_in}. 'kal' about a "
+        "booking means tomorrow; 'subah' is morning, 'dopahar' afternoon, 'shaam' evening.\n"
         "Rules you must always follow:\n"
         "1. Never give medical advice of your own: no diagnosis, no explaining test results, no "
         "changing, stopping, starting or suggesting any medicine or dose, no treatment or diet "
@@ -132,19 +156,36 @@ def system_prompt(language: Language, today: str, has_prescription: bool) -> str
         "for advice: its medicines, the doctor's advice (for example food, rest or "
         "precautions), notes and the next visit. Always answer them by calling "
         "explain_prescription; never refuse them.\n"
-        "3. Use tools for every fact. Never invent clinics, doctors, times, prescriptions or "
-        "instructions.\n"
+        "3. Use tools for every fact, and give the same answer to the same question every time. "
+        "Never invent clinics, doctors, times, prescriptions or instructions.\n"
         "4. For a prescription, repeat only what explain_prescription returns, in the doctor's "
         "own words, adding nothing; introduce the doctor's advice as 'The doctor wrote:'. "
         f"{chosen}\n"
-        "5. To book: find the clinic with search_clinics, get free times with list_slots, let "
-        "the user choose, ask for their phone number, then call request_booking. The user "
-        "confirms on screen; never say a booking is done before that.\n"
-        "6. If something is missing, ask one short question.\n"
-        "7. You cannot cancel or move an appointment; tell the user to call the clinic.\n"
-        "8. You may use simple formatting: **bold**, and lists with '-' or '1.'. No links, "
-        "tables or headings."
+        "5. To book: call list_slots with the clinic's and doctor's names (or the IDs a tool "
+        "gave), the date the user wants (YYYY-MM-DD) and part_of_day if they said morning, "
+        "afternoon or evening. If the clinic is not known yet, call search_clinics first; never "
+        "put dates or times in its query. Show the numbered times, ask for the user's phone "
+        "number if you do not have it, then call request_booking with the clinic, doctor, date "
+        "and time of the chosen entry. The user confirms on screen; never say a booking is done "
+        "before that.\n"
+        "6. When the user answers with a number, 'yes', 'this one', 'pehla wala' or 'yahi', it "
+        "refers to the numbered list in your last message: act on that entry. Do not show the "
+        "same list again. If it is unclear which entry they mean, ask one short question.\n"
+        "7. 'Which clinics are there' or 'how many clinics': call search_clinics with an empty "
+        "query and give the number it reports.\n"
+        "8. 'What is my name' or 'my account': call my_profile.\n"
+        "9. If something is missing, ask one short question.\n"
+        "10. You cannot cancel or move an appointment; tell the user to call the clinic.\n"
+        "11. Copy dates and times exactly as the tools wrote them. You may use simple "
+        "formatting: **bold**, and lists with '-' or '1.'. No links, tables or headings."
     )
+
+
+def _longest(hits: Sequence[ClinicHit], q: str) -> str:
+    """The longest clinic name the words contain ("sample clinic" in "sample clinic me ...")."""
+    said = plain(q)
+    names = [plain(h.clinic.name) for h in hits if plain(h.clinic.name) in said]
+    return max(names, key=len, default="")
 
 
 class PatientToolbox:
@@ -170,9 +211,13 @@ class PatientToolbox:
             Tool(
                 spec(
                     "search_clinics",
-                    "Find clinics by clinic name, doctor name or speciality, optionally in a city.",
-                    {"query": string("Words to search for"), "city": string("City, optional")},
-                    ("query",),
+                    "Clinics on MediEase by clinic name, doctor name or speciality, optionally in "
+                    "a city. Leave query empty to list (and count) every clinic. Never put dates "
+                    "or times in the query.",
+                    {
+                        "query": string("Words to search for, or empty"),
+                        "city": string("City, optional"),
+                    },
                 ),
                 ToolKind.READ,
                 run=self._search_clinics,
@@ -180,13 +225,16 @@ class PatientToolbox:
             Tool(
                 spec(
                     "list_slots",
-                    "Free appointment times for one doctor of one clinic (from a search result).",
+                    "Free appointment times for one doctor of one clinic, on one date or the next "
+                    "days, optionally only morning, afternoon or evening.",
                     {
-                        "clinic_slug": string("The clinic's slug from search_clinics"),
-                        "doctor_id": string("The doctor's id from search_clinics"),
-                        "from_date": string("First day to look at, YYYY-MM-DD, optional"),
+                        "clinic": string("The clinic's name, or clinic_slug from search_clinics"),
+                        "doctor": string(
+                            "The doctor's name, or doctor_id; optional if the clinic has one doctor"
+                        ),
+                        "date": string("Only this day, YYYY-MM-DD, optional"),
+                        "part_of_day": string("morning, afternoon or evening, optional"),
                     },
-                    ("clinic_slug", "doctor_id"),
                 ),
                 ToolKind.READ,
                 run=self._list_slots,
@@ -196,18 +244,25 @@ class PatientToolbox:
                     "request_booking",
                     "Ask the clinic for one of the free times from list_slots. The user confirms.",
                     {
-                        "clinic_slug": string("The clinic's slug"),
-                        "doctor_id": string("The doctor's id"),
-                        "session_start": string("session_start from list_slots, as given"),
-                        "slot_start": string("slot_start from list_slots, if the time has one"),
+                        "clinic": string("The clinic's name or slug"),
+                        "doctor": string("The doctor's name or id"),
+                        "date": string("The chosen time's date, YYYY-MM-DD"),
+                        "time": string(
+                            "The chosen time on the clinic's clock, like 10:00 or 4:30 PM"
+                        ),
                         "contact_phone": string("The user's phone number"),
                         "reason": string("A few words on why, optional (not for emergencies)"),
                     },
-                    ("clinic_slug", "doctor_id", "session_start", "contact_phone"),
+                    ("contact_phone",),
                 ),
                 ToolKind.WRITE,
                 prepare=self._prepare_booking,
                 perform=self._request_booking,
+            ),
+            Tool(
+                spec("my_profile", "The signed-in user's own name and email."),
+                ToolKind.READ,
+                run=self._my_profile,
             ),
             Tool(
                 spec("my_appointments", "The user's appointments in their clinics."),
@@ -257,22 +312,47 @@ class PatientToolbox:
     # --- Reads ----------------------------------------------------------------------------------
 
     def _search_clinics(self, args: Args) -> ToolResult:
-        query = SearchQuery(
-            q=args.required_text("query", max_length=100),
-            city=args.text("city", required=False, max_length=100),
-        )
-        hits = self._uc.search_clinics().execute(query, self._info)[:5]
+        q = args.text("query", required=False, max_length=100) or ""
+        query = SearchQuery(q=q, city=args.text("city", required=False, max_length=100))
+        found = self._uc.search_clinics().execute(query, self._info)
+        if not found and q:
+            # R23: "sample clinic me Dr. Sample Doctor" names a clinic and a doctor in one breath,
+            # which no fuzzy match scores; any listed clinic or doctor named in it is meant.
+            every = self._uc.search_clinics().execute(SearchQuery(), self._info)
+            said = plain(q)
+            found = [
+                h
+                for h in every
+                if plain(h.clinic.name) in said
+                or any(plain(d.display_name) in said for d in h.doctors)
+            ]
+        # R23: a clinic named exactly as asked is the one meant ("Sample Clinic" is not
+        # "Sample Clinic Two"), so a later "1" or "yes" has one clinic to refer to.
+        exact = [h for h in found if q and plain(h.clinic.name) in (plain(q), _longest(found, q))]
+        hits = (exact or found)[:MAX_CLINICS]
         if not hits:
             return ToolResult(
-                say(self._lang, "I found no clinic for that.", "मुझे इसके लिए कोई क्लिनिक नहीं मिला।")
+                say(self._lang, "I found no clinic for that.", "मुझे इसके लिए कोई क्लिनिक नहीं मिला।"),
+                {"count": 0, "clinics": []},
             )
-        lines = [say(self._lang, "Clinics I found:", "मुझे ये क्लिनिक मिले:")]
+        if q:
+            title = say(self._lang, "Clinics I found:", "मुझे ये क्लिनिक मिले:")
+        else:
+            more = len(found) >= MAX_LISTED
+            count = f"{len(found)}{'+' if more else ''}"
+            title = say(
+                self._lang,
+                f"{count} clinics take bookings on MediEase:",
+                f"MediEase पर {count} क्लिनिक बुकिंग लेते हैं:",
+            )
+        lines = [title]
         clinics: list[JsonValue] = []
         for n, hit in enumerate(hits, 1):
             doctors = ", ".join(d.display_name for d in hit.doctors) or "-"
             lines.append(f"{n}. {hit.clinic.name} ({hit.clinic.city or '-'}): {doctors}")
             clinics.append(
                 {
+                    "number": n,
                     "clinic_slug": hit.clinic.slug,
                     "name": hit.clinic.name,
                     "city": hit.clinic.city,
@@ -282,19 +362,41 @@ class PatientToolbox:
                     ],
                 }
             )
-        return ToolResult("\n".join(lines), {"clinics": clinics})
+        return ToolResult("\n".join(lines), {"count": len(found), "clinics": clinics})
+
+    def _clinic(self, args: Args) -> PublicClinic:
+        """R23: the clinic a tool call means, by slug or by name."""
+        wanted = args.text("clinic_slug", required=False, max_length=63) or args.text(
+            "clinic", required=False, max_length=100
+        )
+        if wanted is None:
+            raise ToolArgumentError("'clinic' is required")
+        if _SLUG.fullmatch(wanted):
+            try:
+                return self._uc.get_public_clinic().execute(wanted, self._info)
+            except NotFound:
+                pass  # a one-word name, not a slug: search for it
+        hits = self._uc.search_clinics().execute(SearchQuery(q=wanted), self._info)
+        chosen = pick(wanted, [Named(h.clinic.slug, h.clinic.name) for h in hits], "clinic")
+        return self._uc.get_public_clinic().execute(chosen.key, self._info)
+
+    def _doctor(self, args: Args, clinic: PublicClinic) -> PublicDoctor:
+        wanted = args.text("doctor_id", required=False, max_length=36) or args.text(
+            "doctor", required=False, max_length=100
+        )
+        return resolve_doctor(clinic.doctors, wanted)
 
     def _list_slots(self, args: Args) -> ToolResult:
-        slug = args.required_text("clinic_slug", max_length=63)
-        doctor_id = args.uuid("doctor_id")
-        clinic = self._uc.get_public_clinic().execute(slug, self._info)
-        doctor = next((d for d in clinic.doctors if d.id == doctor_id), None)
-        if doctor is None:
-            raise NotFound("doctor")
-        days = self._uc.get_availability().execute(
-            slug, doctor_id, args.day("from_date", required=False), self._info
-        )[:MAX_DAYS]
+        clinic = self._clinic(args)
+        doctor = self._doctor(args, clinic)
+        slug = clinic.clinic.slug
+        only = args.day("date", required=False)
+        part = part_of_day(args.text("part_of_day", required=False, max_length=20))
+        first = only or args.day("from_date", required=False)
+        days = self._uc.get_availability().execute(slug, doctor.id, first, self._info)
+        days = [d for d in days if d.on_date == only] if only else list(days)[:MAX_DAYS]
         tz = clinic.clinic.timezone
+        zone = ZoneInfo(tz)
         header = say(
             self._lang,
             f"Free times with {doctor.display_name} at {clinic.clinic.name}:",
@@ -305,33 +407,40 @@ class PatientToolbox:
         n = 0
         for day in days:
             for session in day.sessions:
-                starts = [s.starts_at for s in session.slots[:MAX_SLOTS_PER_SESSION]]
-                if session.mode is BookingMode.TOKENS:
-                    starts = [session.starts_at]
-                for start in starts:
+                for offer in offers_of(session, MAX_SLOTS_PER_SESSION):
+                    local = offer.starts_at.astimezone(zone)
+                    if not in_part(local.time(), part):
+                        continue
                     n += 1
                     when = appointment_when(
-                        starts_at=start, token_number=None, timezone=tz, language=self._lang
+                        starts_at=offer.starts_at,
+                        token_number=None,
+                        timezone=tz,
+                        language=self._lang,
                     )
                     lines.append(f"{n}. {when}")
                     offers.append(
                         {
                             "number": n,
-                            "session_start": session.starts_at.isoformat(),
-                            "slot_start": start.isoformat()
-                            if session.mode is BookingMode.SLOTS
+                            "date": local.date().isoformat(),
+                            "time": local.strftime("%H:%M"),
+                            "session_start": offer.session_start.isoformat(),
+                            "slot_start": offer.slot_start.isoformat()
+                            if offer.slot_start
                             else None,
                             "when": when,
                         }
                     )
+        found = {"clinic": clinic.clinic.name, "clinic_slug": slug, "doctor": doctor.display_name}
         if not offers:
+            span = self._span(only, part)
             return ToolResult(
                 say(
                     self._lang,
-                    f"{doctor.display_name} has no free time in the next days.",
-                    f"{doctor.display_name} के पास अगले दिनों में कोई खाली समय नहीं है।",
+                    f"{doctor.display_name} has no free time {span[0]}.",
+                    f"{doctor.display_name} के पास {span[1]} कोई खाली समय नहीं है।",
                 ),
-                {"clinic_slug": slug, "doctor_id": str(doctor_id), "times": []},
+                {**found, "doctor_id": str(doctor.id), "times": []},
             )
         lines.append(
             say(
@@ -340,8 +449,27 @@ class PatientToolbox:
                 "जो समय चाहिए उसका नंबर और अपना फ़ोन नंबर बताइए।",
             )
         )
+        return ToolResult("\n".join(lines), {**found, "doctor_id": str(doctor.id), "times": offers})
+
+    def _span(self, on: date | None, part: str | None) -> tuple[str, str]:
+        """How the empty answer names what was looked at, in English and Hindi."""
+        parts_hi = {"morning": "सुबह", "afternoon": "दोपहर", "evening": "शाम"}
+        if on is None:
+            return ("in the next days", "अगले दिनों में")
+        day = follow_up_date_text(on, self._lang)
+        if part is None:
+            return (f"on {day}", f"{day} को")
+        return (f"on {day} in the {part}", f"{day} {parts_hi[part]} में")
+
+    def _my_profile(self, args: Args) -> ToolResult:
+        account = self._principal.account
         return ToolResult(
-            "\n".join(lines), {"clinic_slug": slug, "doctor_id": str(doctor_id), "times": offers}
+            say(
+                self._lang,
+                f"You are signed in as {account.full_name} ({account.email.value}).",
+                f"आप {account.full_name} ({account.email.value}) के रूप में साइन इन हैं।",
+            ),
+            {"name": account.full_name, "email": account.email.value},
         )
 
     def _my_appointments(self, args: Args) -> ToolResult:
@@ -450,19 +578,29 @@ class PatientToolbox:
     # --- Writes ---------------------------------------------------------------------------------
 
     def _prepare_booking(self, args: Args) -> Prepared:
-        slug = args.required_text("clinic_slug", max_length=63)
-        doctor_id = args.uuid("doctor_id")
-        session_start = args.instant("session_start")
+        clinic = self._clinic(args)
+        doctor = self._doctor(args, clinic)
+        slug = clinic.clinic.slug
+        doctor_id = doctor.id
+        session_start = args.instant("session_start", required=False)
         slot_start = args.instant("slot_start", required=False)
-        assert session_start is not None
+        if session_start is None:
+            # R24: the time as the conversation names it (a date and a clock time), checked
+            # against what is free now, so a choice made a minute ago cannot book a taken time.
+            on = args.day("date")
+            assert on is not None
+            at = clock(args.required_text("time", max_length=12))
+            days = self._uc.get_availability().execute(slug, doctor_id, on, self._info)
+            offer = find_offer(days, on, at, clinic.clinic.timezone)
+            if offer is None:
+                raise ToolArgumentError(
+                    "that time is not free (or not offered) any more; call list_slots again"
+                )
+            session_start, slot_start = offer.session_start, offer.slot_start
         phone = PhoneNumber.parse(
             args.required_text("contact_phone", max_length=20), field="contact_phone"
         )
         reason = args.text("reason", required=False, max_length=200)
-        clinic = self._uc.get_public_clinic().execute(slug, self._info)
-        doctor = next((d for d in clinic.doctors if d.id == doctor_id), None)
-        if doctor is None:
-            raise NotFound("doctor")
         when = appointment_when(
             starts_at=slot_start or session_start,
             token_number=None,
@@ -615,6 +753,7 @@ class PatientAssistant:
         lang = self._language(principal, language)
         chosen = self._chosen(principal, context, lang)
         today = (self._clock.now().astimezone(ZoneInfo(INDIA))).date()
+        tomorrow = today + timedelta(days=1)
         toolbox = PatientToolbox(
             use_cases=self._uc, principal=principal, info=info, language=lang, chosen=chosen
         )
@@ -623,7 +762,10 @@ class PatientAssistant:
             messages=messages,
             language=lang,
             system_prompt=system_prompt(
-                lang, f"{today.isoformat()} ({today:%A})", chosen is not None
+                lang,
+                f"{today.isoformat()} ({today:%A})",
+                chosen is not None,
+                f"{tomorrow.isoformat()} ({tomorrow:%A})",
             ),
             tools=toolbox.tools(),
             context_ids=chosen.ids if chosen else None,

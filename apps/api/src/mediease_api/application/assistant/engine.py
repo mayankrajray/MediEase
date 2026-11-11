@@ -44,7 +44,14 @@ from mediease_api.domain.assistant.guard_rails import (
     reply_is_grounded,
     reply_is_safe,
 )
-from mediease_api.domain.assistant.llm import ChatMessage, LlmReply, ToolCall, ToolSpec
+from mediease_api.domain.assistant.llm import (
+    ChatMessage,
+    LlmBusy,
+    LlmReply,
+    LlmUnavailable,
+    ToolCall,
+    ToolSpec,
+)
 from mediease_api.domain.assistant.proposal import (
     CallerKind,
     Proposal,
@@ -185,9 +192,19 @@ class AssistantEngine:
         explanation: Explanation | None = None
         allowed = set(numbers_in(last))
         final: str | None = None
+        # R22: the last tool's own words (written by our code from the records), the answer if
+        # the provider fails after a tool already ran.
+        fallback: str | None = None
 
         for _ in range(MAX_ROUNDS):
-            reply = self._complete(chat, specs)
+            try:
+                reply = self._complete(chat, specs)
+            except (LlmUnavailable, LlmBusy):
+                if fallback is None:
+                    raise
+                logger.warning("assistant.fell_back", caller=caller.kind.value, tools=used)
+                final = fallback
+                break
             if not reply.tool_calls:
                 final = reply.content.strip()
                 break
@@ -209,6 +226,7 @@ class AssistantEngine:
                     continue
                 content, result = self._run(tool, call)
                 if result is not None:
+                    fallback = result.summary or fallback
                     allowed |= numbers_in(content)
                     if result.explanation is not None:
                         explanation = result.explanation

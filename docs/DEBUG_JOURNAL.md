@@ -29,6 +29,43 @@ Rules:
 
 ---
 
+### 2026-11-11 — the patient assistant answers the same question two ways, and fails on some turns (`AI_UNAVAILABLE`)
+
+- **Milestone / area:** M7c-P7 / patient assistant (`application/assistant`, `adapters/llm`)
+- **Symptom:** the developer's conversations: "how many clinics are registered" got "I found no
+  clinic for that" on 10 Nov and "I don't have access to that" on 11 Nov; "find a clinic with free
+  time for tomorrow morning" found nothing; "1", "yes", "phla wala", "yahi kardo" re-listed the
+  clinics or got no answer; some turns showed "The assistant is not available right now" with a
+  Ref (e.g. `0dbcbccc-…`).
+- **Impact:** local and the demo; every patient on the real model.
+- **Reproduction:** `.exports`-style replay of the conversations against Groq
+  (`openai/gpt-oss-120b`); `tests/integration/test_assistant_http.py::test_r22_*`, `test_r23_*`.
+- **Investigation:** the API log showed `assistant.llm_failed status=400` (not logged before:
+  the provider's code) and `status=429`. Replaying the request showed Groq's body
+  `tool_use_failed` with the model's call `{"name": "search_clinics", "arguments": {"city":
+  null, "query": ""}}`. The 10 Nov answers were the console rules model: the stack had been left
+  on `LLM_PROVIDER=console` by the journey runs, while 11 Nov ran Groq from `.env`.
+- **Root cause:** (1) optional tool arguments were typed `string`, so Groq rejected `null`;
+  (2) the browser sends only the visible text, but `list_slots` and `request_booking` needed IDs
+  and ISO times from an earlier tool result the model no longer had, so a choice like "1" sent it
+  back to `search_clinics`, where "Sample Clinic" fuzzily matched three clinics; (3) the whole
+  sentence (with dates) went into the clinic search; (4) two different models answered on
+  different days.
+- **Fix:** nullable optional arguments; one retry of `tool_use_failed`; the tool's own summary when
+  the provider fails after a tool ran; tools that take clinic and doctor names, a date, a part of
+  the day and a time (resolved on the server against what is free now); an empty search lists and
+  counts clinics; `my_profile`; a prompt with tomorrow's date and the rule for "1"/"yes"; the
+  console model in Hindi and with list choices; patient errors in plain words without the Ref,
+  the message back in the box (assistant R22–R26).
+- **Guard:** `test_llm_adapters.py::test_r22_*`, `test_r25_*`; `test_assistant_tools.py::test_r22_*`;
+  `test_assistant_finder.py`; `test_assistant_http.py::test_r22_*`, `test_r23_*`;
+  `assistant.test.tsx` (the failure wording, no Ref, the message back).
+- **Prevention / follow-up:** after journeys on the CI settings, restart `api worker` on `.env`
+  (the scratch `stack-ci.sh` overrides only for that run). Groq's free tier still limits tokens a
+  minute: heavy use shows `AI_PROVIDER_BUSY` ("wait about a minute").
+- **Search keywords:** assistant, groq, tool_use_failed, null, numbered choice, console, ambiguity
+
+---
 ### 2026-10-27 — journeys fail at set-up during clinic hours once the seeded session is full (`SCH_OVERLAP`)
 
 - **Milestone / area:** M7 final verification / Playwright helper `sessionRunningNow` (`apps/web/e2e/queue-support.ts`)

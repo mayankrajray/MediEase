@@ -185,6 +185,46 @@ def test_r2_the_providers_rate_limit_is_busy_with_its_retry_after() -> None:
     assert default.value.retry_after_seconds == 20
 
 
+class SequenceTransport(FakeTransport):
+    """Answers each call with the next result."""
+
+    def __init__(self, *results: HttpResult) -> None:
+        super().__init__(results[0])
+        self.results = list(results)
+
+    def __call__(
+        self, url: str, body: bytes, headers: Mapping[str, str], timeout: float
+    ) -> HttpResult:
+        self.result = self.results.pop(0)
+        return super().__call__(url, body, headers, timeout)
+
+
+def _tool_use_failed() -> HttpResult:
+    body = {
+        "error": {
+            "message": "Failed to call a function",
+            "type": "invalid_request_error",
+            "code": "tool_use_failed",
+        }
+    }
+    return HttpResult(400, json.dumps(body).encode())
+
+
+def test_r22_a_tool_call_the_provider_could_not_parse_is_retried_once() -> None:
+    transport = SequenceTransport(_tool_use_failed(), _ok({"content": "hello"}))
+    assert _llm(transport).complete([ChatMessage.user("hi")], [TOOL]).content == "hello"
+    assert len(transport.sent) == 2
+    twice = SequenceTransport(_tool_use_failed(), _tool_use_failed())
+    with pytest.raises(LlmUnavailable):
+        _llm(twice).complete([ChatMessage.user("hi")], [TOOL])
+    assert len(twice.sent) == 2
+    # Any other 400 is not retried.
+    other = SequenceTransport(HttpResult(400, b'{"error": {"code": "context_length_exceeded"}}'))
+    with pytest.raises(LlmUnavailable):
+        _llm(other).complete([ChatMessage.user("hi")], [TOOL])
+    assert len(other.sent) == 1
+
+
 def test_the_adapter_refuses_unknown_providers_and_missing_keys() -> None:
     with pytest.raises(ValueError):
         OpenAICompatibleLlm(provider="console", api_key="k")
@@ -296,26 +336,11 @@ def test_console_repeats_the_tools_own_summary() -> None:
 def test_console_turns_a_chosen_time_into_a_booking_request() -> None:
     header = "Free times with Dr. Alpha Sample at Alpha Sample Clinic:\n1. Tue\n2. Wed"
     history = [ChatMessage.assistant(header), ChatMessage.user("2, 9000000777")]
-    first = ConsoleLlm().complete(history, PATIENT_TOOLS).tool_calls[0]
-    assert first.name == "search_clinics"
-    search = ToolCall("call_1", "search_clinics", {})
-    clinics = {
-        "clinics": [
-            {
-                "name": "Alpha Sample Clinic",
-                "clinic_slug": "alpha",
-                "doctors": [{"name": "Dr. Alpha Sample", "doctor_id": "d1"}],
-            }
-        ]
-    }
-    history += [
-        ChatMessage.assistant("", (search,)),
-        ChatMessage.tool(search, json.dumps({"summary": "", "data": clinics})),
-    ]
+    # M7c-P7 (R23): the listed clinic and doctor are named, so no search is needed first.
     slots = ConsoleLlm().complete(history, PATIENT_TOOLS).tool_calls[0]
     assert (slots.name, slots.arguments) == (
         "list_slots",
-        {"clinic_slug": "alpha", "doctor_id": "d1"},
+        {"clinic": "Alpha Sample Clinic", "doctor": "Dr. Alpha Sample"},
     )
     listed = ToolCall("call_2", "list_slots", {})
     times = {
@@ -331,6 +356,36 @@ def test_console_turns_a_chosen_time_into_a_booking_request() -> None:
     assert booking.name == "request_booking"
     assert booking.arguments["session_start"] == "s2" and booking.arguments["slot_start"] == "t2"
     assert booking.arguments["contact_phone"] == "9000000777"
+
+
+def test_r25_console_picks_from_a_clinic_list_counts_clinics_and_speaks_hindi() -> None:
+    listed = (
+        "Clinics I found:\n1. Alpha Sample Clinic (Sample City): Dr. Alpha Sample\n"
+        "2. Beta Sample Clinic (Sample City): Dr. Beta One, Dr. Beta Two"
+    )
+    llm = ConsoleLlm()
+    for answer in ("1", "pehla wala", "the first one"):
+        call = llm.complete(
+            [ChatMessage.assistant(listed), ChatMessage.user(answer)], PATIENT_TOOLS
+        )
+        assert call.tool_calls[0].name == "list_slots", answer
+        assert call.tool_calls[0].arguments == {
+            "clinic": "Alpha Sample Clinic",
+            "doctor": "Dr. Alpha Sample",
+        }
+    two = llm.complete([ChatMessage.assistant(listed), ChatMessage.user("2")], PATIENT_TOOLS)
+    assert two.content == "Which doctor at Beta Sample Clinic? Dr. Beta One, Dr. Beta Two"
+    far = llm.complete([ChatMessage.assistant(listed), ChatMessage.user("7")], PATIENT_TOOLS)
+    assert far.content == "Please choose a number between 1 and 2."
+    count = llm.complete([ChatMessage.user("how many clinics are there?")], PATIENT_TOOLS)
+    assert count.tool_calls[0].arguments == {"query": ""}
+    # Dates and times never reach the clinic search.
+    morning = llm.complete(
+        [ChatMessage.user("find a clinic with free time for tomorrow morning")], PATIENT_TOOLS
+    )
+    assert morning.tool_calls[0].arguments == {"query": "clinic"}
+    hindi = [ChatMessage.system("… Reply briefly in Hindi (Devanagari) …"), ChatMessage.user("hii")]
+    assert llm.complete(hindi, PATIENT_TOOLS).content.startswith("मैं आपके चुने हुए पर्चे")
 
 
 def test_console_staff_rules() -> None:
