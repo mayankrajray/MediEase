@@ -106,17 +106,20 @@ jobs:
       # The PDF renderer (WeasyPrint, M4-P4) needs Pango and HarfBuzz, as in the API image.
       - name: PDF renderer libraries
         working-directory: .
-        # Ubuntu's mirrors sometimes fail to resolve on the runner (11 Nov 2026: security.ubuntu.com):
-        # apt retries each download, and the whole step is tried three times before it fails.
+        timeout-minutes: 8
+        # 11 Nov 2026: on the Ubuntu 26 runner image the apt mirror list includes
+        # security.ubuntu.com, which failed to resolve for 20 minutes. Skip apt when the libraries
+        # are already on the image; else put the Azure mirror (in the runner's own region) first,
+        # retry each download, and give up after 8 minutes instead of the job's 20.
         run: |
-          for attempt in 1 2 3; do
-            sudo apt-get -o Acquire::Retries=5 update &&
-              sudo apt-get -o Acquire::Retries=5 install --yes --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 &&
-              exit 0
-            echo "apt attempt $attempt failed; retrying in 20 s"
-            sleep 20
-          done
-          exit 1
+          pkgs="libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0"
+          if dpkg -s $pkgs >/dev/null 2>&1; then echo "already installed"; exit 0; fi
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            { echo "http://azure.archive.ubuntu.com/ubuntu/"; cat /etc/apt/apt-mirrors.txt; } | sudo tee /etc/apt/apt-mirrors.new >/dev/null
+            sudo mv /etc/apt/apt-mirrors.new /etc/apt/apt-mirrors.txt
+          fi
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 update || true
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 install --yes --no-install-recommends $pkgs
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
