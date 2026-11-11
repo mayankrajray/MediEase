@@ -4,9 +4,9 @@
 |---|---|
 | Requirements | FR-DIS-01, 02, 04, 05 (P6); FR-DIS-08 (P7); NFR-17, NFR-19 |
 | Milestone / phases | M6c / P6–P7 (profiles and the discoverability rule: `clinic-onboarding.md` R50–R64) |
-| Status | P6 (R1–R10, AC1–AC4) and P7 (R11–R15, AC5–AC6) approved in advance by the developer 26 Oct 2026 and built |
+| Status | P6 (R1–R10, AC1–AC4) and P7 (R11–R15, AC5–AC6) approved in advance by the developer 26 Oct 2026 and built; R16–R21 (M7d screens) approved 11 Nov 2026 and built |
 | Owner | Developer |
-| Last updated | 2026-10-26 |
+| Last updated | 2026-11-12 |
 
 ## 1. Context
 Before M6c a patient could book only at a clinic whose link they already had. Discovery lets a
@@ -69,6 +69,27 @@ No new entity. Search reads the published columns of `clinics` and `doctors` and
   form checks the clinic is still discoverable before sending (the same 404 answer otherwise).
 - **R14** The portal's *Find a doctor* opens `/find` (it was an interim page until M6c).
 - **R15** No ranking is paid for, and no result is promoted (PRD §8.14).
+
+### The patient's screens (M7d, 12 Nov 2026; design `docs/milestones/M7d-discovery-booking.md` §7)
+Front end only: the API above is unchanged.
+- **R16** Result cards show no weekly hours; each says "Next available: Tue, 12 Nov" or "No
+  available times in the next 14 days". The search icons are centred on the input itself.
+- **R17** The clinic page has a text header (address, specialties, call, directions, copy link),
+  the date strip and only the doctors free on the chosen date, each with fee, first time and
+  places left, and "View profile and times". No filters. A date with nobody free offers the next
+  date when someone is.
+- **R18** The doctor profile at `/c/{slug}/doctors/{id}` shows only published facts (initials, no
+  photo, rating or counts), About with Read more, and the picker: today selected, the next four
+  dates, the native date input from today to day 14, times grouped into morning (before 12:00),
+  afternoon (12:00–17:00) and evening (from 17:00), three each until "Show all", places-left
+  badges with a warning at 3 or fewer.
+- **R19** The chosen date, session and slot live in the address (`?date=&session=&slot=`), so
+  Back, reload and the language switch keep them. Availability older than 60 s is refreshed, and
+  always once more before the request page opens; a time gone by then says so.
+- **R20** "Request this time" is disabled until a valid time is chosen; on phones it is sticky
+  above the safe area with space reserved for it.
+- **R21** Selected, unavailable, loading and error states differ by text or icon as well as
+  colour; touch targets are at least 44 px; no page scrolls sideways at 320–1440 px.
 
 ## 5. API surface
 | Method | Path | Request | Success | Errors |

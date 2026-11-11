@@ -18,6 +18,11 @@
 | 5 | **P5** | Confirmation summary, "Pay at the clinic", request form, "Requested" only after the server answers | Component tests: double submit, taken time, rate limit |
 | 6 | **P6** | Journeys, full `make e2e`, seven widths, page weights, docs | `make lint typecheck test`, `make smoke`, `make e2e`, screenshots |
 
+**Progress.** P1–P4 built and pushed 11 Nov 2026 (CI green). P5 built 12 Nov 2026 (summary,
+"Pay at the clinic", "Requested" only after the server). P6 12 Nov 2026: full suites, journeys,
+screenshots and weights recorded in the design §8; specs updated (`discovery.md` R16–R21,
+`booking-requests.md` R13a).
+
 M7e (#73, PR #74) and then M9 (deployment: Vercel, Supabase and an Oracle Cloud VM, design to be
 written at M9's start) follow. M8 is skipped for now (developer, 11 Nov 2026).
 
