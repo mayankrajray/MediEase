@@ -292,6 +292,12 @@ design).
 | M7d-P5 | Confirmation: appointment summary, "Pay at the clinic", total = fee, the request form, ending at "Requested" | ✅ 12 Nov 2026: 2 new tests (summary and payment, one send, token session, unknown fee); portal, booking and i18n suites 88; lint, typecheck |
 | M7d-P6 | Journeys and full `make e2e`, screenshots at seven widths, page weights, specs and milestone record | ✅ 12 Nov 2026: `make lint typecheck contract-check`; API 2583 (95.87%), web 776; `make smoke`; full Playwright suite (design §8); no sideways scroll at seven widths; request page 195.8 KB |
 
+## M7e — Installable app (PWA) and web push notifications  `☐ (planned; after M7d)`
+
+**Design:** `docs/milestones/M7e-pwa-push.md` (decisions of 11 Nov 2026, audit, phases E1–E5).
+Issue #73, branch `m7e/73-pwa-push` (from `m7d/71-discovery-booking`; its PR targets that branch
+until M7d is merged), one PR. Nothing is built yet.
+
 ## M8 — Multi-clinic WhatsApp and consolidated billing  `☐ (designed)`
 
 **Covers:** FR-BIL-WA-01..02 (PRD v1.1). **ADR:** 0014 (Proposed). **Design:**
