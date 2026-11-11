@@ -149,7 +149,8 @@ jobs:
     needs: detect
     if: needs.detect.outputs.api == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # The suite alone takes ~17 minutes on a cold cache.
+    timeout-minutes: 30
     # The suite runs in the API image's own base (the same tag and digest as apps/api/Dockerfile),
     # so it tests against the Python, Pango and HarfBuzz that ship, and the system libraries come
     # from Debian's mirrors. On 11 Nov 2026 every Ubuntu mirror was unreachable from the runner
@@ -216,13 +217,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: apps/api/.venv
-          key: venv-v2-python-3.12.15-slim-trixie-${{ hashFiles('apps/api/pyproject.toml') }}
+          key: venv-v3-python-3.12.15-slim-trixie-${{ hashFiles('apps/api/pyproject.toml') }}
       - name: Install dependencies
         run: |
           [ -x .venv/bin/python ] || python -m venv .venv
           if [ "${{ steps.venv.outputs.cache-hit }}" = "true" ]; then
             .venv/bin/pip install --quiet --no-deps -e .
           else
+            # As make install-api: the image's bundled pip is older than the audited one.
+            .venv/bin/python -m pip install --quiet --upgrade pip
             .venv/bin/pip install --quiet -e ".[dev]"
           fi
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
