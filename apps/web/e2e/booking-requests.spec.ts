@@ -65,6 +65,12 @@ test.describe("the clinic page and a booking request at 360 px", () => {
     const form = page.getByRole("region", { name: "Ask for this time" });
     await expect(form).toBeVisible();
     await expect(form.getByLabel(/^Age in years \(optional\)/)).toBeVisible();
+    // M7d-P5: the time and the payment are summed up before the details, and nothing says booked yet.
+    await expect(form).toContainText("Your appointment");
+    await expect(form).toContainText(DOCTOR_NAME);
+    await expect(form).toContainText("Pay at the clinic");
+    await expect(form.getByRole("link", { name: "Change the time" })).toHaveAttribute("href", /\/c\/sample-clinic\/doctors\/.+\?date=/);
+    await expect(page.getByRole("region", { name: "Requested" })).toHaveCount(0);
     await checkScreen(page, browser, "Ask for this time", 2); // a section title: this page has no h1
     await form.getByLabel(/Phone number/).fill(phone());
     await form.getByLabel("This is not an emergency.").check();
