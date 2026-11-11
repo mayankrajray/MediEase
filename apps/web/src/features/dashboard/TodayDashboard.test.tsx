@@ -129,13 +129,20 @@ describe("Today (M6-P1)", () => {
   });
 
   it("shows a skeleton while loading, then the numbers", async () => {
-    let answer: (r: Response) => void = () => {};
-    mockApi({ ...workspaceRoutes, [URL]: () => new Promise<Response>((resolve) => (answer = resolve)) });
+    // Every request waits until the test answers; then all of them, and any later one, get the day.
+    // (The polling restarts when the workspace settles, so the first request may not be the last.)
+    let answered = false;
+    const waiting: ((r: Response) => void)[] = [];
+    mockApi({
+      ...workspaceRoutes,
+      [URL]: () => (answered ? json(200, todayOf()) : new Promise<Response>((resolve) => waiting.push(resolve))),
+    });
 
     renderInWorkspace(<TodayDashboard />);
 
     expect(await screen.findByText("Loading today…")).toHaveAttribute("role", "status");
-    answer(json(200, todayOf()));
+    answered = true;
+    for (const resolve of waiting.splice(0)) resolve(json(200, todayOf()));
     await shown();
   });
 
