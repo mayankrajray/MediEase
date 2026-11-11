@@ -72,6 +72,30 @@ export interface BookingWords {
     readonly gone: string;
     readonly yourChoice: (when: string) => string;
   };
+  // M7d-P3 (design §7): the doctor's own page.
+  readonly profile: {
+    readonly back: (clinic: string) => string;
+    readonly facts: string;
+    readonly fee: string;
+    readonly feeValue: (rupees: string) => string;
+    readonly languages: string;
+    readonly qualification: string;
+    readonly next: string;
+    readonly noneSoon: string;
+    readonly about: string;
+    readonly seesAt: (doctor: string, clinic: string) => string;
+    readonly specialty: (value: string) => string;
+    readonly qualified: (value: string) => string;
+    readonly speaks: (value: string) => string;
+    readonly hours: (value: string) => string;
+    readonly readMore: string;
+    readonly readLess: string;
+    readonly request: string;
+    readonly chooseFirst: string;
+    readonly checking: string;
+    readonly checkFailed: string;
+    readonly payAtClinic: string;
+  };
   readonly form: {
     readonly title: string;
     readonly summary: (doctor: string, clinic: string, when: string) => string;
@@ -193,6 +217,29 @@ const EN: BookingWords = {
     retry: "Try again",
     gone: "The time you chose is no longer available. Please choose another.",
     yourChoice: (when) => `Your choice: ${when}`,
+  },
+  profile: {
+    back: (clinic) => `All doctors at ${clinic}`,
+    facts: "About this doctor",
+    fee: "Consultation fee",
+    feeValue: (rupees) => `₹${rupees}`,
+    languages: "Speaks",
+    qualification: "Qualification",
+    next: "Next available",
+    noneSoon: "Not in the next 14 days",
+    about: "About",
+    seesAt: (doctor, clinic) => `${doctor} sees patients at ${clinic}.`,
+    specialty: (value) => `Specialty: ${value}.`,
+    qualified: (value) => `Qualification: ${value}.`,
+    speaks: (value) => `Speaks ${value}.`,
+    hours: (value) => `Usual hours: ${value}.`,
+    readMore: "Read more",
+    readLess: "Read less",
+    request: "Request this time",
+    chooseFirst: "Choose a date and a time to continue.",
+    checking: "Checking this time is still free.",
+    checkFailed: "We could not check this time. Please try again.",
+    payAtClinic: "Pay at the clinic",
   },
   form: {
     title: "Ask for this time",
@@ -333,6 +380,29 @@ const HI: BookingWords = {
     retry: "फिर कोशिश करें",
     gone: "आपका चुना हुआ समय अब उपलब्ध नहीं है। कृपया दूसरा चुनें।",
     yourChoice: (when) => `आपकी पसंद: ${when}`,
+  },
+  profile: {
+    back: (clinic) => `${clinic} के सभी डॉक्टर`,
+    facts: "डॉक्टर के बारे में",
+    fee: "परामर्श शुल्क",
+    feeValue: (rupees) => `₹${rupees}`,
+    languages: "भाषाएँ",
+    qualification: "योग्यता",
+    next: "अगला उपलब्ध समय",
+    noneSoon: "अगले 14 दिनों में नहीं",
+    about: "परिचय",
+    seesAt: (doctor, clinic) => `${doctor} ${clinic} में मरीज़ देखते हैं।`,
+    specialty: (value) => `विशेषज्ञता: ${value}।`,
+    qualified: (value) => `योग्यता: ${value}।`,
+    speaks: (value) => `भाषाएँ: ${value}।`,
+    hours: (value) => `सामान्य समय: ${value}।`,
+    readMore: "और पढ़ें",
+    readLess: "कम पढ़ें",
+    request: "यह समय माँगें",
+    chooseFirst: "आगे बढ़ने के लिए तारीख़ और समय चुनें।",
+    checking: "देख रहे हैं कि यह समय अब भी खाली है.",
+    checkFailed: "हम यह समय जाँच नहीं सके। कृपया फिर कोशिश करें।",
+    payAtClinic: "भुगतान क्लिनिक पर करें",
   },
   form: {
     title: "यह समय माँगें",

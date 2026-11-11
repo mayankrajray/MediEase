@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
-import { PublicClinicPage } from "@/features/public-clinic/PublicClinicPage";
+import { clinicToday, inWindow, type Choice } from "@/features/booking/availability";
+import { DoctorProfile } from "@/features/booking/DoctorProfile";
 import { ApiError, apiGet, type GetResponse } from "@/lib/api/client";
 import { pickLanguage } from "@/lib/i18n/booking-request";
 import { PORTAL_LANGUAGE_COOKIE } from "@/lib/i18n/portal";
@@ -45,10 +46,24 @@ export async function generateMetadata({ params }: Readonly<{ params: Params }>)
   }
 }
 
+function one(value: string | string[] | undefined): string {
+  return (Array.isArray(value) ? value[0] : value) ?? "";
+}
+
+/** M7d-P3: the date and time from the address, if they still make sense; else today, nothing chosen. */
+function chosen(query: Search, today: string): { date: string; choice: Choice | null } {
+  const date = one(query.date);
+  if (!inWindow(date, today)) return { date: today, choice: null };
+  const session = one(query.session);
+  const slot = one(query.slot);
+  const valid = (iso: string) => iso !== "" && !Number.isNaN(Date.parse(iso));
+  return { date, choice: valid(session) ? { session, slot: valid(slot) ? slot : null } : null };
+}
+
 /**
- * A doctor's public profile (M6c-P5; FR-DIS-03, spec R60): the clinic page for that doctor alone,
- * with their qualification, specialty, languages, fee, hours and free times. A doctor who is not
- * shown, or a clinic without a public page, is the same 404.
+ * A doctor's public profile (M6c-P5; FR-DIS-03, spec R60; M7d-P3): who they are, the date and time
+ * picker, and "Request this time". A doctor who is not shown, or a clinic without a public page, is
+ * the same 404. Today is the clinic's date, worked out here so the page and the browser agree.
  */
 export default async function DoctorProfileRoute({ params, searchParams }: Readonly<{ params: Params; searchParams: Promise<Search> }>) {
   const { slug, doctor: doctorId } = await params;
@@ -56,5 +71,7 @@ export default async function DoctorProfileRoute({ params, searchParams }: Reado
   const via = query.via === "directory";
   const { clinic, doctor } = await load(slug, doctorId, via);
   const language = pickLanguage(query.lang, (await cookies()).get(PORTAL_LANGUAGE_COOKIE)?.value);
-  return <PublicClinicPage clinic={clinic} language={language} profileOf={doctor.id} viaDirectory={via} />;
+  const today = clinicToday(new Date(), clinic.timezone);
+  const { date, choice } = chosen(query, today);
+  return <DoctorProfile clinic={clinic} doctor={doctor} language={language} viaDirectory={via} today={today} initialDate={date} initialChoice={choice} />;
 }
