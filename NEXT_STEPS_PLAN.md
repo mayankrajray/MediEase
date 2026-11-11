@@ -1,6 +1,31 @@
-# NEXT_STEPS_PLAN.md — Plan for M7c (demo polish), with the M7 plan below as history
+# NEXT_STEPS_PLAN.md — Plan for M7d (discovery and booking), with M7c and M7 below as history
 
-## 0. Active: M7c — Demo polish, real configuration and Phase 2 deliverables
+## 0. Active: M7d — Patient discovery, clinic and doctor profiles, booking redesign
+
+| Field | Value |
+|---|---|
+| Status | **Approved by the developer 11 Nov 2026**: the six phases, the four defaults and the UX rules (`docs/milestones/M7d-discovery-booking.md` §7) |
+| Issue / branch | #71 / `m7d/71-discovery-booking`, on `main` after M7c merged (PR #70, 11 Nov 2026); PR #72 (ADR-0011) |
+| Scope | Front end only: no API, schema or contract change; API gaps go to §6 of the design |
+| Priority | Fast booking with few decisions, clear availability, no surprises |
+
+| Order | Phase | Objective | Verify |
+|---|---|---|---|
+| 1 | **P1** | Search icons centred on the inputs; cards with one "Next available: Tue, 12 Nov" line, no schedules | `FindPage` unit tests; web lint, typecheck, tests; CI |
+| 2 | **P2** | `availability.ts` and `AppointmentPicker`: dates, native calendar, morning/afternoon/evening, places left, staleness | Pure-function tests on a fixed clock; component tests for every state |
+| 3 | **P3** | Doctor profile with the picker and the sticky "Request this time" | Component tests; disabled until a valid time |
+| 4 | **P4** | Clinic page: hero, date strip, the doctors free on the date | Component tests; next-available action |
+| 5 | **P5** | Confirmation summary, "Pay at the clinic", request form, "Requested" only after the server answers | Component tests: double submit, taken time, rate limit |
+| 6 | **P6** | Journeys, full `make e2e`, seven widths, page weights, docs | `make lint typecheck test`, `make smoke`, `make e2e`, screenshots |
+
+M7e (#73, PR #74) and then M9 (deployment: Vercel, Supabase and an Oracle Cloud VM, design to be
+written at M9's start) follow. M8 is skipped for now (developer, 11 Nov 2026).
+
+---
+
+# Plan for M7c (demo polish), merged 11 Nov 2026 (PR #70)
+
+## M7c — Demo polish, real configuration and Phase 2 deliverables
 
 | Field | Value |
 |---|---|

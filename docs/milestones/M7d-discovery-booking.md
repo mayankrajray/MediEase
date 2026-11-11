@@ -1,7 +1,7 @@
 # M7d — Patient discovery, clinic and doctor profiles, booking redesign
 
-**Status:** parked. Recorded 10 Nov 2026; work starts after M7c-P7 (modules M7–M10) is finished.
-Branch and issue are opened when the milestone starts (one branch, one PR, ADR-0011).
+**Status:** active from 11 Nov 2026 (issue #71, branch `m7d/71-discovery-booking`, PR #72). The
+approved phases and UX rules are in §7.
 
 **Reference:** [`M7d-reference-image.png`](M7d-reference-image.png), from the developer: a
 "Doctor Profile" screen (photo, name, specialty, rating, stat row, About with Read More, a date
@@ -123,3 +123,41 @@ modules turn out to need, are recorded here.)_
 |---|---|---|---|
 | B1 | **Prescription PDF layout 4 with the MediEase emblem** (approved 9 Nov 2026, plan §9 Q3): replace the placeholder mark `apps/api/.../pdf/assets/mediease-mark.svg` with the outlined emblem, as a new layout version so issued prescriptions keep their look (spec R13–R14) | It is an API change (PDF renderer, assets, layout version, tests); the developer asked for no backend change in M7c-P7 (10 Nov 2026) | M8 |
 | B2 | **Portal page weight headroom**: portal pages are at 185–194 KB of the 200 KB budget (NFR-02), most of it the shared framework chunks (about 140 KB). Any new portal feature should be measured; options are a lighter data layer for the portal or splitting the bell's polling out of the first load | Needs a measured design, not a restyle | M7 |
+
+## 7. Approved phases and UX rules (developer, 11 Nov 2026)
+
+Priority: fast booking with few decisions, clear availability, no surprises.
+
+| Phase | Scope |
+|---|---|
+| P1 | Search: icons centred on the input itself; result cards with one "Next available: Tue, 12 Nov" line; no weekly hours or timetables; no "Free from" |
+| P2 | `features/booking/availability.ts` (pure) and `AppointmentPicker.tsx`: today selected; the next 4 dates; the browser's date picker limited to today through day 14; times of the chosen date grouped into morning (before 12:00), afternoon (12:00–17:00) and evening (from 17:00), three each until "Show all"; places-left badges (warning at 3 or fewer); data refreshed when older than 60 s and before confirmation |
+| P3 | Doctor profile (`/c/[slug]/doctors/[doctor]`): back link, initials avatar, real facts only, About with Read more, the picker, "Request this time", a link to the clinic |
+| P4 | Clinic page: text hero (address, call, directions, share), the date strip, the doctors free on that date with "View profile"; no filters |
+| P5 | Confirmation in `RequestBooking.tsx`: doctor, clinic, date and time; consultation fee, "Pay at the clinic", total = fee; the request form; "Requested" only after the server's answer |
+| P6 | Journeys and full `make e2e`; screenshots at 320, 375, 390, 430, 768, 1024, 1440 px; page weights; specs and this record |
+
+**Defaults, as refined:**
+
+1. **Calendar:** the native date input, `min` today and `max` day 14. A date with no times says
+   "No available times on this date" and offers a "Next available" action that selects it.
+2. **Token sessions:** grouped under morning, afternoon and evening like slots, one compact row
+   each (`09:00–13:00 · 12 places left`) with a "Choose" button. Counts come from the latest
+   answer and are refetched after a selection and before confirmation.
+3. **Search cards:** one line, "Next available: Tue, 12 Nov", or "No available times in the
+   next 14 days".
+4. **Request this time:** sticky at the bottom on phones, above the safe-area inset, with space
+   reserved so it never covers content; inline from `sm` up; disabled until a valid time is chosen.
+
+**Rules for every screen in M7d:**
+
+- Selected, unavailable, loading and error states look different, and not by colour alone
+  (`aria-pressed`, text, icon).
+- Selections survive going back and recovering from an error: the chosen date and time live in
+  the address (`?date=&session=&slot=`), so Back and reload return to them.
+- Nothing says "booked" or "confirmed" before the server answers; the end state is "Requested",
+  and the clinic confirms.
+- One submission at a time (the button shows it is sending); success and failure are said
+  plainly, and a taken time links back to the doctor's times.
+- Touch targets at least 44 px; visible keyboard focus; the existing tokens (`DESIGN.md`) and the
+  accessibility checks of the journeys (axe, no sideways scroll).
