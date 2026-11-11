@@ -1,12 +1,23 @@
 "use client";
 
 import { CircleAlert } from "lucide-react";
-import type { Ref } from "react";
+import { createContext, type ReactNode, type Ref, useContext } from "react";
 
 import { describeError, isRetryable } from "./messages";
 
 /**
- * A failed call, in words a clinic can act on: the API's own message and
+ * M7c-P7: whether "Ref: <request_id>" is shown. Staff quote it when reporting a problem; patients
+ * have no one to quote it to, so the patient pages turn it off (the ID stays in the API's logs).
+ */
+const ShowRef = createContext(true);
+
+/** Patient pages: errors say what happened and what to do, without the reference. */
+export function WithoutErrorRef({ children }: Readonly<{ children: ReactNode }>) {
+  return <ShowRef.Provider value={false}>{children}</ShowRef.Provider>;
+}
+
+/**
+ * A failed call, in words a clinic can act on: the API's own message and, for staff,
  * "Ref: <request_id>" to quote when reporting it (apps/web/CLAUDE.md). State is
  * text, not colour alone. `role="alert"` makes screen readers announce it the
  * moment it appears; `tabIndex={-1}` lets us move focus to it. M7c-P7: the design
@@ -28,7 +39,7 @@ export function ErrorNotice({
 }) {
   const described = describeError(error);
   const message = override ?? described.message;
-  const { requestId } = described;
+  const requestId = useContext(ShowRef) ? described.requestId : "";
   return (
     <div
       id={id}

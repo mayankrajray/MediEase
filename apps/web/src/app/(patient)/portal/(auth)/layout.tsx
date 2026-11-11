@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Logo } from "@/components/ui/Logo";
+import { WithoutErrorRef } from "@/features/auth/ErrorNotice";
 import { LanguageCookieSwitch } from "@/features/portal/LanguageCookieSwitch";
 import { PORTAL_LANGUAGE_COOKIE, parsePortalLanguage, portalStrings } from "@/lib/i18n/portal";
 
@@ -22,7 +23,9 @@ export default async function PortalAuthLayout({ children }: Readonly<{ children
         <Logo size="md" />
       </Link>
       <p className="mt-2 text-sm text-slate-700">{s.brandTagline}</p>
-      <div className="mt-8 w-full max-w-md rounded-2xl border border-line bg-surface shadow-pop">{children}</div>
+      <div className="mt-8 w-full max-w-md rounded-2xl border border-line bg-surface shadow-pop">
+        <WithoutErrorRef>{children}</WithoutErrorRef>
+      </div>
     </main>
   );
 }

@@ -35,6 +35,15 @@ export function appointmentWord(status: string): AppointmentWord {
   }
 }
 
+/** M7c-P7: the assistant's failure messages, by the API's code. */
+export interface ChatFailures {
+  readonly AI_UNAVAILABLE: string;
+  readonly AI_PROVIDER_BUSY: string;
+  readonly AI_RATE_LIMITED: string;
+  /** The browser could not reach the API at all. */
+  readonly offline: string;
+}
+
 export interface PortalStrings {
   readonly lang: PortalLanguage;
   readonly locale: string;
@@ -141,6 +150,8 @@ export interface PortalStrings {
     readonly cancelled: string;
     readonly conversation: string;
     readonly empty: string;
+    /** M7c-P7: why a turn failed and what to do, by the API's code (no reference shown). */
+    readonly failed: ChatFailures;
     /** M7b (spec prescription-uploads §8): a prescription not in the account, by file or code. */
     readonly upload: {
       readonly title: string;
@@ -405,6 +416,16 @@ const EN: PortalStrings = {
     cancelled: "Nothing was changed.",
     conversation: "Conversation",
     empty: "Ask a question to start.",
+    failed: {
+      AI_UNAVAILABLE:
+        "The assistant could not answer this time, because the AI service it uses did not reply properly. Your message is back in the box: press Send to try again. If it keeps happening, use My appointments or call your clinic.",
+      AI_PROVIDER_BUSY:
+        "Many people are using the assistant right now. Wait about a minute, then press Send again. Your message is back in the box.",
+      AI_RATE_LIMITED:
+        "You sent several messages very quickly. Wait about a minute, then press Send again. Your message is back in the box.",
+      offline:
+        "Your phone or computer could not reach MediEase. Check your internet connection, then press Send again. Your message is back in the box.",
+    },
     upload: {
       title: "A prescription not in your account",
       intro:
@@ -697,6 +718,16 @@ const HI: PortalStrings = {
     cancelled: "कुछ नहीं बदला गया।",
     conversation: "बातचीत",
     empty: "शुरू करने के लिए कोई सवाल पूछें।",
+    failed: {
+      AI_UNAVAILABLE:
+        "सहायक इस बार जवाब नहीं दे सका, क्योंकि जिस AI सेवा का यह इस्तेमाल करता है उसने ठीक से जवाब नहीं दिया। आपका संदेश बॉक्स में वापस है: फिर से कोशिश करने के लिए भेजें दबाएँ। ऐसा बार-बार हो तो 'मेरी अपॉइंटमेंट' देखें या अपने क्लिनिक को फ़ोन करें।",
+      AI_PROVIDER_BUSY:
+        "अभी बहुत लोग सहायक का इस्तेमाल कर रहे हैं। लगभग एक मिनट रुकें, फिर भेजें दबाएँ। आपका संदेश बॉक्स में वापस है।",
+      AI_RATE_LIMITED:
+        "आपने बहुत जल्दी-जल्दी कई संदेश भेजे। लगभग एक मिनट रुकें, फिर भेजें दबाएँ। आपका संदेश बॉक्स में वापस है।",
+      offline:
+        "आपका फ़ोन या कंप्यूटर MediEase तक नहीं पहुँच सका। इंटरनेट कनेक्शन जाँचें, फिर भेजें दबाएँ। आपका संदेश बॉक्स में वापस है।",
+    },
     upload: {
       title: "ऐसा पर्चा जो आपके खाते में नहीं है",
       intro:
