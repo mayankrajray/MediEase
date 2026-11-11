@@ -60,6 +60,9 @@ dev = [
     # A test that waits forever (a deadlock, a thread barrier nobody reaches) fails after
     # `timeout` seconds with every thread's stack, instead of hanging the run and CI.
     "pytest-timeout==2.4.0",
+    # The suite in parallel processes (make test-api, CI): each process migrates its own scratch
+    # database (tests/conftest.py::migrated_database_url), so they share nothing.
+    "pytest-xdist==3.8.0",
     # M4-P4: an in-process S3 for the blob adapter (no network), PDF text extraction that
     # understands WeasyPrint's font encoding (pdfium), and boto3 type stubs for mypy.
     "moto[s3]==5.2.4",
