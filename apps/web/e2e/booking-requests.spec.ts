@@ -95,9 +95,9 @@ test.describe("the clinic page and a booking request at 360 px", () => {
     await expect(form2.getByRole("alert")).toContainText(/Someone else|holding it|full/);
     await other.close();
 
-    // The doctor's page no longer offers the held time (AC4).
-    await page.goto(`/c/${SLUG}?date=${lonely.onDate}`);
-    await page.getByRole("listitem").filter({ hasText: DOCTOR_NAME }).getByRole("link", { name: /View profile and times/ }).click();
+    // The doctor's page no longer offers the held time (AC4). Opened directly: once the hold takes
+    // the doctor's last free time that day, the clinic page rightly no longer lists the doctor.
+    await page.goto(`/c/${SLUG}/doctors/${lonely.doctorId}?date=${lonely.onDate}`);
     await expect(page.getByRole("heading", { name: /^Times on / })).toBeVisible();
     await expect(page.getByRole("group").or(page.getByText("No available times on this date.")).first()).toBeVisible();
     await expect(page.getByRole("button", { name: new RegExp(`^Choose ${patientClock(lonely.startsAt)}–`) })).toHaveCount(0);
