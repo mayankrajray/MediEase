@@ -62,15 +62,23 @@ test.describe("discovery at 360 px", () => {
     await expect(card).toContainText(/Next available: |No available times in the next 7 days/);
     await expectAccessible(page);
 
-    // P7: the profile from the result carries via=directory to the time and the request form.
+    // P7, M7d-P3: the profile from the result carries via=directory to the time and the request form.
     await card.getByRole("link", { name: /See profile and times/ }).click();
-    await expect(page).toHaveURL(new RegExp(`/c/${SLUG}/doctors/[0-9a-f-]+\\?via=directory`));
-    await expect(page.getByRole("heading", { name: `Free times with ${DOCTOR_NAME}` })).toBeVisible();
-    await expect(page.getByRole("link", { name: "All doctors at this clinic" })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/c/${SLUG}/doctors/[0-9a-f-]+\\?.*via=directory`));
+    await expect(page.getByRole("heading", { level: 1, name: DOCTOR_NAME })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^All doctors at / })).toBeVisible();
+    const request = page.getByRole("button", { name: "Request this time" });
+    await expect(request).toBeDisabled();
+    // Today first; when today has nothing left, the next available date.
+    const times = page.getByRole("group", { name: /^(Morning|Afternoon|Evening)$/ }).first();
+    const next = page.getByRole("button", { name: /^(Next|First) available: / });
+    await expect(times.or(next)).toBeVisible();
+    if (await next.isVisible()) await next.click();
     await expectAccessible(page);
-    const time = page.locator('a[href*="/portal/request?"][href*="via=directory"]').first();
-    await expect(time).toBeVisible();
-    await time.click();
+    await times.getByRole("button", { pressed: false }).first().click();
+    await expect(request).toBeEnabled();
+    await expect(page).toHaveURL(/[?&]session=/);
+    await request.click();
     await expect(page).toHaveURL(/\/portal\/sign-in\?.*next=/);
     const email = `finder.${Date.now()}.${Math.floor(Math.random() * 1e6)}@example.test`;
     await googleSignInThenReturn(page, email, /\/portal\/request\?.*via=directory/);

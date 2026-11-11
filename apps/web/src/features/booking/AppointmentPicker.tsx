@@ -142,7 +142,7 @@ export function AppointmentPicker({
           <label htmlFor={ids.other} className="block text-sm font-semibold text-slate-900">
             {words.otherDate}
           </label>
-          <div className="relative mt-1.5 sm:max-w-xs">
+          <div className="mt-1.5 sm:max-w-xs">
             <input
               id={ids.other}
               type="date"
@@ -154,11 +154,10 @@ export function AppointmentPicker({
               onChange={(event) => {
                 if (event.target.value !== "") pickDate(event.target.value);
               }}
-              className={`min-h-11 w-full cursor-pointer rounded-lg border bg-white pl-9 pr-3 text-base text-slate-900 transition-colors hover:border-slate-600 focus-visible:border-brand-700 ${
+              className={`min-h-11 w-full cursor-pointer rounded-lg border bg-white px-3 text-base text-slate-900 transition-colors hover:border-slate-600 focus-visible:border-brand-700 ${
                 tiles.includes(date) ? "border-slate-400" : "border-brand-700 ring-1 ring-brand-700"
               }`}
             />
-            <CalendarDays aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3 my-auto size-4 text-slate-500" />
           </div>
           <p id={ids.otherHint} className={`mt-1 text-sm ${outside ? "font-medium text-danger" : "text-slate-700"}`} aria-live="polite">
             {outside
