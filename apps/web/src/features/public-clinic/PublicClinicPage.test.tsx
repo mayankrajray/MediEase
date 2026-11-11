@@ -1,11 +1,25 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { json, mockApi } from "@/test/api";
+import type { Days } from "@/features/booking/availability";
+import { apiError, json, mockApi, type Recorded } from "@/test/api";
 
-import { PublicClinicPage, requestHref } from "./PublicClinicPage";
+import { PublicClinicPage } from "./PublicClinicPage";
 
-const DOCTOR = "0192f0a0-0000-7000-8000-0000000000d1";
+const MEHTA = "0192f0a0-0000-7000-8000-0000000000d1";
+const RAO = "0192f0a0-0000-7000-8000-0000000000d2";
+const ROUTE = "GET /api/v1/public/clinics/sample-clinic/availability";
+const TODAY = "2026-11-12";
+
+const doctor = (id: string, name: string) => ({
+  id,
+  display_name: name,
+  qualification: "MBBS",
+  specialty: "General medicine",
+  languages: ["Hindi", "English"],
+  fee_paise: 30000,
+  hours: [{ weekday: 3, start: "10:00", end: "13:00" }],
+});
 
 const CLINIC = {
   name: "Sample Clinic",
@@ -16,97 +30,101 @@ const CLINIC = {
   pincode: "411001",
   phone_e164: "+919000000010",
   timezone: "Asia/Kolkata",
-  booking_mode: "SLOTS",
+  booking_mode: "TOKENS",
   map_url: "https://maps.example.test/?q=12+MG+Road",
   requires_age_sex: false,
   specialties: ["General Medicine"],
   indexable: false,
-  doctors: [
-    {
-      id: DOCTOR,
-      display_name: "Dr. Mehta",
-      qualification: "MBBS",
-      specialty: "General medicine",
-      languages: ["Hindi", "English"],
-      fee_paise: 30000,
-      hours: [
-        { weekday: 0, start: "10:00", end: "13:00" },
-        { weekday: 2, start: "10:00", end: "13:00" },
-      ],
-    },
-  ],
+  doctors: [doctor(MEHTA, "Dr. Mehta"), doctor(RAO, "Dr. Rao")],
 } as const;
 
-const SESSION = {
-  starts_at: "2026-11-02T04:30:00Z",
-  ends_at: "2026-11-02T07:30:00Z",
-  mode: "SLOTS",
-  places_left: 3,
-  slots: [
-    { starts_at: "2026-11-02T04:30:00Z", ends_at: "2026-11-02T05:30:00Z" },
-    { starts_at: "2026-11-02T05:30:00Z", ends_at: "2026-11-02T06:30:00Z" },
-  ],
-} as const;
+const tokens = (date: string, startUtc: string, places: number) => ({
+  date,
+  sessions: [{ starts_at: `${date}T${startUtc}:00Z`, ends_at: `${date}T${startUtc}:00Z`, mode: "TOKENS" as const, places_left: places, slots: [] }],
+});
+// Dr. Mehta: today 2 places, and Saturday. Dr. Rao: Saturday only.
+const DAYS: Record<string, Days> = { [MEHTA]: [tokens(TODAY, "04:30", 2), tokens("2026-11-14", "04:30", 5)], [RAO]: [tokens("2026-11-14", "10:30", 8)] };
+const byDoctor = (days: Record<string, Days>) => (call: Recorded) => json(200, { days: days[call.search.get("doctor_id") ?? ""] ?? [] });
+
+function show(props: Partial<Parameters<typeof PublicClinicPage>[0]> = {}) {
+  return render(<PublicClinicPage clinic={CLINIC} language="en" today={TODAY} {...props} />);
+}
 
 beforeEach(() => {
-  mockApi({ "GET /api/v1/public/clinics/sample-clinic/availability": () => json(200, { days: [{ date: "2026-11-02", sessions: [SESSION] }] }) });
+  window.history.replaceState(null, "", "/c/sample-clinic");
 });
 
-describe("the public clinic page (M6b-P4, FR-PUB-01, 04)", () => {
-  it("shows the clinic, an emergency notice, the doctor and their hours", () => {
-    render(<PublicClinicPage clinic={CLINIC} language="en" />);
+describe("the public clinic page (M6b-P4, FR-PUB-01, 04; M7d-P4)", () => {
+  it("shows the clinic, an emergency notice and the ways to reach it", () => {
+    mockApi({ [ROUTE]: byDoctor(DAYS) });
+    show();
     expect(screen.getByRole("heading", { level: 1, name: "Sample Clinic" })).toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent(/not for emergencies/);
     expect(screen.getByText(/12 MG Road, Pune, MH, 411001/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Call the clinic" })).toHaveAttribute("href", "tel:+919000000010");
     expect(screen.getByRole("link", { name: "Directions" })).toHaveAttribute("rel", "noopener noreferrer");
-    expect(screen.getByText(/Mon 10:00–13:00 · Wed 10:00–13:00/)).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Specialties" })).toHaveTextContent("General Medicine");
+    // Decision 3: no filters.
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
   });
 
-  it("R7: a chosen doctor's times link to the request form with the exact slot", async () => {
-    render(<PublicClinicPage clinic={CLINIC} language="en" />);
-    fireEvent.click(screen.getByRole("button", { name: "See times" }));
-    const day = await screen.findByRole("heading", { level: 3 });
-    expect(day).toHaveTextContent(/Mon, 2 Nov/);
-    const link = screen.getByRole("link", { name: /Ask for 11:00 am/ });
-    expect(link).toHaveAttribute("href", requestHref("sample-clinic", DOCTOR, SESSION, "2026-11-02T05:30:00Z", "en"));
-    expect(link.getAttribute("href")).toContain("slot=2026-11-02T05%3A30%3A00Z");
+  it("selects today and lists only the doctors free on it, with places left and the doctor's page on that date", async () => {
+    mockApi({ [ROUTE]: byDoctor(DAYS) });
+    show({ viaDirectory: true });
+    expect(screen.getByRole("button", { name: /^Thu, 12 Nov/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("heading", { name: "Doctors available on Thu, 12 Nov" })).toBeInTheDocument();
+    const card = (await screen.findByText("Dr. Mehta")).closest("li") as HTMLElement;
+    expect(within(card).getByText("2 places left")).toHaveClass("bg-warning-soft");
+    expect(within(card).getByText("From 10:00 am")).toBeInTheDocument();
+    expect(within(card).getByRole("link", { name: /View profile and times/ })).toHaveAttribute("href", `/c/sample-clinic/doctors/${MEHTA}?date=2026-11-12&via=directory`);
+    expect(screen.queryByText("Dr. Rao")).not.toBeInTheDocument();
+    expect(screen.getByText("1 other doctor has no times on this date.")).toBeInTheDocument();
+    // The tiles add up the doctors: Saturday has 13.
+    expect(screen.getByRole("button", { name: "Sat, 14 Nov, 13 left" })).toBeInTheDocument();
   });
 
-  it("R10: the Hindi page uses Hindi words and the link keeps the language", async () => {
-    render(<PublicClinicPage clinic={CLINIC} language="hi" />);
-    expect(screen.getByRole("link", { name: /View in English/ })).toHaveAttribute("href", "/c/sample-clinic?lang=en");
-    fireEvent.click(screen.getByRole("button", { name: "समय देखें" }));
-    const links = await screen.findAllByRole("link", { name: /माँगें/ });
-    expect(links[0]?.getAttribute("href")).toContain("lang=hi");
+  it("another date shows that date's doctors and keeps the date in the address", async () => {
+    mockApi({ [ROUTE]: byDoctor(DAYS) });
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Sat, 14 Nov, 13 left" }));
+    expect(await screen.findByText("Dr. Rao")).toBeInTheDocument();
+    expect(screen.getByText("Dr. Mehta")).toBeInTheDocument();
+    expect(window.location.search).toBe("?date=2026-11-14");
+    expect(screen.getByRole("link", { name: /हिन्दी में देखें/ })).toHaveAttribute("href", "/c/sample-clinic?date=2026-11-14&lang=hi");
   });
 
-  it("a token session shows the places left and one link", async () => {
-    mockApi({
-      "GET /api/v1/public/clinics/sample-clinic/availability": () =>
-        json(200, { days: [{ date: "2026-11-02", sessions: [{ ...SESSION, mode: "TOKENS", slots: [] }] }] }),
-    });
-    render(<PublicClinicPage clinic={{ ...CLINIC, booking_mode: "TOKENS" }} language="en" />);
-    fireEvent.click(screen.getByRole("button", { name: "See times" }));
-    const link = await screen.findByRole("link", { name: "Ask for this session" });
-    expect(within(link.closest("div") as HTMLElement).getByText(/3 places left/)).toBeInTheDocument();
+  it("a date when nobody is free offers the next date when someone is", async () => {
+    mockApi({ [ROUTE]: byDoctor(DAYS) });
+    show({ initialDate: "2026-11-13" });
+    expect(await screen.findByText("No doctor has available times on this date.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next available: Sat, 14 Nov" }));
+    expect(await screen.findByText("Dr. Rao")).toBeInTheDocument();
   });
 
-  it("says plainly when nothing is free", async () => {
-    mockApi({ "GET /api/v1/public/clinics/sample-clinic/availability": () => json(200, { days: [] }) });
-    render(<PublicClinicPage clinic={CLINIC} language="en" />);
-    fireEvent.click(screen.getByRole("button", { name: "See times" }));
-    expect(await screen.findByText(/No free times in the next 14 days/)).toBeInTheDocument();
+  it("says when nothing is free in the window", async () => {
+    mockApi({ [ROUTE]: () => json(200, { days: [] }) });
+    show();
+    expect(await screen.findByText("No available times in the next 14 days. Please call the clinic.")).toBeInTheDocument();
   });
 
-  it("M6c-P5 (R60, R61): a doctor's profile shows their languages and fee, with a way back to the clinic", async () => {
-    render(<PublicClinicPage clinic={CLINIC} language="en" profileOf={DOCTOR} />);
-    expect(screen.getByText("Specialties: General Medicine")).toBeInTheDocument();
-    expect(screen.getByText("Speaks: Hindi, English")).toBeInTheDocument();
-    expect(screen.getByText("Consultation fee ₹300")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "All doctors at this clinic" })).toHaveAttribute("href", "/c/sample-clinic");
-    expect(screen.queryByRole("link", { name: /Doctor's profile/ })).not.toBeInTheDocument();
-    // One doctor: the times are loaded at once.
-    expect(await screen.findByRole("heading", { name: "Free times with Dr. Mehta" })).toBeInTheDocument();
+  it("shows the doctors it could load when one fails, and offers Try again", async () => {
+    let fail = true;
+    mockApi({ [ROUTE]: (call) => (call.search.get("doctor_id") === RAO && fail ? apiError(503, "SYS_UNAVAILABLE", "x") : byDoctor(DAYS)(call)) });
+    show({ initialDate: "2026-11-14" });
+    expect(await screen.findByText("Dr. Mehta")).toBeInTheDocument();
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("We could not load the times of some doctors.");
+    fail = false;
+    fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Dr. Rao")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("an address date outside the window falls back to today; Hindi words on the Hindi page", async () => {
+    mockApi({ [ROUTE]: byDoctor(DAYS) });
+    show({ initialDate: "2026-12-30", language: "hi" });
+    expect(screen.getByRole("link", { name: /View in English/ })).toHaveAttribute("href", "/c/sample-clinic?date=2026-11-12&lang=en");
+    expect(await screen.findByRole("link", { name: /प्रोफ़ाइल और समय देखें/ })).toHaveAttribute("href", `/c/sample-clinic/doctors/${MEHTA}?date=2026-11-12&lang=hi`);
   });
 });

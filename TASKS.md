@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M7d — Patient discovery, clinic and doctor profiles, booking redesign** (issue #71, branch `m7d/71-discovery-booking` from `main` after M7c merged in PR #70 on 11 Nov 2026, PR #72). Next: M7e (#73, PR #74), then M9 (deployment on Vercel, Supabase and Oracle Cloud) |
-| Active phase | **M7d-P4** (clinic page); P1–P3 done; P5, P6 follow in order (approved 11 Nov 2026) |
+| Active phase | **M7d-P5** (confirmation); P1–P4 done; P6 follows (approved 11 Nov 2026) |
 | Design notes | `docs/milestones/M7d-discovery-booking.md` (decisions §4, approved phases and UX rules §7); M7e in `docs/milestones/M7e-pwa-push.md`; M8 designed in `docs/milestones/M8-multi-clinic-whatsapp.md` (skipped for now by the developer) |
 | Approved plan | `NEXT_STEPS_PLAN.md` §0 (M7d phases); M7c and M7 below it as history |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -288,7 +288,7 @@ design).
 | M7d-P1 | Search: icons centred on the inputs; result cards with one "Next available" line, no schedules | ✅ 11 Nov 2026: web 750 tests, lint, typecheck; no sideways scroll at the seven widths |
 | M7d-P2 | `availability.ts` + `AppointmentPicker`: today selected, next 4 dates and the native calendar (14 days), morning/afternoon/evening, three each until "Show all", places-left badges, 60 s staleness guard | ✅ 11 Nov 2026: 16 new tests (rules on a fixed clock; every picker state); lint, typecheck |
 | M7d-P3 | Doctor profile on `/c/[slug]/doctors/[doctor]`: real facts only, About with Read more, the picker, sticky "Request this time" | ✅ 11 Nov 2026: 7 tests (disabled until chosen, re-check before leaving, one tap, taken time, failed check, address state, Hindi); 188 KB first load; no sideways scroll at seven widths |
-| M7d-P4 | Clinic page: text hero, the date strip and the doctors free on that date, no filters | ☐ |
+| M7d-P4 | Clinic page: text hero, the date strip and the doctors free on that date, no filters | ✅ 11 Nov 2026: 7 tests; discovery and booking journeys 6/6 (CI settings); 189.6 KB first load (doctor page 191.8 KB); no sideways scroll at seven widths |
 | M7d-P5 | Confirmation: appointment summary, "Pay at the clinic", total = fee, the request form, ending at "Requested" | ☐ |
 | M7d-P6 | Journeys and full `make e2e`, screenshots at seven widths, page weights, specs and milestone record | ☐ |
 

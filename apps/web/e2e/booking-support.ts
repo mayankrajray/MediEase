@@ -66,6 +66,33 @@ export function clinicClock(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
 }
 
+/** The patient pages' clock for an instant ("6:00 pm"), as `portalTime` shows it in English. */
+export function patientClock(iso: string): string {
+  return new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
+}
+
+/**
+ * M7d: a patient's way to the lonely session, as a person takes it: the clinic page on that date,
+ * the doctor's card, the session's Choose, then Request this time (signed out, so it asks to sign
+ * in). Returns the request form's address the page went to.
+ */
+export async function chooseOnProfile(page: Page, lonely: Lonely): Promise<string> {
+  await page.goto(`/c/${SLUG}?date=${lonely.onDate}`);
+  await page.getByRole("listitem").filter({ hasText: DOCTOR_NAME }).getByRole("link", { name: /View profile and times/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/doctors/[0-9a-f-]+\\?date=${lonely.onDate}`));
+  const choose = page.getByRole("button", { name: new RegExp(`^Choose ${patientClock(lonely.startsAt)}–`) });
+  await choose.click();
+  await expect(choose).toHaveAttribute("aria-pressed", "true");
+  const request = page.getByRole("button", { name: "Request this time" });
+  await expect(request).toBeEnabled();
+  await request.click();
+  await expect(page).toHaveURL(/\/portal\/(sign-in|request)\?/);
+  const url = new URL(page.url());
+  const next = url.pathname === "/portal/request" ? `${url.pathname}${url.search}` : (url.searchParams.get("next") ?? "");
+  expect(new URL(next, url.origin).searchParams.get("session")).toBe(lonely.startsAt);
+  return next;
+}
+
 /** A new account asks for the session through the request form; returns its phone number. */
 export async function askFor(page: Page, lonely: Lonely, label: string): Promise<string> {
   await page.goto(requestPath(lonely));

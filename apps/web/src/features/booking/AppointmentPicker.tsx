@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 
 import { Skeleton } from "@/components/ui/Skeleton";
 import { bookingWords } from "@/lib/i18n/booking-request";
-import { portalCalendarDate, portalDay, portalDayParts, portalStrings, portalTime, type PortalLanguage } from "@/lib/i18n/portal";
+import { portalDay, portalStrings, portalTime, type PortalLanguage } from "@/lib/i18n/portal";
 
 import {
   addDays,
@@ -14,24 +14,18 @@ import {
   groupByPart,
   inWindow,
   isChosen,
-  lastDate,
   nextAvailableAfter,
   offersOn,
   placesOn,
   PREVIEW,
-  stripDates,
   choiceOf,
   type Choice,
   type Offer,
   type Part,
 } from "./availability";
+import { DateStrip, noon } from "./DateStrip";
 import type { AvailabilityState } from "./useAvailability";
 
-/** A calendar date as an instant at noon UTC, for the date formatters (no zone shift). */
-const noon = (date: string) => `${date}T12:00:00Z`;
-
-const TILE =
-  "flex min-h-[4.5rem] w-full cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-2 text-center transition-colors";
 const CHIP =
   "inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 text-sm font-semibold tabular-nums transition-colors";
 const QUIET =
@@ -72,10 +66,7 @@ export function AppointmentPicker({
 }>) {
   const words = bookingWords(language).picker;
   const s = portalStrings(language);
-  const ids = { dates: useId(), times: useId(), other: useId(), otherHint: useId() };
-  const [outside, setOutside] = useState(false);
-  const last = lastDate(today);
-  const tiles = stripDates(today);
+  const ids = { times: useId() };
   const days = availability.status === "ready" ? availability.days : [];
   const ready = availability.status === "ready";
   const offers = ready ? offersOn(days, date, timezone) : [];
@@ -85,87 +76,16 @@ export function AppointmentPicker({
   // Nothing later but something earlier (a later date was picked): offer the earliest instead.
   const earliest = ready && next === undefined ? nextAvailableAfter(days, addDays(today, -1)) : undefined;
   const target = next ?? (earliest !== date ? earliest : undefined);
-  const dayName = (d: string) => (d === today ? words.today : d === addDays(today, 1) ? words.tomorrow : portalDayParts(noon(d), "UTC", s).weekday);
   const fullDay = (d: string) => portalDay(noon(d), "UTC", s);
   const places = ready ? placesOn(days, date) : 0;
 
   function pickDate(value: string) {
-    if (!inWindow(value, today)) {
-      setOutside(true);
-      return;
-    }
-    setOutside(false);
-    if (value !== date) onDate(value);
+    if (inWindow(value, today) && value !== date) onDate(value);
   }
 
   return (
     <div className="space-y-5">
-      <section aria-labelledby={ids.dates} className="space-y-3">
-        <h2 id={ids.dates} className="heading-6 text-slate-900">
-          {words.chooseDate}
-        </h2>
-        <ul className="grid grid-cols-4 gap-2">
-          {tiles.map((d) => {
-            const selected = d === date;
-            const left = ready ? placesOn(days, d) : undefined;
-            const none = left === 0;
-            const parts = portalDayParts(noon(d), "UTC", s);
-            return (
-              <li key={d}>
-                <button
-                  type="button"
-                  aria-pressed={selected}
-                  aria-label={`${fullDay(d)}${left === undefined ? "" : `, ${none ? words.tileNone : words.tileLeft(left)}`}`}
-                  onClick={() => pickDate(d)}
-                  className={`${TILE} ${
-                    selected
-                      ? "border-brand-700 bg-brand-700 text-white"
-                      : none
-                        ? "border-dashed border-slate-300 bg-surface text-slate-600 hover:border-slate-400"
-                        : "border-line bg-surface text-slate-900 hover:border-brand-300 hover:bg-brand-50"
-                  }`}
-                >
-                  <span className="text-xs font-medium">{dayName(d)}</span>
-                  <span className="text-lg font-semibold leading-tight tabular-nums">{parts.day}</span>
-                  <span className="text-xs">{parts.month}</span>
-                  {left !== undefined && (
-                    <span aria-hidden="true" className={`text-[0.6875rem] font-medium leading-tight ${selected ? "text-white" : none ? "text-slate-600" : "text-success"}`}>
-                      {none ? words.tileNone : words.tileLeft(left)}
-                    </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <div>
-          <label htmlFor={ids.other} className="block text-sm font-semibold text-slate-900">
-            {words.otherDate}
-          </label>
-          <div className="mt-1.5 sm:max-w-xs">
-            <input
-              id={ids.other}
-              type="date"
-              min={today}
-              max={last}
-              value={tiles.includes(date) ? "" : date}
-              aria-describedby={ids.otherHint}
-              aria-invalid={outside || undefined}
-              onChange={(event) => {
-                if (event.target.value !== "") pickDate(event.target.value);
-              }}
-              className={`min-h-11 w-full cursor-pointer rounded-lg border bg-white px-3 text-base text-slate-900 transition-colors hover:border-slate-600 focus-visible:border-brand-700 ${
-                tiles.includes(date) ? "border-slate-400" : "border-brand-700 ring-1 ring-brand-700"
-              }`}
-            />
-          </div>
-          <p id={ids.otherHint} className={`mt-1 text-sm ${outside ? "font-medium text-danger" : "text-slate-700"}`} aria-live="polite">
-            {outside
-              ? words.outside(portalCalendarDate(today, s), portalCalendarDate(last, s))
-              : words.otherDateHint(portalCalendarDate(today, s), portalCalendarDate(last, s))}
-          </p>
-        </div>
-      </section>
+      <DateStrip language={language} today={today} date={date} onDate={pickDate} left={ready ? (d) => placesOn(days, d) : undefined} />
 
       <section aria-labelledby={ids.times} aria-busy={availability.status === "loading" || (ready && availability.refreshing)} className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">

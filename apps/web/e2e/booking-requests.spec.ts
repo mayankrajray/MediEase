@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
-import { DOCTOR_NAME, googleSignInThenReturn, lonelySession, phone, SLUG } from "./booking-support";
+import { chooseOnProfile, DOCTOR_NAME, googleSignInThenReturn, lonelySession, patientClock, phone, SLUG } from "./booking-support";
 
 import { expectAccessible, firstLoadBytes, noHorizontalScroll } from "./portal-support";
 import { DESK, newPatient, openQueue, signInAs } from "./queue-support";
@@ -46,20 +46,16 @@ test.describe("the clinic page and a booking request at 360 px", () => {
   test("ask for a time, be refused the held one, and see Requested", async ({ page, browser, request }) => {
     test.setTimeout(240_000);
     const lonely = await lonelySession(request);
-    const sessionParam = encodeURIComponent(lonely.startsAt);
 
     // The public page: allow-list content, emergency notice, accessible, light, no sign-in.
     await page.goto(`/c/${SLUG}`);
     await expect(page.getByRole("note")).toContainText("not for emergencies");
     await checkScreen(page, browser, "Sample Clinic");
-    await page.getByRole("button", { name: "See times" }).first().click();
-    const link = page.locator(`a[href*="session=${sessionParam}"]`).first();
-    await expect(link).toBeVisible();
-    const requestPath = (await link.getAttribute("href")) ?? "";
+    // M7d: the clinic page on the session's date, the doctor's page, Choose, Request this time.
+    const requestPath = await chooseOnProfile(page, lonely);
     expect(requestPath).toContain("/portal/request?");
 
     // Choosing the time asks to sign in, and signing in brings the patient back to the same time.
-    await link.click();
     await expect(page).toHaveURL(/\/portal\/sign-in\?.*next=/);
     const email = `ritu.${Date.now()}.${Math.floor(Math.random() * 1e6)}@example.test`;
     await googleSignInThenReturn(page, email, /\/portal\/request\?/);
@@ -93,27 +89,23 @@ test.describe("the clinic page and a booking request at 360 px", () => {
     await expect(form2.getByRole("alert")).toContainText(/Someone else|holding it|full/);
     await other.close();
 
-    // The clinic page no longer offers the held time (AC4).
-    await page.goto(`/c/${SLUG}`);
-    await page.getByRole("button", { name: "See times" }).first().click();
-    await expect(page.getByRole("heading", { name: /^Free times with/ })).toBeVisible();
-    await expect(page.locator(`a[href*="session=${sessionParam}"]`)).toHaveCount(0);
+    // The doctor's page no longer offers the held time (AC4).
+    await page.goto(`/c/${SLUG}?date=${lonely.onDate}`);
+    await page.getByRole("listitem").filter({ hasText: DOCTOR_NAME }).getByRole("link", { name: /View profile and times/ }).click();
+    await expect(page.getByRole("heading", { name: /^Times on / })).toBeVisible();
+    await expect(page.getByRole("group").or(page.getByText("No available times on this date.")).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: new RegExp(`^Choose ${patientClock(lonely.startsAt)}–`) })).toHaveCount(0);
   });
 });
 
 test("front desk sees the request and its hold, and books over it only after confirming (AC5, R18a)", async ({ page, browser, request }) => {
   test.setTimeout(240_000);
   const lonely = await lonelySession(request);
-  const sessionParam = encodeURIComponent(lonely.startsAt);
 
   // A patient asks (through the API as the portal would, in a throwaway signed-in context).
   const patientContext = await browser.newContext({ viewport: { width: 360, height: 740 } });
   const patientPage = await patientContext.newPage();
-  await patientPage.goto(`/c/${SLUG}`);
-  await patientPage.getByRole("button", { name: "See times" }).first().click();
-  const link = patientPage.locator(`a[href*="session=${sessionParam}"]`).first();
-  await expect(link).toBeVisible();
-  await link.click();
+  await chooseOnProfile(patientPage, lonely);
   await googleSignInThenReturn(patientPage, `desk.view.${Date.now()}.${Math.floor(Math.random() * 1e6)}@example.test`, /\/portal\/request\?/);
   const form = patientPage.getByRole("region", { name: "Ask for this time" });
   await form.getByLabel(/Phone number/).fill(phone());
