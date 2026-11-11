@@ -7,7 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 import { Logo } from "@/components/ui/Logo";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { ErrorNotice } from "@/features/auth/ErrorNotice";
+import { ErrorNotice, WithoutErrorRef } from "@/features/auth/ErrorNotice";
 import type { components } from "@/lib/api/schema";
 import { PORTAL_SIGN_IN_PATH, portalGet, portalPatch } from "@/lib/auth/portal-session";
 import { parsePortalLanguage, type PortalLanguage, type PortalStrings, portalStrings } from "@/lib/i18n/portal";
@@ -146,7 +146,7 @@ export function PortalShell({ children }: Readonly<{ children: ReactNode }>) {
 
   if (load.status === "leaving") return null;
 
-  return (
+  const frame = (
     <div lang={language} className="min-h-screen bg-canvas pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
       {/* No backdrop-filter here: it would make the header the containing block of the fixed tab bar. */}
       <header className="sticky top-0 z-20 border-b border-line bg-white">
@@ -225,6 +225,8 @@ export function PortalShell({ children }: Readonly<{ children: ReactNode }>) {
       </main>
     </div>
   );
+  // M7c-P7: patients see what went wrong and what to do, never a reference to quote.
+  return <WithoutErrorRef>{frame}</WithoutErrorRef>;
 }
 
 export function ScreenLoading({ label }: Readonly<{ label: string }>) {

@@ -95,7 +95,7 @@ describe("the patient assistant (M7a-P4; FR-AI-01, 04)", () => {
     expect(second.messages.map((m) => m.role)).toEqual(["user", "assistant", "assistant", "user"]);
   });
 
-  it("FR-AI-02 shows the referral, and an error with its reference", async () => {
+  it("FR-AI-02 shows the referral; M7c-P7: a failure says why and what to do, gives the message back, and shows no reference", async () => {
     mockApi({
       ...me(),
       "GET /api/v1/portal/links": () => json(200, { items: [] }),
@@ -111,8 +111,13 @@ describe("the patient assistant (M7a-P4; FR-AI-01, 04)", () => {
     expect(await screen.findByText("I can't give medical advice.")).toBeInTheDocument();
     ask("Your message", "hello");
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("The assistant is not available right now.");
-    expect(alert).toHaveTextContent("test-ref");
+    expect(alert).toHaveTextContent("the AI service it uses did not reply properly");
+    expect(alert).toHaveTextContent("press Send to try again");
+    expect(alert).not.toHaveTextContent("test-ref");
+    expect(alert).not.toHaveTextContent("Ref:");
+    // The unanswered message is back in the box and not in the conversation.
+    expect(screen.getByLabelText("Your message")).toHaveValue("hello");
+    expect(screen.getByRole("list", { name: "Conversation" })).not.toHaveTextContent("hello");
   });
 });
 

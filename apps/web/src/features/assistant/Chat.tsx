@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/Button";
 import { INPUT, LABEL } from "@/components/ui/Field";
 import { RichText } from "@/features/assistant/RichText";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
+import { ApiError, WEB_API_UNREACHABLE } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
+import type { ChatFailures } from "@/lib/i18n/portal";
 
 export type AssistantReply = components["schemas"]["AssistantReply"];
 export type AssistantMessage = components["schemas"]["AssistantMessage"];
@@ -25,6 +27,18 @@ export interface ChatStrings {
   readonly confirming: string;
   readonly cancel: string;
   readonly cancelled: string;
+  /** M7c-P7: why a turn failed and what to do, by the API's code. */
+  readonly failed: ChatFailures;
+}
+
+/** The words for a failed turn: ours for the assistant's own codes, else the API's message. */
+export function failureText(error: unknown, failed: ChatFailures): string | undefined {
+  if (!(error instanceof ApiError)) return undefined;
+  if (error.code === WEB_API_UNREACHABLE) return failed.offline;
+  if (error.code === "AI_UNAVAILABLE" || error.code === "AI_PROVIDER_BUSY" || error.code === "AI_RATE_LIMITED") {
+    return failed[error.code];
+  }
+  return undefined;
 }
 
 interface Line {
@@ -69,6 +83,7 @@ export function Chat({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const typed = draft;
     const text = draft.trim();
     if (busy !== null) return;
     // DESIGN.md §8a: Send stays enabled; with nothing typed it puts the cursor in the box.
@@ -88,6 +103,10 @@ export function Chat({
       setLines([...next, { role: "assistant", content: reply.reply, kind: reply.kind }]);
       setProposal(reply.proposal);
     } catch (failure) {
+      // M7c-P7: the unanswered message comes back into the box (and leaves the conversation),
+      // so trying again is one press and the model never sees the same question twice.
+      setLines(lines);
+      setDraft(typed);
       failed(failure);
     } finally {
       setBusy(null);
@@ -187,7 +206,7 @@ export function Chat({
 
       {error !== null && (
         <div className="px-3 pb-3 sm:px-4">
-          <ErrorNotice error={error} />
+          <ErrorNotice error={error} {...(failureText(error, s.failed) === undefined ? {} : { message: failureText(error, s.failed) as string })} />
         </div>
       )}
 

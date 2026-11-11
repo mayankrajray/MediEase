@@ -21,6 +21,13 @@ const STRINGS: ChatStrings = {
   confirming: "Confirming…",
   cancel: "Cancel",
   cancelled: "Nothing was changed.",
+  failed: {
+    AI_UNAVAILABLE:
+      "The assistant could not answer this time, because the AI service it uses did not reply properly. Your message is back in the box: press Send to try again, or do it from the Queue screen.",
+    AI_PROVIDER_BUSY: "The AI service is busy. Wait about a minute, then press Send again. Your message is back in the box.",
+    AI_RATE_LIMITED: "You sent several messages very quickly. Wait about a minute, then press Send again. Your message is back in the box.",
+    offline: "This computer could not reach MediEase. Check the internet connection, then press Send again.",
+  },
 };
 
 /**
