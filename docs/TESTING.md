@@ -109,9 +109,11 @@ in a key to discard one.
 
 Runners: `Detect changes`, `Config and contract` and `CI result` run on `ubuntu-slim` (a 1 vCPU
 container, 15-minute cap, Docker CLI but no daemon). The other jobs need a full VM (Docker, or the
-API suite's ~15 minutes) and are pinned to `ubuntu-24.04`: on the Ubuntu 26 image behind
-`ubuntu-latest`, every Ubuntu apt mirror was unreachable (11 Nov 2026). Move them on once that
-image installs the PDF libraries.
+API suite's ~15 minutes) and are pinned to `ubuntu-24.04`. The API job runs inside the API image's
+base (`python:3.12.15-slim-trixie`, same digest as `apps/api/Dockerfile`) and installs Pango,
+HarfBuzz, fontconfig and tzdata from Debian: on 11 Nov 2026 every Ubuntu apt mirror was unreachable
+from the runner host (noble and resolute alike). The system packages' cache key names the base
+image digest; change both together.
 
 ## 6. Phase verification template
 

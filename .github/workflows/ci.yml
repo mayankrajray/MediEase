@@ -20,9 +20,9 @@
 #
 # Runners: the light jobs (detect, config, result) use ubuntu-slim, a 1 vCPU container with a
 # hard 15-minute limit and no Docker daemon. secrets (docker run gitleaks), api (~15 minutes of
-# tests), web, images (docker build, Trivy) and smoke (Compose, Playwright) need a full VM.
-# Those are pinned to ubuntu-24.04: on the Ubuntu 26 image that ubuntu-latest moved to, every
-# Ubuntu apt mirror was unreachable (11 Nov 2026) and the PDF libraries could not be installed.
+# tests), web, images (docker build, Trivy) and smoke (Compose, Playwright) need a full VM,
+# pinned to ubuntu-24.04 so a label move cannot change them unannounced. The API job runs in
+# its image's base container; see the comment there.
 
 name: CI
 
@@ -150,6 +150,12 @@ jobs:
     if: needs.detect.outputs.api == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    # The suite runs in the API image's own base (the same tag and digest as apps/api/Dockerfile),
+    # so it tests against the Python, Pango and HarfBuzz that ship, and the system libraries come
+    # from Debian's mirrors. On 11 Nov 2026 every Ubuntu mirror was unreachable from the runner
+    # host (noble and resolute alike) while deb.debian.org served the image builds.
+    container:
+      image: python:3.12.15-slim-trixie@sha256:29113dcae7aad06daa8e95260fa09f27d62be33b9687ea3774f771d601a02256
     defaults:
       run:
         working-directory: apps/api
@@ -168,56 +174,47 @@ jobs:
       APP_ENV: test
       LOG_LEVEL: INFO
       DB_ECHO_PARAMS: "false"
-      DATABASE_URL: postgresql+psycopg://mediease:ci-only-password@localhost:5432/mediease_test
+      # The job runs in a container, so the service is reached by its name.
+      DATABASE_URL: postgresql+psycopg://mediease:ci-only-password@postgres:5432/mediease_test
       JWT_SIGNING_KEY: ci-only-signing-key-not-a-secret-0123456789
       AUDIT_IP_SALT: ci-only-audit-ip-salt-not-a-secret-0123456789
       # Real-PostgreSQL integration tests (tests/conftest.py::database_url).
-      TEST_DATABASE_URL: postgresql+psycopg://mediease:ci-only-password@localhost:5432/mediease_test
+      TEST_DATABASE_URL: postgresql+psycopg://mediease:ci-only-password@postgres:5432/mediease_test
       # Deliberately not Asia/Kolkata: flushes out code that relies on the machine timezone.
       TZ: America/New_York
     steps:
       - uses: actions/checkout@v7
-      - id: python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      # The PDF renderer (WeasyPrint, M4-P4) needs Pango and HarfBuzz, as in the API image. The
-      # .deb files are cached per runner image, so a run installs them without the network; the
-      # mirrors are used only when the image changes (11 Nov 2026: security.ubuntu.com failed to
-      # resolve for 20 minutes, which a cache hit never meets).
-      - name: Cache the PDF renderer packages
-        id: apt
+      # The PDF renderer (WeasyPrint, M4-P4) needs Pango, HarfBuzz and fontconfig, as in the API
+      # image, and tzdata makes the TZ above real. The .deb files are cached per base image (the
+      # key names its digest: change both together), so a hit installs them without the network.
+      - name: Cache the system packages
         uses: actions/cache@v4
         with:
-          path: ~/apt-debs
-          key: apt-pdf-v1-${{ runner.os }}-${{ env.ImageOS }}-${{ env.ImageVersion }}
-      - name: PDF renderer libraries
+          path: /var/cache/apt-ci
+          key: apt-v2-python-3.12.15-slim-trixie-29113dcae7aa
+      - name: PDF renderer and timezone libraries
         working-directory: .
         timeout-minutes: 8
         run: |
-          pkgs=(libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0)
-          if dpkg -s "${pkgs[@]}" >/dev/null 2>&1; then echo "already on the image"; exit 0; fi
-          if ls ~/apt-debs/*.deb >/dev/null 2>&1 && sudo dpkg -i ~/apt-debs/*.deb && dpkg -s "${pkgs[@]}" >/dev/null 2>&1; then
-            echo "installed from the cache"; exit 0
+          pkgs=(libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fontconfig tzdata)
+          mkdir -p /var/cache/apt-ci/partial
+          # Not /var/cache/apt/archives: the image's docker-clean hook empties that after installs.
+          opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Dir::Cache::archives=/var/cache/apt-ci)
+          if ls /var/cache/apt-ci/*.deb >/dev/null 2>&1 && dpkg -i /var/cache/apt-ci/*.deb >/dev/null; then
+            echo "installed from the cache"
+          else
+            apt-get "${opts[@]}" update
+            DEBIAN_FRONTEND=noninteractive apt-get "${opts[@]}" install --yes --no-install-recommends "${pkgs[@]}"
           fi
-          mkdir -p ~/apt-debs/partial
-          if [ -f /etc/apt/apt-mirrors.txt ]; then
-            # The Azure mirror, in the runner's own region, first.
-            { echo "http://azure.archive.ubuntu.com/ubuntu/"; cat /etc/apt/apt-mirrors.txt; } | sudo tee /etc/apt/apt-mirrors.new >/dev/null
-            sudo mv /etc/apt/apt-mirrors.new /etc/apt/apt-mirrors.txt
-          fi
-          opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o "Dir::Cache::archives=$HOME/apt-debs")
-          sudo apt-get "${opts[@]}" update || true
-          sudo apt-get "${opts[@]}" install --yes --no-install-recommends "${pkgs[@]}"
-          sudo chown -R "$USER" ~/apt-debs
-      # The virtual environment, keyed on the exact pins in pyproject.toml and the Python patch
-      # version; a hit only re-registers the editable package.
+          dpkg -s "${pkgs[@]}" >/dev/null
+      # The virtual environment, keyed on the exact pins in pyproject.toml and the base image (its
+      # Python); a hit only re-registers the editable package.
       - name: Cache the virtual environment
         id: venv
         uses: actions/cache@v4
         with:
           path: apps/api/.venv
-          key: venv-v1-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('apps/api/pyproject.toml') }}
+          key: venv-v2-python-3.12.15-slim-trixie-${{ hashFiles('apps/api/pyproject.toml') }}
       - name: Install dependencies
         run: |
           [ -x .venv/bin/python ] || python -m venv .venv
