@@ -72,6 +72,17 @@ export interface BookingWords {
     readonly gone: string;
     readonly yourChoice: (when: string) => string;
   };
+  // M7d-P4 (design §7): the clinic page's doctors for a date.
+  readonly clinicDay: {
+    readonly heading: (day: string) => string;
+    readonly loading: string;
+    readonly failed: string;
+    readonly someFailed: string;
+    readonly none: string;
+    readonly others: (n: number) => string;
+    readonly from: (time: string) => string;
+    readonly view: string;
+  };
   // M7d-P3 (design §7): the doctor's own page.
   readonly profile: {
     readonly back: (clinic: string) => string;
@@ -217,6 +228,16 @@ const EN: BookingWords = {
     retry: "Try again",
     gone: "The time you chose is no longer available. Please choose another.",
     yourChoice: (when) => `Your choice: ${when}`,
+  },
+  clinicDay: {
+    heading: (day) => `Doctors available on ${day}`,
+    loading: "Loading the doctors' times.",
+    failed: "We could not load the doctors' times.",
+    someFailed: "We could not load the times of some doctors. Try again, or call the clinic.",
+    none: "No doctor has available times on this date.",
+    others: (n) => `${n} other ${n === 1 ? "doctor has" : "doctors have"} no times on this date.`,
+    from: (time) => `From ${time}`,
+    view: "View profile and times",
   },
   profile: {
     back: (clinic) => `All doctors at ${clinic}`,
@@ -380,6 +401,16 @@ const HI: BookingWords = {
     retry: "फिर कोशिश करें",
     gone: "आपका चुना हुआ समय अब उपलब्ध नहीं है। कृपया दूसरा चुनें।",
     yourChoice: (when) => `आपकी पसंद: ${when}`,
+  },
+  clinicDay: {
+    heading: (day) => `${day} को उपलब्ध डॉक्टर`,
+    loading: "डॉक्टरों के समय लोड हो रहे हैं.",
+    failed: "हम डॉक्टरों के समय लोड नहीं कर सके।",
+    someFailed: "कुछ डॉक्टरों के समय लोड नहीं हो सके। फिर कोशिश करें, या क्लिनिक को फ़ोन करें।",
+    none: "इस तारीख़ पर किसी डॉक्टर का समय उपलब्ध नहीं है।",
+    others: (n) => `${n} और डॉक्टरों का इस तारीख़ पर समय नहीं है।`,
+    from: (time) => `${time} से`,
+    view: "प्रोफ़ाइल और समय देखें",
   },
   profile: {
     back: (clinic) => `${clinic} के सभी डॉक्टर`,

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
+import { clinicToday } from "@/features/booking/availability";
 import { PublicClinicPage } from "@/features/public-clinic/PublicClinicPage";
 import { ApiError, apiGet, type GetResponse } from "@/lib/api/client";
 import { pickLanguage } from "@/lib/i18n/booking-request";
@@ -50,10 +51,11 @@ export async function generateMetadata({ params }: Readonly<{ params: Promise<{ 
 }
 
 /**
- * A clinic's public page (M6b-P4; FR-PUB-01, 04, NFR-17, NFR-19): who they are, their doctors and
- * hours, and the times a patient may ask for. Rendered on the server, English or Hindi, 360 px
- * first. Nothing here is signed in: choosing a time goes to the portal's request form, which asks
- * the patient to sign in and brings them back to the same time.
+ * A clinic's public page (M6b-P4; FR-PUB-01, 04, NFR-17, NFR-19; M7d-P4): who they are, and the
+ * doctors free on today or the date in the address. Rendered on the server, English or Hindi,
+ * 360 px first. Nothing here is signed in: a doctor's page leads to the portal's request form,
+ * which asks the patient to sign in and brings them back to the same time. Today is the clinic's
+ * date, worked out here so the page and the browser agree.
  */
 export default async function PublicClinicRoute({ params, searchParams }: Readonly<{ params: Promise<{ slug: string }>; searchParams: Promise<Search> }>) {
   const { slug } = await params;
@@ -61,5 +63,6 @@ export default async function PublicClinicRoute({ params, searchParams }: Readon
   const via = viaDirectory(query);
   const clinic = await load(slug, via);
   const language = pickLanguage(query.lang, (await cookies()).get(PORTAL_LANGUAGE_COOKIE)?.value);
-  return <PublicClinicPage clinic={clinic} language={language} viaDirectory={via} />;
+  const date = Array.isArray(query.date) ? query.date[0] : query.date;
+  return <PublicClinicPage clinic={clinic} language={language} viaDirectory={via} today={clinicToday(new Date(), clinic.timezone)} initialDate={date} />;
 }
