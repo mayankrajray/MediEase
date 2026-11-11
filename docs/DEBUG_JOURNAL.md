@@ -29,6 +29,31 @@ Rules:
 
 ---
 
+### 2026-11-11 — CI's API job cannot install the PDF libraries: no Ubuntu mirror answers
+
+- **Milestone / area:** M7c / CI (`.github/workflows/ci.yml`, API job)
+- **Symptom:** The "PDF renderer libraries" step (`apt-get install libpango…`) hung, then timed
+  out: `Temporary failure resolving 'security.ubuntu.com'` (run 43034567133), a retry loop that
+  reached the 20-minute job limit (43038308929), then `Ign:` for every Ubuntu mirror until the
+  8-minute step limit (43041992239, and 43044019170 on `ubuntu-24.04`).
+- **Impact:** CI only. PR #70 red; no code affected.
+- **Reproduction:** Any API job on a GitHub-hosted Ubuntu runner that day; noble and resolute
+  alike.
+- **Investigation:** The runner image moved `ubuntu-latest` to Ubuntu 26, so the pin to 24.04 was
+  tried first: same result. Only `packages.microsoft.com` answered from the host. The image builds
+  in the same runs reached `deb.debian.org` without trouble. Longer timeouts or the runner's
+  untouched mirror list (the first failure used it) would only wait longer.
+- **Root cause:** The runner host could not reach any Ubuntu archive (external). The job depended
+  on the host's package manager for libraries the API image already gets from Debian.
+- **Fix:** The API job runs in `python:3.12.15-slim-trixie` (the Dockerfile's base, same digest),
+  installs Pango, HarfBuzz, fontconfig and tzdata from Debian and caches the `.deb` files. Two
+  follow-ons: container steps default to `sh` (set `shell: bash`), and the base image's pip 25.0.1
+  fails pip-audit (upgraded in the venv, as `make install-api` does).
+- **Guard:** The API job itself; the system package step fails if `dpkg -s` misses a package.
+- **Prevention / follow-up:** None while Debian's mirrors serve the job.
+- **Search keywords:** apt, Ign, Temporary failure resolving, security.ubuntu.com, azure mirror,
+  ubuntu-latest, Ubuntu 26, resolute, PDF libraries, Pango, container job, sh, Syntax error "("
+
 ### 2026-11-11 — the patient assistant answers the same question two ways, and fails on some turns (`AI_UNAVAILABLE`)
 
 - **Milestone / area:** M7c-P7 / patient assistant (`application/assistant`, `adapters/llm`)

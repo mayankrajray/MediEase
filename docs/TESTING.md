@@ -115,6 +115,18 @@ HarfBuzz, fontconfig and tzdata from Debian: on 11 Nov 2026 every Ubuntu apt mir
 from the runner host (noble and resolute alike). The system packages' cache key names the base
 image digest; change both together.
 
+The API suite runs in parallel (`pytest -n auto`, pytest-xdist, 4 processes on the runner): about 7
+minutes instead of 13.5. Each process migrates its own scratch database, so they share no rows;
+the test count and both coverage gates are the same as a serial run. `make test-api` stays serial:
+on a WSL checkout under `/mnt/` the suite is bound by the file system, and 4 processes took as long
+(17 minutes). The suggestions timing test asserts its 150 ms budget only where `CI` is unset; in CI
+it checks that the query plan uses `ix_prescription_items_clinic_id_medicine_name` (developer
+decision, 11 Nov 2026, after a 569 ms run on a loaded runner).
+
+Not cached, deliberately: Docker image layers. The API image runs `apt-get upgrade`, and a cached
+layer would keep old packages until the cache was evicted, so Trivy would scan an image that a
+fresh build no longer produces.
+
 ## 6. Phase verification template
 
 Every phase hand-off includes:
