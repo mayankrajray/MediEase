@@ -68,33 +68,38 @@ M7c-P7 runs. Add them under "Backlog added during M7c-P7".
 | Clinic logo, cover, about, facilities | none | text hero |
 | "Fully booked" | days with no place are omitted by the API | show "No free times" for the gap; a true "Fully booked" badge needs an API change (API gap) |
 | Admin fee, online payment | none; pay at the clinic | "Pay at the clinic", no other charges, total = fee |
-| Clinic-page availability filter | per-doctor availability call | fetched only when the filter is turned on |
+| Doctors available on a date | per-doctor availability call | one call per doctor for the 14 days, cached; the date strip reads from it |
 
-## 4. Decisions to confirm when M7d starts
+## 4. Decisions (developer, 11 Nov 2026)
 
-1. Keep request-then-clinic-confirms, ending at "Requested" (instant booking needs an API and
-   product-rule change).
-2. Fee shown as "Pay at the clinic", no other charges (no payment provider exists).
-3. "Medical requirement" filter = text match on specialty and qualification, with specialty
-   suggestion chips and a "this is not medical advice" note (a symptom→specialty map needs
-   clinical review; AGENTS.md §7 forbids medical advice).
-4. No date pre-selected, so no times show until a date is chosen.
+1. **Keep request-then-clinic-confirms**, ending at "Requested". No instant booking.
+2. **Fee shown as "Pay at the clinic"**, no other charges; total = fee.
+3. **No filters at all on the clinic page.** No "medical requirement" filter, no qualification,
+   specialty, fee or availability filters: small clinics do not need them. The clinic page shows
+   the doctors who are available on the chosen date at that clinic.
+4. **Today is selected when booking starts.** The date strip lists the next 3–4 dates (today
+   first) and a calendar picker for later dates (within the 14-day window, never past dates).
+   Only the chosen date's data is shown. For that date, times are grouped into **Morning,
+   Afternoon and Evening**, each showing at most three slots at first, with the rest of that
+   part of the day revealed on request ("Show all morning times").
+
+(This replaces the four proposals the audit made on 10 Nov: proposal 3's text-match filter is
+dropped, and proposal 4's "no date pre-selected" becomes "today pre-selected".)
 
 ## 5. Plan (front end only)
 
 1. Search icon alignment in `FindPage.tsx`; clean result cards.
-2. Clinic profile: `PublicClinicPage.tsx` keeps the clinic only; new `ClinicDoctors.tsx` (search,
-   filters, doctor cards) and `doctorFilters.ts` (pure, unit-tested).
+2. Clinic profile: `PublicClinicPage.tsx` keeps the clinic only; new `ClinicDoctors.tsx`: the
+   date strip and the doctors available on the chosen date, as cards (no filters, decision 3).
 3. Doctor profile: new `DoctorProfile.tsx` on `/c/[slug]/doctors/[doctor]` (URL kept).
-4. `AppointmentPicker.tsx` + `availability.ts`: next 4 bookable dates, a calendar limited to the
-   14-day window, times after a date is chosen grouped into morning, afternoon and evening,
-   "N slots remaining" badges (warning at 3 or fewer), refetch when data is older than 60 s and
-   before moving to the confirmation.
+4. `AppointmentPicker.tsx` + `availability.ts`: today selected, the next 3–4 dates and a
+   calendar limited to the 14-day window; the chosen date's times grouped into morning, afternoon
+   and evening, three each until "Show all"; "N slots remaining" badges (warning at 3 or fewer);
+   refetch when data is older than 60 s and before moving to the confirmation.
 5. `RequestBooking.tsx` becomes the confirmation summary with "Pay at the clinic"; the server
    still rejects a full or held time (existing rule), and the page shows that message.
 6. Wording in `lib/i18n/booking-request.ts` and `lib/i18n/find.ts` (English and Hindi).
-7. Tests: update the unit tests of the touched components, add tests for `doctorFilters.ts` and
-   `availability.ts`, update `e2e/discovery.spec.ts`, `booking-requests.spec.ts`,
+7. Tests: update the unit tests of the touched components, add tests for `availability.ts`, update `e2e/discovery.spec.ts`, `booking-requests.spec.ts`,
    `booking-answers.spec.ts` and `booking-support.ts` (`requestPath`, `askFor`), and run them.
 8. Screenshots at the seven widths, the overflow audit and the page-weight check; update
    `docs/specs/discovery.md` and the booking-requests spec.
