@@ -6,7 +6,7 @@
 | PRD | §8.9 FR-PUB-01..04; §8.14 FR-BKG-01..03, 07, FR-DIS-05, 07, 08; NFR-02, 10, 11, 17, 19 |
 | ADR | ADR-0003 (tenancy), ADR-0015 (patient accounts), ADR-0017 (notifications), ADR-0018 (soft hold, Proposed) |
 | Design | `docs/milestones/M6b-patient-portal-booking.md` "M6b-P4" |
-| Last updated | 2026-10-25 |
+| Last updated | 2026-11-12 (R13a, M7d-P5) |
 
 ## 1. Context
 A clinic shares one link, `/c/{slug}`, on WhatsApp and its Google Business Profile. A patient
@@ -90,6 +90,15 @@ stateDiagram-v2
   marks them required). `reason` optional, 1–200 characters; `not_emergency_ack` must be true. The name is the account's. Nothing is stored on the account.
 - **R13** The form shows, in the page's language: "Not for emergencies. In an emergency call
   112 or go to the nearest hospital."
+- **R13a** *Confirmation (M7d-P5, 12 Nov 2026).* Before any detail is asked, the form sums up the
+  appointment (doctor, clinic, date, time; a token session reads "Session from 10:00 am, by
+  token") and the payment (the published consultation fee, total = fee, "Pay at the clinic", no
+  other charges and nothing paid online; with no published fee, "The clinic tells you the fee").
+  A screen reader hears the same in one sentence. "Change the time", and "Choose another time"
+  after a refusal, open the same doctor's page on the same date with the time still chosen; the
+  details typed are kept. Nothing says booked or confirmed before the server answers: "Requested"
+  appears only after the 201, and the send button is disabled while sending, so a second tap
+  posts nothing. No API change.
 - **R14** At most 5 `PENDING` requests per account (409 `PRT_TOO_MANY_REQUESTS`) and one per
   account per session (409 `PRT_REQUEST_EXISTS`).
 - **R15** Rate limits: per account 5 an hour, per IP 20 an hour, per phone 5 a day for requests;

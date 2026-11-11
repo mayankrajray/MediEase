@@ -161,3 +161,40 @@ Priority: fast booking with few decisions, clear availability, no surprises.
   plainly, and a taken time links back to the doctor's times.
 - Touch targets at least 44 px; visible keyboard focus; the existing tokens (`DESIGN.md`) and the
   accessibility checks of the journeys (axe, no sideways scroll).
+
+## 8. As built and verified (P1–P6, 11–12 Nov 2026)
+
+Front end only, as agreed: no API, schema or contract change. Every phase is one commit on
+`m7d/71-discovery-booking` (PR #72).
+
+| Phase | Built |
+|---|---|
+| P1 | Search icons centred on the input wrapper (`inset-y-0 flex items-center`); result cards with one "Next available" line |
+| P2 | `features/booking/availability.ts` (pure rules on a fixed clock) and `AppointmentPicker` with `DateStrip` |
+| P3 | `DoctorProfile` on `/c/[slug]/doctors/[doctor]`; selection in the address; re-check before leaving |
+| P4 | Clinic page with the date strip and the doctors free on the date (`useClinicAvailability`) |
+| P5 | `RequestBooking`: appointment and payment summary, "Change the time" back to the chosen time, "Requested" only after the 201 |
+| P6 | The P5 summary added to the booking journey; full suites; screenshots; page weights; specs (`discovery.md` R16–R21, `booking-requests.md` R13a) |
+
+**Verification (12 Nov 2026).** `make lint typecheck contract-check` green; `make test`: API 2583
+passed at 95.87% (`domain/` + `application/` 95%), web 776; `make up`, `make smoke` green; full
+Playwright suite on the CI settings (fake Google, console LLM, Mailpit): 57 of 57. Locally, 47
+passed in the first run. The other 10 failed only in `sessionRunningNow`, because the long-lived
+local database's session running at that moment was full from earlier runs. They all passed when
+rerun after that session ended. CI starts from an empty database.
+
+**Screenshots** (`.exports/m7d-before/`, `.exports/m7d-after/`, kept out of git): `/find` (doctors
+and clinics), `/c/sample-clinic`, the doctor profile, at 320, 375, 390, 430, 768, 1024 and 1440
+px. No page scrolls sideways at any width.
+
+**First-load weights at 360 px** (budget 200 KB = 204,800 bytes, NFR-02):
+
+| Page | Before M7d | After |
+|---|---|---|
+| `/find` | 163.9 KB | 166.9 KB |
+| `/c/sample-clinic` | 184.6 KB | 188.9 KB |
+| `/c/sample-clinic/doctors/{id}` | — | 191.8 KB (P3/P4) |
+| `/portal/request` | — | 195.8 KB |
+
+The request page has about 4 KB of headroom and `/` (unchanged by M7d) about 0.2 KB; backlog B2
+applies before any further patient-page feature.
