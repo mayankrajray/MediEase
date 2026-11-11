@@ -42,6 +42,36 @@ export interface BookingWords {
     readonly ask: string;
     readonly jumpTo: string;
   };
+  // M7d-P2 (design §7): the date strip, the calendar and the times of one date.
+  readonly picker: {
+    readonly chooseDate: string;
+    readonly today: string;
+    readonly tomorrow: string;
+    readonly otherDate: string;
+    readonly otherDateHint: (first: string, last: string) => string;
+    readonly outside: (first: string, last: string) => string;
+    readonly tileLeft: (n: number) => string;
+    readonly tileNone: string;
+    readonly timesOn: (day: string) => string;
+    readonly placesOn: (n: number) => string;
+    readonly parts: Readonly<Record<"morning" | "afternoon" | "evening", string>>;
+    readonly showAll: (part: string, more: number) => string;
+    readonly showFewer: (part: string) => string;
+    readonly span: (from: string, to: string) => string;
+    readonly choose: string;
+    readonly chosen: string;
+    readonly chooseLabel: (what: string) => string;
+    readonly noneOnDate: string;
+    readonly nextAvailable: (day: string) => string;
+    readonly firstAvailable: (day: string) => string;
+    readonly noneInWindow: string;
+    readonly loading: string;
+    readonly updating: string;
+    readonly failed: string;
+    readonly retry: string;
+    readonly gone: string;
+    readonly yourChoice: (when: string) => string;
+  };
   readonly form: {
     readonly title: string;
     readonly summary: (doctor: string, clinic: string, when: string) => string;
@@ -134,6 +164,35 @@ const EN: BookingWords = {
     allDoctors: "All doctors at this clinic",
     ask: "Ask",
     jumpTo: "Go to a day",
+  },
+  picker: {
+    chooseDate: "Choose a date",
+    today: "Today",
+    tomorrow: "Tomorrow",
+    otherDate: "Another date",
+    otherDateHint: (first, last) => `From ${first} to ${last}.`,
+    outside: (first, last) => `Choose a date from ${first} to ${last}.`,
+    tileLeft: (n) => `${n} left`,
+    tileNone: "No times",
+    timesOn: (day) => `Times on ${day}`,
+    placesOn: (n) => `${n} ${n === 1 ? "place" : "places"} left`,
+    parts: { morning: "Morning", afternoon: "Afternoon", evening: "Evening" },
+    showAll: (part, more) => `Show all ${part.toLowerCase()} times (${more} more)`,
+    showFewer: (part) => `Show fewer ${part.toLowerCase()} times`,
+    span: (from, to) => `${from}–${to}`,
+    choose: "Choose",
+    chosen: "Chosen",
+    chooseLabel: (what) => `Choose ${what}`,
+    noneOnDate: "No available times on this date.",
+    nextAvailable: (day) => `Next available: ${day}`,
+    firstAvailable: (day) => `First available: ${day}`,
+    noneInWindow: "No available times in the next 14 days. Please call the clinic.",
+    loading: "Loading times.",
+    updating: "Checking the latest times.",
+    failed: "We could not load the times.",
+    retry: "Try again",
+    gone: "The time you chose is no longer available. Please choose another.",
+    yourChoice: (when) => `Your choice: ${when}`,
   },
   form: {
     title: "Ask for this time",
@@ -245,6 +304,35 @@ const HI: BookingWords = {
     allDoctors: "इस क्लिनिक के सभी डॉक्टर",
     ask: "माँगें",
     jumpTo: "किसी दिन पर जाएँ",
+  },
+  picker: {
+    chooseDate: "तारीख़ चुनें",
+    today: "आज",
+    tomorrow: "कल",
+    otherDate: "कोई और तारीख़",
+    otherDateHint: (first, last) => `${first} से ${last} तक।`,
+    outside: (first, last) => `${first} से ${last} तक की कोई तारीख़ चुनें।`,
+    tileLeft: (n) => `${n} बाकी`,
+    tileNone: "समय नहीं",
+    timesOn: (day) => `${day} के समय`,
+    placesOn: (n) => `${n} जगह बाकी`,
+    parts: { morning: "सुबह", afternoon: "दोपहर", evening: "शाम" },
+    showAll: (part, more) => `${part} के सभी समय देखें (${more} और)`,
+    showFewer: (part) => `${part} के कम समय देखें`,
+    span: (from, to) => `${from}–${to}`,
+    choose: "चुनें",
+    chosen: "चुना गया",
+    chooseLabel: (what) => `${what} चुनें`,
+    noneOnDate: "इस तारीख़ पर कोई समय उपलब्ध नहीं है।",
+    nextAvailable: (day) => `अगला उपलब्ध समय: ${day}`,
+    firstAvailable: (day) => `पहला उपलब्ध समय: ${day}`,
+    noneInWindow: "अगले 14 दिनों में कोई समय उपलब्ध नहीं है। कृपया क्लिनिक को फ़ोन करें।",
+    loading: "समय लोड हो रहे हैं.",
+    updating: "नए समय देख रहे हैं.",
+    failed: "हम समय लोड नहीं कर सके।",
+    retry: "फिर कोशिश करें",
+    gone: "आपका चुना हुआ समय अब उपलब्ध नहीं है। कृपया दूसरा चुनें।",
+    yourChoice: (when) => `आपकी पसंद: ${when}`,
   },
   form: {
     title: "यह समय माँगें",
