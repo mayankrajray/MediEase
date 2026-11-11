@@ -32,6 +32,9 @@ test("M1: on a phone the header is the logo and Menu, and the open menu covers t
     );
     expect(onTop, `${name} is in front`).toBe(true);
   }
+  // The items fade in one after another (about 0.7 s); axe must read their final colours, not a
+  // frame of the fade (a slow CI runner caught "Staff sign in" half-transparent).
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
   await expectAccessible(page);
 
   // Choosing a section closes the menu and goes there.
