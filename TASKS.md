@@ -11,14 +11,14 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M7c — Demo polish, real configuration and Phase 2 deliverables** (issue #69, branch `m7c/69-demo-polish` from `main` at `c2b0274`, one PR for the milestone). M7 merged in PR #66 and its follow-up in PR #68 on 27 Oct 2026 (#65, #67 closed) |
-| Active phase | **M7c P3, P1, P2, P5, P6 (agent's part) and P4** (approved by the developer 9 Nov 2026, built in that order); P6's live tests wait for the developer; P7 waits for the developer's module list |
-| Design notes | `docs/milestones/M7c-demo-polish.md`, progress `docs/milestones/M7c-progress-report.md`; spec `docs/specs/assistant.md` (R15–R21); M8 already designed in `docs/milestones/M8-multi-clinic-whatsapp.md` |
-| Approved plan | `NEXT_STEPS_PLAN.md` (M7c phases; M7 history) |
+| Active milestone | **M7d — Patient discovery, clinic and doctor profiles, booking redesign** (issue #71, branch `m7d/71-discovery-booking` from `main` after M7c merged in PR #70 on 11 Nov 2026, PR #72). Next: M7e (#73, PR #74), then M9 (deployment on Vercel, Supabase and Oracle Cloud) |
+| Active phase | **M7d-P1** (search icons and result cards); P2–P6 follow in order (approved 11 Nov 2026) |
+| Design notes | `docs/milestones/M7d-discovery-booking.md` (decisions §4, approved phases and UX rules §7); M7e in `docs/milestones/M7e-pwa-push.md`; M8 designed in `docs/milestones/M8-multi-clinic-whatsapp.md` (skipped for now by the developer) |
+| Approved plan | `NEXT_STEPS_PLAN.md` §0 (M7d phases); M7c and M7 below it as history |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
-| Open decisions | L-09 (Google sign-in), L-10 (Groq key) and L-11 (Brevo email) are done (9 Nov 2026). The issue #49 title still says "MVP demo" (rename on GitHub by the developer). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test is flaky on CI (150 ms bound) |
-| Last updated | 9 Nov 2026 |
+| Open decisions | L-09 (Google sign-in), L-10 (Groq key) and L-11 (Brevo email) are done (9 Nov 2026). The issue #49 title still says "MVP demo" (rename on GitHub by the developer). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test checks the index plan in CI and the 150 ms bound locally (11 Nov 2026) |
+| Last updated | 11 Nov 2026 |
 
 
 ---
