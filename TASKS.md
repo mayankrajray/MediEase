@@ -11,9 +11,9 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M7d — Patient discovery, clinic and doctor profiles, booking redesign** (issue #71, branch `m7d/71-discovery-booking` from `main` after M7c merged in PR #70 on 11 Nov 2026, PR #72). Next: M7e (#73, PR #74), then M9 (deployment on Vercel, Supabase and Oracle Cloud) |
-| Active phase | **M7d complete** (P1–P6, 12 Nov 2026); PR #72 waits for the developer's review and merge. Next: M7e (#73) |
-| Design notes | `docs/milestones/M7d-discovery-booking.md` (decisions §4, approved phases and UX rules §7); M7e in `docs/milestones/M7e-pwa-push.md`; M8 designed in `docs/milestones/M8-multi-clinic-whatsapp.md` (skipped for now by the developer) |
+| Active milestone | **M7e — Installable app (PWA) and web push notifications** (issue #73, branch `m7e/73-pwa-push` on `main` after M7d merged in PR #72 on 12 Nov 2026, PR #74). Next: M9 (deployment on Vercel, Supabase and Oracle Cloud) |
+| Active phase | **M7e design** awaiting the developer's approval (`docs/milestones/M7e-pwa-push.md` §7); E1 follows |
+| Design notes | `docs/milestones/M7e-pwa-push.md`; M7d (done) in `docs/milestones/M7d-discovery-booking.md`; M8 designed in `docs/milestones/M8-multi-clinic-whatsapp.md` (skipped for now by the developer) |
 | Approved plan | `NEXT_STEPS_PLAN.md` §0 (M7d phases); M7c and M7 below it as history |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
@@ -275,7 +275,7 @@ Build order (approved): P3 → P1 → P2 → P5 → P6 → P4 → P7 → P8.
 | M7c-P7 | Landing page and frontend redesign: design system (Phase 1) then modules M1–M10 (`docs/milestones/M7c-P7-modules.md`) | ✅ Phase 1 and modules M1–M10 built and gated (9–10 Nov 2026); full `make e2e` 57/57; report `docs/milestones/M7c-P7-final-report.md` |
 | M7c-P8 | Demo rehearsal, full suites and `make e2e`, Phase 2 deliverable documents | ☐ |
 
-## M7d — Patient discovery, clinic and doctor profiles, booking redesign  `◐ (active)`
+## M7d — Patient discovery, clinic and doctor profiles, booking redesign  `✅ (merged 12 Nov 2026, PR #72)`
 
 **Design:** `docs/milestones/M7d-discovery-booking.md` (the developer's brief of 10 Nov 2026, the
 audit, data gaps, decisions and the reference image `M7d-reference-image.png`). Front end only: no
@@ -292,11 +292,19 @@ design).
 | M7d-P5 | Confirmation: appointment summary, "Pay at the clinic", total = fee, the request form, ending at "Requested" | ✅ 12 Nov 2026: 2 new tests (summary and payment, one send, token session, unknown fee); portal, booking and i18n suites 88; lint, typecheck |
 | M7d-P6 | Journeys and full `make e2e`, screenshots at seven widths, page weights, specs and milestone record | ✅ 12 Nov 2026: `make lint typecheck contract-check`; API 2583 (95.87%), web 776; `make smoke`; full Playwright suite (design §8); no sideways scroll at seven widths; request page 195.8 KB |
 
-## M7e — Installable app (PWA) and web push notifications  `☐ (planned; after M7d)`
+## M7e — Installable app (PWA) and web push notifications  `◐ (active; design awaiting approval)`
 
-**Design:** `docs/milestones/M7e-pwa-push.md` (decisions of 11 Nov 2026, audit, phases E1–E5).
-Issue #73, branch `m7e/73-pwa-push` (from `m7d/71-discovery-booking`; its PR targets that branch
-until M7d is merged), one PR. Nothing is built yet.
+**Design:** `docs/milestones/M7e-pwa-push.md` (decisions of 11 Nov 2026, audit, phases E1–E5,
+open points §7). Issue #73, branch `m7e/73-pwa-push` (rebased onto `main` after M7d merged in
+PR #72, 12 Nov 2026), PR #74, one PR. Nothing is built yet.
+
+| Phase | Scope | Status |
+|---|---|---|
+| M7e-E1 | Installable app: manifest, icons, service worker, offline page, install prompt | ☐ |
+| M7e-E2 | Push subscriptions per device (migration `0043`), API and contract | ☐ |
+| M7e-E3 | Delivery: `send_push` jobs, `WebPushPort`, generic text, expiry and retries | ☐ |
+| M7e-E4 | Appointment and follow-up reminders for app users | ☐ |
+| M7e-E5 | Settings, offline, docs, full suites and real-device checks | ☐ |
 
 ## M8 — Multi-clinic WhatsApp and consolidated billing  `☐ (designed)`
 
