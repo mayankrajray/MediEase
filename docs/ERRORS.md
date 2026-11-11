@@ -358,7 +358,7 @@ prescription or upload) is the generic `REQ_NOT_FOUND` (404); a malformed conver
 
 | Code | HTTP | Meaning | Likely cause | Where to look |
 |---|---|---|---|---|
-| `AI_UNAVAILABLE` | 503 | The assistant is not available right now | The model timed out (`LLM_TIMEOUT_SECONDS`), the provider failed or answered something unreadable, or the key is wrong (401 from the provider) | `assistant.llm_failed` with `status` or `kind`; the provider's status page; `LLM_*` settings |
+| `AI_UNAVAILABLE` | 503 | The assistant is not available right now | The model timed out (`LLM_TIMEOUT_SECONDS`), the provider failed or answered something unreadable, or the key is wrong (401 from the provider) | `assistant.llm_failed` with `status`, `kind` and the provider's `code` (M7c-P7: `tool_use_failed` is retried once, `assistant.llm_retried`); the provider's status page; `LLM_*` settings. Patients see a plain explanation and their message back in the box, without the reference (assistant R26) |
 | `AI_PROVIDER_BUSY` | 503 (Retry-After) | The assistant is busy; try in a minute | The provider's own rate limit (Groq's free tier allows about 30 requests a minute) | `assistant.llm_failed status=429`; the provider plan |
 | `AI_RATE_LIMITED` | 429 (Retry-After) | Too many messages | More than 12 turns a minute from one account or staff user | `public_rate_limits` bucket `assistant:<caller>:<id>` |
 | `AI_PROPOSAL_INVALID` | 404 | This confirmation is no longer valid | The token expired (10 minutes), was altered, belongs to another account, user or clinic, or names an action the caller no longer has | `assistant.proposal_refused` with `reason` |

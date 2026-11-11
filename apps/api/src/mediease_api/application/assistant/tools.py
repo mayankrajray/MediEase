@@ -73,8 +73,19 @@ def spec(
     properties: Mapping[str, Mapping[str, JsonValue]] | None = None,
     required: tuple[str, ...] = (),
 ) -> ToolSpec:
-    """A JSON Schema object for the tool's arguments."""
-    props: dict[str, JsonValue] = {k: dict(v) for k, v in (properties or {}).items()}
+    """A JSON Schema object for the tool's arguments.
+
+    M7c-P7 (assistant R22): an optional argument also accepts ``null``. Models often send
+    ``"city": null`` for one they leave out, and Groq refuses a call that does not match the
+    schema (``tool_use_failed``); ``Args`` already reads ``null`` as absent.
+    """
+    props: dict[str, JsonValue] = {}
+    for key, value in (properties or {}).items():
+        prop: dict[str, JsonValue] = dict(value)
+        kind = prop.get("type")
+        if key not in required and isinstance(kind, str):
+            prop["type"] = [kind, "null"]
+        props[key] = prop
     schema: dict[str, JsonValue] = {
         "type": "object",
         "properties": props,

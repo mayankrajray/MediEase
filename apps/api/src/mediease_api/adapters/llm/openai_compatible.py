@@ -11,9 +11,11 @@ an object instead of a JSON string, and some leave out a tool call's ``id`` (one
 tool result can still be paired with its call).
 
 Failures: the provider's 429 is ``LlmBusy`` (with its ``Retry-After``); a timeout, a dropped
-connection, any other non-2xx answer, or a body we cannot read is ``LlmUnavailable``. Nothing is
-retried here (a turn is interactive; the user retries). Logged: the status and the failure kind,
-never the request or the answer, which may hold a prescription's lines.
+connection, any other non-2xx answer, or a body we cannot read is ``LlmUnavailable``. One thing
+is retried, once: a 400 whose code says the model's own tool call could not be parsed
+(``tool_use_failed``, M7c-P7), which is the model's slip, not the request's. Logged: the status,
+the failure kind and the provider's short error code, never the request or the answer, which may
+hold a prescription's lines.
 """
 
 from __future__ import annotations
@@ -44,6 +46,8 @@ logger = structlog.get_logger(__name__)
 DEFAULT_RETRY_AFTER_SECONDS = 20
 MAX_TOKENS = 700
 TEMPERATURE = 0.2
+# 400 codes that mean the model wrote a tool call the provider could not parse (Groq).
+RETRYABLE_400 = frozenset({"tool_use_failed"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +121,16 @@ def _tool(spec: ToolSpec) -> dict[str, Any]:
             "parameters": dict(spec.parameters),
         },
     }
+
+
+def _error_code(body: bytes) -> str | None:
+    """The provider's error code from an OpenAI-style error body, if it has a short one."""
+    try:
+        error = json.loads(body).get("error") or {}
+        code = error.get("code") or error.get("type")
+    except (ValueError, AttributeError):
+        return None
+    return code if isinstance(code, str) and len(code) <= 64 else None
 
 
 def _retry_after(value: str | None) -> int:
@@ -235,6 +249,15 @@ class OpenAICompatibleLlm:
             result = self._transport(
                 self._url, json.dumps(payload).encode(), headers, self._timeout
             )
+            if result.status == 400 and _error_code(result.body) in RETRYABLE_400:
+                # M7c-P7 (assistant R22): Groq answers 400 tool_use_failed when the model wrote
+                # a tool call it could not parse; the same request usually succeeds at once.
+                logger.warning(
+                    "assistant.llm_retried", provider=self._provider, code=_error_code(result.body)
+                )
+                result = self._transport(
+                    self._url, json.dumps(payload).encode(), headers, self._timeout
+                )
         except (TimeoutError, OSError) as error:
             logger.warning(
                 "assistant.llm_failed", provider=self._provider, kind=type(error).__name__
@@ -244,7 +267,14 @@ class OpenAICompatibleLlm:
             logger.warning("assistant.llm_failed", provider=self._provider, status=429)
             raise LlmBusy(_retry_after(result.retry_after))
         if not 200 <= result.status < 300:
-            logger.warning("assistant.llm_failed", provider=self._provider, status=result.status)
+            logger.warning(
+                "assistant.llm_failed",
+                provider=self._provider,
+                status=result.status,
+                # The provider's error code only (for example tool_use_failed); never its text,
+                # which can quote the conversation.
+                code=_error_code(result.body),
+            )
             raise LlmUnavailable(f"status {result.status}")
         try:
             return parse_reply(result.body)

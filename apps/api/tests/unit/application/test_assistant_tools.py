@@ -9,7 +9,7 @@ import pytest
 
 from mediease_api.application.assistant.engine import MessageRole, TurnMessage, check_messages
 from mediease_api.application.assistant.staff import StaffToolbox
-from mediease_api.application.assistant.tools import Args, ToolArgumentError
+from mediease_api.application.assistant.tools import Args, ToolArgumentError, spec, string
 from mediease_api.application.context import RequestContext, RequestInfo
 from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.identity.permissions import Permission
@@ -85,3 +85,11 @@ def test_r3_message_limits() -> None:
     ):
         with pytest.raises(InvalidValue):
             check_messages(bad)
+
+
+def test_r22_optional_arguments_accept_null_so_providers_do_not_refuse_the_call() -> None:
+    tool = spec("t", "d", {"query": string("q"), "city": string("c")}, ("query",))
+    props = tool.parameters["properties"]
+    assert isinstance(props, dict)
+    assert props["query"] == {"type": "string", "description": "q"}
+    assert props["city"] == {"type": ["string", "null"], "description": "c"}

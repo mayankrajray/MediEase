@@ -125,6 +125,34 @@ sequenceDiagram
   their IDs; with more than one doctor the model asks which before choosing a session.
 - **R21 (M7c-P4)** Replies may use bold, italics and `-` or `1.` lists; the chat renders only
   those, as React elements. Links, images, tables and HTML are shown as plain text.
+- **R22 (M7c-P7)** Reliability and consistency (developer's conversations, 10–11 Nov 2026):
+  - Optional tool arguments accept `null` (Groq refused `"city": null` as `tool_use_failed`).
+  - A `400 tool_use_failed` is retried once; the log carries the provider's short error code.
+  - If the provider fails after a tool ran in the same turn, the reply is that tool's own
+    summary (written by our code from the records) instead of an error.
+  - `search_clinics` takes an empty query to list and count every clinic that takes bookings
+    ("N clinics take bookings on MediEase"), so "how many clinics" has one answer.
+  - `my_profile` returns the signed-in person's name and email, sent only when asked.
+  - The patient prompt gives today's and tomorrow's dates, maps "kal", "subah", "dopahar" and
+    "shaam", and says a reply of "1", "yes" or "pehla wala" refers to the list just shown.
+- **R23 (M7c-P7)** The browser sends only the visible conversation, so the booking tools take
+  **names**: `list_slots` and `request_booking` accept the clinic's name (or slug) and the doctor's
+  name (or ID; optional when the clinic has one doctor). An exact name wins over a fuzzy one
+  ("Sample Clinic" is never "Sample Clinic Two"); several matches go back to the model as a
+  question to ask. A search phrase that names a listed clinic or doctor inside other words
+  ("sample clinic me Dr. Sample Doctor") finds it.
+- **R24 (M7c-P7)** `list_slots` takes `date` (one day only) and `part_of_day` (morning before 12:00,
+  afternoon 12:00–16:59, evening from 17:00, on the clinic's clock; Hinglish words accepted).
+  `request_booking` takes the chosen entry's `date` and `time` and resolves them against what is
+  free now; a time no longer free goes back to the model (`BAD_ARGUMENTS`) and nothing is
+  proposed. The older `clinic_slug`, `doctor_id`, `session_start` and `slot_start` still work.
+- **R25 (M7c-P7)** The console rules model (local, CI, demo) answers in Hindi when the prompt
+  does, picks from a numbered clinic list ("1", "pehla wala"), counts clinics, and keeps dates and
+  times out of clinic searches.
+- **R26 (M7c-P7)** On the patient pages a failed turn says why and what to do in plain words, by
+  code (`AI_UNAVAILABLE`, `AI_PROVIDER_BUSY`, `AI_RATE_LIMITED`, no connection), in English or
+  Hindi; the unanswered message goes back into the box (and out of the conversation), and no
+  `Ref:` is shown. Staff pages keep the reference.
 
 ## 5. API surface
 | Method | Path | Request | Success | Errors |

@@ -6,7 +6,9 @@ a model's tool calls and records everything it was sent. Synthetic people and da
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from flask.testing import FlaskClient
@@ -28,6 +30,7 @@ from tests.booking_helpers import ensure_schedule, offers, verified_client
 from tests.conftest import World
 from tests.integration.test_appointments_http import _patient
 from tests.integration.test_prescriptions_http import _issued
+from tests.integration.test_search_http import _discoverable_a
 from tests.portal_helpers import PORTAL, link_by_invite, portal_client
 from tests.sessions_now import running_session
 
@@ -249,6 +252,111 @@ def test_fr_ai_01_booking_by_chat_asks_then_proposes_then_books_once(world: Worl
 
     again = patient_confirm(patient, token)
     assert again.status_code == 409 and _code(again) == "AI_PROPOSAL_USED"
+
+
+def _first_time(world: World, first: dict[str, Any]) -> datetime:
+    """The first free time of a session on the clinic's clock."""
+    start = first["slots"][0]["starts_at"] if first["slots"] else first["starts_at"]
+    return datetime.fromisoformat(start).astimezone(ZoneInfo(world.a.clinic.timezone))
+
+
+def test_r23_r24_names_a_date_and_a_time_find_and_book_the_same_time(world: World) -> None:
+    """M7c-P7: the browser sends only the visible words, so tools take names, a date and a time
+    and resolve them on the server against what is free now."""
+    _discoverable_a(world)
+    w, patient, llm, first = _booking_turns(world)
+    at = _first_time(w, first)
+    clinic, doctor = w.a.clinic.name, w.a.doctor.display_name
+
+    llm.steps = [
+        call("list_slots", clinic=clinic, doctor=doctor, date=at.date().isoformat()),
+        say("Here are the times."),
+    ]
+    patient_turn(patient, user(f"free times at {clinic} on {at.date()}"))
+    listed = llm.tool_results()[-1]["data"]
+    assert listed["clinic"] == clinic and listed["times"]
+    assert {t["date"] for t in listed["times"]} == {at.date().isoformat()}
+
+    llm.steps = [
+        call("list_slots", clinic=clinic, date=at.date().isoformat(), part_of_day="subah"),
+        call("list_slots", clinic=clinic, date=at.date().isoformat(), part_of_day="evening"),
+        say("ok"),
+    ]
+    patient_turn(patient, user("morning, and evening?"))
+    morning, evening = (r["data"]["times"] for r in llm.tool_results()[-2:])
+    assert morning and all(t["time"] < "12:00" for t in morning)
+    assert evening == []  # the doctor works 10:00-13:00
+    assert "has no free time on" in llm.tool_results()[-1]["summary"]
+
+    llm.steps = [
+        call(
+            "request_booking",
+            clinic=clinic,
+            doctor=doctor,
+            date=at.date().isoformat(),
+            time=at.strftime("%H:%M"),
+            contact_phone="9000000777",
+        )
+    ]
+    proposed = patient_turn(patient, user("1, 9000000777")).get_json()
+    assert proposed["kind"] == "CONFIRM", proposed
+    assert clinic in proposed["reply"]
+
+    llm.steps = [
+        call(
+            "request_booking",
+            clinic=clinic,
+            date=at.date().isoformat(),
+            time="03:17",
+            contact_phone="9000000777",
+        ),
+        say("That time is not free any more."),
+    ]
+    refused = patient_turn(patient, user("3:17 then")).get_json()
+    assert refused["kind"] == "ANSWER"
+    assert llm.tool_results()[-1]["error"] == "BAD_ARGUMENTS"
+    assert patient.get(f"{PORTAL}/booking-requests").get_json()["items"] == []
+
+
+def test_r22_a_provider_failure_after_a_tool_answers_with_the_tools_own_words(
+    world: World,
+) -> None:
+    _discoverable_a(world)
+    _, patient, llm, _ = _booking_turns(world)
+    llm.steps = [call("search_clinics", query=""), LlmUnavailable("status 400")]
+    body = patient_turn(patient, user("which clinics are there?")).get_json()
+    assert body["kind"] == "ANSWER"
+    assert "take bookings on MediEase" in body["reply"]
+    # Without a tool result there is nothing of ours to say: the failure stays a failure.
+    llm.steps = [LlmUnavailable("status 400")]
+    assert patient_turn(patient, user("hello")).status_code == 503
+
+
+def test_r23_a_clinic_and_doctor_named_in_one_phrase_are_found(world: World) -> None:
+    _discoverable_a(world)
+    w, patient, llm, _ = _booking_turns(world)
+    phrase = f"kal dopahar {w.a.clinic.name} me {w.a.doctor.display_name}"
+    llm.steps = [call("search_clinics", query=phrase), say("ok")]
+    patient_turn(patient, user(phrase))
+    found = llm.tool_results()[-1]["data"]["clinics"]
+    assert [c["name"] for c in found] == [w.a.clinic.name]
+
+
+def test_r22_counting_clinics_an_exact_name_and_the_users_own_name(world: World) -> None:
+    _discoverable_a(world)
+    w, patient, llm, _ = _booking_turns(world)
+    llm.steps = [
+        call("search_clinics", query=""),
+        call("search_clinics", query=w.a.clinic.name),
+        call("my_profile"),
+        say("ok"),
+    ]
+    patient_turn(patient, user("how many clinics, which is mine, and what is my name?"))
+    every, exact, me = llm.tool_results()[-3:]
+    assert every["data"]["count"] >= 1
+    assert "take bookings on MediEase" in every["summary"]
+    assert [c["name"] for c in exact["data"]["clinics"]] == [w.a.clinic.name]
+    assert me["data"]["email"] == EMAIL
 
 
 def test_r8_a_proposal_is_bound_to_its_account_and_cannot_be_altered(world: World) -> None:
