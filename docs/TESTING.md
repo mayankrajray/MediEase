@@ -80,6 +80,39 @@ browser is installed on the host. Locally: `make up && make seed && make install
 the report and traces of a failure are in `apps/web/playwright-report/` and `test-results/`.
 Nightly runs against staging start in M6.
 
+**Incremental CI (from M7c, 11 Nov 2026).** A pull request runs only the jobs its changes can
+affect; the `Detect changes` job lists the changed files against the PR's base and writes what runs,
+and why, to the run's summary. The selection is by component, because the API and the web app meet
+only through `contracts/openapi.yaml` and the compose stack:
+
+| Changed | API | Web | Images | Stack and journeys |
+|---|---|---|---|---|
+| `apps/api/**` | ✓ | | ✓ | ✓ |
+| `apps/web/**` except `e2e/` | | ✓ | ✓ | ✓ |
+| `apps/web/e2e/**` | | | | ✓ |
+| `contracts/**` | ✓ | ✓ | ✓ | ✓ |
+| `docker-compose.yml`, `Makefile`, `.env.example`, `scripts/**` | | | | ✓ |
+| `.github/**` | ✓ | ✓ | ✓ | ✓ |
+| docs and other text | | | | |
+
+`Config and contract` and `Secrets scan` always run. Inside a job nothing is skipped: when the API
+is touched the whole API suite runs with its coverage gates, and the same for the web suite, because
+a changed shared module can break a test whose files did not change. A push to `main`, the nightly
+run (02:00 IST) and a manual run with *full* run every job. `CI result` is the one check to require:
+it fails if any job that ran failed or was cancelled.
+
+Caches (never test results): the API's virtual environment (key: Python patch version and
+`pyproject.toml`), mypy's incremental cache, the PDF renderer's `.deb` packages (key: runner
+image version, so the Ubuntu mirrors are used only when the image changes), the web's
+`node_modules` (key: `.nvmrc` and `package-lock.json`) and the Next.js build cache. Bump the `-v1`
+in a key to discard one.
+
+Runners: `Detect changes`, `Config and contract` and `CI result` run on `ubuntu-slim` (a 1 vCPU
+container, 15-minute cap, Docker CLI but no daemon). The other jobs need a full VM (Docker, or the
+API suite's ~15 minutes) and are pinned to `ubuntu-24.04`: on the Ubuntu 26 image behind
+`ubuntu-latest`, every Ubuntu apt mirror was unreachable (11 Nov 2026). Move them on once that
+image installs the PDF libraries.
+
 ## 6. Phase verification template
 
 Every phase hand-off includes:
