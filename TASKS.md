@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M7d — Patient discovery, clinic and doctor profiles, booking redesign** (issue #71, branch `m7d/71-discovery-booking` from `main` after M7c merged in PR #70 on 11 Nov 2026, PR #72). Next: M7e (#73, PR #74), then M9 (deployment on Vercel, Supabase and Oracle Cloud) |
-| Active phase | **M7d-P1** (search icons and result cards); P2–P6 follow in order (approved 11 Nov 2026) |
+| Active phase | **M7d-P2** (availability logic and the date and time picker); P1 done; P3–P6 follow in order (approved 11 Nov 2026) |
 | Design notes | `docs/milestones/M7d-discovery-booking.md` (decisions §4, approved phases and UX rules §7); M7e in `docs/milestones/M7e-pwa-push.md`; M8 designed in `docs/milestones/M8-multi-clinic-whatsapp.md` (skipped for now by the developer) |
 | Approved plan | `NEXT_STEPS_PLAN.md` §0 (M7d phases); M7c and M7 below it as history |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -275,13 +275,22 @@ Build order (approved): P3 → P1 → P2 → P5 → P6 → P4 → P7 → P8.
 | M7c-P7 | Landing page and frontend redesign: design system (Phase 1) then modules M1–M10 (`docs/milestones/M7c-P7-modules.md`) | ✅ Phase 1 and modules M1–M10 built and gated (9–10 Nov 2026); full `make e2e` 57/57; report `docs/milestones/M7c-P7-final-report.md` |
 | M7c-P8 | Demo rehearsal, full suites and `make e2e`, Phase 2 deliverable documents | ☐ |
 
-## M7d — Patient discovery, clinic and doctor profiles, booking redesign  `☐ (planned; not started)`
+## M7d — Patient discovery, clinic and doctor profiles, booking redesign  `◐ (active)`
 
 **Design:** `docs/milestones/M7d-discovery-booking.md` (the developer's brief of 10 Nov 2026, the
-audit, data gaps, plan and the reference image `M7d-reference-image.png`). Front end only; starts
-after M7c-P7. Further change requests made during M7c-P7 are recorded in that file.
-Issue #71, branch `m7d/71-discovery-booking` (from `m7c/69-demo-polish`; its PR targets that
-branch until M7c is merged), one PR. Decisions recorded 11 Nov 2026 (§4 of the design).
+audit, data gaps, decisions and the reference image `M7d-reference-image.png`). Front end only: no
+API, schema or contract change. Issue #71, branch `m7d/71-discovery-booking` (from `main` after
+M7c merged, 11 Nov 2026), PR #72, one PR. Phase plan and UX rules approved 11 Nov 2026 (§7 of the
+design).
+
+| Phase | Scope | Status |
+|---|---|---|
+| M7d-P1 | Search: icons centred on the inputs; result cards with one "Next available" line, no schedules | ✅ 11 Nov 2026: web 750 tests, lint, typecheck; no sideways scroll at the seven widths |
+| M7d-P2 | `availability.ts` + `AppointmentPicker`: today selected, next 4 dates and the native calendar (14 days), morning/afternoon/evening, three each until "Show all", places-left badges, 60 s staleness guard | ☐ |
+| M7d-P3 | Doctor profile on `/c/[slug]/doctors/[doctor]`: real facts only, About with Read more, the picker, sticky "Request this time" | ☐ |
+| M7d-P4 | Clinic page: text hero, the date strip and the doctors free on that date, no filters | ☐ |
+| M7d-P5 | Confirmation: appointment summary, "Pay at the clinic", total = fee, the request form, ending at "Requested" | ☐ |
+| M7d-P6 | Journeys and full `make e2e`, screenshots at seven widths, page weights, specs and milestone record | ☐ |
 
 ## M8 — Multi-clinic WhatsApp and consolidated billing  `☐ (designed)`
 

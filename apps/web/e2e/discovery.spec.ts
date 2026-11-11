@@ -59,7 +59,7 @@ test.describe("discovery at 360 px", () => {
     await expect(page).toHaveURL(/q=Sample\+Doctor/);
     const card = page.getByRole("listitem").filter({ hasText: DOCTOR_NAME }).filter({ hasText: "Sample Clinic," }).first();
     await expect(card).toBeVisible();
-    await expect(card).toContainText(/Free from|No free time/);
+    await expect(card).toContainText(/Next available: |No available times in the next 7 days/);
     await expectAccessible(page);
 
     // P7: the profile from the result carries via=directory to the time and the request form.
