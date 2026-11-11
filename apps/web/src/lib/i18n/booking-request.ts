@@ -144,6 +144,19 @@ export interface BookingWords {
     readonly when: string;
     readonly with: string;
     readonly at: string;
+    // M7d-P5 (design §7): the confirmation summary.
+    readonly appointment: string;
+    readonly date: string;
+    readonly time: string;
+    readonly sessionFrom: (time: string) => string;
+    readonly payment: string;
+    readonly consultation: string;
+    readonly payAtClinic: string;
+    readonly feeAtClinic: string;
+    readonly total: string;
+    readonly noOther: string;
+    readonly change: string;
+    readonly yourDetails: string;
   };
   readonly mine: {
     readonly title: string;
@@ -309,6 +322,18 @@ const EN: BookingWords = {
     when: "When",
     with: "Doctor",
     at: "Clinic",
+    appointment: "Your appointment",
+    date: "Date",
+    time: "Time",
+    sessionFrom: (time) => `Session from ${time}, by token`,
+    payment: "Payment",
+    consultation: "Consultation fee",
+    payAtClinic: "Pay at the clinic",
+    feeAtClinic: "The clinic tells you the fee",
+    total: "Total",
+    noOther: "No other charges. Nothing is paid online.",
+    change: "Change the time",
+    yourDetails: "Your details",
   },
   mine: {
     title: "Requested",
@@ -482,6 +507,18 @@ const HI: BookingWords = {
     when: "कब",
     with: "डॉक्टर",
     at: "क्लिनिक",
+    appointment: "आपकी अपॉइंटमेंट",
+    date: "तारीख़",
+    time: "समय",
+    sessionFrom: (time) => `${time} से सत्र, टोकन से`,
+    payment: "भुगतान",
+    consultation: "परामर्श शुल्क",
+    payAtClinic: "भुगतान क्लिनिक पर करें",
+    feeAtClinic: "शुल्क क्लिनिक बताएगा",
+    total: "कुल",
+    noOther: "कोई और शुल्क नहीं। ऑनलाइन कुछ नहीं देना है।",
+    change: "समय बदलें",
+    yourDetails: "आपकी जानकारी",
   },
   mine: {
     title: "अनुरोध भेजे गए",

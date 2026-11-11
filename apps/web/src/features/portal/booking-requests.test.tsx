@@ -27,7 +27,7 @@ const CLINIC = {
   booking_mode: "SLOTS",
   map_url: null,
   requires_age_sex: false,
-  doctors: [{ id: DOCTOR, display_name: "Dr. Mehta", qualification: null, specialty: null, hours: [] }],
+  doctors: [{ id: DOCTOR, display_name: "Dr. Mehta", qualification: null, specialty: null, languages: [], fee_paise: 50000, hours: [] }],
 };
 
 const REQUESTED = {
@@ -92,6 +92,51 @@ describe("the request form (M6b-P4, FR-PUB-02, FR-BKG-01)", () => {
     });
   });
 
+  it("M7d-P5: sums up the appointment and the payment before the details, and sends once", async () => {
+    let answer: (r: Response) => void = () => {};
+    const api = mockApi({
+      ...me(),
+      "GET /api/v1/public/clinics/sample-clinic": () => json(200, CLINIC),
+      "POST /api/v1/portal/booking-requests": () => new Promise<Response>((resolve) => (answer = resolve)),
+    });
+    await renderPortal(<RequestBooking />);
+    const form = await screen.findByRole("region", { name: "Ask for this time" });
+    for (const text of ["Your appointment", "Dr. Mehta", "Sample Clinic", "Mon, 2 Nov", "11:00 am", "Consultation fee", "Total", "Pay at the clinic"]) {
+      expect(within(form).getAllByText(text).length).toBeGreaterThan(0);
+    }
+    expect(within(form).getAllByText("₹500")).toHaveLength(2);
+    expect(within(form).getByText(/No other charges/)).toBeInTheDocument();
+    expect(within(form).getByText(/Consultation fee: ₹500\. Pay at the clinic\./)).toHaveClass("sr-only");
+    expect(within(form).getByRole("link", { name: "Change the time" }).getAttribute("href")).toContain(`/c/sample-clinic/doctors/${DOCTOR}?date=2026-11-02`);
+    // Nothing says booked or confirmed before the server answers; the page says a request is not a booking.
+    expect(within(form).queryByRole("heading", { name: /requested|booked|confirmed/i })).not.toBeInTheDocument();
+    expect(within(form).queryByRole("status")).not.toBeInTheDocument();
+    expect(form).toHaveTextContent("A request is not a confirmed booking.");
+
+    fireEvent.change(within(form).getByLabelText(/Phone number/), { target: { value: "9000000601" } });
+    fireEvent.click(within(form).getByLabelText("This is not an emergency."));
+    const send = within(form).getByRole("button", { name: "Send request" });
+    fireEvent.click(send);
+    fireEvent.click(send);
+    await waitFor(() => expect(send).toBeDisabled());
+    expect(screen.queryByText("Requested")).not.toBeInTheDocument();
+    expect(api.calls.filter((c) => c.method === "POST")).toHaveLength(1);
+    answer(json(201, REQUESTED));
+    expect(await screen.findByRole("region", { name: "Requested" })).toHaveTextContent("It is not confirmed until they do.");
+  });
+
+  it("M7d-P5: a token session says it is by token, and an unknown fee is left to the clinic", async () => {
+    navigation.search = `?clinic=sample-clinic&doctor=${DOCTOR}&session=${SESSION}`;
+    mockApi({
+      ...me(),
+      "GET /api/v1/public/clinics/sample-clinic": () => json(200, { ...CLINIC, doctors: [{ ...CLINIC.doctors[0], fee_paise: null }] }),
+    });
+    await renderPortal(<RequestBooking />);
+    const form = await screen.findByRole("region", { name: "Ask for this time" });
+    expect(within(form).getByText("Session from 10:00 am, by token")).toBeInTheDocument();
+    expect(within(form).getAllByText("The clinic tells you the fee").length).toBeGreaterThan(0);
+  });
+
   it("R12: age and sex are required when the clinic says so", async () => {
     mockApi({ ...me(), "GET /api/v1/public/clinics/sample-clinic": () => json(200, { ...CLINIC, requires_age_sex: true }) });
     await renderPortal(<RequestBooking />);
@@ -112,7 +157,13 @@ describe("the request form (M6b-P4, FR-PUB-02, FR-BKG-01)", () => {
     fireEvent.click(within(form).getByLabelText("This is not an emergency."));
     fireEvent.click(within(form).getByRole("button", { name: "Send request" }));
     expect(await within(form).findByRole("alert")).toHaveTextContent(/clinic is holding it/);
-    expect(within(form).getByRole("link", { name: "Choose another time" })).toHaveAttribute("href", "/c/sample-clinic");
+    // M7d-P5: back to the same doctor and date, with the time still chosen there.
+    expect(within(form).getByRole("link", { name: "Choose another time" })).toHaveAttribute(
+      "href",
+      `/c/sample-clinic/doctors/${DOCTOR}?date=2026-11-02&session=2026-11-02T04%3A30%3A00Z&slot=2026-11-02T05%3A30%3A00Z`,
+    );
+    // The details typed stay as they were.
+    expect(within(form).getByLabelText(/Phone number/)).toHaveValue("9000000601");
   });
 
   it("R15: a rate limit says how long to wait", async () => {

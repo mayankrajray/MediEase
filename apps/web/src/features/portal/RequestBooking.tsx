@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CalendarClock, CircleAlert, Stethoscope } from "lucide-react";
+import { Building2, CalendarDays, CircleAlert, Clock, Stethoscope } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
@@ -9,8 +9,11 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { CheckboxField, ErrorSummary, SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
+import { clinicToday } from "@/features/booking/availability";
+import { doctorHref } from "@/features/booking/links";
 import { ApiError, apiGet, type GetResponse } from "@/lib/api/client";
 import { portalPost } from "@/lib/auth/portal-session";
+import { rupees } from "@/lib/format/money";
 import { bookingWords } from "@/lib/i18n/booking-request";
 import { portalDay, portalTime } from "@/lib/i18n/portal";
 
@@ -79,10 +82,17 @@ export function RequestBooking() {
   const clinic = load.clinic;
   const at = slotStart ?? sessionStart;
   const when = `${portalDay(at, clinic.timezone, s)}${slotStart === null ? "" : `, ${portalTime(slotStart, clinic.timezone, s)}`}`;
+  // M7d-P5: back to the same doctor, date and time on the doctor's page.
+  const back = doctorHref({ slug, language: s.lang, viaDirectory: via }, doctorId, clinicToday(new Date(sessionStart), clinic.timezone), {
+    session: sessionStart,
+    slot: slotStart,
+  });
   return (
     <RequestForm
       clinic={clinic}
       doctorName={doctor.display_name}
+      feePaise={doctor.fee_paise}
+      back={back}
       doctorId={doctorId}
       sessionStart={sessionStart}
       slotStart={slotStart}
@@ -96,6 +106,8 @@ export function RequestBooking() {
 function RequestForm({
   clinic,
   doctorName,
+  feePaise,
+  back,
   doctorId,
   sessionStart,
   slotStart,
@@ -105,6 +117,8 @@ function RequestForm({
 }: Readonly<{
   clinic: Clinic;
   doctorName: string;
+  feePaise: number | null;
+  back: string;
   doctorId: string;
   sessionStart: string;
   slotStart: string | null;
@@ -126,6 +140,8 @@ function RequestForm({
   const [left, setLeft] = useState<ReadonlySet<string>>(new Set());
   const [checked, setChecked] = useState(false);
   const required = clinic.requires_age_sex;
+  const day = portalDay(slotStart ?? sessionStart, clinic.timezone, s);
+  const time = slotStart === null ? words.form.sessionFrom(portalTime(sessionStart, clinic.timezone, s)) : portalTime(slotStart, clinic.timezone, s);
   const optional = required ? undefined : ` ${words.form.optional}`;
   const leaveField = (field: string) => setLeft((now) => (now.has(field) ? now : new Set([...now, field])));
 
@@ -202,30 +218,52 @@ function RequestForm({
   return (
     <PortalCard id="request-title" title={words.form.title}>
       {/* What is being asked for, in one glance: doctor, clinic and time. */}
-      <p className="sr-only">{words.form.summary(doctorName, clinic.name, when)}</p>
-      <dl aria-hidden="true" className="grid gap-2 rounded-lg border border-line bg-surface-muted p-3 text-sm sm:grid-cols-3">
-        <div className="flex gap-2">
-          <Stethoscope aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-slate-500" />
-          <div className="min-w-0">
-            <dt className="text-slate-600">{words.form.with}</dt>
-            <dd className="break-words font-semibold text-slate-900">{doctorName}</dd>
-          </div>
+      <p className="sr-only">
+        {words.form.summary(doctorName, clinic.name, when)}. {words.form.consultation}: {feePaise === null ? words.form.feeAtClinic : `₹${rupees(feePaise)}`}.{" "}
+        {words.form.payAtClinic}.
+      </p>
+      {/* M7d-P5 (design §7): what is being asked for and what it costs, before any detail is typed.
+          The words above say it in one line to a screen reader; these rows are for the eye. */}
+      <div aria-hidden="true" className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2 rounded-lg border border-line bg-surface-muted p-3 text-sm">
+          <p className="font-semibold text-slate-900">{words.form.appointment}</p>
+          <dl className="space-y-2">
+            {[
+              { icon: Stethoscope, label: words.form.with, value: doctorName },
+              { icon: Building2, label: words.form.at, value: clinic.name },
+              { icon: CalendarDays, label: words.form.date, value: day },
+              { icon: Clock, label: words.form.time, value: time },
+            ].map(({ icon: Icon, label, value }) => (
+              <div key={label} className="flex gap-2">
+                <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-slate-500" />
+                <div className="flex min-w-0 flex-1 flex-wrap justify-between gap-x-3">
+                  <dt className="text-slate-600">{label}</dt>
+                  <dd className="break-words text-right font-semibold tabular-nums text-slate-900">{value}</dd>
+                </div>
+              </div>
+            ))}
+          </dl>
         </div>
-        <div className="flex gap-2">
-          <Building2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-slate-500" />
-          <div className="min-w-0">
-            <dt className="text-slate-600">{words.form.at}</dt>
-            <dd className="break-words font-semibold text-slate-900">{clinic.name}</dd>
-          </div>
+
+        <div className="space-y-2 rounded-lg border border-line bg-surface-muted p-3 text-sm">
+          <p className="font-semibold text-slate-900">{words.form.payment}</p>
+          <dl className="space-y-2">
+            <div className="flex flex-wrap justify-between gap-x-3">
+              <dt className="text-slate-600">{words.form.consultation}</dt>
+              <dd className="font-semibold tabular-nums text-slate-900">{feePaise === null ? words.form.feeAtClinic : `₹${rupees(feePaise)}`}</dd>
+            </div>
+            <div className="flex flex-wrap justify-between gap-x-3 border-t border-line pt-2">
+              <dt className="font-semibold text-slate-900">{words.form.total}</dt>
+              <dd className="font-semibold tabular-nums text-brand-800">{feePaise === null ? "–" : `₹${rupees(feePaise)}`}</dd>
+            </div>
+          </dl>
+          <p className="font-medium text-slate-900">{words.form.payAtClinic}</p>
+          <p className="text-slate-700">{words.form.noOther}</p>
         </div>
-        <div className="flex gap-2">
-          <CalendarClock aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-slate-500" />
-          <div className="min-w-0">
-            <dt className="text-slate-600">{words.form.when}</dt>
-            <dd className="font-semibold tabular-nums text-slate-900">{when}</dd>
-          </div>
-        </div>
-      </dl>
+      </div>
+      <Link href={back} className="inline-flex min-h-11 items-center text-sm font-semibold text-brand-800 underline underline-offset-2">
+        {words.form.change}
+      </Link>
       <p className="text-sm text-slate-700">{words.page.howItWorks}</p>
       {!verified && (
         <div role="note" id={`${ids.phone}-verify`} className="space-y-2 rounded-xl border border-warning-line bg-warning-soft p-3 text-slate-900">
@@ -235,6 +273,7 @@ function RequestForm({
           </Link>
         </div>
       )}
+      <h3 className="font-semibold text-slate-900">{words.form.yourDetails}</h3>
       <ErrorSummary title={words.form.check.title} errors={problems.length > 1 ? problems : []} />
       <form onSubmit={(event) => void submit(event)} className="space-y-4" noValidate>
         <TextField
@@ -301,7 +340,7 @@ function RequestForm({
             <ErrorNotice error={error} />
           ))}
         {error !== undefined && message !== undefined && !limited && (
-          <Link href={`/c/${encodeURIComponent(clinic.slug)}`} className="inline-flex min-h-11 items-center font-semibold text-brand-800 underline underline-offset-2">
+          <Link href={back} className="inline-flex min-h-11 items-center font-semibold text-brand-800 underline underline-offset-2">
             {words.form.chooseAnother}
           </Link>
         )}
