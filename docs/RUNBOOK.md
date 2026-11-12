@@ -46,7 +46,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 33. The assistant's model (M7a)
 34. Prescription uploads and ClamAV (M7b)
 35. Checking real configuration (M7c-P6)
-36. Web push keys and delivery (M7e-E3)
+36. Web push keys, delivery and the phone test (M7e-E3, E5)
 
 ---
 
@@ -907,7 +907,7 @@ has_trial, trial_ends_at FROM clinic_subscriptions WHERE clinic_id = '<id>';`
   against `127.0.0.1:3310` (`CLAMD_PUBLISH_PORT`); it skips when no clamd answers.
 
 ### 35. Checking real configuration (M7c-P6)
-36. Web push keys and delivery (M7e-E3)
+36. Web push keys, delivery and the phone test (M7e-E3, E5)
 **When:** after changing `.env`, before a demo, and after every deployment.
 Real values live only in `.env` (or the deployment's secret store). Nobody needs to open it to
 check it:
@@ -941,22 +941,14 @@ console model's fixed answers, as CI does. With `GOOGLE_OIDC_PROVIDER=google` or
 as `LLM_PROVIDER=console GOOGLE_OIDC_PROVIDER=fake docker compose up -d --wait api` (a shell
 variable overrides `.env` for that start), then `docker compose up -d --wait api` to go back.
 
-### 36. Web push keys and delivery (M7e-E3)
+### 36. Web push keys, delivery and the phone test (M7e-E3, E5)
 **When:** turning push on for an environment, rotating the keys, or a push that did not arrive.
 Push needs one VAPID key pair per environment: browsers subscribe with the public key, and the
-worker signs every push with the private key. `make vapid-keys` arrives in E5; until then:
+worker signs every push with the private key. Generate a pair (nothing is stored; it is only in
+the output):
 
 ```bash
-docker compose run --rm --no-deps -T api python - <<'EOF'
-import base64
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-key = ec.generate_private_key(ec.SECP256R1())
-b64 = lambda raw: base64.urlsafe_b64encode(raw).decode().rstrip("=")
-point = key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
-print("VAPID_PUBLIC_KEY=" + b64(point))
-print("VAPID_PRIVATE_KEY=" + b64(key.private_numbers().private_value.to_bytes(32, "big")))
-EOF
+make vapid-keys
 ```
 
 Put both lines in `.env` (or the secret store) with `PUSH_PROVIDER=webpush` and
@@ -973,4 +965,33 @@ production.
   state, run_at, last_error_code FROM jobs WHERE kind = 'send_push' ORDER BY created_at DESC
   LIMIT 20;` A job at night waits until 08:00 clinic time (quiet hours, web-push R38).
 - **Locally** `PUSH_PROVIDER=console` logs `push.console_sent` instead of sending. Real devices
-  need HTTPS, so the E5 device test runs through a tunnel.
+  need HTTPS, so the device test runs through a tunnel (below).
+**Real-device test (Android Chrome, through a tunnel).** A phone allows service workers and push
+only on HTTPS, so the local web app is reached through a temporary HTTPS address. Nothing about the
+stack changes: the browser calls the same origin, which proxies `/api` to the API.
+
+1. Put a pair from `make vapid-keys` in `.env` with `PUSH_PROVIDER=webpush` and
+   `VAPID_SUBJECT=mailto:<you>`, then `make up` and `make config-check` (push lines: `webpush`,
+   keys set). The worker must reach the internet (it posts to `fcm.googleapis.com`).
+2. Start a quick tunnel on the same machine: `cloudflared tunnel --url http://localhost:3000`. It
+   prints an address like `https://<words>.trycloudflare.com`; open it on the phone in Chrome.
+   Google sign-in will not work through it (its redirect goes to localhost): use the password
+   sign-in, e.g. the seeded `doctor@sample-clinic.example` with the demo password.
+3. **Staff alert.** On the phone, as the doctor: Settings → Notifications → *Turn on*, allow
+   notifications. On the computer, as `desk@sample-clinic.example`: book that doctor for a
+   patient. Between 08:00 and 21:00 IST the phone shows "New appointment · An appointment was
+   booked. Open MediEase to see it." (at night it waits until 08:00, R38). Tap it: Chrome opens
+   the queue for that day.
+4. **Patient alert.** On the phone, sign up at `/portal/sign-up` (or sign in), Account →
+   *Pop-up alerts on this device* → *Turn on*. On the computer, link that account to a patient
+   (the patient's profile → Patient app → invite; accept the invite on the phone), then book the
+   patient: "Appointment confirmed · Your appointment is confirmed. Open MediEase to see it."
+   Tap it: My appointments opens (or sign-in first, then My appointments).
+5. **Installed app.** Chrome menu → *Install app* (or *Add to Home screen*), open MediEase from
+   the home screen, check the switch still shows *On*, and repeat step 3 with the app closed.
+6. **Off.** *Turn off* on the phone; the next booking shows nothing on it.
+7. Record what was seen (time, which alert, where the tap went) in `docs/milestones/M7e-pwa-push.md`
+   §8, then stop the tunnel (Ctrl+C). The address dies with it.
+
+iPhone and iPad (iOS 16.4+) deliver web push only to the app added to the Home Screen; the
+switch says so in Safari. That check is still to do when an iPhone is available.
