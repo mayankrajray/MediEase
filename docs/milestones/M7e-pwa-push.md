@@ -141,3 +141,29 @@ that minute. The developer chose:
    API trusts it only with that secret. Off by default; M9 configures it for the hosting edge.
    Checked on the real stack with a 10-a-minute limit: two edge addresses had separate budgets,
    and an address sent by the browser itself was ignored.
+
+### E2 — Push subscriptions (12 Nov 2026)
+
+Built as designed; decisions recorded in ADR-0025 and spec `web-push.md` R10–R21.
+
+| Part | Where |
+|---|---|
+| Domain | `domain/push/subscription.py` (owner, endpoint allow-list, key checks, label, digest), `domain/push/errors.py` |
+| Storage | migration `0043`, `adapters/db/models/push.py`, `adapters/db/push.py`; `uow.push_subscriptions` |
+| Secrets at rest | `adapters/security/text_cipher.py` (`FernetTextCipher`, the phone-number keys) behind `ports/push.py` `TextCipherPort` |
+| Use cases | `application/push/subscriptions.py`: `SubscribeDevice`, `ListDevices`, `RemoveDevice`, `GetPushConfig` |
+| HTTP | `delivery/http/push.py`: `/api/v1/push/config`, `/api/v1/portal/push-subscriptions`, `/api/v1/me/push-subscriptions` |
+| Preferences | `PUSH` in `Channel` and `PatientChannel`; staff `STAFF_CHANNELS = (IN_APP, PUSH)`; patient `push` field |
+| Settings | `VAPID_PUBLIC_KEY` (empty or a 65-byte P-256 point) |
+| Contract | 0.52.0: the three paths, `PushConfig`, `PushSubscriptionIn`, `PushDevice`, `PushDeviceList`, `PushError`, `DevicePath`; `PUSH` in both channel enums |
+
+Choices made while building, within the approved design:
+
+- **Owner per person, endpoint by digest.** Unique SHA-256 of the endpoint, so a shared browser
+  moves to whoever subscribed last (R14) instead of delivering to two people.
+- **Allow-list of push services** (R12), because E3 will POST to the endpoint: anything else is a
+  request-forgery path to internal services or cloud metadata.
+- **Staff preferences list both channels.** The staff settings screen (web) filters to `IN_APP`
+  until E5 adds the push switches, so it shows no duplicates meanwhile.
+- **Audit metadata for staff preferences** names push changes `kind:PUSH`. In-app changes keep the
+  bare kind, so older rows and their readers are unchanged.

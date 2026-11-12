@@ -20,7 +20,7 @@ Status: codes marked *(planned)* are designed but not yet implemented; the miles
 | `PRT_` | Patient portal accounts (M6a-P3) | | `AUD_` | Audit log (M6a-P8) |
 | `SYS_` | Unexpected server errors | | `WEB_` | Web app → API (raised in the browser/web server, never by the API) |
 | `SUB_` | Plans and limits (M6d-P7) | | `AI_` | The assistant (M7a) |
-| `UPL_` | Prescription uploads (M7b) | | | |
+| `UPL_` | Prescription uploads (M7b) | | `PSH_` | Web push (M7e) |
 
 ## Platform
 
@@ -382,6 +382,18 @@ and counts, never the file name, the code read or anything else from the file.
 | `UPL_NOT_AWAITING` | 409 | Not waiting for the digits | The upload is verified, rejected or still being checked | the upload's state |
 | `UPL_NOT_VERIFIED` | 409 | Not verified | The assistant was given an upload that is not verified, was withdrawn or is past its 24 hours | `prescription_uploads.state`, `expires_at` |
 | `UPL_SELECTION_REQUIRED` | 409 | Choose a version first | A superseded upload with no version chosen | `prescription_uploads.selected_id` |
+
+## Web push (M7e)
+
+Spec `web-push.md` R10-R21, ADR-0025. A bad endpoint or key is the generic
+`REQ_VALIDATION_FAILED` (422) naming `endpoint`, `keys.p256dh` or `keys.auth`; another person's
+device is `REQ_NOT_FOUND` (404). Logs carry the owner kind and the device ID, never the endpoint,
+the keys or the user agent.
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `PSH_TOO_MANY_DEVICES` | 409 | Notifications are on for 10 devices; turn one off first | The person has 10 active devices | `push_subscriptions` by `account_id` or `user_id` |
+| `PSH_RATE_LIMITED` | 429 (Retry-After) | Too many attempts | More than 30 subscribe calls an hour from one person (a client loop) | `push.rate_limited`; `public_rate_limits` bucket `push-sub:` |
 
 Rejection codes (an upload's `rejection_code`, not HTTP errors): `UPL_INFECTED` (ClamAV found
 malware), `UPL_SCAN_UNAVAILABLE` (clamd unreachable on the last of 4 attempts), `UPL_NO_IDENTIFIER`

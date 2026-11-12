@@ -22,6 +22,7 @@ wrong, update the spec first, then the code.
 | [booking-requests.md](docs/specs/booking-requests.md) | FR-PUB, FR-BKG | M6b | Implemented (P4, P5) |
 | [clinic-onboarding.md](docs/specs/clinic-onboarding.md) | FR-ONB | M6c | P1 Approved and built; P2–P4 written at their start |
 | Discovery (`discovery.md`) | FR-DIS, FR-LND | M6c | Not started (written at P5) |
+| [web-push.md](docs/specs/web-push.md) | FR-NTF (push channel), NFR-02, NFR-08 | M7e | E1, E2 Implemented; E3–E5 Approved |
 
 Status values: `Not started` → `Draft` → `Approved` (developer sign-off; implementation may begin)
 → `Implemented` (all acceptance criteria have passing tests) → `Superseded`.
