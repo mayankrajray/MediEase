@@ -321,7 +321,8 @@ notices left for M7, and the clarifications written into R55, R58, R63, R65 and 
 - **R57** Kinds: `booking.accepted`, `booking.declined`, `booking.proposed`, `booking.expired`,
   `appointment.confirmed` (a staff booking; an accepted request's appointment is told once, as
   `booking.accepted`), `appointment.moved`, `appointment.cancelled`, `prescription.ready`,
-  `medicine.due`.
+  `medicine.due`; from M7e-E4 `appointment.reminder` and `follow_up.due` (spec `web-push.md`
+  R40–R46).
 - **R58** Delivery is idempotent: `(account_id, event_key)` is a unique constraint and rows are
   inserted with "on conflict do nothing", so replaying an event, or two workers handling it at
   once, writes nothing new (FR-NTF-06).

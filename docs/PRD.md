@@ -408,7 +408,7 @@ instruction appears under a "How to give" heading.
 | FR-REM-02 | Staff can schedule, edit or cancel a reminder manually for any patient. | P0 |
 | FR-REM-03 | Medicine-course reminders (optional per prescription): daily at chosen times until the course ends. | P1 |
 | FR-REM-04 | Reminders are never sent to opted-out patients, and never between 21:00 and 08:00 clinic time; due reminders in that window are deferred to 08:00. | P0 |
-| FR-REM-05 | Every reminder has a visible status: `SCHEDULED`, `SENT`, `DELIVERED`, `READ`, `FAILED`, `CANCELLED`, `SKIPPED_NO_CONSENT`. | P0 |
+| FR-REM-05 | Every reminder has a visible status: `SCHEDULED`, `SENT`, `DELIVERED`, `READ`, `FAILED`, `CANCELLED`, `SKIPPED_NO_CONSENT` (and from M7e-E4 `SENT_IN_APP`: reminded in the MediEase app instead of WhatsApp). | P0 |
 | FR-REM-06 | Failed WhatsApp sends fall back to SMS once, if the patient consented to SMS. | P1 |
 | FR-REM-07 | A "pending follow-ups" list shows patients whose follow-up date has passed without a visit. | P0 |
 

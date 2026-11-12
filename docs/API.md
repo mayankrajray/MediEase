@@ -811,3 +811,15 @@ latest_version, latest_issued_at, selected, expires_at}`. Nothing from the file 
 and no route serves the file back, to the account or to staff. A verified upload is used by
 naming `{upload_id}` as the assistant turn's `context`. Errors: `docs/ERRORS.md` "Prescription
 uploads".
+
+### Web push and app reminders (M7e)
+
+Contract 0.52.0 (E2): `GET /push/config` (public), and add, list and remove this browser's push
+device at `/portal/push-subscriptions` (`@patient`) and `/me/push-subscriptions` (staff); `PUSH`
+in both preference channel enums. Rules: spec `web-push.md` R10–R21. E3 (delivery) changed no
+route.
+
+Contract 0.53.0 (E4): `PatientNotificationKind` gains `appointment.reminder` and `follow_up.due`
+(the clinic's reminders for the account linked to the record), and `ReminderStatus` gains
+`SENT_IN_APP` (no WhatsApp consent; the app account was told). `POST /patients/{id}/reminders`
+is no longer `REM_NO_CONSENT` for a patient with a linked app account. Rules: R40–R46.

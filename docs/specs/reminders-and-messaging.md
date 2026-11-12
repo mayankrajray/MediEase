@@ -17,7 +17,8 @@ Staff schedule, edit and cancel reminders. The system schedules follow-ups from 
 Patients opt out by replying STOP.
 
 ## 3. Domain model
-- `Reminder` (`SCHEDULED → SENT → DELIVERED → READ`; `FAILED`, `CANCELLED`, `SKIPPED_NO_CONSENT`)
+- `Reminder` (`SCHEDULED → SENT → DELIVERED → READ`; `FAILED`, `CANCELLED`, `SKIPPED_NO_CONSENT`; from
+  M7e-E4 `SENT_IN_APP` when the patient's linked app account was told instead, spec `web-push.md` R43)
 - `Message` (`QUEUED → SENT → DELIVERED → READ`; `FAILED`)
 - `Job` (`queued → running → succeeded`; `running → queued` to retry; `dead` when attempts are
   used up or the failure is permanent; `cancelled` when the work no longer applies, e.g. a

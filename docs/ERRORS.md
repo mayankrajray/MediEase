@@ -313,7 +313,7 @@ Patient notifications reuse `REQ_NOT_FOUND` (another account's notice) and `REQ_
 
 | Code | HTTP | Meaning | Likely cause | Where to look |
 |---|---|---|---|---|
-| `REM_NO_CONSENT` | 409 | Patient hasn't agreed to messages | Consent false or opted out | Patient consent |
+| `REM_NO_CONSENT` | 409 | Patient hasn't agreed to messages | Consent false or opted out, and (M7e-E4) no app account linked to the record | Patient consent; the profile's patient app section |
 | `REM_IN_PAST` | 422 | The follow-up date is not after today | Client/timezone | Clock, clinic timezone |
 | `REM_CLINIC_PHONE_MISSING` | 409 (or on a reminder) | The clinic has no phone number, which `follow_up_due` needs (M5-P4 decision 6A): manual reminders are refused; an automatic one becomes `FAILED` with this code at send time | Phone not entered at onboarding | Clinic settings |
 | `REM_NOT_SCHEDULED` | 409 | The reminder was sent, cancelled or skipped and can no longer be changed (M5-P4) | A stale screen | The reminder's status |

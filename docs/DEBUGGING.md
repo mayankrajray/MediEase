@@ -103,7 +103,7 @@ every environment (`DB_ECHO_PARAMS=false` is enforced by settings validation).
 | Two patients booked into one slot | Concurrency | Session row lock missing or bypassed; unique index present? §5.5 |
 | Queue screen stale | Polling / ETag | Network tab: polling every 5 s? 304 forever although something changed? §5.5a |
 | Reminder shows `SCHEDULED` long after due time | Worker / jobs | Worker running? oldest queued job age; §5.6 |
-| Reminder `SKIPPED_NO_CONSENT` | Consent | Patient consent flags / opt-out — expected behaviour |
+| Reminder `SKIPPED_NO_CONSENT` | Consent | Patient consent flags / opt-out — expected behaviour. A linked app user with both reminder switches off also ends here (M7e-E4) |
 | Message `FAILED` with `MSG_TEMPLATE_*` | Provider templates | Template name/language/variables vs `templates.yaml`; §5.7 |
 | Status never moves past `SENT` | Webhooks | Webhook reachable? signature verification failing? §5.8 |
 | Patient link says expired/invalid | Links | Token expiry, revocation, or signing key rotated; §5.9 |
