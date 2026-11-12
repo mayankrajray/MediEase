@@ -167,3 +167,52 @@ Choices made while building, within the approved design:
   until E5 adds the push switches, so it shows no duplicates meanwhile.
 - **Audit metadata for staff preferences** names push changes `kind:PUSH`. In-app changes keep the
   bare kind, so older rows and their readers are unchanged.
+
+### E3 — Delivery (12 Nov 2026)
+
+Built as designed; rules in spec `web-push.md` R30–R38.
+
+| Part | Where |
+|---|---|
+| Words | `domain/push/message.py`: fixed title and body per kind (patient EN/HI, staff EN), the path, a tag, the push service's keep time; `waits_for_quiet_hours` |
+| Device state | `PushSubscription.mark_sent`, `disable(EXPIRED)` |
+| Job | `send_push` (clinic kind, no migration), one per device per notice, key `push:{device}:{sha256(event_key)[:32]}` |
+| Enqueue | `application/push/delivery.py` `enqueue_push`, called from `notify_patient` and the staff in-app dispatch (`NotificationService._in_app`) |
+| Send | `SendPush`: reads the device, the switch and (staff) the membership again, decrypts, sends, records |
+| Port and adapters | `ports/push.py` `WebPushPort`, `PushTarget`, `PushFailure`; `adapters/push/webpush.py` (`pywebpush` 2.5.0) and `adapters/push/console.py`; `bootstrap.build_push` |
+| Settings | `PUSH_PROVIDER` (`console` \| `webpush`), `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`; `make config-check` lists them |
+
+Choices made while building, within the approved design:
+
+- **Devices in one query.** A staff notice reads all its recipients' devices at once, and their
+  push switches only if someone has a device, so a dispatch's cost stays flat however many
+  members are told. `test_a_dispatch_costs_one_query_per_lookup_whatever_the_recipients` now
+  expects that one extra lookup (five statements, was four).
+- **Quiet hours (R38)** are the reminders' 21:00–08:00 on the clinic's clock. Every kind waits
+  except a medicine reminder (the patient's chosen time) and a patient's arrival. The staff
+  `KINDS[...].respects_quiet_hours` flag stays false: it describes the in-app notice, which never
+  waits (decision 7A, pinned by a test).
+- **Prescription and medicine pushes** say only "something new" or "a reminder", because naming
+  either is clinical on a lock screen.
+- **No redirects, 10-second timeout.** The adapter's HTTP session follows no redirect, so a push
+  can reach only the allow-listed host the endpoint names.
+- **The VAPID pair is checked at start-up.** A private key from another pair would have every
+  push refused (403); the worker stops instead.
+- **`pywebpush` brings `aiohttp`** for its async API, which we do not use; `pip-audit` reports no
+  known vulnerability in it, `requests`, `py-vapid` or `http-ece`.
+- **The service worker does not show pushes yet.** The `push` and `notificationclick` handlers
+  come with E5's settings and device test; until then no device can subscribe from the UI.
+
+**Checked on the local stack.** A doctor's device (synthetic endpoint) got one `send_push` job
+when the desk booked an appointment at 01:10 IST; it was held until 08:00 IST (`run_at` 02:30
+UTC). Brought forward, the worker logged `push.console_sent` (146 bytes, TTL 86,400) and
+`push.sent` with the device ID only, and the device's `last_success_at` was set. With
+`PUSH_PROVIDER=webpush` in the image, a generated pair built the adapter and a mismatched pair
+stopped it with `VAPID_PRIVATE_KEY is not the pair of VAPID_PUBLIC_KEY`.
+
+**Tests.** `tests/unit/domain/test_push_message.py` (every kind, both languages, links, keep
+times, quiet hours); `tests/unit/adapters/test_push_adapters.py` (the request decrypted as the
+browser would, VAPID header, each status and network failure, no redirects, the pair check,
+`build_push`); `tests/integration/test_push_delivery.py` (one job per device, replay, words,
+Hindi, both switches, removal and turning off after the notice, 404/410, retries, staff, a bad
+job, an unreadable device, night); settings validators.

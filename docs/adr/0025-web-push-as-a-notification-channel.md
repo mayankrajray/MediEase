@@ -44,6 +44,10 @@ with these rules:
 7. **Content (E3).** A push payload carries generic text per kind and the notice's link, never a
    name, clinic, doctor, time or anything clinical (design §1 decision 3). The notice in the
    database stays the record; push is best effort.
+   *As built (E3):* one `send_push` job per device per notice through `pywebpush` (RFC 8291
+   encryption, RFC 8292 VAPID); 404/410 disables the device, 429 and 5xx retry, other answers and
+   redirects are dead; pushes wait for the end of the quiet hours except a medicine reminder and
+   a patient's arrival (spec R30–R38).
 8. **Audit.** Adding and removing a device are audited (`push_device.added`, `.removed`) with the
    device's ID and label only. They belong to no clinic, so they never reach an owner's log.
 
@@ -62,7 +66,8 @@ with these rules:
   notices once it changes hands; nothing about a device is readable at rest.
 - Negative / costs: Fernet keys now protect device secrets too, so key rotation must keep old keys
   until every device has resubscribed or been removed. A browser not on the allow-list (a new push
-  service) needs a code change.
-- Follow-ups and triggers to revisit: E3 adds delivery (VAPID private key, `pywebpush`, expired
-  endpoints disabled on 404/410). Revisit the allow-list if a supported browser moves its push
-  service. Revisit ownership if devices ever need per-clinic quiet hours.
+  service) needs a code change. A VAPID key pair cannot be rotated without every device turning
+  push on again (RUNBOOK §36). `pywebpush` brings `aiohttp`, unused.
+- Follow-ups and triggers to revisit: delivery is built (E3, 12 Nov 2026). Revisit the
+  allow-list if a supported browser moves its push service. Quiet hours follow the notice's
+  clinic; revisit ownership if devices ever need their own quiet hours.

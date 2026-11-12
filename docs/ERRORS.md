@@ -383,21 +383,30 @@ and counts, never the file name, the code read or anything else from the file.
 | `UPL_NOT_VERIFIED` | 409 | Not verified | The assistant was given an upload that is not verified, was withdrawn or is past its 24 hours | `prescription_uploads.state`, `expires_at` |
 | `UPL_SELECTION_REQUIRED` | 409 | Choose a version first | A superseded upload with no version chosen | `prescription_uploads.selected_id` |
 
-## Web push (M7e)
-
-Spec `web-push.md` R10-R21, ADR-0025. A bad endpoint or key is the generic
-`REQ_VALIDATION_FAILED` (422) naming `endpoint`, `keys.p256dh` or `keys.auth`; another person's
-device is `REQ_NOT_FOUND` (404). Logs carry the owner kind and the device ID, never the endpoint,
-the keys or the user agent.
-
-| Code | HTTP | Meaning | Likely cause | Where to look |
-|---|---|---|---|---|
-| `PSH_TOO_MANY_DEVICES` | 409 | Notifications are on for 10 devices; turn one off first | The person has 10 active devices | `push_subscriptions` by `account_id` or `user_id` |
-| `PSH_RATE_LIMITED` | 429 (Retry-After) | Too many attempts | More than 30 subscribe calls an hour from one person (a client loop) | `push.rate_limited`; `public_rate_limits` bucket `push-sub:` |
-
 Rejection codes (an upload's `rejection_code`, not HTTP errors): `UPL_INFECTED` (ClamAV found
 malware), `UPL_SCAN_UNAVAILABLE` (clamd unreachable on the last of 4 attempts), `UPL_NO_IDENTIFIER`
 (no MediEase QR or printed code), `UPL_AMBIGUOUS` (two different IDs), `UPL_UNREADABLE` (damaged,
 password-protected, over 50 pages or 40 megapixels), `UPL_LOCKED` (5 wrong digits),
 `UPL_ABANDONED`, `UPL_EXPIRED` (the sweep), `UPL_WITHDRAWN` (the user), `UPL_FILE_MISSING` (the
 quarantined file was gone when the job ran).
+
+## Web push (M7e)
+
+Spec `web-push.md` R10-R21 and (delivery, M7e-E3) R30-R38, ADR-0025. A bad endpoint or key is
+the generic `REQ_VALIDATION_FAILED` (422) naming `endpoint`, `keys.p256dh` or `keys.auth`;
+another person's device is `REQ_NOT_FOUND` (404). Logs carry the owner kind and the device ID,
+never the endpoint, the keys, the words of a push or the user agent.
+
+| Code | HTTP | Meaning | Likely cause | Where to look |
+|---|---|---|---|---|
+| `PSH_TOO_MANY_DEVICES` | 409 | Notifications are on for 10 devices; turn one off first | The person has 10 active devices | `push_subscriptions` by `account_id` or `user_id` |
+| `PSH_RATE_LIMITED` | 429 (Retry-After) | Too many attempts | More than 30 subscribe calls an hour from one person (a client loop) | `push.rate_limited`; `public_rate_limits` bucket `push-sub:` |
+| `PSH_SERVICE_RATE_LIMITED` | job (retried) | The browser's push service asked us to slow down | 429 from FCM, Mozilla or Apple: a burst of notices; retried on the job's backoff (M7e-E3, R36) | `push.failed` with `code`, `status`, `device_id`; `jobs.last_error_code` for kind `send_push` |
+| `PSH_SERVICE_UNAVAILABLE` | job (retried) | The push service did not answer | 5xx, a 10-second timeout or no connection (the worker's network, or the service down); retried, then dead | `push.failed`; the worker's outbound network; the push service's status page |
+| `PSH_REFUSED` | job (dead) | The push service refused the message | 400/403/413 or a redirect: most often `VAPID_PRIVATE_KEY` not the pair the browser subscribed with (403), or the device was subscribed under an old `VAPID_PUBLIC_KEY`; not retried | `push.failed` `status`; `make config-check`; a changed key pair means every device must turn push on again (RUNBOOK §36) |
+
+A 404 or 410 from the push service is not an error: the browser unsubscribed, so the device is
+disabled with reason `EXPIRED` (`push.device_expired`) and the job succeeds (R34). A device the
+worker cannot decrypt (its `MESSAGING_PHONE_KEYS` key was removed) is skipped, `push.skipped`
+`reason=unreadable`.
+

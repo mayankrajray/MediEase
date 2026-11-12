@@ -1219,3 +1219,7 @@ Indexes: `ix_push_subscriptions_account_id`, `ix_push_subscriptions_user_id`.
 
 `notification_preferences.channel` and `patient_notification_preferences.channel` also allow
 `PUSH`. A missing row means on.
+
+M7e-E3 adds no table. `jobs` gains the clinic kind `send_push` (one per device per notice, dedupe
+`push:{device_id}:{first 32 hex of sha256(event_key)}`; payload: owner kind and ID, device ID,
+notice kind, link). Delivery sets `last_success_at`, or `disabled_at` with `EXPIRED` on 404/410.
