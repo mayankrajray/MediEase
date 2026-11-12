@@ -5,7 +5,13 @@ import type { ReactNode } from "react";
 import { Logo } from "@/components/ui/Logo";
 import { WithoutErrorRef } from "@/features/auth/ErrorNotice";
 import { LanguageCookieSwitch } from "@/features/portal/LanguageCookieSwitch";
+import { RegisterServiceWorker } from "@/features/pwa/RegisterServiceWorker";
+import { PWA_METADATA, PWA_VIEWPORT } from "@/lib/pwa/manifest";
 import { PORTAL_LANGUAGE_COOKIE, parsePortalLanguage, portalStrings } from "@/lib/i18n/portal";
+
+// M7e-E1: the installable app's manifest link and iPhone tags (src/lib/pwa/manifest.ts).
+export const metadata = PWA_METADATA;
+export const viewport = PWA_VIEWPORT;
 
 /**
  * The portal's signed-out frame (M6a-P3; M6b-P2 decision 1A): the sign-in card, in the language of
@@ -26,6 +32,7 @@ export default async function PortalAuthLayout({ children }: Readonly<{ children
       <div className="mt-8 w-full max-w-md rounded-2xl border border-line bg-surface shadow-pop">
         <WithoutErrorRef>{children}</WithoutErrorRef>
       </div>
+      <RegisterServiceWorker />
     </main>
   );
 }

@@ -48,6 +48,12 @@ const PUBLIC_PATHS: ReadonlySet<string> = new Set([
   "/icon.svg",
   "/apple-icon.png",
   "/design-system",
+  // M7e-E1: the installable app's files. They hold no data and must load for anyone, signed in
+  // or not, or the browser cannot install the app or show the offline page.
+  "/manifest.webmanifest",
+  "/sw.js",
+  "/sw-register.js",
+  "/offline.html",
 ]);
 // /p/<token>: the patient's prescription page (M4-P5); the token and the last-4 check guard it.
 // M6a-P4: emailed reset and verification links; the token in the path is the authority.
@@ -67,6 +73,8 @@ const PUBLIC_PREFIXES: readonly string[] = [
   "/portal/verify-email/",
   // M7c-P7: the logo files (apps/web/public/brand), for emails, documents and social previews.
   "/brand/",
+  // M7e-E1: the app icons rendered from the emblem (apps/web/public/icons).
+  "/icons/",
 ];
 
 /** Pages anyone may open without a session. */

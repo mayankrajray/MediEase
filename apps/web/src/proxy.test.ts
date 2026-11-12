@@ -99,6 +99,14 @@ describe("proxy (sign-in hint)", () => {
     // M6b-P1: linking needs a signed-in patient; the proxy sends others to sign in and back.
     expect(["/portal/link/x", "/portal/link/prescription/x"].some(isPublicPath)).toBe(false);
   });
+
+  it("M7e-E1: the installable app's files load without a session; nothing near them does", () => {
+    expect(["/manifest.webmanifest", "/sw.js", "/sw-register.js", "/offline.html", "/icons/icon-192.png", "/icons/maskable-512.png"].every(isPublicPath)).toBe(true);
+    expect(["/sw", "/offline", "/icons", "/manifest.json", "/sw.js/x"].some(isPublicPath)).toBe(false);
+    for (const path of ["/sw.js", "/manifest.webmanifest", "/offline.html"]) {
+      expect(proxy(signedOut(`http://localhost:3000${path}`)).status).toBe(200);
+    }
+  });
 });
 
 describe("proxy (patient portal, M6a-P3, ADR-0015)", () => {

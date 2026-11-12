@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#147d72" />
+    <title>You are offline · MediEase</title>
+    <!-- M7e-E1: shown by the service worker when a page cannot load. No script, no data. -->
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #f5f9f8;
+        color: #0f172a;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+      }
+      main {
+        box-sizing: border-box;
+        width: min(28rem, 100% - 2rem);
+        padding: 1.5rem;
+        border: 1px solid #e8eef1;
+        border-radius: 1rem;
+        background: #ffffff;
+        box-shadow: 0 1px 2px rgb(23 43 53 / 0.06);
+      }
+      img { display: block; width: 3rem; height: 3rem; }
+      h1 { margin: 1rem 0 0.5rem; font-size: 1.375rem; line-height: 1.3; }
+      p { margin: 0 0 0.75rem; line-height: 1.5; color: #334155; }
+      hr { margin: 1.25rem 0; border: 0; border-top: 1px solid #e8eef1; }
+      a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.75rem;
+        padding: 0 1.25rem;
+        border-radius: 0.75rem;
+        background: #147d72;
+        color: #ffffff;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      a:focus-visible { outline: 3px solid #0e504a; outline-offset: 2px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/brand/mediease-icon.svg" alt="MediEase" width="48" height="48" />
+      <h1>You are offline</h1>
+      <p>MediEase needs the internet to show your appointments and prescriptions. Nothing was sent or changed.</p>
+      <p>Check your connection, then try again. In an emergency, call 112.</p>
+      <a href="/">Try again</a>
+      <hr />
+      <div lang="hi">
+        <h1>आप ऑफ़लाइन हैं</h1>
+        <p>आपके अपॉइंटमेंट और पर्चे दिखाने के लिए MediEase को इंटरनेट चाहिए। कुछ भी भेजा या बदला नहीं गया।</p>
+        <p>अपना कनेक्शन देखें, फिर दोबारा कोशिश करें। आपात स्थिति में 112 पर कॉल करें।</p>
+      </div>
+    </main>
+  </body>
+</html>
