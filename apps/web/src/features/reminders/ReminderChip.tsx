@@ -14,6 +14,7 @@ const TONE: Record<Reminder["status"], string> = {
   FAILED: "bg-red-50 ring-red-700 text-red-950",
   CANCELLED: "bg-slate-100 ring-slate-500 text-slate-900",
   SKIPPED_NO_CONSENT: "bg-amber-50 ring-amber-700 text-amber-950",
+  SENT_IN_APP: "bg-green-50 ring-green-700 text-green-950",
 };
 
 export const KIND_LABELS: Record<Reminder["kind"], string> = {

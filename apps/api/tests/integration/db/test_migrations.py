@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0043"
+HEAD = "0044"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -1300,3 +1300,56 @@ def test_0043_push_subscriptions_one_owner_and_the_push_channel_round_trip(
         engine.dispose()
     command.downgrade(alembic_config, "0042")
     assert _tables(scratch_database_url) == M7B_TABLES
+
+
+def test_0044_reminder_kinds_and_sent_in_app_round_trip(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    """M7e-E4 (web-push R40-R46): the two reminder notice kinds and ``SENT_IN_APP``."""
+    command.upgrade(alembic_config, "0044")
+    pref = text(
+        "INSERT INTO patient_notification_preferences (id, account_id, kind, channel, enabled,"
+        " created_at, updated_at) VALUES (gen_random_uuid(), :account, :kind, 'PUSH', false,"
+        " now(), now())"
+    )
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.begin() as conn:
+            account = conn.execute(
+                text(
+                    "INSERT INTO patient_accounts (id, full_name, email, sign_in_method, status,"
+                    " created_at, updated_at) VALUES (gen_random_uuid(), 'Sample Person',"
+                    " 'reminded.person@example.test', 'GOOGLE', 'ACTIVE', now(), now())"
+                    " RETURNING id"
+                )
+            ).scalar_one()
+            for kind in ("appointment.reminder", "follow_up.due"):
+                conn.execute(pref, {"account": account, "kind": kind})
+        with pytest.raises(IntegrityError), engine.begin() as conn:
+            conn.execute(pref, {"account": account, "kind": "reminder.other"})
+        with engine.connect() as conn:
+            status = conn.execute(
+                text(
+                    "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+                    " WHERE conname = 'ck_reminders_status'"
+                )
+            ).scalar_one()
+        assert "SENT_IN_APP" in status
+    finally:
+        engine.dispose()
+    command.downgrade(alembic_config, "0043")
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as conn:
+            left = conn.execute(
+                text("SELECT count(*) FROM patient_notification_preferences")
+            ).scalar_one()
+            status = conn.execute(
+                text(
+                    "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+                    " WHERE conname = 'ck_reminders_status'"
+                )
+            ).scalar_one()
+        assert left == 0 and "SENT_IN_APP" not in status
+    finally:
+        engine.dispose()

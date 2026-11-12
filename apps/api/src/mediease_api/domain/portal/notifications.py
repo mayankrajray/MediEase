@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from types import MappingProxyType
 from uuid import UUID
@@ -28,7 +28,7 @@ from mediease_api.domain.shared.time import require_utc
 
 LINK_MAX = 300
 EVENT_KEY_MAX = 200
-PARAM_KEYS = frozenset({"at", "token", "doctor_id", "reason", "slot", "time"})
+PARAM_KEYS = frozenset({"at", "token", "doctor_id", "reason", "slot", "time", "date"})
 
 
 class PatientNotificationKind(StrEnum):
@@ -43,6 +43,9 @@ class PatientNotificationKind(StrEnum):
     APPOINTMENT_CANCELLED = "appointment.cancelled"
     PRESCRIPTION_READY = "prescription.ready"
     MEDICINE_DUE = "medicine.due"
+    # M7e-E4 (web-push R40-R46): the clinic's reminders, for the account linked to the record.
+    APPOINTMENT_REMINDER = "appointment.reminder"
+    FOLLOW_UP_DUE = "follow_up.due"
 
 
 # R63: the only kinds that may also go by email.
@@ -214,6 +217,17 @@ def _when(params: Mapping[str, str], names: Names, lang: Language) -> str:
     return f"{day}, {local.hour:02d}:{local.minute:02d}"
 
 
+def _day(raw: str | None, lang: Language) -> str:
+    """A date param as ``13 Nov``; empty when absent or not a date."""
+    if raw is None:
+        return ""
+    try:
+        day = date.fromisoformat(raw)
+    except ValueError:
+        return ""
+    return f"{day.day} {_MONTHS[lang][day.month - 1]}"
+
+
 def decline_words(reason: str | None, lang: Language) -> str:
     try:
         return _REASONS[lang][DeclineReason(reason or "OTHER")]
@@ -278,6 +292,17 @@ def render_title(n: PatientNotification, names: Names, lang: Language) -> str:
             slot = _SLOTS[lang].get(n.params.get("slot", ""), "")
             time = n.params.get("time", "")
             return f"{slot} की दवाइयाँ · {time}" if hi else f"{slot} medicines · {time}"
+        case k.APPOINTMENT_REMINDER:
+            return (
+                f"रिमाइंडर: {when}, {doctor} ({clinic})"
+                if hi
+                else f"Reminder: {when} with {doctor} at {clinic}"
+            )
+        case k.FOLLOW_UP_DUE:
+            day = _day(n.params.get("date"), lang)
+            if hi:
+                return f"{doctor} ({clinic}) के साथ फ़ॉलो-अप" + (f": {day}" if day else "")
+            return f"Follow-up due{f' {day}' if day else ''} with {doctor} at {clinic}"
     return ""  # pragma: no cover - every kind is matched
 
 

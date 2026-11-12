@@ -14,6 +14,8 @@ export const REMINDER_STATUS_LABELS: Record<ReminderStatus, string> = {
   FAILED: "Failed",
   CANCELLED: "Cancelled",
   SKIPPED_NO_CONSENT: "Not sent: no consent",
+  // M7e-E4: no WhatsApp consent, but the patient's MediEase app account was reminded.
+  SENT_IN_APP: "Sent in the app",
 };
 
 export const MESSAGE_STATUS_LABELS: Record<PatientMessage["status"], string> = {

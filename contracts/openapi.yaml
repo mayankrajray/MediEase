@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.52.0
+  version: 0.53.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -7617,7 +7617,8 @@ paths:
       description: |
         FR-REM-05; M5-P4 decision 3A. At most 50. `status` is the message's status once the
         reminder was sent (SENT, DELIVERED, READ, FAILED), else the reminder's own (SCHEDULED,
-        CANCELLED, SKIPPED_NO_CONSENT, FAILED). Permission REMINDERS_SCHEDULE.
+        CANCELLED, SKIPPED_NO_CONSENT, FAILED, or from M7e-E4 SENT_IN_APP: no WhatsApp consent,
+        and the app account linked to the record was told). Permission REMINDERS_SCHEDULE.
       security:
         - sessionCookie: []
       parameters:
@@ -9124,7 +9125,8 @@ components:
             $ref: '#/components/schemas/TeamInvitation'
     ReminderError:
       description: |
-        REM_NO_CONSENT (409: the patient has not agreed to WhatsApp or opted out);
+        REM_NO_CONSENT (409: the patient has not agreed to WhatsApp or opted out, and from M7e-E4
+        has no app account linked to the record);
         REM_CLINIC_PHONE_MISSING (409: add the clinic's phone first); REM_NOT_SCHEDULED (409: the
         reminder was sent, cancelled or skipped); REM_IN_PAST (422: the date is not after today);
         REQ_VALIDATION_FAILED (422)
@@ -9302,7 +9304,7 @@ components:
     ReminderStatus:
       type: string
       description: FR-REM-05 (the message's status once sent, decision 3A)
-      enum: [SCHEDULED, SENT, DELIVERED, READ, FAILED, CANCELLED, SKIPPED_NO_CONSENT]
+      enum: [SCHEDULED, SENT, DELIVERED, READ, FAILED, CANCELLED, SKIPPED_NO_CONSENT, SENT_IN_APP]
     Reminder:
       type: object
       additionalProperties: false
@@ -11499,8 +11501,8 @@ components:
       type: string
       enum: [booking.accepted, booking.declined, booking.proposed, booking.expired,
              appointment.confirmed, appointment.moved, appointment.cancelled,
-             prescription.ready, medicine.due]
-      description: M6b-P6 (R57)
+             prescription.ready, medicine.due, appointment.reminder, follow_up.due]
+      description: M6b-P6 (R57); M7e-E4 adds the clinic's reminders (web-push R41)
     PortalNotification:
       type: object
       required: [id, kind, title, link, created_at, read_at]

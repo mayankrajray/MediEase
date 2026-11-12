@@ -273,7 +273,9 @@ function AddReminder({
           className={`${INPUT_BASE} mt-1.5 block tabular-nums`}
         />
       </div>
-      <p className="w-full text-sm text-slate-700">Sent on WhatsApp at 09:00 the day before, if the patient agreed to messages.</p>
+      <p className="w-full text-sm text-slate-700">
+        Sent at 09:00 the day before: on WhatsApp if the patient agreed to messages, and in the MediEase app if they use it.
+      </p>
       <button type="submit" className={buttonClasses("primary", "sm")}>
         Add reminder
       </button>
