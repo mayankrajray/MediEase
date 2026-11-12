@@ -12,6 +12,9 @@ same transaction:
    - **WhatsApp** for the patient: the existing M5 send jobs (booking confirmation, prescription
      link), enqueued with their own keys. Their handlers re-check consent and the facts when they
      send, exactly as before (decision 3A).
+   - **push** (M7e-E3, ADR-0025): a ``send_push`` job per device of each staff recipient and of
+     the patient's linked account, with a switch of its own per kind
+     (``application/push/delivery.py``).
 
 So an event exists exactly when the change commits, and no feature calls WhatsApp itself.
 """
@@ -33,6 +36,7 @@ from mediease_api.application.portal.patient_notifications import (
     notify_patient,
     prescription_link,
 )
+from mediease_api.application.push.delivery import enqueue_push
 from mediease_api.application.reminders.appointment import (
     cancel_appointment_reminders,
     schedule_appointment_reminders,
@@ -78,6 +82,7 @@ from mediease_api.domain.notifications.notification import (
 )
 from mediease_api.domain.patients.patient import Patient
 from mediease_api.domain.portal.notifications import PatientNotificationKind
+from mediease_api.domain.push.subscription import OwnerKind
 from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.scheduling.sessions import Session
 from mediease_api.domain.shared.time import local_date
@@ -185,6 +190,7 @@ class NotificationService:
                 if patient is None:  # pragma: no cover - a foreign key keeps it
                     return 0
                 return self._in_app(
+                    uow,
                     tenant,
                     NotificationKind.MESSAGE_FAILED,
                     self._members(tenant, {Role.OWNER, Role.FRONT_DESK}),
@@ -202,6 +208,7 @@ class NotificationService:
                     return 0
                 joined = membership.invite_accepted_at or now
                 return self._in_app(
+                    uow,
                     tenant,
                     NotificationKind.STAFF_JOINED,
                     [u for u in self._members(tenant, {Role.OWNER}) if u != user.id],
@@ -288,6 +295,7 @@ class NotificationService:
             request_id=request_id,
         )
         return self._in_app(
+            uow,
             tenant,
             kind,
             self._doctor_user(tenant, doctor.user_id),
@@ -468,6 +476,7 @@ class NotificationService:
             timezone=clinic.timezone,
         )
         return self._in_app(
+            uow,
             tenant,
             NotificationKind.BOOKING_REQUESTED,
             self._members(tenant, {Role.OWNER, Role.FRONT_DESK}),
@@ -503,6 +512,7 @@ class NotificationService:
         if count == 0:
             return 0
         return self._in_app(
+            uow,
             tenant,
             NotificationKind.BOOKINGS_TO_MOVE,
             self._members(tenant, {Role.OWNER, Role.FRONT_DESK}),
@@ -535,6 +545,7 @@ class NotificationService:
 
     def _in_app(
         self,
+        uow: UnitOfWork,
         tenant: TenantRepositories,
         kind: NotificationKind,
         recipients: Sequence[UUID],
@@ -546,6 +557,8 @@ class NotificationService:
         now: datetime,
         actor: UUID | None,
     ) -> int:
+        """The in-app rows and (M7e-E3) a push to each recipient's devices. The two channels have
+        their own switches: push may be on with the in-app notice off, and the other way round."""
         wanted = [u for u in dict.fromkeys(recipients) if u != actor]
         if not wanted:
             return 0
@@ -567,12 +580,29 @@ class NotificationService:
             if user_id not in off
         ]
         written = tenant.notifications.add_many(rows)
+        # M7e-E3 (web-push R30): every recipient's devices in one query; their push switches only
+        # when someone has a device. The cost stays flat however many members are told.
+        devices = uow.push_subscriptions.active_for_owners(OwnerKind.STAFF, wanted)
+        pushed = 0
+        if devices:
+            push_off = tenant.notification_preferences.disabled_among(wanted, kind, Channel.PUSH)
+            pushed = enqueue_push(
+                uow,
+                ids=self._ids,
+                devices=[d for d in devices if d.owner.id not in push_off],
+                clinic_id=tenant.clinic_id,
+                notice=kind,
+                event_key=event_key,
+                link=link,
+                now=now,
+            )
         logger.info(
             "notification.dispatched",
             kind=kind.value,
             recipients=len(rows),
             written=written,
             muted=len(off),
+            push_devices=pushed,
         )
         return written
 

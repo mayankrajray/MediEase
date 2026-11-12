@@ -48,6 +48,8 @@ from mediease_api.adapters.messaging.whatsapp_webhook import (
 from mediease_api.adapters.oidc.fake import FakeOidcProvider
 from mediease_api.adapters.oidc.google import GoogleOidcProvider
 from mediease_api.adapters.pdf.weasy import WeasyPrintRenderer
+from mediease_api.adapters.push.console import ConsolePushAdapter
+from mediease_api.adapters.push.webpush import PyWebPushAdapter
 from mediease_api.adapters.security.argon2_hasher import Argon2PasswordHasher
 from mediease_api.adapters.security.ip_hash import HmacIpHasher
 from mediease_api.adapters.security.jwt_flow import JwtFlowSealer
@@ -272,6 +274,7 @@ from mediease_api.application.prescriptions.use_cases import (
     ReplaceDraft,
     RevisePrescription,
 )
+from mediease_api.application.push.delivery import SendPush
 from mediease_api.application.push.subscriptions import (
     GetPushConfig,
     ListDevices,
@@ -387,6 +390,7 @@ from mediease_api.domain.jobs.job import (
     PATIENT_EMAIL_KIND,
     PROCESS_UPLOAD_KIND,
     PURGE_KIND,
+    PUSH_KIND,
     RECONCILE_KIND,
     REQUEST_EXPIRY_SWEEP_KIND,
     STAFF_INVITE_KIND,
@@ -409,7 +413,7 @@ from mediease_api.ports.llm import LlmPort
 from mediease_api.ports.messaging import MessagingPort, PhoneCipherPort
 from mediease_api.ports.oidc import OidcPort
 from mediease_api.ports.pdf import PdfRendererPort
-from mediease_api.ports.push import TextCipherPort
+from mediease_api.ports.push import TextCipherPort, WebPushPort
 from mediease_api.ports.readiness import DatabaseCheck
 from mediease_api.ports.security import AccessTokenIssuer, FlowSealer, PasswordHasher
 from mediease_api.ports.storage import BlobStoragePort
@@ -1432,6 +1436,19 @@ def build_email(settings: AppSettings) -> EmailPort:
     return ConsoleEmailAdapter()
 
 
+def build_push(settings: AppSettings) -> WebPushPort:
+    """M7e-E3 (ADR-0025): web push, or the console (sends nothing; refused in production)."""
+    if settings.PUSH_PROVIDER == "webpush":
+        return PyWebPushAdapter(
+            private_key=settings.VAPID_PRIVATE_KEY.get_secret_value(),
+            public_key=settings.VAPID_PUBLIC_KEY,
+            subject=settings.VAPID_SUBJECT,
+        )
+    if settings.APP_ENV is AppEnv.PRODUCTION:
+        raise ValueError("PUSH_PROVIDER=console sends nothing; refused in production")
+    return ConsolePushAdapter()
+
+
 def build_sms(settings: AppSettings) -> MessagingPort | None:
     """The SMS fallback's provider, or None while ``MESSAGING_SMS_FALLBACK_ENABLED`` is off (M5-P5).
 
@@ -1563,6 +1580,13 @@ def build_worker(settings: AppSettings, stop: threading.Event) -> Worker:
         # M6b-P6 (portal R63): a booking answer by email, at most once per notice.
         PATIENT_EMAIL_KIND: SendPatientEmail(
             uow=SqlAlchemyUnitOfWork(factory), email=email, public_base_url=settings.PUBLIC_BASE_URL
+        ),
+        # M7e-E3 (web-push R30-R37): one push to one device for one notice.
+        PUSH_KIND: SendPush(
+            uow=SqlAlchemyUnitOfWork(factory),
+            clock=clock,
+            push=build_push(settings),
+            cipher=FernetTextCipher(settings.messaging_phone_keys()),
         ),
         # M6c-P1 (clinic-onboarding R11-R14): an application's emails, and unconfirmed ones deleted.
         APPLICATION_EMAIL_KIND: SendApplicationEmail(

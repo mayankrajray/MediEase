@@ -93,6 +93,10 @@ _MANAGED_VARS = (
     "TRUSTED_PROXY_SECRET",
     # M7e-E2: the VAPID public key (ADR-0025).
     "VAPID_PUBLIC_KEY",
+    # M7e-E3: the push provider and the VAPID private key and subject.
+    "PUSH_PROVIDER",
+    "VAPID_PRIVATE_KEY",
+    "VAPID_SUBJECT",
 )
 
 # Synthetic, test-only secrets (>= 32 characters each).

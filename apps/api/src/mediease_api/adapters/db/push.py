@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -109,6 +109,23 @@ class SqlAlchemyPushSubscriptionRepository:
             select(PushSubscriptionRow)
             .where(_is(owner))
             .order_by(PushSubscriptionRow.created_at.desc(), PushSubscriptionRow.id)
+        )
+        return [_subscription(row) for row in self._session.scalars(query)]
+
+    def active_for_owners(
+        self, kind: OwnerKind, owner_ids: Collection[UUID]
+    ) -> Sequence[PushSubscription]:
+        if not owner_ids:
+            return []
+        column = (
+            PushSubscriptionRow.account_id
+            if kind is OwnerKind.PATIENT
+            else PushSubscriptionRow.user_id
+        )
+        query = (
+            select(PushSubscriptionRow)
+            .where(column.in_(list(owner_ids)), PushSubscriptionRow.disabled_at.is_(None))
+            .order_by(PushSubscriptionRow.created_at, PushSubscriptionRow.id)
         )
         return [_subscription(row) for row in self._session.scalars(query)]
 

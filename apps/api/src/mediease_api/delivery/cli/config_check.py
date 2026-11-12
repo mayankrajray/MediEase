@@ -67,6 +67,13 @@ def describe(s: AppSettings) -> list[Line]:
         ]
     lines.append(("sms", "MESSAGING_SMS_FALLBACK_ENABLED", str(s.MESSAGING_SMS_FALLBACK_ENABLED)))
     lines.append(("email", "EMAIL_PROVIDER", s.EMAIL_PROVIDER))
+    lines.append(("push", "PUSH_PROVIDER", s.PUSH_PROVIDER))
+    lines.append(("push", "VAPID_PUBLIC_KEY", _last4(s.VAPID_PUBLIC_KEY)))
+    if s.PUSH_PROVIDER == "webpush":
+        lines += [
+            ("push", "VAPID_PRIVATE_KEY", _set(s.VAPID_PRIVATE_KEY)),
+            ("push", "VAPID_SUBJECT", s.VAPID_SUBJECT),
+        ]
     if s.EMAIL_PROVIDER == "smtp":
         lines += [
             ("email", "SMTP", f"{s.SMTP_HOST}:{s.SMTP_PORT} ({s.SMTP_SECURITY})"),

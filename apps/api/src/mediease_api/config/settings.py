@@ -76,6 +76,8 @@ EmailProvider = Literal["console", "smtp"]
 # M7a-P2 (ADR-0013): the assistant's model; M7c-P5 adds Mistral and NVIDIA.
 LlmProvider = Literal["console", "groq", "deepinfra", "openai", "mistral", "nvidia"]
 SmtpSecurity = Literal["starttls", "tls", "none"]
+# M7e-E3 (ADR-0025): web push through the browsers' push services, or the console.
+PushProvider = Literal["console", "webpush"]
 # M5-P3: Graph API v26.0 (released July 2026); overridable without a code change.
 _WHATSAPP_API_VERSION = "v26.0"
 _WHATSAPP_GRAPH_URL = "https://graph.facebook.com"
@@ -136,9 +138,14 @@ class AppSettings(BaseSettings):
     # and uses the connection's address, as before A11.
     TRUSTED_PROXY_SECRET: SecretStr = SecretStr("")
     # M7e-E2 (ADR-0025): the VAPID public key browsers subscribe with, base64url of an uncompressed
-    # P-256 point. Empty: push is not offered (the config endpoint says so). Its private half and
-    # the push provider are E3's settings.
+    # P-256 point. Empty: push is not offered (the config endpoint says so).
     VAPID_PUBLIC_KEY: str = ""
+    # M7e-E3: how the worker sends push. `console` only logs (refused in production by the
+    # worker); `webpush` signs with VAPID_PRIVATE_KEY (base64url of the raw 32-byte P-256 key, the
+    # pair of VAPID_PUBLIC_KEY) and names VAPID_SUBJECT (mailto: or https:) to the push services.
+    PUSH_PROVIDER: PushProvider = "console"
+    VAPID_PRIVATE_KEY: SecretStr = SecretStr("")
+    VAPID_SUBJECT: str = ""
     # Refresh token lifetime: 14 days by default (spec R4); 1 hour to 30 days allowed.
     REFRESH_TOKEN_TTL_SECONDS: int = Field(default=1_209_600, ge=3600, le=2_592_000)
     # Generated files such as prescription PDFs (M4-P4, ADR-0012). `local`: a directory (the
@@ -499,6 +506,39 @@ class AppSettings(BaseSettings):
             raise ValueError("must be base64url") from exc
         if len(raw) != 65 or raw[0] != 0x04:
             raise ValueError("must be an uncompressed P-256 public key (65 bytes)")
+        return value
+
+    @field_validator("VAPID_PRIVATE_KEY")
+    @classmethod
+    def _vapid_private_key(cls, value: SecretStr, info: ValidationInfo) -> SecretStr:
+        """Empty, or the raw 32-byte P-256 private key as base64url; required for `webpush`."""
+        raw = value.get_secret_value().strip()
+        webpush = info.data.get("PUSH_PROVIDER") == "webpush"
+        if not raw:
+            if webpush:
+                raise ValueError("is required when PUSH_PROVIDER=webpush")
+            return SecretStr("")
+        try:
+            key = base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("must be base64url") from exc
+        if len(key) != 32:
+            raise ValueError("must be a raw P-256 private key (32 bytes, base64url)")
+        if webpush and not info.data.get("VAPID_PUBLIC_KEY"):
+            raise ValueError("needs VAPID_PUBLIC_KEY, its public half, when PUSH_PROVIDER=webpush")
+        return SecretStr(raw)
+
+    @field_validator("VAPID_SUBJECT")
+    @classmethod
+    def _vapid_subject(cls, value: str, info: ValidationInfo) -> str:
+        """Who the push services may contact about our sending: a mailto: or an https URL."""
+        value = value.strip()
+        if not value:
+            if info.data.get("PUSH_PROVIDER") == "webpush":
+                raise ValueError("is required when PUSH_PROVIDER=webpush")
+            return value
+        if not re.fullmatch(r"mailto:[^@\s]+@[^@\s]+|https://[^\s]+", value) or len(value) > 200:
+            raise ValueError("must be mailto:address or an https URL")
         return value
 
     @field_validator("TRUSTED_PROXY_SECRET")
