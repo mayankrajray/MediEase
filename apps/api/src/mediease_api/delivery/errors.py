@@ -34,6 +34,7 @@ from mediease_api.domain.links.errors import LinkRateLimited
 from mediease_api.domain.messaging.errors import WebhookRateLimited
 from mediease_api.domain.onboarding.application import ApplicationRateLimited
 from mediease_api.domain.prescriptions.errors import PdfBusy
+from mediease_api.domain.push.errors import PushRateLimited
 from mediease_api.domain.shared.errors import DomainError, InvalidValue
 from mediease_api.domain.uploads.errors import UploadRateLimited
 from mediease_api.ports.readiness import DatabaseTimeout, DatabaseUnavailable, ReadinessError
@@ -207,6 +208,9 @@ DOMAIN_ERROR_STATUS = {
     # M7b (spec prescription-uploads §10): verified uploads.
     "UPL_FILE_REJECTED": 422,
     "UPL_RATE_LIMITED": 429,
+    # M7e-E2 (ADR-0025): web push devices.
+    "PSH_TOO_MANY_DEVICES": 409,
+    "PSH_RATE_LIMITED": 429,
     "UPL_TOO_MANY": 409,
     "UPL_UPLOAD_FAILED": 503,
     "UPL_CHALLENGE_FAILED": 401,
@@ -246,7 +250,8 @@ def domain_error_response(exc: DomainError) -> tuple[Response, int]:
         | ApplicationRateLimited
         | AssistantRateLimited
         | LlmBusy
-        | UploadRateLimited,
+        | UploadRateLimited
+        | PushRateLimited,
     ):
         response.headers["Retry-After"] = str(exc.retry_after_seconds)
     return response, status

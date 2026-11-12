@@ -56,6 +56,7 @@ from mediease_api.adapters.security.link_signer import HmacLinkSigner
 from mediease_api.adapters.security.phone_cipher import FernetPhoneCipher
 from mediease_api.adapters.security.proposal_signer import HmacProposalSigner
 from mediease_api.adapters.security.refresh_secrets import Sha256RefreshTokenSecrets
+from mediease_api.adapters.security.text_cipher import FernetTextCipher
 from mediease_api.adapters.storage.local import LocalBlobStorage
 from mediease_api.adapters.storage.s3 import S3BlobStorage
 from mediease_api.application.appointments.book import BookAppointment
@@ -271,6 +272,12 @@ from mediease_api.application.prescriptions.use_cases import (
     ReplaceDraft,
     RevisePrescription,
 )
+from mediease_api.application.push.subscriptions import (
+    GetPushConfig,
+    ListDevices,
+    RemoveDevice,
+    SubscribeDevice,
+)
 from mediease_api.application.reminders.fallback import SendSmsFallback, SmsFallback
 from mediease_api.application.reminders.send import SendReminder
 from mediease_api.application.reminders.use_cases import (
@@ -357,6 +364,7 @@ from mediease_api.delivery.http.public_clinics import (
 from mediease_api.delivery.http.public_links import create_public_links_blueprint
 from mediease_api.delivery.http.public_queue import create_public_queue_blueprint
 from mediease_api.delivery.http.public_search import create_public_search_blueprint
+from mediease_api.delivery.http.push import create_push_blueprints
 from mediease_api.delivery.http.reminders import create_reminders_blueprint
 from mediease_api.delivery.http.request_info import register_request_info
 from mediease_api.delivery.http.rx_library import create_rx_library_blueprint
@@ -401,6 +409,7 @@ from mediease_api.ports.llm import LlmPort
 from mediease_api.ports.messaging import MessagingPort, PhoneCipherPort
 from mediease_api.ports.oidc import OidcPort
 from mediease_api.ports.pdf import PdfRendererPort
+from mediease_api.ports.push import TextCipherPort
 from mediease_api.ports.readiness import DatabaseCheck
 from mediease_api.ports.security import AccessTokenIssuer, FlowSealer, PasswordHasher
 from mediease_api.ports.storage import BlobStoragePort
@@ -450,6 +459,26 @@ class _UseCases:
     public_base_url: str = ""
     # M7e: the public page, availability and search limit per address (booking-requests R15).
     public_reads_per_minute: int = READS_PER_MINUTE_PER_IP
+    # M7e-E2 (ADR-0025): push devices' secrets at rest, and the key browsers subscribe with.
+    push_cipher: TextCipherPort | None = None
+    vapid_public_key: str = ""
+
+    # --- M7e: web push devices (spec web-push) ---------------------------------------------------
+    def push_config(self) -> GetPushConfig:
+        return GetPushConfig(public_key=self.vapid_public_key)
+
+    def subscribe_device(self) -> SubscribeDevice:
+        assert self.push_cipher is not None
+        return SubscribeDevice(
+            uow=self._uow(), clock=self.clock, ids=self.ids, cipher=self.push_cipher
+        )
+
+    def list_devices(self) -> ListDevices:
+        return ListDevices(uow=self._uow())
+
+    def remove_device(self) -> RemoveDevice:
+        return RemoveDevice(uow=self._uow(), clock=self.clock, ids=self.ids)
+
     # M7a (ADR-0013, ADR-0024): the assistant's model and its proposal signer.
     llm: LlmPort | None = None
     proposal_signer: HmacProposalSigner | None = None
@@ -1659,6 +1688,8 @@ def create_app(
         phones=FernetPhoneCipher(settings.messaging_phone_keys()),
         public_base_url=settings.PUBLIC_BASE_URL,
         public_reads_per_minute=settings.PUBLIC_READS_PER_MINUTE,
+        push_cipher=FernetTextCipher(settings.messaging_phone_keys()),
+        vapid_public_key=settings.VAPID_PUBLIC_KEY,
         llm=llm or build_llm(settings),
         proposal_signer=HmacProposalSigner(signing_key),
     )
@@ -1737,6 +1768,9 @@ def create_app(
     app.register_blueprint(create_assistant_blueprint(use_cases))
     # M7b (spec prescription-uploads): verified uploads and typed codes.
     app.register_blueprint(create_prescription_uploads_blueprint(use_cases))
+    # M7e-E2 (ADR-0025): web push devices for patients and staff, and the public config.
+    for push_blueprint in create_push_blueprints(use_cases):
+        app.register_blueprint(push_blueprint)
     # Default deny: refuse to start with an undeclared route (spec R6-R10).
     check_every_route_has_policy(app)
 

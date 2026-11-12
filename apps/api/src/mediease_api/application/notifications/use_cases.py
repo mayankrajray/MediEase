@@ -17,6 +17,7 @@ from mediease_api.application.context import Actor, RequestContext
 from mediease_api.domain.audit.actions import AuditAction
 from mediease_api.domain.notifications.notification import (
     KINDS,
+    STAFF_CHANNELS,
     Channel,
     Notification,
     NotificationKind,
@@ -112,13 +113,15 @@ class ReadAllNotifications:
 
 def _views(saved: Sequence[Preference]) -> list[PreferenceView]:
     chosen = {(p.kind, p.channel): p.enabled for p in saved}
+    # M7e: one item per kind and staff channel (in the app, then push), each on unless turned off.
     return [
         PreferenceView(
             kind=kind,
             label=info.label,
-            channel=Channel.IN_APP,
-            enabled=chosen.get((kind, Channel.IN_APP), True),
+            channel=channel,
+            enabled=chosen.get((kind, channel), True),
         )
+        for channel in STAFF_CHANNELS
         for kind, info in KINDS.items()
     ]
 
@@ -153,11 +156,13 @@ class SetNotificationPreferences:
         with self._uow as uow:
             now = self._clock.now()
             preferences = uow.tenant(ctx.clinic_id).notification_preferences
-            before = {v.kind: v.enabled for v in _views(preferences.list_for(ctx.user_id))}
+            before = {
+                (v.kind, v.channel): v.enabled for v in _views(preferences.list_for(ctx.user_id))
+            }
             turned_on: list[str] = []
             turned_off: list[str] = []
             for change in changes:
-                if before[change.kind] is change.enabled:
+                if before[(change.kind, change.channel)] is change.enabled:
                     continue
                 preferences.set(
                     Preference(
@@ -169,8 +174,12 @@ class SetNotificationPreferences:
                     id=self._ids.new_id(),
                     now=now,
                 )
-                before[change.kind] = change.enabled
-                (turned_on if change.enabled else turned_off).append(change.kind.value)
+                before[(change.kind, change.channel)] = change.enabled
+                # In-app as the kind alone (as since M6a); push as kind:PUSH (M7e).
+                name = change.kind.value + (
+                    "" if change.channel is Channel.IN_APP else f":{change.channel.value}"
+                )
+                (turned_on if change.enabled else turned_off).append(name)
             if turned_on or turned_off:
                 record_event(
                     uow,

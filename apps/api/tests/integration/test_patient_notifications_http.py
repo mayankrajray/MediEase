@@ -183,6 +183,7 @@ def test_r62_r63_switches_turn_off_the_app_notice_and_the_email(world: World, db
         "kind": "booking.accepted",
         "in_app": False,
         "email": False,
+        "push": True,  # M7e: push stays on until turned off
     }
     assert prefs["medicine.due"]["email"] is None
 

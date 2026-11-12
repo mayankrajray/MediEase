@@ -260,6 +260,14 @@ EXPECTED_POLICIES = {
     "prescription_uploads.challenge": (Access.PATIENT, None),
     "prescription_uploads.selection": (Access.PATIENT, None),
     "prescription_uploads.withdraw": (Access.PATIENT, None),
+    # M7e-E2 (ADR-0025): web push devices; the config is public, devices are the caller's own.
+    "push_config.push_config": (Access.PUBLIC, None),
+    "portal_push.subscribe": (Access.PATIENT, None),
+    "portal_push.list_devices": (Access.PATIENT, None),
+    "portal_push.remove": (Access.PATIENT, None),
+    "staff_push.subscribe": (Access.AUTHENTICATED, None),
+    "staff_push.list_devices": (Access.AUTHENTICATED, None),
+    "staff_push.remove": (Access.AUTHENTICATED, None),
 }
 
 

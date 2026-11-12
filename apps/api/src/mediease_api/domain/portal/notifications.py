@@ -59,10 +59,12 @@ BOOKING_KINDS: frozenset[PatientNotificationKind] = frozenset(
 class PatientChannel(StrEnum):
     IN_APP = "IN_APP"
     EMAIL = "EMAIL"
+    # M7e (ADR-0025): web push to the account's devices, for every kind.
+    PUSH = "PUSH"
 
 
 def check_channel(kind: PatientNotificationKind, channel: PatientChannel) -> None:
-    """R62, R63: every kind in the app; email for the four booking kinds only."""
+    """R62, R63: every kind in the app and by push (M7e); email for the four booking kinds only."""
     if channel is PatientChannel.EMAIL and kind not in BOOKING_KINDS:
         raise InvalidValue("channel", "email is only for booking answers")
 

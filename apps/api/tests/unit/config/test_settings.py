@@ -483,3 +483,19 @@ def test_m7e_a11_placeholder_proxy_secret_only_in_local_and_test(
     set_env({**valid_env, "APP_ENV": "staging", "TRUSTED_PROXY_SECRET": placeholder})
     with pytest.raises(ValidationError, match="placeholder"):
         AppSettings()  # type: ignore[call-arg]
+
+
+def test_m7e_e2_vapid_public_key_is_empty_or_an_uncompressed_p256_point(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    set_env(valid_env)
+    assert AppSettings().VAPID_PUBLIC_KEY == ""  # type: ignore[call-arg]
+    key = base64.urlsafe_b64encode(b"\x04" + bytes(range(64))).decode().rstrip("=")
+    set_env({**valid_env, "VAPID_PUBLIC_KEY": f" {key} "})
+    assert key == AppSettings().VAPID_PUBLIC_KEY  # type: ignore[call-arg]
+    compressed = base64.urlsafe_b64encode(b"\x02" + bytes(32)).decode().rstrip("=")
+    for bad in (compressed, "not base64!!", "QUJD"):
+        set_env({**valid_env, "VAPID_PUBLIC_KEY": bad})
+        with pytest.raises(ValidationError) as excinfo:
+            AppSettings()  # type: ignore[call-arg]
+        assert "VAPID_PUBLIC_KEY" in str(excinfo.value)

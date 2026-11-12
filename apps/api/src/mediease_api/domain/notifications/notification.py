@@ -41,6 +41,8 @@ class Channel(StrEnum):
     # Declared for preferences; nothing delivers by them yet (ADR-0017 decision 2).
     EMAIL = "EMAIL"
     SMS = "SMS"
+    # M7e (ADR-0025): web push to the member's devices.
+    PUSH = "PUSH"
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,7 +235,11 @@ class Preference:
     enabled: bool
 
 
+# M6a decision 5A: in-app only; M7e adds push. WhatsApp, email and SMS are not offered to staff.
+STAFF_CHANNELS: tuple[Channel, ...] = (Channel.IN_APP, Channel.PUSH)
+
+
 def ensure_in_app(channel: Channel) -> None:
-    """Staff choose in-app only in M6a (decision 5A); other channels are not offered yet."""
-    if channel is not Channel.IN_APP:
+    """Staff choose the in-app and push channels only; the others are not offered."""
+    if channel not in STAFF_CHANNELS:
         raise InvalidTransition("notification preference", channel.value, "change")

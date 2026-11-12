@@ -911,6 +911,7 @@ export interface paths {
         /**
          * Turn one switch on or off
          * @description M6b-P6, R62, R63. @patient. EMAIL for a kind other than the booking answers is 422.
+         *     PUSH (M7e-E2) is offered for every kind.
          *     Returns every switch. Logged, not audited. Needs X-CSRF-Token equal to me_pt_csrf.
          */
         readonly put: operations["setPortalNotificationPreference"];
@@ -4220,18 +4221,142 @@ export interface paths {
         };
         /**
          * My notification choices
-         * @description M6a-P7 (FR-NTF-03, decision 5A). Every kind with its in-app choice; on unless turned off.
+         * @description M6a-P7 (FR-NTF-03, decision 5A). Every kind with its in-app choice and, from M7e-E2, its
+         *     push choice (one item per kind and channel); on unless turned off.
          *     Patients' WhatsApp and SMS preference is their consent (M2-P3), not stored here.
          */
         readonly get: operations["getNotificationPreferences"];
         /**
          * Change my notification choices
-         * @description M6a-P7. Only IN_APP may be chosen in M6a; another channel is 409 CLN_INVALID_TRANSITION.
+         * @description M6a-P7. IN_APP, and PUSH from M7e-E2; another channel is 409 CLN_INVALID_TRANSITION.
          *     A real change records notification.preferences_changed. Needs X-CSRF-Token.
          */
         readonly put: operations["setNotificationPreferences"];
         readonly post?: never;
         readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/push/config": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Whether web push is offered, and the key browsers subscribe with
+         * @description M7e-E2 (ADR-0025, spec web-push R10). Public. public_key is the VAPID public key
+         *     (base64url of an uncompressed P-256 point) for PushManager.subscribe; null and
+         *     enabled false when push is not configured here.
+         */
+        readonly get: operations["getPushConfig"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/push-subscriptions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The account's devices for notifications
+         * @description M7e-E2 (spec web-push R16). @patient. Newest first. Never the endpoint or keys.
+         */
+        readonly get: operations["listPortalPushDevices"];
+        readonly put?: never;
+        /**
+         * Turn on notifications for this browser
+         * @description M7e-E2 (spec web-push R11-R15, R19). @patient. The body is PushSubscription.toJSON().
+         *     The endpoint must be https at a browser push service (FCM, Mozilla, Apple, Windows),
+         *     else 422 REQ_VALIDATION_FAILED. 201 for a new device; 200 when this browser was already
+         *     the account's (keys refreshed, active again). A browser another account had turned on
+         *     moves to this one. 409 PSH_TOO_MANY_DEVICES at 10 active devices; 429 PSH_RATE_LIMITED
+         *     after 30 calls an hour. Audited (push_device.added). Needs X-CSRF-Token.
+         */
+        readonly post: operations["subscribePortalPushDevice"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/portal/push-subscriptions/{device_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly device_id: components["parameters"]["DevicePath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        /**
+         * Turn off notifications for one of the account's devices
+         * @description M7e-E2 (spec web-push R17). @patient. Another account's device is 404 REQ_NOT_FOUND.
+         *     Audited (push_device.removed). Needs X-CSRF-Token.
+         */
+        readonly delete: operations["removePortalPushDevice"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/me/push-subscriptions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * My devices for notifications
+         * @description M7e-E2 (spec web-push R16). @authenticated. A staff member's devices, the same in every
+         *     clinic (no X-Clinic-ID). Newest first. Never the endpoint or keys.
+         */
+        readonly get: operations["listMyPushDevices"];
+        readonly put?: never;
+        /**
+         * Turn on notifications for this browser
+         * @description M7e-E2 (spec web-push R11-R15, R19). @authenticated. As the portal route, for the
+         *     signed-in staff member. Audited (push_device.added, actor STAFF). Needs X-CSRF-Token.
+         */
+        readonly post: operations["subscribeMyPushDevice"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/v1/me/push-subscriptions/{device_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly device_id: components["parameters"]["DevicePath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        /**
+         * Turn off notifications for one of my devices
+         * @description M7e-E2 (spec web-push R17). @authenticated. Another user's device is 404 REQ_NOT_FOUND.
+         *     Audited (push_device.removed). Needs X-CSRF-Token.
+         */
+        readonly delete: operations["removeMyPushDevice"];
         readonly options?: never;
         readonly head?: never;
         readonly patch?: never;
@@ -5770,11 +5895,46 @@ export interface components {
         readonly PortalNotificationsMarked: {
             readonly marked: number;
         };
+        readonly PushConfig: {
+            readonly enabled: boolean;
+            /** @description The VAPID public key, base64url; null when push is not configured */
+            readonly public_key: string | null;
+        };
+        /** @description PushSubscription.toJSON() from the browser */
+        readonly PushSubscriptionIn: {
+            /** @description https at a browser push service; stored only encrypted */
+            readonly endpoint: string;
+            /** @description Ignored */
+            readonly expirationTime?: number | null;
+            readonly keys: {
+                /** @description base64url of the browser's uncompressed P-256 public key (65 bytes) */
+                readonly p256dh: string;
+                /** @description base64url of the 16-byte auth secret */
+                readonly auth: string;
+            };
+        };
+        readonly PushDevice: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description A fixed-vocabulary name such as "Chrome on Android", never the user agent */
+            readonly label: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly last_success_at: string | null;
+            /** @description False once the push service said the browser unsubscribed */
+            readonly active: boolean;
+        };
+        readonly PushDeviceList: {
+            readonly items: readonly components["schemas"]["PushDevice"][];
+        };
         readonly PortalNotificationPreference: {
             readonly kind: components["schemas"]["PatientNotificationKind"];
             readonly in_app: boolean;
             /** @description Null where email is not offered (only the four booking answers) */
             readonly email: boolean | null;
+            /** @description M7e-E2. Push to the account's devices; on unless turned off */
+            readonly push: boolean;
         };
         readonly PortalNotificationPreferenceList: {
             readonly items: readonly components["schemas"]["PortalNotificationPreference"][];
@@ -5782,7 +5942,7 @@ export interface components {
         readonly PortalNotificationPreferenceChange: {
             readonly kind: components["schemas"]["PatientNotificationKind"];
             /** @enum {string} */
-            readonly channel: "IN_APP" | "EMAIL";
+            readonly channel: "IN_APP" | "EMAIL" | "PUSH";
             readonly enabled: boolean;
         };
         /** @enum {string} */
@@ -6569,7 +6729,7 @@ export interface components {
             readonly latest_id: string | null;
         };
         /** @enum {string} */
-        readonly NotificationChannel: "IN_APP" | "WHATSAPP" | "EMAIL" | "SMS";
+        readonly NotificationChannel: "IN_APP" | "WHATSAPP" | "EMAIL" | "SMS" | "PUSH";
         readonly NotificationPreferences: {
             readonly items: readonly {
                 readonly kind: components["schemas"]["NotificationKind"];
@@ -7466,6 +7626,22 @@ export interface components {
             };
         };
         /**
+         * @description M7e-E2: PSH_TOO_MANY_DEVICES (409, 10 active devices; turn one off first);
+         *     PSH_RATE_LIMITED (429, with Retry-After); REQ_NOT_FOUND (404, unknown device or
+         *     another person's, never distinguishable)
+         */
+        readonly PushError: {
+            headers: {
+                readonly "X-Request-ID": components["headers"]["RequestId"];
+                /** @description Seconds to wait (429 only) */
+                readonly "Retry-After"?: string;
+                readonly [name: string]: unknown;
+            };
+            content: {
+                readonly "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
          * @description M6d-P7: SUB_LIMIT_REACHED (the plan has no room for another doctor or user; details.plan,
          *     limit doctors or users, allowed) and SUB_PLAN_TOO_SMALL (ops chose a plan smaller than
          *     what is used; details.limit, allowed, used).
@@ -7838,6 +8014,7 @@ export interface components {
         readonly ApplicationId: string;
         /** @description Correlation ID. Generated by the API when absent and always echoed back. */
         readonly RequestId: string;
+        readonly DevicePath: string;
         /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
         readonly CsrfToken: string;
         /**
@@ -15455,6 +15632,238 @@ export interface operations {
             readonly 409: components["responses"]["ConflictError"];
             readonly 415: components["responses"]["AuthError"];
             readonly 422: components["responses"]["AuthError"];
+        };
+    };
+    readonly getPushConfig: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The push configuration */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PushConfig"];
+                };
+            };
+        };
+    };
+    readonly listPortalPushDevices: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The devices */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PushDeviceList"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+        };
+    };
+    readonly subscribePortalPushDevice: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PushSubscriptionIn"];
+            };
+        };
+        readonly responses: {
+            /** @description This browser, refreshed */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PushDevice"];
+                };
+            };
+            /** @description This browser, added */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PushDevice"];
+                };
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 409: components["responses"]["PushError"];
+            readonly 415: components["responses"]["PortalError"];
+            readonly 422: components["responses"]["PortalError"];
+            readonly 429: components["responses"]["PushError"];
+        };
+    };
+    readonly removePortalPushDevice: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly device_id: components["parameters"]["DevicePath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Removed */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 401: components["responses"]["PortalError"];
+            readonly 403: components["responses"]["PortalError"];
+            readonly 404: components["responses"]["PushError"];
+        };
+    };
+    readonly listMyPushDevices: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The devices */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PushDeviceList"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+        };
+    };
+    readonly subscribeMyPushDevice: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PushSubscriptionIn"];
+            };
+        };
+        readonly responses: {
+            /** @description This browser, refreshed */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PushDevice"];
+                };
+            };
+            /** @description This browser, added */
+            readonly 201: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PushDevice"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["AuthError"];
+            readonly 409: components["responses"]["PushError"];
+            readonly 415: components["responses"]["AuthError"];
+            readonly 422: components["responses"]["AuthError"];
+            readonly 429: components["responses"]["PushError"];
+        };
+    };
+    readonly removeMyPushDevice: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+                /** @description Copy of the me_csrf cookie; required when session cookies are sent. */
+                readonly "X-CSRF-Token"?: components["parameters"]["CsrfToken"];
+            };
+            readonly path: {
+                readonly device_id: components["parameters"]["DevicePath"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Removed */
+            readonly 204: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["AuthError"];
+            readonly 404: components["responses"]["PushError"];
         };
     };
 }

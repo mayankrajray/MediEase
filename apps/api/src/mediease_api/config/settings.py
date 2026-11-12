@@ -135,6 +135,10 @@ class AppSettings(BaseSettings):
     # (X-MediEase-Proxy-Secret with X-MediEase-Client-IP). Empty: the API ignores both headers
     # and uses the connection's address, as before A11.
     TRUSTED_PROXY_SECRET: SecretStr = SecretStr("")
+    # M7e-E2 (ADR-0025): the VAPID public key browsers subscribe with, base64url of an uncompressed
+    # P-256 point. Empty: push is not offered (the config endpoint says so). Its private half and
+    # the push provider are E3's settings.
+    VAPID_PUBLIC_KEY: str = ""
     # Refresh token lifetime: 14 days by default (spec R4); 1 hour to 30 days allowed.
     REFRESH_TOKEN_TTL_SECONDS: int = Field(default=1_209_600, ge=3600, le=2_592_000)
     # Generated files such as prescription PDFs (M4-P4, ADR-0012). `local`: a directory (the
@@ -480,6 +484,21 @@ class AppSettings(BaseSettings):
     def _absolute_endpoint(cls, value: str) -> str:
         if value and not value.startswith(("http://", "https://")):
             raise ValueError("must be an absolute http(s) URL or empty")
+        return value
+
+    @field_validator("VAPID_PUBLIC_KEY")
+    @classmethod
+    def _vapid_public_key(cls, value: str) -> str:
+        """Empty, or the 65-byte uncompressed P-256 point a browser's push manager accepts."""
+        value = value.strip()
+        if not value:
+            return value
+        try:
+            raw = base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("must be base64url") from exc
+        if len(raw) != 65 or raw[0] != 0x04:
+            raise ValueError("must be an uncompressed P-256 public key (65 bytes)")
         return value
 
     @field_validator("TRUSTED_PROXY_SECRET")

@@ -190,3 +190,8 @@ class AuditAction(StrEnum):
     # the access) and a wrong last-4 answer on one (the attempt number). Actor PATIENT; IDs only.
     PRESCRIPTION_UPLOAD_VERIFIED = "prescription_upload.verified"
     PRESCRIPTION_UPLOAD_CHALLENGE_FAILED = "prescription_upload.challenge_failed"
+    # M7e-E2 (ADR-0025): a device added for web push or removed, by its owner (actor PATIENT or
+    # STAFF; no clinic). Metadata holds the device's ID and fixed-vocabulary label only, never the
+    # endpoint or keys.
+    PUSH_DEVICE_ADDED = "push_device.added"
+    PUSH_DEVICE_REMOVED = "push_device.removed"

@@ -709,7 +709,7 @@ def create_portal_records_blueprint(use_cases: PortalRecordUseCases) -> Blueprin
     def notification_preferences() -> Response:
         return jsonify(
             items_body(
-                {"kind": p.kind.value, "in_app": p.in_app, "email": p.email}
+                {"kind": p.kind.value, "in_app": p.in_app, "email": p.email, "push": p.push}
                 for p in use_cases.get_patient_preferences().execute(current_patient())
             )
         )
@@ -722,7 +722,7 @@ def create_portal_records_blueprint(use_cases: PortalRecordUseCases) -> Blueprin
         use_cases.set_patient_preference().execute(principal, body.kind, body.channel, body.enabled)
         return jsonify(
             items_body(
-                {"kind": p.kind.value, "in_app": p.in_app, "email": p.email}
+                {"kind": p.kind.value, "in_app": p.in_app, "email": p.email, "push": p.push}
                 for p in use_cases.get_patient_preferences().execute(principal)
             )
         )

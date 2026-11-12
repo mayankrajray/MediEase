@@ -118,6 +118,15 @@ def _bina_report(scene: Scene) -> str:
     return report
 
 
+def _bina_device(s: Scene) -> str:
+    """M7e-E2: a push device of Bina's."""
+    from tests.integration.test_push_http import PORTAL_DEVICES, subscribe, subscription
+
+    resp = subscribe(s.bina, PORTAL_DEVICES, portal_csrf(s.bina), subscription(41))
+    assert resp.status_code == 201, resp.get_json()
+    return str(resp.get_json()["id"])
+
+
 def _bina_upload(scene: Scene) -> str:
     """M7b: Bina verifies her own prescription by its printed code."""
     made = scene.bina.post(
@@ -271,6 +280,12 @@ PORTAL_ID_CASES: dict[str, Case] = {
     "/api/v1/portal/prescription-uploads/<uuid:upload_id>/challenge": (
         "POST",
         lambda s: f"{PORTAL}/prescription-uploads/{_bina_pending_upload(s)}/challenge",
+        "REQ_NOT_FOUND",
+    ),
+    # M7e-E2: Bina's push device; Asha cannot turn it off.
+    "/api/v1/portal/push-subscriptions/<uuid:device_id>": (
+        "DELETE",
+        lambda s: f"{PORTAL}/push-subscriptions/{_bina_device(s)}",
         "REQ_NOT_FOUND",
     ),
 }
