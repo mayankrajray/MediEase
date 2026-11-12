@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-NTF-01..06 (push channel), NFR-02, NFR-08, NFR-19 |
 | Milestone / phases | M7e / E1–E5 (design `docs/milestones/M7e-pwa-push.md`) |
-| Status | E1 and E2 Implemented (12 Nov 2026); E3–E5 Approved |
+| Status | E1, E2 and E3 Implemented (12 Nov 2026); E4–E5 Approved |
 | Owner | Developer |
 | Last updated | 2026-11-12 |
 
@@ -75,8 +75,39 @@ last successful send, and `disabled_at` with a reason (`EXPIRED`) set by deliver
 - **R21** Adding and removing a device are audited (`push_device.added`, `push_device.removed`)
   with the device's ID and label, actor `PATIENT` or `STAFF`, no clinic.
 
-E3 (delivery), E4 (reminders for app users) and E5 (settings screens and real devices) are added
-here when they are built.
+E4 (reminders for app users) and E5 (settings screens and real devices) are added here when they
+are built.
+
+### E3 — Delivery
+- **R30** Every notice a person is given also goes by push to each of their active devices, as one
+  `send_push` job per device, enqueued in the notice's transaction (the outbox). For a patient:
+  every kind `notify_patient` delivers, to the linked or requesting account. For staff: every
+  in-app kind, to the same recipients (not the member who caused it). The `PUSH` switch is its
+  own: push goes with the in-app notice turned off, and stops with push turned off for the kind.
+- **R31** The job key is the device and the notice's event key, so a replayed event enqueues
+  nothing and a retry for one device never sends again to the others.
+- **R32** The push says only fixed words for its kind and the notice's path: never a name, the
+  clinic, a doctor, a time, a token, a reason, a medicine or a prescription (those two say only
+  that something is new). The body is the JSON `{"title", "body", "url", "tag"}`; `url` is a
+  same-site path of at most 200 characters (a patient's always under `/portal`), else the home
+  page (`/portal`, `/today`); `tag` is the kind. A medicine due or a patient at the desk is kept
+  by the push service for an hour, the rest for a day.
+- **R33** A patient's push is in the account's language (English or Hindi); staff's in English.
+- **R34** A push service answering 404 or 410 means the browser unsubscribed: the device is
+  disabled (`EXPIRED`), the job ends, and later notices skip it. The owner sees it as inactive.
+- **R35** At send time the worker reads the device, the switch and (staff) the membership again:
+  a device removed or taken over, push turned off, or a member no longer active means nothing is
+  sent. A device whose secrets no key can read is skipped.
+- **R36** 429, 5xx, a timeout or no connection are retried on the job's backoff
+  (`PSH_SERVICE_RATE_LIMITED`, `PSH_SERVICE_UNAVAILABLE`); any other answer, or a redirect, is
+  not (`PSH_REFUSED`, the job is dead). An accepted push records the device's last success.
+- **R37** Delivery logs the device ID, owner kind and notice kind, never the endpoint, the keys or
+  the words. The worker refuses `PUSH_PROVIDER=console` in production, and `webpush` needs the
+  VAPID private key that pairs with `VAPID_PUBLIC_KEY` (checked at start-up) and a subject.
+- **R38** Quiet hours: a push enqueued between 21:00 and 08:00 clinic time waits until 08:00
+  (the in-app notice is there at once). Every kind waits except a medicine reminder (at the time
+  the patient chose, 05:00–23:30) and a patient's arrival (only while the clinic is open).
+  E4's reminders are timed outside the quiet hours when they are made.
 
 ## 5. API surface
 | Method | Path | Request | Success | Errors |
@@ -97,6 +128,8 @@ update banner; the offline page. The device switches arrive in E5.
 | A device added (new, or taken over) | `push_device.added` | — (E3: none until a notice) | none |
 | A device removed | `push_device.removed` | — | none |
 | A device refreshed by its owner | none (logged `push.device_refreshed`) | — | none |
+| A notice to a person with devices (E3) | none | `send_push` per active device | none |
+| A push service answers 404/410 (E3) | none (logged `push.device_expired`) | — | none |
 
 ## 8. Edge cases
 | Case | Expected outcome |
@@ -116,11 +149,25 @@ update banner; the offline page. The device switches arrive in E5.
 - **AC5 (R17, NFR-08)** — Given another person's device ID, then delete is 404 and the device
   stays.
 - **AC6 (R12)** — Given an endpoint at `169.254.169.254`, then 422 and nothing is stored.
+- **AC7 (R30, R31)** — Given a patient with two devices and an accepted request, then two
+  `send_push` jobs, and a replay of the event adds none (`test_push_delivery.py`).
+- **AC8 (R32, R33)** — Given those jobs run, then each device is handed the fixed words, with no
+  clinic, doctor or patient name, and a Hindi account gets the Hindi words.
+- **AC9 (R34)** — Given the push service answers 410, then the device is disabled and the next
+  notice enqueues nothing for it.
+- **AC10 (R36)** — Given 429 or 503, then the job is retried; given 403, then it is dead.
+- **AC11 (R32)** — Given the pywebpush adapter, then the request is encrypted for the browser (the
+  test decrypts it as the browser would), signed with VAPID, and never follows a redirect.
+- **AC12 (R38)** — Given a cancellation at 23:30 clinic time, then its push runs at 08:00; a
+  medicine reminder's runs at once.
 
 ## 10. Observability
 Logs `push.device_added` (owner kind, device ID, moved), `push.device_refreshed`,
-`push.device_removed`, `push.rate_limited`; never the endpoint, keys or user agent. Error codes
-`PSH_TOO_MANY_DEVICES`, `PSH_RATE_LIMITED`, `REQ_VALIDATION_FAILED`, `REQ_NOT_FOUND`.
+`push.device_removed`, `push.rate_limited`; from E3 `push.sent`, `push.skipped` (reason
+`no_device`, `turned_off`, `not_a_member`, `unreadable`), `push.device_expired`, `push.failed`
+(code, status) and `notification.dispatched` `push_devices`; never the endpoint, keys, words or
+user agent. Error codes `PSH_TOO_MANY_DEVICES`, `PSH_RATE_LIMITED`, `REQ_VALIDATION_FAILED`,
+`REQ_NOT_FOUND`; job codes `PSH_SERVICE_RATE_LIMITED`, `PSH_SERVICE_UNAVAILABLE`, `PSH_REFUSED`.
 
 ## 11. Out of scope
 Native apps; SMS as a paid fallback; offline clinical data; a third-party push provider.

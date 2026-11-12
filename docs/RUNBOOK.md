@@ -46,6 +46,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 33. The assistant's model (M7a)
 34. Prescription uploads and ClamAV (M7b)
 35. Checking real configuration (M7c-P6)
+36. Web push keys and delivery (M7e-E3)
 
 ---
 
@@ -904,6 +905,7 @@ has_trial, trial_ends_at FROM clinic_subscriptions WHERE clinic_id = '<id>';`
   against `127.0.0.1:3310` (`CLAMD_PUBLISH_PORT`); it skips when no clamd answers.
 
 ### 35. Checking real configuration (M7c-P6)
+36. Web push keys and delivery (M7e-E3)
 **When:** after changing `.env`, before a demo, and after every deployment.
 Real values live only in `.env` (or the deployment's secret store). Nobody needs to open it to
 check it:
@@ -921,6 +923,7 @@ make config-check WHATSAPP_TO=9xxxxxxxxx        # sends Meta's hello_world templ
 | Email (Brevo) | `EMAIL_PROVIDER=smtp`, `SMTP_HOST=smtp-relay.brevo.com`, port 587, `starttls`, login | Logs in to the relay; sends nothing | `EMAIL_FROM` on the sending domain verified in Brevo (SPF, DKIM, DMARC). A free-mail sender such as an `@gmail.com` address fails Gmail's DMARC when sent through Brevo, so mail can be rejected or land in spam |
 | Google sign-in | `GOOGLE_OIDC_PROVIDER=google` and the client ID and secret | Fetches Google's sign-in discovery document | The redirect URI the command prints, registered in the Google Cloud OAuth client; the client and secret are proved only by a real *Continue with Google* |
 | The assistant's model | `LLM_PROVIDER` other than `console`, and `LLM_API_KEY` | Asks the model for one word | §33; staging and production also need `LLM_PATIENT_DATA_ALLOWED=true` after the privacy review (L-04) |
+| Web push (M7e-E3) | `PUSH_PROVIDER=webpush` and the three `VAPID_*` values | Nothing live yet: the worker checks at start-up that the private key pairs with the public key | §36; a real push needs a device that turned push on (E5) |
 
 A failed live check makes the command exit 1 and names the cause (`HTTP 401 (OAuthException
 code 190 …)` is an expired or wrong WhatsApp token; `SMTPAuthenticationError` a wrong SMTP login).
@@ -935,3 +938,37 @@ console model's fixed answers, as CI does. With `GOOGLE_OIDC_PROVIDER=google` or
 `LLM_PROVIDER` in `.env` they fail at sign-in or on the reply text. Run them with the API started
 as `LLM_PROVIDER=console GOOGLE_OIDC_PROVIDER=fake docker compose up -d --wait api` (a shell
 variable overrides `.env` for that start), then `docker compose up -d --wait api` to go back.
+
+### 36. Web push keys and delivery (M7e-E3)
+**When:** turning push on for an environment, rotating the keys, or a push that did not arrive.
+Push needs one VAPID key pair per environment: browsers subscribe with the public key, and the
+worker signs every push with the private key. `make vapid-keys` arrives in E5; until then:
+
+```bash
+docker compose run --rm --no-deps -T api python - <<'EOF'
+import base64
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+key = ec.generate_private_key(ec.SECP256R1())
+b64 = lambda raw: base64.urlsafe_b64encode(raw).decode().rstrip("=")
+point = key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+print("VAPID_PUBLIC_KEY=" + b64(point))
+print("VAPID_PRIVATE_KEY=" + b64(key.private_numbers().private_value.to_bytes(32, "big")))
+EOF
+```
+
+Put both lines in `.env` (or the secret store) with `PUSH_PROVIDER=webpush` and
+`VAPID_SUBJECT=mailto:<an address you read>`, then `make up`. The private key is a secret: never
+commit it or paste it into an issue. The worker refuses to start if the two keys are not a pair
+(`CFG_INVALID` or `VAPID_PRIVATE_KEY is not the pair`), and refuses `PUSH_PROVIDER=console` in
+production.
+
+- **Rotating the pair** makes every existing device useless: browsers subscribed with the old
+  public key, so the push services refuse the new signature (`PSH_REFUSED`, 403). Rotate only if
+  the private key leaked; people turn push on again on each device.
+- **A push did not arrive.** `make logs` and look for `push.sent`, `push.skipped` (with
+  `reason`), `push.device_expired` or `push.failed` with the `device_id`. `SELECT kind,
+  state, run_at, last_error_code FROM jobs WHERE kind = 'send_push' ORDER BY created_at DESC
+  LIMIT 20;` A job at night waits until 08:00 clinic time (quiet hours, web-push R38).
+- **Locally** `PUSH_PROVIDER=console` logs `push.console_sent` instead of sending. Real devices
+  need HTTPS, so the E5 device test runs through a tunnel.
