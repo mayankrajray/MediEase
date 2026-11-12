@@ -17,6 +17,8 @@ export const dynamic = "force-dynamic";
 
 // M7c-P7: the brand font (Manrope) is applied per surface by its layout (src/app/fonts.ts), so
 // patient pages keep the system font and their 200 KB budget.
+// M7e-E1: the installable app's tags and service worker are added by the staff and portal
+// layouts only (src/lib/pwa/manifest.ts), for the same reason.
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en">
