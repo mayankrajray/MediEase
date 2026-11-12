@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -17,6 +18,9 @@ import { type PortalLanguage, portalDate } from "@/lib/i18n/portal";
 
 import { type PortalLink, type PortalNotificationPreference, usePortalLoad } from "./data";
 import { PortalCard, PortalTitle, ScreenLoading, usePortal } from "./PortalShell";
+
+// M7e-E5: the pop-up alerts card is loaded when this page renders, not with every page that links here.
+const PortalDevicePush = dynamic(() => import("./PortalDevicePush").then((m) => m.PortalDevicePush), { ssr: false });
 
 async function loadLinks(): Promise<readonly PortalLink[]> {
   return (await portalGet("/api/v1/portal/links")).data.items;
@@ -128,6 +132,8 @@ export function PortalAccountPage() {
       </PortalCard>
 
       <SlotTimesCard onSaved={(text) => setStatus(text)} />
+
+      <PortalDevicePush onSaved={setStatus} />
 
       <NotificationSwitches onSaved={(text) => setStatus(text)} />
 
@@ -269,7 +275,8 @@ async function loadPreferences(): Promise<readonly PortalNotificationPreference[
 
 /**
  * M6b-P6 (spec R62, R63): what the person is told about, in the app and by email. Everything is on
- * until they turn it off; email is offered only for the four answers to a booking request.
+ * until they turn it off; email is offered only for the four answers to a booking request. M7e-E5:
+ * and as a pop-up alert on the devices they turned alerts on for (web-push R53).
  */
 function NotificationSwitches({ onSaved }: Readonly<{ onSaved: (text: string) => void }>) {
   const { s, leave } = usePortal();
@@ -280,7 +287,7 @@ function NotificationSwitches({ onSaved }: Readonly<{ onSaved: (text: string) =>
   const [busy, setBusy] = useState(false);
   const shown = items ?? (loaded.status === "ready" ? loaded.data : []);
 
-  async function change(kind: PortalNotificationPreference["kind"], channel: "IN_APP" | "EMAIL", enabled: boolean) {
+  async function change(kind: PortalNotificationPreference["kind"], channel: "IN_APP" | "EMAIL" | "PUSH", enabled: boolean) {
     if (busy) return;
     setBusy(true);
     setError(null);
@@ -329,6 +336,16 @@ function NotificationSwitches({ onSaved }: Readonly<{ onSaved: (text: string) =>
                     {words.switches.email}
                   </label>
                 )}
+                <label className={`${CHOICE_CARD} min-h-11 text-sm font-medium`}>
+                  <input
+                    type="checkbox"
+                    checked={p.push}
+                    disabled={busy}
+                    onChange={(e) => void change(p.kind, "PUSH", e.target.checked)}
+                    className={CHOICE_INPUT}
+                  />
+                  {words.switches.push}
+                </label>
               </div>
             </fieldset>
           </li>

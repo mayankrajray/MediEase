@@ -153,4 +153,27 @@ describe("my notification settings (M6a-P7, FR-NTF-05)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/Try again shortly|try again/i);
     expect(screen.getByRole("checkbox", { name: "A patient is booked with me" })).toBeChecked();
   });
+
+  it("M7e-E5 (web-push R53): the pop-up alert switches are their own, and save the PUSH channel", async () => {
+    const push = PREFERENCES.map((p) => ({ ...p, channel: "PUSH" as const }));
+    const api = render({
+      "GET /api/v1/notifications/preferences": () => json(200, { items: [...PREFERENCES, ...push] }),
+      "PUT /api/v1/notifications/preferences": () =>
+        json(200, {
+          items: [...PREFERENCES, ...push.map((p) => (p.kind === "appointment.booked" ? { ...p, enabled: false } : p))],
+        }),
+    });
+    const alerts = await screen.findByRole("group", { name: "Pop-up alerts" });
+    const inApp = screen.getByRole("group", { name: "In the app" });
+    fireEvent.click(within(alerts).getByRole("checkbox", { name: "A patient is booked with me" }));
+    expect(await screen.findByText("Saved: the pop-up alert for “A patient is booked with me” is off.")).toBeInTheDocument();
+    expect(api.calls.find((c) => c.method === "PUT")?.body).toEqual({
+      items: [{ kind: "appointment.booked", channel: "PUSH", enabled: false }],
+    });
+    expect(within(alerts).getByRole("checkbox", { name: "A patient is booked with me" })).not.toBeChecked();
+    expect(within(inApp).getByRole("checkbox", { name: "A patient is booked with me" })).toBeChecked();
+    // No push manager in this test browser: said in words, and nothing asked of the API.
+    expect(screen.getByText(/can't show alerts from MediEase/)).toBeInTheDocument();
+    expect(api.calls.some((c) => c.path.includes("push"))).toBe(false);
+  });
 });

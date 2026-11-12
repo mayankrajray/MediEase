@@ -42,7 +42,8 @@ async function clearAll(page: Page): Promise<void> {
 
 async function setBookedNotice(page: Page, on: boolean): Promise<void> {
   await page.goto("/settings/notifications");
-  const box = page.getByRole("checkbox", { name: BOOKED_LABEL });
+  // M7e-E5: the page also has pop-up alert switches; this is the in-app one.
+  const box = page.getByRole("group", { name: "In the app" }).getByRole("checkbox", { name: BOOKED_LABEL });
   await expect(box).toBeVisible();
   if ((await box.isChecked()) !== on) {
     await box.click();
