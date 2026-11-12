@@ -43,6 +43,11 @@ dependencies = [
     "pypdfium2==5.14.0",
     "zxing-cpp==3.1.1",
     "pillow==13.0.0",
+    # M7e-E3 (ADR-0025, design §1 decision 5): web push. pywebpush encrypts each message for the
+    # browser (RFC 8291, aes128gcm, through http-ece) and signs the VAPID header (RFC 8292,
+    # through py-vapid), both on PyCA cryptography. It brings requests (the HTTP call we use) and
+    # aiohttp (its async API, which we do not use). Only adapters/push imports it.
+    "pywebpush==2.5.0",
 ]
 
 [project.optional-dependencies]
@@ -114,9 +119,13 @@ module = ["mediease_api.domain.*", "mediease_api.application.*"]
 strict = true
 
 # WeasyPrint ships no type information; only adapters/pdf imports it. pypdfium2 neither; only
-# adapters/extraction imports it at runtime (M7b).
+# adapters/extraction imports it at runtime (M7b). pywebpush and py-vapid neither; only
+# adapters/push imports them (M7e-E3).
 [[tool.mypy.overrides]]
-module = ["weasyprint", "weasyprint.*", "pypdfium2", "pypdfium2.*"]
+module = [
+    "weasyprint", "weasyprint.*", "pypdfium2", "pypdfium2.*",
+    "pywebpush", "pywebpush.*", "py_vapid", "py_vapid.*",
+]
 ignore_missing_imports = true
 
 # --- pytest ------------------------------------------------------------------
@@ -156,7 +165,8 @@ forbidden_modules = [
     "mediease_api.delivery", "mediease_api.config", "mediease_api.bootstrap", "mediease_api.wsgi",
     "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
     "structlog", "gunicorn", "ulid", "argon2", "jwt", "weasyprint", "jinja2", "boto3", "botocore",
-    "cryptography", "yaml", "segno", "pypdfium2", "zxingcpp", "PIL",
+    "cryptography", "yaml", "segno", "pypdfium2", "zxingcpp", "PIL", "pywebpush", "py_vapid",
+    "requests",
 ]
 
 [[tool.importlinter.contracts]]
@@ -168,7 +178,7 @@ forbidden_modules = [
     "mediease_api.bootstrap", "mediease_api.wsgi",
     "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
     "gunicorn", "argon2", "jwt", "cryptography", "yaml",
-    "segno", "pypdfium2", "zxingcpp", "PIL",
+    "segno", "pypdfium2", "zxingcpp", "PIL", "pywebpush", "py_vapid", "requests",
 ]
 
 [[tool.importlinter.contracts]]
@@ -179,7 +189,7 @@ forbidden_modules = [
     "mediease_api.application", "mediease_api.adapters", "mediease_api.delivery",
     "mediease_api.config", "mediease_api.bootstrap", "mediease_api.wsgi",
     "flask", "werkzeug", "sqlalchemy", "alembic", "psycopg", "pydantic", "pydantic_settings",
-    "gunicorn", "argon2", "jwt", "cryptography", "yaml",
+    "gunicorn", "argon2", "jwt", "cryptography", "yaml", "pywebpush", "py_vapid", "requests",
 ]
 
 [[tool.importlinter.contracts]]
