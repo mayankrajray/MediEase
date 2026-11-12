@@ -209,3 +209,14 @@ class PushSubscription:
         self.disabled_at = None
         self.disabled_reason = None
         self.updated_at = require_utc(now, "now")
+
+    def mark_sent(self, now: datetime) -> None:
+        """E3: the push service accepted a message for this device."""
+        self.last_success_at = require_utc(now, "now")
+
+    def disable(self, reason: DisabledReason, now: datetime) -> None:
+        """E3 (R34): the push service says the browser is gone; nothing more is sent to it."""
+        now = require_utc(now, "now")
+        self.disabled_at = now
+        self.disabled_reason = reason
+        self.updated_at = now

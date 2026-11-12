@@ -48,6 +48,9 @@ EXPIRE_REQUESTS_KIND = "expire_booking_requests"
 MEDICINE_DUE_SWEEP_KIND = "schedule_medicine_due"
 NOTIFY_MEDICINE_DUE_KIND = "notify_medicine_due"
 PATIENT_EMAIL_KIND = "send_patient_email"
+# M7e-E3 (ADR-0025, spec web-push R30-R37): one web push to one device for one notice. It belongs
+# to the notice's clinic, so it is a clinic kind (no migration).
+PUSH_KIND = "send_push"
 # M6c-P1 (clinic-onboarding R9, R12, R14): an application's emails (no clinic yet), and the daily
 # deletion of applications never confirmed, with their certificates.
 APPLICATION_EMAIL_KIND = "send_application_email"

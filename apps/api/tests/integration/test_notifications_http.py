@@ -372,7 +372,8 @@ def test_fr_ntf_03_the_centre_needs_a_clinic_session(world: World) -> None:
 def test_a_dispatch_costs_one_query_per_lookup_whatever_the_recipients(
     world: World, db: Engine, uow_factory: UowFactory, session_factory: sessionmaker[Session]
 ) -> None:
-    """MessageFailed to every owner and desk: patient, members, their choices, one insert."""
+    """MessageFailed to every owner and desk: patient, members, their choices, one insert, and
+    (M7e-E3) one lookup of all their push devices; with none, no push switches are read."""
     _, appointment_id = _booked(world)
     with db.connect() as conn:
         patient_id = conn.execute(
@@ -398,7 +399,7 @@ def test_a_dispatch_costs_one_query_per_lookup_whatever_the_recipients(
         finally:
             event.remove(engine, "before_cursor_execute", count)
     assert written >= 2  # every owner and the desk
-    assert statements == ["SELECT", "SELECT", "SELECT", "INSERT"]
+    assert statements == ["SELECT", "SELECT", "SELECT", "INSERT", "SELECT"]
 
 
 # --- Retention (decision 8A) --------------------------------------------------------------------

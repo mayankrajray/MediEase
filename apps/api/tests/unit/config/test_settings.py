@@ -499,3 +499,48 @@ def test_m7e_e2_vapid_public_key_is_empty_or_an_uncompressed_p256_point(
         with pytest.raises(ValidationError) as excinfo:
             AppSettings()  # type: ignore[call-arg]
         assert "VAPID_PUBLIC_KEY" in str(excinfo.value)
+
+
+def _vapid_pair() -> tuple[str, str]:
+    from tests.unit.adapters.test_push_adapters import vapid_pair
+
+    return vapid_pair()
+
+
+def test_m7e_e3_webpush_needs_the_pair_and_a_subject(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    set_env(valid_env)
+    settings = AppSettings()  # type: ignore[call-arg]
+    assert (settings.PUSH_PROVIDER, settings.VAPID_SUBJECT) == ("console", "")
+    private, public = _vapid_pair()
+    set_env({**valid_env, "PUSH_PROVIDER": "webpush"})
+    with pytest.raises(ValidationError) as excinfo:
+        AppSettings()  # type: ignore[call-arg]
+    assert "VAPID_PRIVATE_KEY" in str(excinfo.value) and "VAPID_SUBJECT" in str(excinfo.value)
+    set_env({"VAPID_PRIVATE_KEY": private, "VAPID_SUBJECT": "mailto:push@mediease.example"})
+    with pytest.raises(ValidationError, match="needs VAPID_PUBLIC_KEY"):
+        AppSettings()  # type: ignore[call-arg]
+    set_env({"VAPID_PUBLIC_KEY": public})
+    settings = AppSettings()  # type: ignore[call-arg]
+    assert settings.VAPID_PRIVATE_KEY.get_secret_value() == private
+    assert private not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    ("field", "bad"),
+    [
+        ("VAPID_PRIVATE_KEY", "not base64!!"),
+        ("VAPID_PRIVATE_KEY", "QUJD"),
+        ("VAPID_SUBJECT", "push@mediease.example"),
+        ("VAPID_SUBJECT", "http://mediease.example"),
+        ("VAPID_SUBJECT", "mailto:"),
+    ],
+)
+def test_m7e_e3_a_bad_vapid_value_is_named(
+    set_env: SetEnv, valid_env: dict[str, str], field: str, bad: str
+) -> None:
+    set_env({**valid_env, field: bad})
+    with pytest.raises(ValidationError) as excinfo:
+        AppSettings()  # type: ignore[call-arg]
+    assert field in str(excinfo.value)

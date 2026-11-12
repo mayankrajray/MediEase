@@ -5,7 +5,9 @@ actively linked to the record an appointment or prescription is for: never found
 or name. **Delivery** inserts a row per notice; ``(account_id, event_key)`` is unique in the
 database, so a replay writes nothing (R58). A kind turned off in the app writes no row. The four
 booking kinds may also go by email to a verified address (R63), by a job keyed on the notice, so
-it is sent at most once; the email never carries the reason or note.
+it is sent at most once; the email never carries the reason or note. From M7e-E3 every kind also
+goes by web push to the account's devices, unless push is off for it (a switch of its own, apart
+from the in-app one); see ``application/push/delivery.py``.
 
 Reads go through ``uow.patient_notification_lookup`` with the account's linked clinics (the
 portal scope): an unlinked or suspended clinic's notices are neither listed nor counted (R60).
@@ -23,6 +25,7 @@ import structlog
 
 from mediease_api.application.portal.scope import PortalScope
 from mediease_api.application.portal.views import PatientPrincipal
+from mediease_api.application.push.delivery import enqueue_push
 from mediease_api.domain.jobs.job import PATIENT_EMAIL_KIND, NewJob
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.portal.notifications import (
@@ -34,6 +37,7 @@ from mediease_api.domain.portal.notifications import (
     check_channel,
     render_title,
 )
+from mediease_api.domain.push.subscription import OwnerKind
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -115,6 +119,20 @@ def notify_patient(
                     dedupe_key=patient_email_key(account_id, event_key),
                 )
             )
+    devices = uow.push_subscriptions.active_for_owners(OwnerKind.PATIENT, [account_id])
+    if devices and not uow.patient_preferences.is_off(account_id, kind, PatientChannel.PUSH):
+        # M7e-E3 (web-push R30, R31): a push to each of the account's devices, by the outbox.
+        enqueue_push(
+            uow,
+            ids=ids,
+            devices=devices,
+            clinic_id=tenant.clinic_id,
+            notice=kind,
+            event_key=event_key,
+            link=link,
+            now=now,
+            request_id=request_id,
+        )
     logger.info("patient_notification.dispatched", kind=kind.value, written=written)
     return written
 
