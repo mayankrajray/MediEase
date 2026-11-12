@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { RECEIPT_VIEW_COOKIE, receiptPath } from "@/features/patient-link/view-cookie";
 import { apiBaseUrl } from "@/lib/api/client";
+import { forwardedFrom } from "@/lib/security/client-address";
 
 /**
  * The receipt PDF for the receipt page (M6d-P4, billing R50). The browser cannot send the view
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   let upstream: Response;
   try {
     upstream = await fetch(`${apiBaseUrl()}/api/v1/public/links/${encodeURIComponent(token)}/receipt.pdf`, {
-      headers: { "X-Link-View": view, Accept: "application/pdf" },
+      headers: { ...forwardedFrom(request.headers), "X-Link-View": view, Accept: "application/pdf" },
       cache: "no-store",
       signal: AbortSignal.timeout(30_000),
     });

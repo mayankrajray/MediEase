@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { clinicToday } from "@/features/booking/availability";
 import { PublicClinicPage } from "@/features/public-clinic/PublicClinicPage";
 import { ApiError, apiGet, type GetResponse } from "@/lib/api/client";
+import { forwardedClient } from "@/lib/api/forwarded";
 import { pickLanguage } from "@/lib/i18n/booking-request";
 import { PORTAL_LANGUAGE_COOKIE } from "@/lib/i18n/portal";
 
@@ -23,7 +24,7 @@ function viaDirectory(search: Search): boolean {
 
 async function load(slug: string, via: boolean): Promise<Clinic> {
   try {
-    return (await apiGet("/api/v1/public/clinics/{slug}", { pathParams: { slug }, ...(via ? { query: { via: "directory" } } : {}) })).data;
+    return (await apiGet("/api/v1/public/clinics/{slug}", { headers: await forwardedClient(), pathParams: { slug }, ...(via ? { query: { via: "directory" } } : {}) })).data;
   } catch (error) {
     // An unknown slug and a clinic without a public page are the same answer (spec R2).
     if (error instanceof ApiError && (error.code === "REQ_NOT_FOUND" || error.status === 404)) notFound();
@@ -34,7 +35,7 @@ async function load(slug: string, via: boolean): Promise<Clinic> {
 export async function generateMetadata({ params }: Readonly<{ params: Promise<{ slug: string }> }>): Promise<Metadata> {
   const { slug } = await params;
   try {
-    const clinic = (await apiGet("/api/v1/public/clinics/{slug}", { pathParams: { slug } })).data;
+    const clinic = (await apiGet("/api/v1/public/clinics/{slug}", { headers: await forwardedClient(), pathParams: { slug } })).data;
     const place = [clinic.city, clinic.state].filter((part) => part !== null && part !== "").join(", ");
     const title = `${clinic.name} · MediEase`;
     // Name and address only: no doctor, no hours, nothing a share preview should not carry.

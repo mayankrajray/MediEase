@@ -6,6 +6,7 @@ import { PrescriptionView } from "@/features/patient-link/PrescriptionView";
 import { otherLanguage, pageLanguage, stringsFor, type PageLanguage, type PageStrings } from "@/features/patient-link/strings";
 import { VIEW_COOKIE, pagePath, problemFor, readProblem, type Problem } from "@/features/patient-link/view-cookie";
 import { ApiError, apiGet, type GetResponse } from "@/lib/api/client";
+import { forwardedClient } from "@/lib/api/forwarded";
 
 // R12: nothing clinical in the title, the description or social previews.
 export const metadata: Metadata = {
@@ -48,7 +49,7 @@ async function loadPage(token: string, view: string, lang: PageLanguage | undefi
       await apiGet("/api/v1/public/links/{token}/prescription", {
         pathParams: { token },
         query: { lang },
-        headers: { "X-Link-View": view },
+        headers: { ...(await forwardedClient()), "X-Link-View": view },
       })
     ).data;
   } catch (error) {
@@ -60,7 +61,7 @@ async function loadPage(token: string, view: string, lang: PageLanguage | undefi
 
 async function loadSummary(token: string): Promise<Summary | Problem> {
   try {
-    return (await apiGet("/api/v1/public/links/{token}", { pathParams: { token } })).data;
+    return (await apiGet("/api/v1/public/links/{token}", { headers: await forwardedClient(), pathParams: { token } })).data;
   } catch (error) {
     return problemOf(error);
   }

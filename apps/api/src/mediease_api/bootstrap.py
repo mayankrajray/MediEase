@@ -123,6 +123,7 @@ from mediease_api.application.booking.answers import (
     ProposeBookingTime,
 )
 from mediease_api.application.booking.expiry import ExpireBookingRequests, SweepRequestExpiry
+from mediease_api.application.booking.limits import READS_PER_MINUTE_PER_IP
 from mediease_api.application.booking.public import (
     GetAvailability,
     GetPublicClinic,
@@ -447,6 +448,8 @@ class _UseCases:
     phones: PhoneCipherPort | None = None
     # M6b-P6: the live token link's address (PUBLIC_BASE_URL/q/<token>).
     public_base_url: str = ""
+    # M7e: the public page, availability and search limit per address (booking-requests R15).
+    public_reads_per_minute: int = READS_PER_MINUTE_PER_IP
     # M7a (ADR-0013, ADR-0024): the assistant's model and its proposal signer.
     llm: LlmPort | None = None
     proposal_signer: HmacProposalSigner | None = None
@@ -962,10 +965,14 @@ class _UseCases:
 
     # M6b-P4: the public page, booking requests and the staff list.
     def get_public_clinic(self) -> GetPublicClinic:
-        return GetPublicClinic(uow=self._uow(), clock=self.clock)
+        return GetPublicClinic(
+            uow=self._uow(), clock=self.clock, reads_per_minute=self.public_reads_per_minute
+        )
 
     def get_availability(self) -> GetAvailability:
-        return GetAvailability(uow=self._uow(), clock=self.clock)
+        return GetAvailability(
+            uow=self._uow(), clock=self.clock, reads_per_minute=self.public_reads_per_minute
+        )
 
     def create_booking_request(self) -> CreateBookingRequest:
         return CreateBookingRequest(uow=self._uow(), clock=self.clock, ids=self.ids)
@@ -1116,10 +1123,14 @@ class _UseCases:
 
     # --- M6c-P6: directory search -------------------------------------------------------------
     def search_clinics(self) -> SearchClinics:
-        return SearchClinics(uow=self._uow(), clock=self.clock)
+        return SearchClinics(
+            uow=self._uow(), clock=self.clock, reads_per_minute=self.public_reads_per_minute
+        )
 
     def search_doctors(self) -> SearchDoctors:
-        return SearchDoctors(uow=self._uow(), clock=self.clock)
+        return SearchDoctors(
+            uow=self._uow(), clock=self.clock, reads_per_minute=self.public_reads_per_minute
+        )
 
     # --- M6d-P1: the fee schedule ---------------------------------------------------------------
     def get_fees(self) -> GetFees:
@@ -1647,6 +1658,7 @@ def create_app(
         whatsapp_verify_token=settings.WHATSAPP_VERIFY_TOKEN.get_secret_value(),
         phones=FernetPhoneCipher(settings.messaging_phone_keys()),
         public_base_url=settings.PUBLIC_BASE_URL,
+        public_reads_per_minute=settings.PUBLIC_READS_PER_MINUTE,
         llm=llm or build_llm(settings),
         proposal_signer=HmacProposalSigner(signing_key),
     )
@@ -1662,7 +1674,11 @@ def create_app(
     # each route's access policy decides who may continue; error handlers wrap
     # everything so failures still carry the request_id.
     register_request_middleware(app)
-    register_request_info(app, HmacIpHasher(settings.AUDIT_IP_SALT.get_secret_value()))
+    register_request_info(
+        app,
+        HmacIpHasher(settings.AUDIT_IP_SALT.get_secret_value()),
+        proxy_secret=settings.TRUSTED_PROXY_SECRET.get_secret_value(),
+    )
     register_csrf_protection(app)
     register_access_control(app, use_cases)
     register_error_handlers(app)

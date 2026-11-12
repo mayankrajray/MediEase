@@ -1,10 +1,9 @@
 /**
- * Runs before every page request (Next.js 16 "proxy", formerly middleware).
+ * Runs before every request (Next.js 16 "proxy", formerly middleware).
  *
  * 1. Creates a per-request CSP nonce and passes the policy on the *request* so
  *    Next.js can read the nonce and stamp it on the scripts it renders, and on the
- *    *response* so the browser enforces it. API paths are excluded: they are
- *    rewritten to the Flask API and return JSON, not pages.
+ *    *response* so the browser enforces it.
  * 2. Sends a visitor who has no `me_csrf` cookie to /sign-in. That cookie is the
  *    only session cookie a page request carries (`me_access` is scoped to /api,
  *    ADR-0006), so its absence means "never signed in, or signed out". This is a
@@ -12,12 +11,17 @@
  *    not a security check: a stale or forged cookie just reaches the client-side
  *    session provider, which asks the API, and the API enforces access on every
  *    request (M1-P6 design, concepts 2 and 3).
+ * 3. M7e, A11: on every request, pages and /api alike, removes the client-address headers a
+ *    browser may not set and, when configured, adds the browser's address for the API
+ *    (src/lib/security/client-address.ts). API paths get only this step: they are rewritten to
+ *    the Flask API and return JSON, so they need no nonce and no sign-in redirect.
  */
 
 import { type NextRequest, NextResponse } from "next/server";
 
 import { CSRF_COOKIE, PORTAL_CSRF_COOKIE } from "@/lib/api/csrf";
 import { isPortalPath } from "@/lib/auth/safe-next";
+import { forwardingConfig, withClientAddress } from "@/lib/security/client-address";
 import { buildContentSecurityPolicy, newNonce } from "@/lib/security/headers";
 
 export const CSP_HEADER = "Content-Security-Policy";
@@ -82,12 +86,21 @@ export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.has(pathname) || PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
+/** Paths that next.config rewrites to the API. */
+function isApiPath(pathname: string): boolean {
+  return pathname.startsWith("/api/") || pathname === "/health" || pathname === "/ready";
+}
+
 export function proxy(request: NextRequest): NextResponse {
+  const { pathname, search } = request.nextUrl;
+  const requestHeaders = withClientAddress(request.headers, forwardingConfig());
+  if (isApiPath(pathname)) {
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
   const csp = buildContentSecurityPolicy(newNonce(), {
     isDev: process.env.NODE_ENV === "development",
   });
-
-  const { pathname, search } = request.nextUrl;
   // The portal has its own session (ADR-0015 decision 2): its pages look for the portal's
   // CSRF cookie and send a signed-out visitor to the portal's sign-in, never the staff one.
   const portal = isPortalPath(pathname);
@@ -104,7 +117,6 @@ export function proxy(request: NextRequest): NextResponse {
     return redirect;
   }
 
-  const requestHeaders = new Headers(request.headers);
   requestHeaders.set(CSP_HEADER, csp);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
@@ -115,8 +127,13 @@ export function proxy(request: NextRequest): NextResponse {
 export const config = {
   matcher: [
     {
-      // Everything except API paths (rewritten to Flask), static build assets and the favicon.
-      source: "/((?!api/|health$|ready$|_next/static|_next/image|favicon.ico).*)",
+      // Everything except static build assets and the favicon. M7e (A11): API paths are matched
+      // too, so the client-address headers are cleaned and set before the rewrite to the API.
+      // The two large-upload routes are not: Next buffers a matched request's body up to 10 MB
+      // and cuts the rest, and an upload may be 10 MB plus framing (#30). Their route handler,
+      // proxyWithLimit, applies the same client-address step itself.
+      source:
+        "/((?!_next/static|_next/image|favicon.ico|api/v1/portal/prescription-uploads$|api/v1/ops/clinics/[^/]+/patient-imports$).*)",
       // Prefetches do not render HTML, so they need no nonce.
       missing: [
         { type: "header", key: "next-router-prefetch" },

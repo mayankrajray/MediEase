@@ -6,6 +6,7 @@ import { ReceiptView } from "@/features/patient-link/ReceiptView";
 import { otherLanguage, pageLanguage, stringsFor, type PageLanguage, type PageStrings } from "@/features/patient-link/strings";
 import { RECEIPT_VIEW_COOKIE, problemFor, readProblem, receiptPath, type Problem } from "@/features/patient-link/view-cookie";
 import { ApiError, apiGet, type GetResponse } from "@/lib/api/client";
+import { forwardedClient } from "@/lib/api/forwarded";
 
 // Nothing about the patient or the amount in the title or social previews (billing R49).
 export const metadata: Metadata = {
@@ -41,7 +42,7 @@ const problemOf = (error: unknown): Problem => (error instanceof ApiError ? prob
 
 async function loadReceipt(token: string, view: string): Promise<Receipt | Problem | "ask"> {
   try {
-    return (await apiGet("/api/v1/public/links/{token}/receipt", { pathParams: { token }, headers: { "X-Link-View": view } })).data;
+    return (await apiGet("/api/v1/public/links/{token}/receipt", { pathParams: { token }, headers: { ...(await forwardedClient()), "X-Link-View": view } })).data;
   } catch (error) {
     if (error instanceof ApiError && error.code === "LINK_CHALLENGE_REQUIRED") return "ask";
     return problemOf(error);
@@ -50,7 +51,7 @@ async function loadReceipt(token: string, view: string): Promise<Receipt | Probl
 
 async function loadSummary(token: string): Promise<Summary | Problem> {
   try {
-    return (await apiGet("/api/v1/public/links/{token}", { pathParams: { token } })).data;
+    return (await apiGet("/api/v1/public/links/{token}", { headers: await forwardedClient(), pathParams: { token } })).data;
   } catch (error) {
     return problemOf(error);
   }

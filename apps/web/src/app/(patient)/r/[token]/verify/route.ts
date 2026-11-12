@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { pageLanguage } from "@/features/patient-link/strings";
 import { RECEIPT_VIEW_COOKIE, problemFor, receiptPath } from "@/features/patient-link/view-cookie";
 import { ApiError, apiPost } from "@/lib/api/client";
+import { forwardedFrom } from "@/lib/security/client-address";
 
 /**
  * The receipt page's last-4 form target (M6d-P4, billing R48): the prescription page's flow, with
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const secure = (request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol).startsWith("https");
 
   try {
-    const { data } = await apiPost("/api/v1/public/links/{token}/verify", { phone_last4: digits }, { pathParams: { token } });
+    const { data } = await apiPost("/api/v1/public/links/{token}/verify", { phone_last4: digits }, { pathParams: { token }, headers: forwardedFrom(request.headers) });
     const response = seeOther(token, back);
     response.cookies.set(RECEIPT_VIEW_COOKIE, data.view_token, {
       httpOnly: true,

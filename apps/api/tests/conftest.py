@@ -88,6 +88,9 @@ _MANAGED_VARS = (
     "SMTP_SECURITY",
     "SMTP_USERNAME",
     "SMTP_PASSWORD",
+    # M7e: the public read limit and the trusted web server's secret (A11).
+    "PUBLIC_READS_PER_MINUTE",
+    "TRUSTED_PROXY_SECRET",
 )
 
 # Synthetic, test-only secrets (>= 32 characters each).

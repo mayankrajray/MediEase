@@ -6,6 +6,7 @@ import { Logo } from "@/components/ui/Logo";
 import { liveProblemOf, liveProblemText } from "@/features/live-queue/problems";
 import { LiveQueueView } from "@/features/live-queue/LiveQueueView";
 import { apiGet, type ApiResult, type GetResponse } from "@/lib/api/client";
+import { forwardedClient } from "@/lib/api/forwarded";
 import { pickLanguage } from "@/lib/i18n/booking-request";
 import { liveWords } from "@/lib/i18n/patient-notifications";
 import { PORTAL_LANGUAGE_COOKIE } from "@/lib/i18n/portal";
@@ -23,7 +24,7 @@ type First = ApiResult<GetResponse<"/api/v1/public/queue/{token}">>;
 /** The first answer, or the error that stands in for it. */
 async function load(token: string): Promise<First | { readonly error: unknown }> {
   try {
-    return await apiGet("/api/v1/public/queue/{token}", { pathParams: { token } });
+    return await apiGet("/api/v1/public/queue/{token}", { headers: await forwardedClient(), pathParams: { token } });
   } catch (error) {
     return { error };
   }

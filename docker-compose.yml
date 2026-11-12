@@ -71,6 +71,11 @@ x-api-environment: &api-environment
   LLM_API_KEY: ${LLM_API_KEY:-}
   LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-20}
   LLM_PATIENT_DATA_ALLOWED: ${LLM_PATIENT_DATA_ALLOWED:-false}
+  # M7e (booking-requests R15): public reads a minute per client address; 60 unless set. The
+  # journeys' browsers share one address, so .env.example raises it for local runs and CI.
+  PUBLIC_READS_PER_MINUTE: ${PUBLIC_READS_PER_MINUTE:-60}
+  # M7e, A11: the secret the web server sends with the browser's address; empty turns it off.
+  TRUSTED_PROXY_SECRET: ${TRUSTED_PROXY_SECRET:-}
 
 # Least privilege for our own containers (CLAUDE.md): read-only root
 # filesystem, no Linux capabilities, no privilege escalation. Writable scratch
@@ -267,6 +272,10 @@ services:
     environment:
       # Read at runtime by the server-side API client (src/lib/api/client.ts).
       API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:8000}
+      # M7e, A11 (src/lib/security/client-address.ts): with both set, the browser's address is read
+      # from the edge's header and sent to the API with the secret. Empty: off (no edge locally).
+      TRUSTED_PROXY_SECRET: ${TRUSTED_PROXY_SECRET:-}
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-}
     # Next.js writes its runtime cache here; the node user (uid 1000) must own it.
     tmpfs: ["/tmp", "/app/.next/cache:uid=1000,gid=1000"]
     ports:

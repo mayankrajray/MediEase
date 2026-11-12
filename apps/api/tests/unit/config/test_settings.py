@@ -443,3 +443,43 @@ def test_m5_p3_deployed_whatsapp_values_must_be_real_and_https(
     assert _invalid_fields(placeholder, set_env) == {"WHATSAPP_APP_SECRET"}
     http = {**deployed, "WHATSAPP_GRAPH_URL": "http://graph.example.test"}
     assert _invalid_fields(http, set_env) == {"WHATSAPP_GRAPH_URL"}
+
+
+def test_m7e_public_reads_default_to_60_a_minute_and_stay_within_bounds(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    set_env(valid_env)
+    assert AppSettings().PUBLIC_READS_PER_MINUTE == 60  # type: ignore[call-arg]
+    set_env({**valid_env, "PUBLIC_READS_PER_MINUTE": "1000"})
+    assert AppSettings().PUBLIC_READS_PER_MINUTE == 1000  # type: ignore[call-arg]
+    for bad in ("9", "10001", "many"):
+        set_env({**valid_env, "PUBLIC_READS_PER_MINUTE": bad})
+        with pytest.raises(ValidationError) as excinfo:
+            AppSettings()  # type: ignore[call-arg]
+        assert "PUBLIC_READS_PER_MINUTE" in str(excinfo.value)
+
+
+def test_m7e_a11_trusted_proxy_secret_is_empty_or_strong(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    set_env(valid_env)
+    assert AppSettings().TRUSTED_PROXY_SECRET.get_secret_value() == ""  # type: ignore[call-arg]
+    set_env({**valid_env, "TRUSTED_PROXY_SECRET": "short"})
+    with pytest.raises(ValidationError, match="at least 32"):
+        AppSettings()  # type: ignore[call-arg]
+    strong = "x" * 40
+    set_env({**valid_env, "TRUSTED_PROXY_SECRET": strong})
+    assert AppSettings().TRUSTED_PROXY_SECRET.get_secret_value() == strong  # type: ignore[call-arg]
+    # Never printed with the settings.
+    assert strong not in repr(AppSettings())  # type: ignore[call-arg]
+
+
+def test_m7e_a11_placeholder_proxy_secret_only_in_local_and_test(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    placeholder = "change-me-local-only-trusted-proxy-secret-01"
+    set_env({**valid_env, "APP_ENV": "local", "TRUSTED_PROXY_SECRET": placeholder})
+    assert AppSettings().TRUSTED_PROXY_SECRET.get_secret_value() == placeholder  # type: ignore[call-arg]
+    set_env({**valid_env, "APP_ENV": "staging", "TRUSTED_PROXY_SECRET": placeholder})
+    with pytest.raises(ValidationError, match="placeholder"):
+        AppSettings()  # type: ignore[call-arg]
