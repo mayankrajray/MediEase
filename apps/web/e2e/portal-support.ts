@@ -101,8 +101,21 @@ export async function firstLoadBytes(browser: Browser, page: Page, path: string,
   return total;
 }
 
-/** NFR-10: no serious or critical WCAG 2.1 A/AA violation on the page as it is now. */
+/**
+ * NFR-10: no serious or critical WCAG 2.1 A/AA violation on the page as it is now. Running CSS
+ * transitions and animations finish first: axe reads colours as drawn, and a tile caught halfway
+ * between two colours is not what anyone sees at rest (seen on the date strip after a click).
+ */
 export async function expectAccessible(page: Page): Promise<void> {
+  // Endless ones (a spinner) never finish, so they are left alone.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  );
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   const serious = results.violations
     .filter((v) => v.impact === "serious" || v.impact === "critical")
