@@ -281,13 +281,18 @@ def test_fr_ntf_05_a_doctor_who_turns_bookings_off_is_not_told_and_the_change_is
 ) -> None:
     doctor = world.client_for(world.a.doctor_user)
     defaults = doctor.get(f"{NOTIFICATIONS}/preferences").get_json()["items"]
-    assert {p["kind"] for p in defaults} == {k.value for k in NotificationKind}
-    assert all(p["enabled"] and p["channel"] == "IN_APP" for p in defaults)
+    # M7e: one item per kind for each staff channel, in the app and push, every one on.
+    assert sorted((p["kind"], p["channel"]) for p in defaults) == sorted(
+        (k.value, c) for k in NotificationKind for c in ("IN_APP", "PUSH")
+    )
+    assert all(p["enabled"] for p in defaults)
 
     off = {"items": [{"kind": "appointment.booked", "enabled": False}]}
     changed = _send(doctor, "PUT", f"{NOTIFICATIONS}/preferences", off)
     assert changed.status_code == 200, changed.get_json()
-    states = {p["kind"]: p["enabled"] for p in changed.get_json()["items"]}
+    states = {
+        p["kind"]: p["enabled"] for p in changed.get_json()["items"] if p["channel"] == "IN_APP"
+    }
     assert states["appointment.booked"] is False and states["appointment.arrived"] is True
     assert _send(doctor, "PUT", f"{NOTIFICATIONS}/preferences", off).status_code == 200
 

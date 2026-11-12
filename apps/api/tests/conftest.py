@@ -91,6 +91,8 @@ _MANAGED_VARS = (
     # M7e: the public read limit and the trusted web server's secret (A11).
     "PUBLIC_READS_PER_MINUTE",
     "TRUSTED_PROXY_SECRET",
+    # M7e-E2: the VAPID public key (ADR-0025).
+    "VAPID_PUBLIC_KEY",
 )
 
 # Synthetic, test-only secrets (>= 32 characters each).

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.51.0
+  version: 0.52.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -1589,6 +1589,7 @@ paths:
       summary: Turn one switch on or off
       description: |
         M6b-P6, R62, R63. @patient. EMAIL for a kind other than the booking answers is 422.
+        PUSH (M7e-E2) is offered for every kind.
         Returns every switch. Logged, not audited. Needs X-CSRF-Token equal to me_pt_csrf.
       security:
         - patientSessionCookie: []
@@ -8183,7 +8184,8 @@ paths:
       operationId: getNotificationPreferences
       summary: My notification choices
       description: |
-        M6a-P7 (FR-NTF-03, decision 5A). Every kind with its in-app choice; on unless turned off.
+        M6a-P7 (FR-NTF-03, decision 5A). Every kind with its in-app choice and, from M7e-E2, its
+        push choice (one item per kind and channel); on unless turned off.
         Patients' WhatsApp and SMS preference is their consent (M2-P3), not stored here.
       security:
         - sessionCookie: []
@@ -8213,7 +8215,7 @@ paths:
       operationId: setNotificationPreferences
       summary: Change my notification choices
       description: |
-        M6a-P7. Only IN_APP may be chosen in M6a; another channel is 409 CLN_INVALID_TRANSITION.
+        M6a-P7. IN_APP, and PUSH from M7e-E2; another channel is 409 CLN_INVALID_TRANSITION.
         A real change records notification.preferences_changed. Needs X-CSRF-Token.
       security:
         - sessionCookie: []
@@ -8251,6 +8253,246 @@ paths:
           $ref: '#/components/responses/AuthError'
         '422':
           $ref: '#/components/responses/AuthError'
+  /api/v1/push/config:
+    get:
+      tags: [push]
+      operationId: getPushConfig
+      summary: Whether web push is offered, and the key browsers subscribe with
+      description: |
+        M7e-E2 (ADR-0025, spec web-push R10). Public. public_key is the VAPID public key
+        (base64url of an uncompressed P-256 point) for PushManager.subscribe; null and
+        enabled false when push is not configured here.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The push configuration
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushConfig'
+  /api/v1/portal/push-subscriptions:
+    get:
+      tags: [push]
+      operationId: listPortalPushDevices
+      summary: The account's devices for notifications
+      description: |
+        M7e-E2 (spec web-push R16). @patient. Newest first. Never the endpoint or keys.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The devices
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDeviceList'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+    post:
+      tags: [push]
+      operationId: subscribePortalPushDevice
+      summary: Turn on notifications for this browser
+      description: |
+        M7e-E2 (spec web-push R11-R15, R19). @patient. The body is PushSubscription.toJSON().
+        The endpoint must be https at a browser push service (FCM, Mozilla, Apple, Windows),
+        else 422 REQ_VALIDATION_FAILED. 201 for a new device; 200 when this browser was already
+        the account's (keys refreshed, active again). A browser another account had turned on
+        moves to this one. 409 PSH_TOO_MANY_DEVICES at 10 active devices; 429 PSH_RATE_LIMITED
+        after 30 calls an hour. Audited (push_device.added). Needs X-CSRF-Token.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushSubscriptionIn'
+      responses:
+        '200':
+          description: This browser, refreshed
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevice'
+        '201':
+          description: This browser, added
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevice'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '409':
+          $ref: '#/components/responses/PushError'
+        '415':
+          $ref: '#/components/responses/PortalError'
+        '422':
+          $ref: '#/components/responses/PortalError'
+        '429':
+          $ref: '#/components/responses/PushError'
+  /api/v1/portal/push-subscriptions/{device_id}:
+    parameters:
+      - $ref: '#/components/parameters/DevicePath'
+    delete:
+      tags: [push]
+      operationId: removePortalPushDevice
+      summary: Turn off notifications for one of the account's devices
+      description: |
+        M7e-E2 (spec web-push R17). @patient. Another account's device is 404 REQ_NOT_FOUND.
+        Audited (push_device.removed). Needs X-CSRF-Token.
+      security:
+        - patientSessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Removed
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '401':
+          $ref: '#/components/responses/PortalError'
+        '403':
+          $ref: '#/components/responses/PortalError'
+        '404':
+          $ref: '#/components/responses/PushError'
+  /api/v1/me/push-subscriptions:
+    get:
+      tags: [push]
+      operationId: listMyPushDevices
+      summary: My devices for notifications
+      description: |
+        M7e-E2 (spec web-push R16). @authenticated. A staff member's devices, the same in every
+        clinic (no X-Clinic-ID). Newest first. Never the endpoint or keys.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The devices
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDeviceList'
+        '401':
+          $ref: '#/components/responses/AuthError'
+    post:
+      tags: [push]
+      operationId: subscribeMyPushDevice
+      summary: Turn on notifications for this browser
+      description: |
+        M7e-E2 (spec web-push R11-R15, R19). @authenticated. As the portal route, for the
+        signed-in staff member. Audited (push_device.added, actor STAFF). Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushSubscriptionIn'
+      responses:
+        '200':
+          description: This browser, refreshed
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevice'
+        '201':
+          description: This browser, added
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevice'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        '409':
+          $ref: '#/components/responses/PushError'
+        '415':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/AuthError'
+        '429':
+          $ref: '#/components/responses/PushError'
+  /api/v1/me/push-subscriptions/{device_id}:
+    parameters:
+      - $ref: '#/components/parameters/DevicePath'
+    delete:
+      tags: [push]
+      operationId: removeMyPushDevice
+      summary: Turn off notifications for one of my devices
+      description: |
+        M7e-E2 (spec web-push R17). @authenticated. Another user's device is 404 REQ_NOT_FOUND.
+        Audited (push_device.removed). Needs X-CSRF-Token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Removed
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/PushError'
 components:
   securitySchemes:
     sessionCookie:
@@ -8287,6 +8529,11 @@ components:
       schema:
         type: string
         maxLength: 64
+    DevicePath:
+      name: device_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
     CsrfToken:
       name: X-CSRF-Token
       in: header
@@ -8531,6 +8778,22 @@ components:
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    PushError:
+      description: |
+        M7e-E2: PSH_TOO_MANY_DEVICES (409, 10 active devices; turn one off first);
+        PSH_RATE_LIMITED (429, with Retry-After); REQ_NOT_FOUND (404, unknown device or
+        another person's, never distinguishable)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+        Retry-After:
+          description: Seconds to wait (429 only)
+          schema:
+            type: string
       content:
         application/json:
           schema:
@@ -11270,9 +11533,68 @@ components:
       required: [marked]
       properties:
         marked: {type: integer, minimum: 0}
+    PushConfig:
+      type: object
+      additionalProperties: false
+      required: [enabled, public_key]
+      properties:
+        enabled: {type: boolean}
+        public_key:
+          type: [string, 'null']
+          description: The VAPID public key, base64url; null when push is not configured
+    PushSubscriptionIn:
+      type: object
+      additionalProperties: false
+      required: [endpoint, keys]
+      description: PushSubscription.toJSON() from the browser
+      properties:
+        endpoint:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: https at a browser push service; stored only encrypted
+        expirationTime:
+          type: [integer, 'null']
+          description: Ignored
+        keys:
+          type: object
+          additionalProperties: false
+          required: [p256dh, auth]
+          properties:
+            p256dh:
+              type: string
+              maxLength: 128
+              description: base64url of the browser's uncompressed P-256 public key (65 bytes)
+            auth:
+              type: string
+              maxLength: 64
+              description: base64url of the 16-byte auth secret
+    PushDevice:
+      type: object
+      additionalProperties: false
+      required: [id, label, created_at, last_success_at, active]
+      properties:
+        id: {type: string, format: uuid}
+        label:
+          type: string
+          description: A fixed-vocabulary name such as "Chrome on Android", never the user agent
+        created_at: {type: string, format: date-time}
+        last_success_at: {type: [string, 'null'], format: date-time}
+        active:
+          type: boolean
+          description: False once the push service said the browser unsubscribed
+    PushDeviceList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PushDevice'
     PortalNotificationPreference:
       type: object
-      required: [kind, in_app, email]
+      required: [kind, in_app, email, push]
       properties:
         kind:
           $ref: '#/components/schemas/PatientNotificationKind'
@@ -11280,6 +11602,9 @@ components:
         email:
           type: [boolean, 'null']
           description: Null where email is not offered (only the four booking answers)
+        push:
+          type: boolean
+          description: M7e-E2. Push to the account's devices; on unless turned off
     PortalNotificationPreferenceList:
       type: object
       required: [items]
@@ -11295,7 +11620,7 @@ components:
       properties:
         kind:
           $ref: '#/components/schemas/PatientNotificationKind'
-        channel: {type: string, enum: [IN_APP, EMAIL]}
+        channel: {type: string, enum: [IN_APP, EMAIL, PUSH]}
         enabled: {type: boolean}
     ApplicationRejectReason:
       type: string
@@ -12533,7 +12858,7 @@ components:
         latest_id: {type: [string, 'null'], format: uuid}
     NotificationChannel:
       type: string
-      enum: [IN_APP, WHATSAPP, EMAIL, SMS]
+      enum: [IN_APP, WHATSAPP, EMAIL, SMS, PUSH]
     NotificationPreferences:
       type: object
       required: [items]

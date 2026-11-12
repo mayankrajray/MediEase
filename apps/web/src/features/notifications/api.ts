@@ -18,6 +18,11 @@ export type NotificationSummary = components["schemas"]["NotificationSummary"];
 export type NotificationKind = components["schemas"]["NotificationKind"];
 export type Preference = components["schemas"]["NotificationPreferences"]["items"][number];
 
+/** M7e: the in-app switches only; push has its own place in E5. */
+function inApp(items: readonly Preference[]): readonly Preference[] {
+  return items.filter((p) => p.channel === "IN_APP");
+}
+
 export interface NotificationsApi {
   readonly clinicId: string | undefined;
   /** The latest 30, newest first. */
@@ -48,10 +53,10 @@ export function useNotificationsApi(): NotificationsApi {
           })
         ).data,
       readAll: async () => (await sessionPost("/api/v1/notifications/read-all", undefined, base)).data.updated,
-      preferences: async () => (await sessionGet("/api/v1/notifications/preferences", base)).data.items,
+        // M7e: the API now lists push switches too; this screen shows the in-app ones (push in E5).
+      preferences: async () => inApp((await sessionGet("/api/v1/notifications/preferences", base)).data.items),
       setPreference: async (kind, enabled) =>
-        (await sessionPut("/api/v1/notifications/preferences", { items: [{ kind, channel: "IN_APP", enabled }] }, base))
-          .data.items,
+        inApp((await sessionPut("/api/v1/notifications/preferences", { items: [{ kind, channel: "IN_APP", enabled }] }, base)).data.items),
     };
   }, [clinicId]);
 }

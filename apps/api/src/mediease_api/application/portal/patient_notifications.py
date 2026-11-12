@@ -247,6 +247,7 @@ class PreferenceView:
     kind: PatientNotificationKind
     in_app: bool
     email: bool | None  # None: email is not offered for this kind
+    push: bool = True  # M7e: push to the account's devices, for every kind
 
 
 class GetPatientPreferences:
@@ -268,6 +269,7 @@ class GetPatientPreferences:
                 email=saved.get((kind, PatientChannel.EMAIL), True)
                 if kind in BOOKING_KINDS
                 else None,
+                push=saved.get((kind, PatientChannel.PUSH), True),
             )
             for kind in PatientNotificationKind
         ]

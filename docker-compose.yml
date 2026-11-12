@@ -76,6 +76,8 @@ x-api-environment: &api-environment
   PUBLIC_READS_PER_MINUTE: ${PUBLIC_READS_PER_MINUTE:-60}
   # M7e, A11: the secret the web server sends with the browser's address; empty turns it off.
   TRUSTED_PROXY_SECRET: ${TRUSTED_PROXY_SECRET:-}
+  # M7e-E2 (ADR-0025): the VAPID public key browsers subscribe with; empty: push not offered.
+  VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
 
 # Least privilege for our own containers (CLAUDE.md): read-only root
 # filesystem, no Linux capabilities, no privilege escalation. Writable scratch

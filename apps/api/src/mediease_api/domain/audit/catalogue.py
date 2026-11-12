@@ -162,6 +162,9 @@ ACTIONS: dict[A, ActionInfo] = {
         AuditCategory.SETTINGS,
         (A.CLINIC_CREATED, "Created the clinic"),
         # M6c-P1: platform events with no clinic; they never reach an owner's log.
+        # M7e-E2: a person's own devices for notifications (no clinic either).
+        (A.PUSH_DEVICE_ADDED, "Turned on notifications on a device"),
+        (A.PUSH_DEVICE_REMOVED, "Turned off notifications on a device"),
         (A.APPLICATION_SUBMITTED, "Applied to join MediEase"),
         (A.APPLICATION_EMAIL_VERIFIED, "Confirmed the application's email"),
         (A.APPLICATION_VIEWED, "Opened a clinic application"),
