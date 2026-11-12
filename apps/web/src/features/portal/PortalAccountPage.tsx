@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { CHOICE_CARD, CHOICE_INPUT, INPUT, LABEL } from "@/components/ui/Field";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
+import { AppPromptsGate } from "@/features/pwa/AppPromptsGate";
 import { PORTAL_SIGN_IN_PATH, portalDelete, portalGet, portalPatch, portalPost, portalPut } from "@/lib/auth/portal-session";
 import { notificationWords } from "@/lib/i18n/patient-notifications";
 import { type PortalLanguage, portalDate } from "@/lib/i18n/portal";
@@ -80,6 +81,7 @@ export function PortalAccountPage() {
   return (
     <div className="space-y-5">
       <PortalTitle>{s.account.title}</PortalTitle>
+      <AppPromptsGate language={s.lang} />
       {error !== null && <ErrorNotice error={error} />}
       <p role="status" className="min-h-0 font-medium text-success empty:sr-only">
         {status}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { ErrorNotice } from "@/features/auth/ErrorNotice";
+import { AppPromptsGate } from "@/features/pwa/AppPromptsGate";
 import { portalGet } from "@/lib/auth/portal-session";
 import { portalDate } from "@/lib/i18n/portal";
 
@@ -88,6 +89,8 @@ export function Home() {
   return (
     <div className="space-y-5">
       <PortalTitle>{s.home.hello(account.full_name)}</PortalTitle>
+      {/* M7e-E1: install the app once, Add to Home Screen on an iPhone, Update when ready. */}
+      <AppPromptsGate language={s.lang} />
       {!account.email_verified && account.sign_in_method === "PASSWORD" && <VerifyBanner />}
       {home.status === "loading" && <ScreenLoading label={s.loading} />}
       {home.status === "failed" && <ErrorNotice error={home.error} onRetry={home.retry} />}

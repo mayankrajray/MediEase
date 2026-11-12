@@ -18,6 +18,7 @@ import { ErrorNotice } from "@/features/auth/ErrorNotice";
 import { useSession } from "@/features/auth/SessionProvider";
 import { useRegisterPatient } from "@/features/patients/RegisterPatientProvider";
 import { useClinic } from "@/features/shell/ClinicGate";
+import { AppPromptsGate } from "@/features/pwa/AppPromptsGate";
 import type { Permission } from "@/features/shell/nav";
 import { QUICK_ACTIONS, type Workspace } from "@/features/shell/workspace";
 import { useWorkspace } from "@/features/shell/WorkspaceProvider";
@@ -74,6 +75,8 @@ export function TodayDashboard() {
         description={`${formatDay(today.on_date)} · ${WORKSPACE_LINES[workspace]} · ${scopeLine}`}
         actions={<QuickActions workspace={workspace} />}
       />
+      {/* M7e-E1: install the app once, Add to Home Screen on an iPhone, Update when ready. */}
+      <AppPromptsGate language="en" />
       {error !== undefined && (
         <div className="mb-4">
           <ErrorNotice error={error} onRetry={refresh} message="These numbers could not be refreshed. They show the last update." />
