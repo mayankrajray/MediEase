@@ -301,6 +301,7 @@ PR #72, 12 Nov 2026), PR #74, one PR. Nothing is built yet.
 | Phase | Scope | Status |
 |---|---|---|
 | M7e-E1 | Installable app: manifest, icons, service worker, offline page, install prompt | ✅ 12 Nov 2026: 24 unit tests (cache rules on the real `sw.js`, manifest and icons, prompts, gate, nonce script, proxy); `pwa` journey 2/2; portal pages 194–197 KB, `/` and `/find` unchanged; design §8 |
+| M7e-A11 | Client addresses (moved up from M9 by the developer, 12 Nov 2026) and the public read limit as a setting, after CI's shared-address 429 | ✅ 12 Nov 2026: API 81 and web 124 tests; checked on the real stack (own budget per edge address, browser-sent address ignored); design §8 |
 | M7e-E2 | Push subscriptions per device (migration `0043`), API and contract | ☐ |
 | M7e-E3 | Delivery: `send_push` jobs, `WebPushPort`, generic text, expiry and retries | ☐ |
 | M7e-E4 | Appointment and follow-up reminders for app users | ☐ |

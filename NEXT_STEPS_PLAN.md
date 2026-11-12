@@ -167,7 +167,8 @@ Milestone issue #65 → branch m7/65-assistant-and-verified-uploads (from origin
    two pilot clinics. M7 adds these to M9's scope:
    - the ClamAV and upload-worker sizing (about 1.5 GB) and egress limits;
    - S3 lifecycle rules for `uploads/`;
-   - the trusted proxy forwarding client addresses (ARCHITECTURE A11);
+   - the trusted proxy forwarding client addresses (A11): built in M7e on 12 Nov 2026 (ARCHITECTURE §9);
+    M9 sets `TRUSTED_PROXY_SECRET` and `CLIENT_IP_HEADER` for the hosting edge;
    - moving the remaining upload paths onto `proxyWithLimit`;
    - e2e journeys that do not depend on the time of day (their own doctor or a high-capacity
      seeded session).

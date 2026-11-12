@@ -585,9 +585,11 @@ Never quote the `reason` or phone into a ticket.
 
 **"Too many attempts" (`PRT_RATE_LIMITED`).** Limits: 60 page reads a minute per address; 5
 requests an hour per account, 20 an hour per address, 5 a day per phone number; 5 open requests
-per account. **Until a reverse proxy we control sets the client address (ARCHITECTURE A11) every
-patient shares the web server's address**, so the per-address limits apply to all patients
-together in the pilot. If the clinic page answers 429 for everyone, wait for the minute to pass
+per account. The page-read limit is `PUBLIC_READS_PER_MINUTE` (60 in production; `.env.example`
+raises it for local runs and CI). **The limits are per patient only when client-address
+forwarding is on (A11, ARCHITECTURE §9): `TRUSTED_PROXY_SECRET` on api and web, and
+`CLIENT_IP_HEADER` on web naming the hosting edge's header.** Without it every patient shares the
+web server's address and the per-address limits apply to all patients together. If the clinic page answers 429 for everyone, wait for the minute to pass
 (`Retry-After`), and raise the proxy work before onboarding more clinics. Logs carry
 `booking.rate_limited` with the bucket kind only.
 
@@ -622,8 +624,8 @@ no sign-in and shows only the clinic, the doctor, the token or time, how many ar
 being seen. It works from the start of the session's day until 2 hours after the session ends,
 then says it has expired: copy a new one the next time. It cannot be revoked early (it is signed,
 not stored); that is acceptable because it carries no name or clinical detail. "Too many
-refreshes": 30 reads a minute per link and 120 per address, and the address is shared until the
-reverse proxy work (A11).
+refreshes": 30 reads a minute per link and 120 per address, and the address is shared unless
+client-address forwarding is on (A11, ARCHITECTURE §9).
 ---
 
 ### 25. Clinic applications (M6c-P1)
@@ -648,7 +650,7 @@ received: nothing to do. Otherwise the applicant applies again.
 
 **"Too many applications."** 3 a day per owner phone or email and 5 per address, counted from the
 table over 24 hours (`ONB_RATE_LIMITED`, logged with the bucket kind only). The per-address limit
-is shared by every visitor until the reverse proxy sets the client address (A11).
+is shared by every visitor unless client-address forwarding is on (A11, ARCHITECTURE §9).
 
 **A file was refused.** Only PDF, JPEG or PNG, up to 5 MB each, recognised by the file's content:
 a Word file or a renamed text file is refused on that doctor's step. Certificates are private
