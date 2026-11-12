@@ -478,6 +478,19 @@ Full controls list: [SECURITY_AND_COMPLIANCE.md](SECURITY_AND_COMPLIANCE.md).
   invariants. Implementation (M1-P3): `delivery/http/access.py`,
   `application/auth/authenticate.py`, `application/context.py`,
   `domain/identity/permissions.py`.
+- **Client address (M7e, A11):** every browser request reaches the API through the web server,
+  so the API's `remote_addr` is the web server and per-address limits and audit fingerprints
+  would be shared by everyone. `src/proxy.ts` in the web app runs on every request, pages and
+  `/api` alike, and always removes `X-MediEase-Client-IP` and `X-MediEase-Proxy-Secret` from
+  what the browser sent. When `TRUSTED_PROXY_SECRET` and `CLIENT_IP_HEADER` are set, it adds the
+  browser's address with the secret. The address is the last value of the header the hosting
+  edge writes (`x-real-ip` on Vercel, `x-forwarded-for` behind Caddy or nginx). Server-side
+  calls to the API forward the same two headers (`lib/api/forwarded.ts`), and so does the
+  upload proxy (`proxyWithLimit`), whose two routes stay outside the proxy's matcher because Next
+  cuts a matched body at 10 MB. The API (`delivery/http/request_info.py`) uses the address only
+  with the matching secret and a valid IP, and otherwise the connection's address. With the
+  settings empty, as in local compose and CI where nothing sets an edge header, nothing changes.
+  The public read limit is `PUBLIC_READS_PER_MINUTE` (60 in production).
 - **Patient links:** HMAC-signed tokens containing `purpose`, `resource_id`, `clinic_id`, `exp`;
   server-side revocation list; last-4-digit phone challenge with attempt limits.
 - **Audit trail:** every audited action writes one `audit_events` row through the same unit of

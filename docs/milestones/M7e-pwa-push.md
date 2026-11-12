@@ -125,3 +125,19 @@ worker is still controlled by it and gets the offline page.
 runs on full Chromium (`channel: "chromium"`) with `--unsafely-treat-insecure-origin-as-secure`
 for the compose origin, because service workers need a secure context and the default headless
 shell ignores the flag.
+
+### A11 and the public read limit (12 Nov 2026, developer's decision)
+
+CI failed the discovery journey with a 429 on availability. Every journey shares one address,
+and the booking journeys' clinic-page reads (one per doctor) used up the 60 public reads of
+that minute. The developer chose:
+
+1. **`PUBLIC_READS_PER_MINUTE`**: an API setting (10–10,000), 60 by default and in production.
+   `.env.example`, which CI copies, sets 600. The limiter's 60-a-minute rule keeps its own test
+   (`tests/integration/db/test_public_read_limit.py`).
+2. **A11 moved from M9 into M7e**: the browser's address reaches the API (ARCHITECTURE §9
+   "Client address"). The web proxy strips the two headers from browsers and, with
+   `TRUSTED_PROXY_SECRET` and `CLIENT_IP_HEADER`, adds the edge's address and the secret. The
+   API trusts it only with that secret. Off by default; M9 configures it for the hosting edge.
+   Checked on the real stack with a 10-a-minute limit: two edge addresses had separate budgets,
+   and an address sent by the browser itself was ignored.
