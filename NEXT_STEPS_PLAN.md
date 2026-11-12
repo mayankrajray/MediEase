@@ -1,6 +1,30 @@
-# NEXT_STEPS_PLAN.md — Plan for M7d (discovery and booking), with M7c and M7 below as history
+# NEXT_STEPS_PLAN.md — Plan for M7e (installable app and web push), with M7d, M7c and M7 below as history
 
-## 0. Active: M7d — Patient discovery, clinic and doctor profiles, booking redesign
+## 0. Active: M7e — Installable app (PWA) and web push notifications
+
+| Field | Value |
+|---|---|
+| Status | **Approved by the developer 12 Nov 2026**: phases E1–E5 and the §7 points as recommended (`docs/milestones/M7e-pwa-push.md`) |
+| Issue / branch | #73 / `m7e/73-pwa-push`, on `main` after M7d merged (PR #72, 12 Nov 2026); PR #74 (ADR-0011) |
+| Decisions | Start URL `/`; the service worker registered by a small script loaded after the page; app reminders to the linked account holder who turns push on; journeys with the push manager stubbed, real delivery on the developer's phones through a tunnel |
+| Needs from the developer | E5: an Android phone and an iPhone (iOS 16.4+), a tunnel run on their machine, later a production HTTPS URL |
+
+| Order | Phase | Objective | Verify |
+|---|---|---|---|
+| 1 | **E1** | Manifest, icons, service worker, offline page, install and update prompts | Unit (manifest, cache rules); journey (manifest, worker, offline, no API from cache); page weights |
+| 2 | **E2** | Push subscriptions per device (migration `0043`), API, contract, ADR-0025 | Ownership and isolation, CSRF, idempotent re-subscribe, delete |
+| 3 | **E3** | `send_push` jobs, `WebPushPort` (`pywebpush` and console), generic text | No PHI in payloads; several devices; expired endpoints; retries; one push per event |
+| 4 | **E4** | Appointment and follow-up reminders for app users | Time zones, cancel and move, one reminder per kind, WhatsApp unchanged |
+| 5 | **E5** | Settings, docs, full suites, real devices | `make lint typecheck test`, `make smoke`, `make e2e`, Android and iOS checks |
+
+Then M9 (deployment: Vercel, Supabase and an Oracle Cloud VM, design to be written at M9's
+start). M8 is skipped for now (developer, 11 Nov 2026).
+
+---
+
+# Plan for M7d (discovery and booking), merged 12 Nov 2026 (PR #72)
+
+## M7d — Patient discovery, clinic and doctor profiles, booking redesign
 
 | Field | Value |
 |---|---|
@@ -23,10 +47,7 @@
 screenshots and weights recorded in the design §8; specs updated (`discovery.md` R16–R21,
 `booking-requests.md` R13a).
 
-M7d merged 12 Nov 2026 (PR #72, #71 closed). M7e (#73, PR #74) is now active; its plan,
-`docs/milestones/M7e-pwa-push.md`, replaces this section once the developer approves it. Then M9
-(deployment: Vercel, Supabase and an Oracle Cloud VM, design to be written at M9's start). M8 is
-skipped for now (developer, 11 Nov 2026).
+M7d merged 12 Nov 2026 (PR #72, #71 closed).
 
 ---
 
