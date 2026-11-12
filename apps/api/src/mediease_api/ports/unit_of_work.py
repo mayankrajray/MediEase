@@ -49,6 +49,7 @@ from mediease_api.ports.portal import (
     PortalLookup,
     ReminderPrefRepository,
 )
+from mediease_api.ports.push import PushSubscriptionRepository
 from mediease_api.ports.reminders import NoShowSweep, ReminderRepository
 from mediease_api.ports.repositories import (
     AppointmentHistoryRepository,
@@ -261,6 +262,11 @@ class UnitOfWork(Protocol):
     @property
     def prescription_uploads(self) -> PrescriptionUploadRepository:
         """M7b: patient accounts' prescription uploads (platform data owned by the account)."""
+        ...
+
+    @property
+    def push_subscriptions(self) -> PushSubscriptionRepository:
+        """M7e: devices of a patient account or a staff user (platform data, no clinic)."""
         ...
 
     @property

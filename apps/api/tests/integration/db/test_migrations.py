@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from mediease_api.adapters.db.models import Base
 from tests.conftest import ALEMBIC_INI, SetEnv, scratch_database
 
-HEAD = "0042"
+HEAD = "0043"
 M1_TABLES = ["alembic_version", "clinic_memberships", "clinics", "doctors", "users"]
 M1_P2_TABLES = sorted([*M1_TABLES, "refresh_tokens"])
 M1_P4_TABLES = sorted([*M1_P2_TABLES, "audit_events"])
@@ -59,6 +59,7 @@ M6D_P3_TABLES = sorted([*M6D_P2_TABLES, "payments"])
 M6D_P6_TABLES = sorted([*M6D_P3_TABLES, "visit_attachments"])
 M6D_P7_TABLES = sorted([*M6D_P6_TABLES, "clinic_subscriptions"])
 M7B_TABLES = sorted([*M6D_P7_TABLES, "prescription_uploads"])
+M7E_TABLES = sorted([*M7B_TABLES, "push_subscriptions"])
 
 
 @pytest.fixture
@@ -666,7 +667,7 @@ def test_0021_adds_email_tokens_and_the_auth_email_system_kind(
 
 def test_models_match_migrations(alembic_config: Config, scratch_database_url: str) -> None:
     """Autogenerate finds nothing to change: models and hand-written migrations agree."""
-    assert sorted(Base.metadata.tables) == [t for t in M7B_TABLES if t != "alembic_version"]
+    assert sorted(Base.metadata.tables) == [t for t in M7E_TABLES if t != "alembic_version"]
     command.upgrade(alembic_config, "head")
     engine = create_engine(scratch_database_url)
     try:
@@ -1253,3 +1254,49 @@ def test_0042_prescription_uploads_checks_and_round_trip(
         engine.dispose()
     command.downgrade(alembic_config, "0041")
     assert _tables(scratch_database_url) == M6D_P7_TABLES
+
+
+def test_0043_push_subscriptions_one_owner_and_the_push_channel_round_trip(
+    alembic_config: Config, scratch_database_url: str
+) -> None:
+    """M7e-E2 (web-push §3): one owner per device, one row per endpoint, PUSH preferences."""
+    command.upgrade(alembic_config, "0043")
+    assert _tables(scratch_database_url) == M7E_TABLES
+    insert = text(
+        "INSERT INTO push_subscriptions (id, account_id, user_id, endpoint_digest,"
+        " endpoint_encrypted, p256dh_encrypted, auth_encrypted, label, created_at, updated_at)"
+        " VALUES (gen_random_uuid(), :account, :user, :digest, 'e', 'p', 'a', 'Chrome', now(),"
+        " now())"
+    )
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.begin() as conn:
+            account = conn.execute(
+                text(
+                    "INSERT INTO patient_accounts (id, full_name, email, sign_in_method, status,"
+                    " created_at, updated_at) VALUES (gen_random_uuid(), 'Sample Person',"
+                    " 'push.person@example.test', 'GOOGLE', 'ACTIVE', now(), now()) RETURNING id"
+                )
+            ).scalar_one()
+            conn.execute(insert, {"account": account, "user": None, "digest": "a" * 64})
+            conn.execute(
+                text(
+                    "INSERT INTO patient_notification_preferences (id, account_id, kind, channel,"
+                    " enabled, created_at, updated_at) VALUES (gen_random_uuid(), :account,"
+                    " 'medicine.due', 'PUSH', false, now(), now())"
+                ),
+                {"account": account},
+            )
+        # No owner, the same endpoint twice, a digest that is not SHA-256 hex.
+        for account_id, digest in ((None, "b" * 64), (account, "a" * 64), (account, "XYZ")):
+            with pytest.raises(IntegrityError), engine.begin() as conn:
+                conn.execute(insert, {"account": account_id, "user": None, "digest": digest})
+        # Deleting the account deletes its devices.
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM patient_notification_preferences"))
+            conn.execute(text("DELETE FROM patient_accounts WHERE id = :a"), {"a": account})
+            assert conn.execute(text("SELECT count(*) FROM push_subscriptions")).scalar_one() == 0
+    finally:
+        engine.dispose()
+    command.downgrade(alembic_config, "0042")
+    assert _tables(scratch_database_url) == M7B_TABLES
