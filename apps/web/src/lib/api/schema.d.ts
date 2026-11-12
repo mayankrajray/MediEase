@@ -7995,7 +7995,8 @@ export interface components {
             };
         };
         /**
-         * @description REM_NO_CONSENT (409: the patient has not agreed to WhatsApp or opted out);
+         * @description REM_NO_CONSENT (409: the patient has not agreed to WhatsApp or opted out, and from M7e-E4
+         *     has no app account linked to the record);
          *     REM_CLINIC_PHONE_MISSING (409: add the clinic's phone first); REM_NOT_SCHEDULED (409: the
          *     reminder was sent, cancelled or skipped); REM_IN_PAST (422: the date is not after today);
          *     REQ_VALIDATION_FAILED (422)
