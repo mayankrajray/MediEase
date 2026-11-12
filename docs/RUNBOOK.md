@@ -485,7 +485,9 @@ scheduled by the system in the booking's transaction and sent by the `send_remin
    arrived or been marked a no-show, or the session was closed by leave or a schedule change.
    `REM_TOO_LATE`: when it could run outside the quiet hours (21:00–08:00) the visit had already
    started, e.g. after a worker outage (reminders that early are not scheduled at all). `REM_CLINIC_PHONE_MISSING`: the clinic has no phone. `SKIPPED_NO_CONSENT`: consent was
-   withdrawn. A `SENT` reminder shows its message's status (§9; template `appointment_reminder`).
+   withdrawn (or, for an app user, both reminder switches are off). `SENT_IN_APP` (M7e-E4): no WhatsApp
+   consent, and the patient's linked app account was told instead (`patient_notifications` kind
+   `appointment.reminder` or `follow_up.due`). A `SENT` reminder shows its message's status (§9; template `appointment_reminder`).
 
 **Staff try to move an appointment reminder:** 409 `REM_FOLLOWS_APPOINTMENT`. Reschedule the
 appointment instead; cancelling the reminder is allowed.

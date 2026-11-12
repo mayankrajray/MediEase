@@ -216,3 +216,40 @@ browser would, VAPID header, each status and network failure, no redirects, the 
 `build_push`); `tests/integration/test_push_delivery.py` (one job per device, replay, words,
 Hindi, both switches, removal and turning off after the notice, 404/410, retries, staff, a bad
 job, an unreadable device, night); settings validators.
+
+### E4 — Reminders for app users (13 Nov 2026)
+
+Built as designed; rules in spec `web-push.md` R40–R46.
+
+| Part | Where |
+|---|---|
+| Who gets reminders | `application/reminders/app.py` `can_remind`: WhatsApp consent **or** an app account linked to the record; used when an appointment is booked and when staff add a follow-up |
+| The notice | `remind_in_app`, called by `SendReminder` when a reminder is due, after the appointment and quiet-hours checks: `appointment.reminder` or `follow_up.due` to the linked account, key `{kind}:{reminder_id}` |
+| Status | `ReminderStatus.SENT_IN_APP` and `Reminder.sent_in_app`; `sent_for_chain` counts it, so a prescription revision does not remind twice |
+| Notice words | `render_title` (EN/HI, names the time or day, doctor and clinic); push words in `domain/push/message.py` |
+| Delivery result | `deliver_patient_notice` returns whether the account was reached; `notify_patient` still returns the rows written |
+| Migration | `0044`: the two kinds in both kind CHECKs, `SENT_IN_APP` in `ck_reminders_status` |
+| Contract | 0.53.0: the two kinds and the status |
+| Web | labels for the kinds (EN/HI) and the status (staff "Sent in the app", green, no call prompt; portal EN/HI); the add-reminder hint names the app |
+
+Choices made while building, within the approved design:
+
+- **Reuse the reminder rows** instead of a second schedule: a reminder is one row with one due
+  time, so the app notice and the WhatsApp message share timing, quiet hours, deferral and
+  cancellation (the "same timing rules" of §3), and nothing new has to follow an appointment.
+- **`SENT_IN_APP`** rather than leaving `SKIPPED_NO_CONSENT`: staff would otherwise be told to
+  call a patient who was reminded. With both of the patient's switches off for the kind, the
+  account is not reached and the status stays `SKIPPED_NO_CONSENT`.
+- **Recipient:** the account linked to the record when the reminder is due (R56). An accepted
+  booking request links its account, so requested visits are covered. A record linked after
+  the booking gets no reminders for that booking (spec §8).
+- **Link** `/portal/appointments` for both kinds: a follow-up has no session to request yet, and
+  a public doctor page is outside the portal.
+
+**Tests.** `tests/integration/test_app_reminders.py` (7: rows for an app user, the notice and
+push once, `SENT_IN_APP`, WhatsApp and the app together, nobody without either, cancellation,
+both switches off, a Hindi follow-up allowed and told, still refused without either);
+`tests/unit/domain/test_app_reminders.py` (3); migration `0044` round trip; the push-words test
+covers the two kinds; web `labels.test.ts` (1). Journeys `patient-notifications`,
+`reminders-follow-ups`, `notifications`, `bookings-to-move`, `booking-answers`, `portal-screens`
+10/10 on the CI-like stack.

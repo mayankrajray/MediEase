@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-NTF-01..06 (push channel), NFR-02, NFR-08, NFR-19 |
 | Milestone / phases | M7e / E1–E5 (design `docs/milestones/M7e-pwa-push.md`) |
-| Status | E1, E2 and E3 Implemented (12 Nov 2026); E4–E5 Approved |
+| Status | E1–E4 Implemented (12–13 Nov 2026); E5 Approved |
 | Owner | Developer |
 | Last updated | 2026-11-12 |
 
@@ -109,6 +109,30 @@ are built.
   the patient chose, 05:00–23:30) and a patient's arrival (only while the clinic is open).
   E4's reminders are timed outside the quiet hours when they are made.
 
+### E4 — Reminders for app users
+- **R40** An appointment's reminders (the evening before, and the clinic's hours before) are made
+  for a patient who can be messaged on WhatsApp **or** whose record is linked to an app account
+  (an invitation, a prescription link, or an accepted booking request). A walk-in still gets
+  none, and a patient with neither gets none. A manual follow-up reminder is allowed on the same
+  terms; with neither it is still 409 `REM_NO_CONSENT`.
+- **R41** When a reminder is due, the linked account gets a notice, `appointment.reminder` or
+  `follow_up.due`, in the app and by push (E3), each with its own switches. In the app it names
+  the time or token, the doctor and the clinic, like the other notices; the push says only
+  "You have an upcoming appointment" or "It is time to book your follow-up visit". Both link to
+  `/portal/appointments`.
+- **R42** A reminder tells the account at most once (the notice's key is the reminder), however
+  often its job runs. WhatsApp is unchanged: a consenting patient gets the WhatsApp message too.
+- **R43** A patient who cannot be messaged on WhatsApp but was told in the app (in-app on, or a
+  push enqueued) ends `SENT_IN_APP`, shown to staff as "Sent in the app" with no call prompt. With
+  both switches off it stays `SKIPPED_NO_CONSENT`.
+- **R44** The notice is decided when the reminder is due, after the M6a-P8 checks: a reminder for
+  a cancelled, moved, arrived or closed appointment, or too close to the visit, tells nobody.
+- **R45** A follow-up reminder (from a prescription or added by staff) tells the account the day
+  and the doctor, in the account's language.
+- **R46** Times are the reminders' own: due times and quiet hours on the clinic's clock, so a
+  notice never arrives between 21:00 and 08:00. A record linked after the booking gets reminders
+  only for bookings made after the link.
+
 ## 5. API surface
 | Method | Path | Request | Success | Errors |
 |---|---|---|---|---|
@@ -130,6 +154,7 @@ update banner; the offline page. The device switches arrive in E5.
 | A device refreshed by its owner | none (logged `push.device_refreshed`) | — | none |
 | A notice to a person with devices (E3) | none | `send_push` per active device | none |
 | A push service answers 404/410 (E3) | none (logged `push.device_expired`) | — | none |
+| A reminder due for an app user (E4) | none (the reminder's own audit as before) | `send_push` per device | none |
 
 ## 8. Edge cases
 | Case | Expected outcome |
@@ -138,6 +163,8 @@ update banner; the offline page. The device switches arrive in E5.
 | A staff member in two clinics | One device, used for notices from both |
 | The account is deleted | Its devices are deleted with it (cascade) |
 | An endpoint at an internal address | 422 before anything is stored |
+| A record linked after it was booked (E4) | That booking has no app reminders; later bookings do |
+| A patient with WhatsApp and the app (E4) | Both: the message and the notice, once each |
 
 ## 9. Acceptance criteria
 - **AC1 (R2)** — Given the app has been opened, then the cache holds only build assets, logos,
@@ -160,12 +187,22 @@ update banner; the offline page. The device switches arrive in E5.
   test decrypts it as the browser would), signed with VAPID, and never follows a redirect.
 - **AC12 (R38)** — Given a cancellation at 23:30 clinic time, then its push runs at 08:00; a
   medicine reminder's runs at once.
+- **AC13 (R40, R41, R43)** — Given a linked patient without WhatsApp consent and a booking, then
+  two reminders are made; when the first is due, no WhatsApp is sent, the account gets one
+  `appointment.reminder` notice and a push, and the reminder is `SENT_IN_APP`
+  (`test_app_reminders.py`).
+- **AC14 (R42)** — Given the same reminder job runs twice, then the account has one notice.
+- **AC15 (R42)** — Given a consenting linked patient, then the WhatsApp message and the notice.
+- **AC16 (R44)** — Given the appointment was cancelled, then nobody is told.
+- **AC17 (R45)** — Given a Hindi account and a follow-up added by staff, then a Hindi
+  `follow_up.due` notice and `SENT_IN_APP`.
 
 ## 10. Observability
 Logs `push.device_added` (owner kind, device ID, moved), `push.device_refreshed`,
 `push.device_removed`, `push.rate_limited`; from E3 `push.sent`, `push.skipped` (reason
 `no_device`, `turned_off`, `not_a_member`, `unreadable`), `push.device_expired`, `push.failed`
-(code, status) and `notification.dispatched` `push_devices`; never the endpoint, keys, words or
+(code, status) and `notification.dispatched` `push_devices`; from E4 `reminder.sent_in_app` and
+`patient_notification.dispatched` `pushed`; never the endpoint, keys, words or
 user agent. Error codes `PSH_TOO_MANY_DEVICES`, `PSH_RATE_LIMITED`, `REQ_VALIDATION_FAILED`,
 `REQ_NOT_FOUND`; job codes `PSH_SERVICE_RATE_LIMITED`, `PSH_SERVICE_UNAVAILABLE`, `PSH_REFUSED`.
 

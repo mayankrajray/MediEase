@@ -49,6 +49,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0041` | `clinic_subscriptions` (plans and trials); every existing clinic on `PLUS` with no trial | M6d-P7 |
 | `0042` | `prescription_uploads`; `ck_jobs_system_kind` gains `process_prescription_upload` and `purge_prescription_uploads` | M7b-P6 |
 | `0043` | `push_subscriptions`; `PUSH` in the channel CHECKs of `notification_preferences` and `patient_notification_preferences` | M7e-E2 |
+| `0044` | `appointment.reminder` and `follow_up.due` in the kind CHECKs of `patient_notifications` and `patient_notification_preferences`; `SENT_IN_APP` in `ck_reminders_status` | M7e-E4 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -516,7 +517,7 @@ Tenant-scoped (`SqlAlchemyReminderRepository`).
 | appointment_id | uuid null FK appointments | M6a-P8: set exactly when the source is `APPOINTMENT` (`ck_reminders_appointment_id`); index `ix_reminders_appointment_id` |
 | follow_up_date | date | The follow-up date; for an appointment reminder, the visit date |
 | due_at | timestamptz | Follow-up: 09:00 clinic time the day before (now if past). Appointment: 19:00 the day before, or N hours before the visit (`clinics.reminder_*`). Never 21:00–08:00 |
-| status | text | `SCHEDULED` \| `SENT` \| `CANCELLED` \| `SKIPPED_NO_CONSENT` \| `FAILED`; once `SENT`, the visible status is the message's (decision 3A) |
+| status | text | `SCHEDULED` \| `SENT` \| `CANCELLED` \| `SKIPPED_NO_CONSENT` \| `FAILED` \| `SENT_IN_APP` (M7e-E4: no WhatsApp consent, the linked app account was told); once `SENT`, the visible status is the message's (decision 3A) |
 | revision | smallint | Bumped by every move, deferral or cancel; each `send_reminder` job carries the revision it was made for (decision 1A) |
 | error_code | text null | `REM_CLINIC_PHONE_MISSING` on `FAILED`; from M6a-P8 `REM_APPOINTMENT_CHANGED` or `REM_TOO_LATE` on an appointment reminder the system cancelled at send time |
 | created_by, cancelled_by | uuid null FK users | `created_by` null (from `0024`) when the system scheduled it (every appointment reminder); `cancelled_by` null when the system cancelled it |
@@ -883,7 +884,7 @@ Patient portal spec R55-R66. **Tenant data** (`SqlAlchemyPatientNotificationRepo
 | id | uuid PK | One row per notification |
 | clinic_id | uuid FK not null | |
 | account_id | uuid FK patient_accounts not null | The one recipient |
-| kind | text not null | `booking.accepted` \| `booking.declined` \| `booking.proposed` \| `booking.expired` \| `appointment.confirmed` \| `appointment.moved` \| `appointment.cancelled` \| `prescription.ready` \| `medicine.due` (CHECK) |
+| kind | text not null | `booking.accepted` \| `booking.declined` \| `booking.proposed` \| `booking.expired` \| `appointment.confirmed` \| `appointment.moved` \| `appointment.cancelled` \| `prescription.ready` \| `medicine.due` \| (M7e-E4) `appointment.reminder` \| `follow_up.due` (CHECK) |
 | event_key | text not null | What happened, e.g. `booking.accepted:{request}` or `medicine.due:{clinic}:{date}:{slot}` |
 | entity_type, entity_id | text, uuid not null | The request, appointment or prescription |
 | link | text not null | A portal path (starts with `/portal`) |

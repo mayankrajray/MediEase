@@ -18,7 +18,8 @@
 | 5 | **E5** | Settings, docs, full suites, real devices | `make lint typecheck test`, `make smoke`, `make e2e`, Android and iOS checks |
 
 **Progress.** E1, A11 and E2 built and pushed 12 Nov 2026 (CI green). E3 built 12 Nov 2026:
-delivery with quiet hours, spec R30–R38, design §8; next E4.
+delivery with quiet hours, spec R30–R38, design §8, pushed (CI green). E4 built 13 Nov 2026:
+reminders for app users, spec R40–R46, migration `0044`, contract 0.53.0; next E5.
 
 Then M9 (deployment: Vercel, Supabase and an Oracle Cloud VM, design to be written at M9's
 start). M8 is skipped for now (developer, 11 Nov 2026).
