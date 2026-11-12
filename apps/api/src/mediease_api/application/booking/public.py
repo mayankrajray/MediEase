@@ -21,7 +21,7 @@ from uuid import UUID
 import structlog
 
 from mediease_api.application.billing.fees import consultation_prices
-from mediease_api.application.booking.limits import limit_reads
+from mediease_api.application.booking.limits import READS_PER_MINUTE_PER_IP, limit_reads
 from mediease_api.application.clinics.listing import load_listing
 from mediease_api.application.context import RequestInfo
 from mediease_api.domain.booking.request import HORIZON_DAYS, MIN_LEAD
@@ -123,12 +123,15 @@ def require_discoverable(uow: UnitOfWork, clinic: Clinic, now: datetime) -> None
 
 
 class GetPublicClinic:
-    def __init__(self, *, uow: UnitOfWork, clock: ClockPort) -> None:
+    def __init__(
+        self, *, uow: UnitOfWork, clock: ClockPort, reads_per_minute: int = READS_PER_MINUTE_PER_IP
+    ) -> None:
         self._uow = uow
         self._clock = clock
+        self._reads_per_minute = reads_per_minute
 
     def execute(self, slug: str, info: RequestInfo, *, via_directory: bool = False) -> PublicClinic:
-        limit_reads(self._uow, self._clock, info)
+        limit_reads(self._uow, self._clock, info, per_minute=self._reads_per_minute)
         with self._uow as uow:
             clinic = find_public_clinic(uow, slug)
             if via_directory:
@@ -226,9 +229,12 @@ def build_offers(
 
 
 class GetAvailability:
-    def __init__(self, *, uow: UnitOfWork, clock: ClockPort) -> None:
+    def __init__(
+        self, *, uow: UnitOfWork, clock: ClockPort, reads_per_minute: int = READS_PER_MINUTE_PER_IP
+    ) -> None:
         self._uow = uow
         self._clock = clock
+        self._reads_per_minute = reads_per_minute
 
     def execute(
         self,
@@ -239,7 +245,7 @@ class GetAvailability:
         *,
         via_directory: bool = False,
     ) -> Sequence[DayOffer]:
-        limit_reads(self._uow, self._clock, info)
+        limit_reads(self._uow, self._clock, info, per_minute=self._reads_per_minute)
         now = self._clock.now()
         with self._uow as uow:
             clinic = find_public_clinic(uow, slug)

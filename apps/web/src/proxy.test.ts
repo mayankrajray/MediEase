@@ -153,16 +153,67 @@ describe("proxy (per-request CSP)", () => {
     expect(a).not.toBe(b);
   });
 
-  it("matches pages but not API paths or static assets", () => {
+  it("M7e (A11): matches pages and API paths, but not static assets or the two large-upload routes", () => {
     const source = config.matcher[0]?.source ?? "";
     // Next compiles `source` as a path pattern; its regex group is plain JS regex.
     const pattern = new RegExp(`^${source}$`);
-    for (const path of ["/api/v1/me", "/health", "/ready", "/_next/static/chunk.js"]) {
+    for (const path of [
+      "/_next/static/chunk.js",
+      "/_next/image",
+      "/favicon.ico",
+      "/api/v1/portal/prescription-uploads",
+      "/api/v1/ops/clinics/0192f0a0-0000-7000-8000-0000000000e2/patient-imports",
+    ]) {
       expect(pattern.test(path), path).toBe(false);
     }
-    for (const path of ["/", "/status", "/healthcheck-page"]) {
+    for (const path of ["/", "/status", "/healthcheck-page", "/api/v1/me", "/health", "/ready", "/api/v1/portal/prescription-uploads/x"]) {
       expect(pattern.test(path), path).toBe(true);
     }
+  });
+});
+
+describe("proxy (M7e, A11: the browser's address for the API)", () => {
+  const SECRET = "a-trusted-proxy-secret-of-at-least-32-chars";
+  const forwarded = (response: Response, name: string) => response.headers.get(`x-middleware-request-${name}`);
+  const request = (url: string, headers: Record<string, string>) => new NextRequest(url, { headers });
+
+  it("an API call passes through with no CSP and no sign-in redirect, even signed out", () => {
+    const response = proxy(signedOut("http://localhost:3000/api/v1/public/clinics/sample-clinic"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get(CSP_HEADER)).toBeNull();
+  });
+
+  it("removes the address and secret a browser sends, whether or not forwarding is on", () => {
+    const spoofed = { "x-mediease-client-ip": "198.51.100.9", "x-mediease-proxy-secret": "guess" };
+    for (const env of [{}, { TRUSTED_PROXY_SECRET: SECRET, CLIENT_IP_HEADER: "x-real-ip" }]) {
+      for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
+      for (const path of ["/api/v1/me", "/find"]) {
+        const response = proxy(request(`http://localhost:3000${path}`, spoofed));
+        expect(forwarded(response, "x-mediease-client-ip"), path).not.toBe("198.51.100.9");
+        expect(forwarded(response, "x-mediease-proxy-secret"), path).not.toBe("guess");
+      }
+    }
+  });
+
+  it("with a secret and the edge's header set, adds the edge's address (the last hop) and the secret", () => {
+    vi.stubEnv("TRUSTED_PROXY_SECRET", SECRET);
+    vi.stubEnv("CLIENT_IP_HEADER", "X-Forwarded-For");
+    for (const path of ["/api/v1/public/search/doctors", "/c/sample-clinic"]) {
+      const response = proxy(request(`http://localhost:3000${path}`, { "x-forwarded-for": "198.51.100.9, 203.0.113.7" }));
+      expect(forwarded(response, "x-mediease-client-ip"), path).toBe("203.0.113.7");
+      expect(forwarded(response, "x-mediease-proxy-secret"), path).toBe(SECRET);
+    }
+  });
+
+  it("adds nothing without a secret, or when the edge's header is missing", () => {
+    vi.stubEnv("CLIENT_IP_HEADER", "x-real-ip");
+    const without = proxy(request("http://localhost:3000/api/v1/me", { "x-real-ip": "203.0.113.7" }));
+    expect(forwarded(without, "x-mediease-client-ip")).toBeNull();
+    vi.stubEnv("TRUSTED_PROXY_SECRET", SECRET);
+    const missing = proxy(request("http://localhost:3000/api/v1/me", {}));
+    expect(forwarded(missing, "x-mediease-client-ip")).toBeNull();
+    expect(forwarded(missing, "x-mediease-proxy-secret")).toBeNull();
   });
 });
 

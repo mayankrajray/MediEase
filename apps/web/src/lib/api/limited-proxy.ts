@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { forwardedFrom, forwardingConfig, withClientAddress } from "@/lib/security/client-address";
+
 import { REQUEST_ID_HEADER, apiBaseUrl } from "./client";
 
 /**
@@ -73,6 +75,11 @@ export async function proxyWithLimit(request: NextRequest, apiPath: string, maxB
   for (const name of PASSED_TO_API) {
     const value = request.headers.get(name);
     if (value !== null) headers.set(name, value);
+  }
+  // M7e, A11: these routes are outside src/proxy.ts (it would cut a body over 10 MB), so they
+  // add the browser's address themselves, from the edge's header only, never the browser's own.
+  for (const [name, value] of Object.entries(forwardedFrom(withClientAddress(request.headers, forwardingConfig())))) {
+    headers.set(name, value);
   }
   let upstream: Response;
   try {

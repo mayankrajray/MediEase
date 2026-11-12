@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { FindPage, type FindResult, type Options } from "@/features/find/FindPage";
 import { apiFilters, readQuery, type Search } from "@/features/find/query";
 import { ApiError, apiGet } from "@/lib/api/client";
+import { forwardedClient } from "@/lib/api/forwarded";
 import { pickLanguage } from "@/lib/i18n/booking-request";
 import { findWords } from "@/lib/i18n/find";
 import { PORTAL_LANGUAGE_COOKIE } from "@/lib/i18n/portal";
@@ -31,11 +32,11 @@ export default async function FindRoute({ searchParams }: Readonly<{ searchParam
   let options: Options | undefined;
   try {
     if (query.kind === "clinics") {
-      const { data } = await apiGet("/api/v1/public/search/clinics", { query: filters });
+      const { data } = await apiGet("/api/v1/public/search/clinics", { headers: await forwardedClient(), query: filters });
       result = { status: "clinics", items: data.items };
       options = data.options;
     } else {
-      const { data } = await apiGet("/api/v1/public/search/doctors", { query: filters });
+      const { data } = await apiGet("/api/v1/public/search/doctors", { headers: await forwardedClient(), query: filters });
       result = { status: "doctors", items: data.items };
       options = data.options;
     }

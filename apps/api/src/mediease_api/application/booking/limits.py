@@ -31,14 +31,24 @@ def _count(uow: UnitOfWork, bucket: str, window: datetime) -> int:
     return hits
 
 
-def limit_reads(uow: UnitOfWork, clock: ClockPort, info: RequestInfo) -> None:
-    """The page and availability: 60 a minute per address (R15)."""
+def limit_reads(
+    uow: UnitOfWork,
+    clock: ClockPort,
+    info: RequestInfo,
+    *,
+    per_minute: int = READS_PER_MINUTE_PER_IP,
+) -> None:
+    """The page, availability and search: ``per_minute`` a minute per address (R15).
+
+    60 by default; ``PUBLIC_READS_PER_MINUTE`` changes it (M7e: raised for the journeys, whose
+    browsers all share one address).
+    """
     now = clock.now()
     window = now.replace(second=0, microsecond=0)
     with uow as open_uow:
         hits = _count(open_uow, f"pub-read:{info.ip_hash or '-'}", window)
         open_uow.commit()
-    if hits > READS_PER_MINUTE_PER_IP:
+    if hits > per_minute:
         _refuse("pub-read", 60 - now.second)
 
 

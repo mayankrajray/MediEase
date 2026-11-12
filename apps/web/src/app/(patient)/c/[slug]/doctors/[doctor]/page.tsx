@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { clinicToday, inWindow, type Choice } from "@/features/booking/availability";
 import { DoctorProfile } from "@/features/booking/DoctorProfile";
 import { ApiError, apiGet, type GetResponse } from "@/lib/api/client";
+import { forwardedClient } from "@/lib/api/forwarded";
 import { pickLanguage } from "@/lib/i18n/booking-request";
 import { PORTAL_LANGUAGE_COOKIE } from "@/lib/i18n/portal";
 
@@ -19,7 +20,7 @@ const INDEX = { index: true, follow: true } as const;
 async function load(slug: string, doctorId: string, via = false): Promise<{ clinic: Clinic; doctor: Clinic["doctors"][number] }> {
   try {
     // M6c-P7 (discovery R11): opened from search, the API applies the directory's rule too.
-    const clinic = (await apiGet("/api/v1/public/clinics/{slug}", { pathParams: { slug }, ...(via ? { query: { via: "directory" } } : {}) })).data;
+    const clinic = (await apiGet("/api/v1/public/clinics/{slug}", { headers: await forwardedClient(), pathParams: { slug }, ...(via ? { query: { via: "directory" } } : {}) })).data;
     const doctor = clinic.doctors.find((d) => d.id === doctorId);
     if (doctor === undefined) notFound();
     return { clinic, doctor };

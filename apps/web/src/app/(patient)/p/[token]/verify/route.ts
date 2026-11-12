@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { pageLanguage } from "@/features/patient-link/strings";
 import { VIEW_COOKIE, pagePath, problemFor } from "@/features/patient-link/view-cookie";
 import { ApiError, apiPost } from "@/lib/api/client";
+import { forwardedFrom } from "@/lib/security/client-address";
 
 /**
  * The last-4 form's target (M4-P5 decision 5A): asks the API, keeps the view token in an HttpOnly
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { data } = await apiPost(
       "/api/v1/public/links/{token}/verify",
       { phone_last4: digits },
-      { pathParams: { token } },
+      { pathParams: { token }, headers: forwardedFrom(request.headers) },
     );
     const response = seeOther(token, back);
     response.cookies.set(VIEW_COOKIE, data.view_token, {

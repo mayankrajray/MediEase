@@ -127,6 +127,14 @@ class AppSettings(BaseSettings):
     AUDIT_IP_SALT: SecretStr
     # Access token lifetime: 15 min by default (spec R4); 1-60 minutes allowed.
     ACCESS_TOKEN_TTL_SECONDS: int = Field(default=900, ge=60, le=3600)
+    # M7e (booking-requests R15): reads of the public pages, availability and search a minute per
+    # client address. 60 in production; compose raises it for the journeys, whose browsers all
+    # share one address.
+    PUBLIC_READS_PER_MINUTE: int = Field(default=60, ge=10, le=10_000)
+    # M7e, A11 (ARCHITECTURE §9): the secret the web server sends with the browser's address
+    # (X-MediEase-Proxy-Secret with X-MediEase-Client-IP). Empty: the API ignores both headers
+    # and uses the connection's address, as before A11.
+    TRUSTED_PROXY_SECRET: SecretStr = SecretStr("")
     # Refresh token lifetime: 14 days by default (spec R4); 1 hour to 30 days allowed.
     REFRESH_TOKEN_TTL_SECONDS: int = Field(default=1_209_600, ge=3600, le=2_592_000)
     # Generated files such as prescription PDFs (M4-P4, ADR-0012). `local`: a directory (the
@@ -473,6 +481,20 @@ class AppSettings(BaseSettings):
         if value and not value.startswith(("http://", "https://")):
             raise ValueError("must be an absolute http(s) URL or empty")
         return value
+
+    @field_validator("TRUSTED_PROXY_SECRET")
+    @classmethod
+    def _proxy_secret(cls, value: SecretStr, info: ValidationInfo) -> SecretStr:
+        """A11: empty, or a strong secret; a placeholder only in local and test."""
+        raw = value.get_secret_value().strip()
+        if not raw:
+            return SecretStr("")
+        env = _app_env(info)
+        if _PLACEHOLDER in raw and env is not AppEnv.LOCAL and env is not AppEnv.TEST:
+            raise ValueError(f"contains a '{_PLACEHOLDER}' placeholder; set the real value")
+        if len(raw) < _MIN_SIGNING_KEY_LENGTH:
+            raise ValueError(f"must be at least {_MIN_SIGNING_KEY_LENGTH} characters")
+        return SecretStr(raw)
 
     @field_validator("AUDIT_IP_SALT")
     @classmethod

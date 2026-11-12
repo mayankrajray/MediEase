@@ -20,7 +20,7 @@ from uuid import UUID
 
 import structlog
 
-from mediease_api.application.booking.limits import limit_reads
+from mediease_api.application.booking.limits import READS_PER_MINUTE_PER_IP, limit_reads
 from mediease_api.application.booking.public import build_offers
 from mediease_api.application.clinics.listing import Listing, load_listing
 from mediease_api.application.context import RequestInfo
@@ -122,13 +122,16 @@ def _sort_key(
 
 
 class SearchClinics:
-    def __init__(self, *, uow: UnitOfWork, clock: ClockPort) -> None:
+    def __init__(
+        self, *, uow: UnitOfWork, clock: ClockPort, reads_per_minute: int = READS_PER_MINUTE_PER_IP
+    ) -> None:
         self._uow = uow
         self._clock = clock
+        self._reads_per_minute = reads_per_minute
 
     def execute(self, query: SearchQuery, info: RequestInfo) -> list[ClinicHit]:
         f = query.normalised()
-        limit_reads(self._uow, self._clock, info)
+        limit_reads(self._uow, self._clock, info, per_minute=self._reads_per_minute)
         now = self._clock.now()
         ranked: list[tuple[tuple[float, int, int, date, str], ClinicHit]] = []
         with self._uow as uow:
@@ -157,13 +160,16 @@ class SearchClinics:
 
 
 class SearchDoctors:
-    def __init__(self, *, uow: UnitOfWork, clock: ClockPort) -> None:
+    def __init__(
+        self, *, uow: UnitOfWork, clock: ClockPort, reads_per_minute: int = READS_PER_MINUTE_PER_IP
+    ) -> None:
         self._uow = uow
         self._clock = clock
+        self._reads_per_minute = reads_per_minute
 
     def execute(self, query: SearchQuery, info: RequestInfo) -> list[DoctorHit]:
         f = query.normalised()
-        limit_reads(self._uow, self._clock, info)
+        limit_reads(self._uow, self._clock, info, per_minute=self._reads_per_minute)
         now = self._clock.now()
         ranked: list[tuple[tuple[float, int, int, date, str], DoctorHit]] = []
         listings: dict[UUID, Listing | None] = {}

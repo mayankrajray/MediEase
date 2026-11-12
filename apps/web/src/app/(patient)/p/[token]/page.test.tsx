@@ -10,6 +10,8 @@ const apiGet = vi.hoisted(() => vi.fn());
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: () => (cookieValue.current === undefined ? undefined : { value: cookieValue.current }) }),
+  // M7e (A11): the page forwards the browser's address; there is none in these tests.
+  headers: async () => new Headers(),
 }));
 vi.mock("@/lib/api/client", async (original) => ({ ...(await original<object>()), apiGet }));
 

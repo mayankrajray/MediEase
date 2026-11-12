@@ -95,6 +95,29 @@ describe("the size-checked upload proxy (issue #30, prescription-uploads R3)", (
     expect((init?.body as Uint8Array).byteLength).toBe(1024);
   });
 
+  it("M7e (A11): sends the edge's address with the secret, never an address the browser sent", async () => {
+    vi.stubEnv("API_INTERNAL_URL", "http://api:8000");
+    vi.stubEnv("TRUSTED_PROXY_SECRET", "a-trusted-proxy-secret-of-at-least-32-chars");
+    vi.stubEnv("CLIENT_IP_HEADER", "x-real-ip");
+    const fetchMock = api(202, { id: "u1", state: "QUARANTINED" });
+    await uploadPost(
+      upload(new Uint8Array(8), { "x-real-ip": "203.0.113.7", "x-mediease-client-ip": "198.51.100.9", "x-mediease-proxy-secret": "guess" }),
+    );
+    const sent = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+    expect(sent.get("x-mediease-client-ip")).toBe("203.0.113.7");
+    expect(sent.get("x-mediease-proxy-secret")).toBe("a-trusted-proxy-secret-of-at-least-32-chars");
+    expect(sent.get("x-real-ip")).toBeNull();
+  });
+
+  it("M7e (A11): with forwarding off, no address header reaches the API", async () => {
+    vi.stubEnv("API_INTERNAL_URL", "http://api:8000");
+    const fetchMock = api(202, { id: "u1", state: "QUARANTINED" });
+    await uploadPost(upload(new Uint8Array(8), { "x-mediease-client-ip": "198.51.100.9", "x-mediease-proxy-secret": "guess" }));
+    const sent = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+    expect(sent.get("x-mediease-client-ip")).toBeNull();
+    expect(sent.get("x-mediease-proxy-secret")).toBeNull();
+  });
+
   it("the API's own errors pass through, Retry-After included", async () => {
     vi.stubEnv("API_INTERNAL_URL", "http://api:8000");
     api(429, { error: { code: "UPL_RATE_LIMITED", message: "x", request_id: "r", details: {} } }, { "Retry-After": "120" });
