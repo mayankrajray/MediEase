@@ -9,19 +9,17 @@
 import { useMemo } from "react";
 
 import { useSession } from "@/features/auth/SessionProvider";
-import { apiGetConditional, type ConditionalResult, type RequestOptions } from "@/lib/api/client";
+import type { PushApi } from "@/features/pwa/DevicePush";
+import { apiGet, apiGetConditional, type ConditionalResult, type RequestOptions } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
-import { sessionGet, sessionPost, sessionPut, withSessionRefresh } from "@/lib/auth/refresh";
+import { sessionDelete, sessionGet, sessionPost, sessionPut, withSessionRefresh } from "@/lib/auth/refresh";
 
 export type Notification = components["schemas"]["Notification"];
 export type NotificationSummary = components["schemas"]["NotificationSummary"];
 export type NotificationKind = components["schemas"]["NotificationKind"];
 export type Preference = components["schemas"]["NotificationPreferences"]["items"][number];
 
-/** M7e: the in-app switches only; push has its own place in E5. */
-function inApp(items: readonly Preference[]): readonly Preference[] {
-  return items.filter((p) => p.channel === "IN_APP");
-}
+export type Channel = Preference["channel"];
 
 export interface NotificationsApi {
   readonly clinicId: string | undefined;
@@ -31,7 +29,10 @@ export interface NotificationsApi {
   readonly read: (id: string) => Promise<Notification>;
   readonly readAll: () => Promise<number>;
   readonly preferences: () => Promise<readonly Preference[]>;
-  readonly setPreference: (kind: NotificationKind, enabled: boolean) => Promise<readonly Preference[]>;
+  /** M7e-E5: `channel` is IN_APP or PUSH (spec web-push R53). */
+  readonly setPreference: (kind: NotificationKind, enabled: boolean, channel?: Channel) => Promise<readonly Preference[]>;
+  /** M7e-E5: this member's devices for pop-up alerts (R50-R54). */
+  readonly push: PushApi;
 }
 
 export function useNotificationsApi(): NotificationsApi {
@@ -53,10 +54,17 @@ export function useNotificationsApi(): NotificationsApi {
           })
         ).data,
       readAll: async () => (await sessionPost("/api/v1/notifications/read-all", undefined, base)).data.updated,
-        // M7e: the API now lists push switches too; this screen shows the in-app ones (push in E5).
-      preferences: async () => inApp((await sessionGet("/api/v1/notifications/preferences", base)).data.items),
-      setPreference: async (kind, enabled) =>
-        inApp((await sessionPut("/api/v1/notifications/preferences", { items: [{ kind, channel: "IN_APP", enabled }] }, base)).data.items),
+      preferences: async () => (await sessionGet("/api/v1/notifications/preferences", base)).data.items,
+      setPreference: async (kind, enabled, channel = "IN_APP") =>
+        (await sessionPut("/api/v1/notifications/preferences", { items: [{ kind, channel, enabled }] }, base)).data.items,
+      push: {
+        config: async () => (await apiGet("/api/v1/push/config")).data,
+        list: async () => (await sessionGet("/api/v1/me/push-subscriptions", base)).data.items,
+        add: async (body) => (await sessionPost("/api/v1/me/push-subscriptions", body, base)).data,
+        remove: async (id) => {
+          await sessionDelete("/api/v1/me/push-subscriptions/{device_id}", { ...base, pathParams: { device_id: id } });
+        },
+      },
     };
   }, [clinicId]);
 }

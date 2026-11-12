@@ -147,6 +147,29 @@ describe("notification switches (M6b-P6, R62, R63)", () => {
     expect(api.calls.find((c) => c.method === "PUT")?.body).toEqual({ kind: "booking.accepted", channel: "EMAIL", enabled: false });
     expect(within(accepted).getByRole("checkbox", { name: "Email" })).not.toBeChecked();
   });
+
+  it("M7e-E5 (web-push R53): each kind has a pop-up alert switch beside the in-app one", async () => {
+    navigation.pathname = "/portal/account";
+    const api = mockApi({
+      ...me(),
+      "GET /api/v1/portal/links": () => json(200, { items: [] }),
+      "PUT /api/v1/portal/notification-preferences": (call) =>
+        json(200, {
+          items: PREFERENCES.map((p) => (p.kind === "medicine.due" ? { ...p, push: (call.body as { enabled: boolean }).enabled } : p)),
+        }),
+    });
+    await renderPortal(<PortalAccountPage />);
+    const group = await screen.findByRole("group", { name: "Medicine time" });
+    const alert = within(group).getByRole("checkbox", { name: "Pop-up alert" });
+    expect(alert).toBeChecked();
+    fireEvent.click(alert);
+    await screen.findByText("Notification settings saved.");
+    expect(api.calls.find((c) => c.method === "PUT")?.body).toEqual({ kind: "medicine.due", channel: "PUSH", enabled: false });
+    expect(within(screen.getByRole("group", { name: "Medicine time" })).getByRole("checkbox", { name: "Pop-up alert" })).not.toBeChecked();
+    // This test browser has no push manager: the device card says so, and asks the API nothing.
+    expect(await screen.findByText("This browser can't show alerts from MediEase. Try Chrome on Android, or the installed app.")).toBeInTheDocument();
+    expect(api.calls.some((c) => c.path.includes("push"))).toBe(false);
+  });
 });
 
 describe("Live queue on My appointments (M6b-P6, R69)", () => {

@@ -10,6 +10,8 @@
  * Updates: a new version waits until the person chooses "Update" (the page posts SKIP_WAITING),
  * then takes over and old caches are removed. Plain JavaScript on purpose: no build step, no
  * library, and the tests load this very file (src/features/pwa/sw.test.ts).
+ *
+ * M7e-E5: it also shows pop-up alerts (web push) and opens the notice's page when one is tapped.
  */
 
 const VERSION = "v1";
@@ -75,4 +77,68 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate" && request.method === "GET" && new URL(request.url).origin === self.location.origin) {
     event.respondWith(pageOrOffline(request));
   }
+});
+
+/*
+ * M7e-E5 (spec web-push R55-R57): pop-up alerts. The server sends only fixed words per kind and
+ * the notice's path (R32), and nothing here adds to them. A message that is not the expected JSON
+ * still shows a plain "MediEase" alert, because a push the browser receives must be shown.
+ * Tapping it opens the path on this site only; a signed-out person signs in first and lands on it
+ * (the proxy's ?next=, validated by the sign-in pages).
+ */
+const ALERT_ICON = "/icons/icon-192.png";
+const FALLBACK = { title: "MediEase", body: "Open MediEase to see it." };
+
+/** A path on this site, or "/": never another origin, a protocol-relative URL or a backslash. */
+function samePath(value) {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return "/";
+  try {
+    const url = new URL(value, self.location.origin);
+    return url.origin === self.location.origin ? `${url.pathname}${url.search}${url.hash}` : "/";
+  } catch {
+    return "/";
+  }
+}
+
+function text(value, fallback, max) {
+  return typeof value === "string" && value.trim() !== "" ? value.slice(0, max) : fallback;
+}
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  if (data === null || typeof data !== "object") data = {};
+  const tag = typeof data.tag === "string" && data.tag !== "" ? data.tag.slice(0, 64) : undefined;
+  const options = {
+    body: text(data.body, FALLBACK.body, 200),
+    icon: ALERT_ICON,
+    data: { url: samePath(data.url) },
+  };
+  // A newer notice of the same kind replaces the older one on the screen, and still alerts.
+  if (tag !== undefined) Object.assign(options, { tag, renotify: true });
+  event.waitUntil(self.registration.showNotification(text(data.title, FALLBACK.title, 100), options));
+});
+
+async function openPath(path) {
+  const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of windows) {
+    if (new URL(client.url).origin !== self.location.origin) continue;
+    try {
+      const shown = await client.navigate(path);
+      if (shown) return shown.focus();
+    } catch {
+      // Not controlled by this worker: open a new window below instead.
+    }
+  }
+  return self.clients.openWindow(path);
+}
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const data = event.notification.data;
+  event.waitUntil(openPath(samePath(data !== null && typeof data === "object" ? data.url : undefined)));
 });

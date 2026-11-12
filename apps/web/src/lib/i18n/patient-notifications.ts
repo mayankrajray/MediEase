@@ -27,6 +27,8 @@ export interface NotificationWords {
     readonly help: string;
     readonly inApp: string;
     readonly email: string;
+    /** M7e-E5: the PUSH channel, to every device the person turned alerts on for. */
+    readonly push: string;
     readonly saved: string;
     readonly kinds: Readonly<Record<PatientNotificationKind, string>>;
   };
@@ -68,9 +70,10 @@ const EN: NotificationWords = {
   settings: "Notification settings",
   switches: {
     title: "Notifications",
-    help: "Choose what you are told about. Email is only for answers to your booking requests.",
+    help: "Choose what you are told about, in the app and as pop-up alerts on your devices. Email is only for answers to your booking requests.",
     inApp: "In the app",
     email: "Email",
+    push: "Pop-up alert",
     saved: "Notification settings saved.",
     kinds: {
       "booking.accepted": "Booking request accepted",
@@ -102,9 +105,10 @@ const HI: NotificationWords = {
   settings: "सूचना सेटिंग",
   switches: {
     title: "सूचनाएँ",
-    help: "चुनें कि आपको किस बारे में बताया जाए। ईमेल सिर्फ़ बुकिंग अनुरोधों के जवाब के लिए है।",
+    help: "चुनें कि आपको किस बारे में बताया जाए, ऐप में और आपके डिवाइस पर पॉप-अप अलर्ट से। ईमेल सिर्फ़ बुकिंग अनुरोधों के जवाब के लिए है।",
     inApp: "ऐप में",
     email: "ईमेल",
+    push: "पॉप-अप अलर्ट",
     saved: "सूचना सेटिंग सहेज दी गई।",
     kinds: {
       "booking.accepted": "बुकिंग अनुरोध मंज़ूर",

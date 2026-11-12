@@ -41,6 +41,12 @@ const req = (p: string, init: Partial<FakeRequest> = {}): FakeRequest => ({
 
 type Listener = (event: Record<string, unknown>) => void;
 
+interface FakeWindow {
+  readonly url: string;
+  readonly navigate: (url: string) => Promise<FakeWindow | null>;
+  readonly focus: () => Promise<FakeWindow>;
+}
+
 function load() {
   const listeners = new Map<string, Listener>();
   const stores = new Map<string, Map<string, FakeResponse>>();
@@ -73,7 +79,12 @@ function load() {
     location: { origin: ORIGIN },
     addEventListener: (type: string, fn: Listener) => listeners.set(type, fn),
     skipWaiting: vi.fn(),
-    clients: { claim: vi.fn(async () => undefined) },
+    clients: {
+      claim: vi.fn(async () => undefined),
+      matchAll: vi.fn(async (): Promise<FakeWindow[]> => []),
+      openWindow: vi.fn<(url: string) => Promise<null>>(async () => null),
+    },
+    registration: { showNotification: vi.fn<(title: string, options: Record<string, unknown>) => Promise<void>>(async () => undefined) },
   };
   runInNewContext(SOURCE, { self, caches, fetch: network, URL, Response: { error: () => answer("error", { ok: false, type: "error" }) }, Promise });
 
@@ -88,7 +99,12 @@ function load() {
     await work;
   }
   const stored = () => [...stores.values()].flatMap((s) => [...s.keys()].map((k) => new URL(k).pathname));
-  return { listeners, stores, network, self, fetchEvent, lifecycle, stored };
+  async function fire(type: "push" | "notificationclick", event: Record<string, unknown>): Promise<void> {
+    let work: Promise<unknown> = Promise.resolve();
+    listeners.get(type)?.({ ...event, waitUntil: (p: Promise<unknown>) => (work = p) });
+    await work;
+  }
+  return { listeners, stores, network, self, fetchEvent, lifecycle, stored, fire };
 }
 
 describe("the service worker's cache rules (M7e-E1)", () => {
@@ -162,5 +178,85 @@ describe("the service worker's cache rules (M7e-E1)", () => {
     expect(sw.self.skipWaiting).not.toHaveBeenCalled();
     message?.({ data: { type: "SKIP_WAITING" } });
     expect(sw.self.skipWaiting).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("pop-up alerts (M7e-E5, spec web-push R55-R57)", () => {
+  let sw: ReturnType<typeof load>;
+  beforeEach(() => {
+    sw = load();
+  });
+
+  const pushed = (payload: unknown) => ({
+    data: {
+      json: () => {
+        if (typeof payload === "string") throw new SyntaxError("not JSON");
+        return payload;
+      },
+    },
+  });
+
+  it("shows exactly the server's words, with the app icon and the notice's path", async () => {
+    await sw.fire(
+      "push",
+      pushed({ title: "Appointment reminder", body: "You have an upcoming appointment. Open MediEase to see it.", url: "/portal/appointments", tag: "appointment.reminder" }),
+    );
+    expect(sw.self.registration.showNotification).toHaveBeenCalledWith("Appointment reminder", {
+      body: "You have an upcoming appointment. Open MediEase to see it.",
+      icon: "/icons/icon-192.png",
+      data: { url: "/portal/appointments" },
+      tag: "appointment.reminder",
+      renotify: true,
+    });
+  });
+
+  it("still shows a plain alert for a message that is not the expected JSON", async () => {
+    for (const payload of ["garbage", null, 42, { title: "", body: 7 }]) await sw.fire("push", pushed(payload));
+    await sw.fire("push", { data: null });
+    expect(sw.self.registration.showNotification).toHaveBeenCalledTimes(5);
+    for (const [title, options] of sw.self.registration.showNotification.mock.calls) {
+      expect(title).toBe("MediEase");
+      expect(options).toEqual({ body: "Open MediEase to see it.", icon: "/icons/icon-192.png", data: { url: "/" } });
+    }
+  });
+
+  it("never keeps a link to another site, whatever the message says", async () => {
+    for (const url of ["https://evil.example/x", "//evil.example/x", "/\\evil.example", "javascript:alert(1)", 5]) {
+      await sw.fire("push", pushed({ title: "MediEase", body: "x", url }));
+    }
+    const urls = sw.self.registration.showNotification.mock.calls.map(([, o]) => (o.data as { url: string }).url);
+    expect(urls).toEqual(["/", "/", "/", "/", "/"]);
+  });
+
+  it("opens the notice's page in a new window when MediEase is not open", async () => {
+    const close = vi.fn();
+    await sw.fire("notificationclick", { notification: { data: { url: "/portal/appointments?x=1" }, close } });
+    expect(close).toHaveBeenCalled();
+    expect(sw.self.clients.openWindow).toHaveBeenCalledWith("/portal/appointments?x=1");
+  });
+
+  it("reuses an open MediEase window, and leaves other sites' windows alone", async () => {
+    const focus = vi.fn(async () => mine);
+    const mine: FakeWindow = { url: `${ORIGIN}/today`, navigate: vi.fn(async () => mine), focus };
+    const other: FakeWindow = { url: "https://other.example/", navigate: vi.fn(async () => other), focus: vi.fn(async () => other) };
+    sw.self.clients.matchAll.mockResolvedValueOnce([other, mine]);
+    await sw.fire("notificationclick", { notification: { data: { url: "/booking-requests" }, close: vi.fn() } });
+    expect(other.navigate).not.toHaveBeenCalled();
+    expect(mine.navigate).toHaveBeenCalledWith("/booking-requests");
+    expect(focus).toHaveBeenCalled();
+    expect(sw.self.clients.openWindow).not.toHaveBeenCalled();
+  });
+
+  it("opens a new window when the open one cannot be steered, and goes home for a bad link", async () => {
+    const stuck: FakeWindow = {
+      url: `${ORIGIN}/portal`,
+      navigate: vi.fn(async () => {
+        throw new TypeError("not controlled");
+      }),
+      focus: vi.fn(async () => stuck),
+    };
+    sw.self.clients.matchAll.mockResolvedValueOnce([stuck]);
+    await sw.fire("notificationclick", { notification: { data: { url: "https://evil.example/" }, close: vi.fn() } });
+    expect(sw.self.clients.openWindow).toHaveBeenCalledWith("/");
   });
 });
