@@ -12,9 +12,9 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M7e — Installable app (PWA) and web push notifications** (issue #73, branch `m7e/73-pwa-push` on `main` after M7d merged in PR #72 on 12 Nov 2026, PR #74). Next: M9 (deployment on Vercel, Supabase and Oracle Cloud) |
-| Active phase | **M7e design** awaiting the developer's approval (`docs/milestones/M7e-pwa-push.md` §7); E1 follows |
+| Active phase | **M7e-E1** (installable app); design approved 12 Nov 2026 (`docs/milestones/M7e-pwa-push.md` §7, all as recommended) |
 | Design notes | `docs/milestones/M7e-pwa-push.md`; M7d (done) in `docs/milestones/M7d-discovery-booking.md`; M8 designed in `docs/milestones/M8-multi-clinic-whatsapp.md` (skipped for now by the developer) |
-| Approved plan | `NEXT_STEPS_PLAN.md` §0 (M7d phases); M7c and M7 below it as history |
+| Approved plan | `NEXT_STEPS_PLAN.md` §0 (M7e phases); M7d, M7c and M7 below it as history |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
 | Open decisions | L-09 (Google sign-in), L-10 (Groq key) and L-11 (Brevo email) are done (9 Nov 2026). The issue #49 title still says "MVP demo" (rename on GitHub by the developer). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test checks the index plan in CI and the 150 ms bound locally (11 Nov 2026) |
@@ -292,7 +292,7 @@ design).
 | M7d-P5 | Confirmation: appointment summary, "Pay at the clinic", total = fee, the request form, ending at "Requested" | ✅ 12 Nov 2026: 2 new tests (summary and payment, one send, token session, unknown fee); portal, booking and i18n suites 88; lint, typecheck |
 | M7d-P6 | Journeys and full `make e2e`, screenshots at seven widths, page weights, specs and milestone record | ✅ 12 Nov 2026: `make lint typecheck contract-check`; API 2583 (95.87%), web 776; `make smoke`; full Playwright suite (design §8); no sideways scroll at seven widths; request page 195.8 KB |
 
-## M7e — Installable app (PWA) and web push notifications  `◐ (active; design awaiting approval)`
+## M7e — Installable app (PWA) and web push notifications  `◐ (active)`
 
 **Design:** `docs/milestones/M7e-pwa-push.md` (decisions of 11 Nov 2026, audit, phases E1–E5,
 open points §7). Issue #73, branch `m7e/73-pwa-push` (rebased onto `main` after M7d merged in
