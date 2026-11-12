@@ -6,7 +6,9 @@ transaction:
 - a newer revision, or a reminder no longer ``SCHEDULED`` / ``SENT`` (cancelled, skipped): nothing;
 - inside the quiet hours (R4): the reminder is deferred to the next 08:00 under a new revision and
   a fresh job is enqueued for it (2A); this job succeeds (``MSG_QUIET_HOURS_DEFERRED``);
-- no consent (R5): ``SKIPPED_NO_CONSENT``, no message row;
+- no consent (R5): ``SKIPPED_NO_CONSENT``, no message row; M7e-E4: ``SENT_IN_APP`` when the
+  app account linked to the record was told instead (``app.py``), which happens first in every
+  case, at most once per reminder;
 - no clinic phone (6A): ``FAILED`` with ``REM_CLINIC_PHONE_MISSING``;
 - otherwise ``follow_up_due`` with the clinic name, doctor, date and the clinic's phone; the
   reminder becomes ``SENT`` with the message row, and from then on shows the message's status (3A);
@@ -22,6 +24,7 @@ from uuid import UUID
 import structlog
 
 from mediease_api.application.messaging.sender import MessageSender, Send, Skip
+from mediease_api.application.reminders.app import remind_in_app
 from mediease_api.application.reminders.appointment import (
     appointment_variables,
     cancel_reminder,
@@ -117,10 +120,27 @@ class SendReminder:
                 return Skip("quiet_hours", MSG_QUIET_HOURS_DEFERRED, close=False)
             patient = tenant.patients.get(reminder.patient_id)
             assert patient is not None
+            # M7e-E4 (web-push R41-R43): the linked app account is told first, once per reminder.
+            in_app = remind_in_app(
+                uow,
+                tenant,
+                ids=self._ids,
+                reminder=reminder,
+                appointment=appointment,
+                session=session,
+                now=now,
+                request_id=job.request_id,
+            )
             if not patient.may_receive_whatsapp:
                 if reminder.is_scheduled:
-                    reminder.skipped_no_consent(now)
+                    if in_app:
+                        reminder.sent_in_app(now)
+                    else:
+                        reminder.skipped_no_consent(now)
                     tenant.reminders.update(reminder)
+                if in_app:
+                    logger.info("reminder.sent_in_app", reminder_id=str(reminder.id))
+                    return Skip("in_app_only", MSG_NO_CONSENT)
                 logger.info("reminder.skipped_no_consent", reminder_id=str(reminder.id))
                 return Skip("no_consent", MSG_NO_CONSENT)
             if clinic.phone is None:

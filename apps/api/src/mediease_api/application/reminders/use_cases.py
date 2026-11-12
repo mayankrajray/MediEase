@@ -2,7 +2,8 @@
 
 Staff with ``REMINDERS_SCHEDULE`` (every role) schedule a follow-up reminder for a patient with a
 doctor and a follow-up date; it is due like an automatic one (09:00 the day before, outside quiet
-hours). Without consent: ``REM_NO_CONSENT``; a date not after today: ``REM_IN_PAST``; a clinic
+hours). Without consent (M7e-E4: and no app account linked to the record): ``REM_NO_CONSENT``;
+a date not after today: ``REM_IN_PAST``; a clinic
 with no phone: ``REM_CLINIC_PHONE_MISSING``. A scheduled reminder can be moved or cancelled;
 anything else is ``REM_NOT_SCHEDULED``.
 """
@@ -17,6 +18,7 @@ from uuid import UUID
 import structlog
 
 from mediease_api.application.context import RequestContext
+from mediease_api.application.reminders.app import can_remind
 from mediease_api.application.reminders.scheduling import audit, enqueue_send
 from mediease_api.application.scheduling.schedules import load_clinic, load_doctor
 from mediease_api.domain.audit.actions import AuditAction
@@ -83,7 +85,7 @@ class ScheduleReminder(_UseCase):
             now = self._clock.now()
             if cmd.follow_up_date <= local_date(now, clinic.timezone):
                 raise InPast()
-            if not patient.may_receive_whatsapp:
+            if not can_remind(tenant, patient):  # M7e-E4: or an app account linked to the record
                 raise NoConsent()
             if clinic.phone is None:
                 raise ClinicPhoneMissing()

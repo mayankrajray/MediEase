@@ -34,6 +34,7 @@ from mediease_api.application.portal.patient_notifications import (
     APPOINTMENTS_LINK,
     linked_account,
     notify_patient,
+    place_params,
     prescription_link,
 )
 from mediease_api.application.push.delivery import enqueue_push
@@ -402,7 +403,7 @@ class NotificationService:
             event_key=f"{kind.value}:{appointment.id}",
             entity=("appointment", appointment.id),
             link=APPOINTMENTS_LINK,
-            params=_place_params(appointment, session),
+            params=place_params(appointment, session),
             now=now,
             request_id=request_id,
         )
@@ -436,7 +437,7 @@ class NotificationService:
             tenant.appointments.get(request.appointment_id) if request.appointment_id else None
         )
         if appointment is not None:
-            params |= _place_params(appointment, session)
+            params |= place_params(appointment, session)
         else:
             params["at"] = (request.slot_start or session.starts_at).isoformat()
         if request.decline_reason is not None:
@@ -605,17 +606,6 @@ class NotificationService:
             push_devices=pushed,
         )
         return written
-
-
-def _place_params(appointment: Appointment, session: Session) -> dict[str, str]:
-    """When, as IDs and a time: the slot (or session start) and the token (R55, R59)."""
-    params = {
-        "at": (appointment.slot_start or session.starts_at).isoformat(),
-        "doctor_id": str(appointment.doctor_id),
-    }
-    if appointment.token_number is not None and session.mode is BookingMode.TOKENS:
-        params["token"] = str(appointment.token_number)
-    return params
 
 
 def _appointment_key(kind: NotificationKind, appointment: Appointment) -> str:

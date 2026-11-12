@@ -28,6 +28,8 @@ export const PREFERENCES = [
   "appointment.cancelled",
   "prescription.ready",
   "medicine.due",
+  "appointment.reminder",
+  "follow_up.due",
 ].map((kind) => ({ kind, in_app: true, email: kind.startsWith("booking.") ? true : null }));
 
 export const CLINIC_ID = "0192f0a0-0000-7000-8000-0000000000e2";

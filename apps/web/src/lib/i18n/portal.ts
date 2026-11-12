@@ -370,6 +370,7 @@ const EN: PortalStrings = {
         FAILED: "Not delivered",
         CANCELLED: "Cancelled",
         SKIPPED_NO_CONSENT: "Not sent (no consent)",
+        SENT_IN_APP: "Sent in the app",
       })[status] ?? status,
   },
   prescriptions: {
@@ -672,6 +673,7 @@ const HI: PortalStrings = {
         FAILED: "नहीं पहुँचा",
         CANCELLED: "रद्द",
         SKIPPED_NO_CONSENT: "नहीं भेजा (अनुमति नहीं)",
+        SENT_IN_APP: "ऐप में भेजा",
       })[status] ?? status,
   },
   prescriptions: {

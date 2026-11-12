@@ -26,6 +26,7 @@ import structlog
 from mediease_api.application.portal.scope import PortalScope
 from mediease_api.application.portal.views import PatientPrincipal
 from mediease_api.application.push.delivery import enqueue_push
+from mediease_api.domain.appointments.appointment import Appointment
 from mediease_api.domain.jobs.job import PATIENT_EMAIL_KIND, NewJob
 from mediease_api.domain.patients.patient import Language
 from mediease_api.domain.portal.notifications import (
@@ -38,6 +39,8 @@ from mediease_api.domain.portal.notifications import (
     render_title,
 )
 from mediease_api.domain.push.subscription import OwnerKind
+from mediease_api.domain.scheduling.mode import BookingMode
+from mediease_api.domain.scheduling.sessions import Session
 from mediease_api.domain.shared.errors import NotFound
 from mediease_api.ports.clock import ClockPort
 from mediease_api.ports.ids import IdPort
@@ -53,6 +56,17 @@ MEDICINES_LINK = "/portal/medicines"
 
 def prescription_link(prescription_id: UUID) -> str:
     return f"/portal/prescriptions/{prescription_id}"
+
+
+def place_params(appointment: Appointment, session: Session) -> dict[str, str]:
+    """When, as IDs and a time: the slot (or session start) and the token (R55, R59)."""
+    params = {
+        "at": (appointment.slot_start or session.starts_at).isoformat(),
+        "doctor_id": str(appointment.doctor_id),
+    }
+    if appointment.token_number is not None and session.mode is BookingMode.TOKENS:
+        params["token"] = str(appointment.token_number)
+    return params
 
 
 def linked_account(tenant: TenantRepositories, patient_id: UUID) -> UUID | None:
@@ -80,8 +94,53 @@ def notify_patient(
     request_id: str | None = None,
 ) -> int:
     """Deliver one notice to one account in the caller's transaction; returns the rows written."""
+    return deliver_patient_notice(
+        uow,
+        tenant,
+        ids=ids,
+        account_id=account_id,
+        kind=kind,
+        event_key=event_key,
+        entity=entity,
+        link=link,
+        params=params,
+        now=now,
+        request_id=request_id,
+    ).written
+
+
+@dataclass(frozen=True, slots=True)
+class Delivery:
+    """What one notice did: rows written (0 on a replay), whether the in-app channel is on for
+    the kind, and the devices a push was enqueued for."""
+
+    written: int
+    in_app: bool
+    pushed: int
+
+    @property
+    def reached(self) -> bool:
+        """M7e-E4: the account is told in the app or on a device (a replay counts)."""
+        return self.in_app or self.pushed > 0
+
+
+def deliver_patient_notice(
+    uow: UnitOfWork,
+    tenant: TenantRepositories,
+    *,
+    ids: IdPort,
+    account_id: UUID,
+    kind: PatientNotificationKind,
+    event_key: str,
+    entity: tuple[str, UUID],
+    link: str,
+    params: Mapping[str, str],
+    now: datetime,
+    request_id: str | None = None,
+) -> Delivery:
     written = 0
-    if not uow.patient_preferences.is_off(account_id, kind, PatientChannel.IN_APP):
+    in_app = not uow.patient_preferences.is_off(account_id, kind, PatientChannel.IN_APP)
+    if in_app:
         written = len(
             tenant.patient_notifications.add_many(
                 [
@@ -120,9 +179,10 @@ def notify_patient(
                 )
             )
     devices = uow.push_subscriptions.active_for_owners(OwnerKind.PATIENT, [account_id])
+    pushed = 0
     if devices and not uow.patient_preferences.is_off(account_id, kind, PatientChannel.PUSH):
         # M7e-E3 (web-push R30, R31): a push to each of the account's devices, by the outbox.
-        enqueue_push(
+        pushed = enqueue_push(
             uow,
             ids=ids,
             devices=devices,
@@ -133,8 +193,8 @@ def notify_patient(
             now=now,
             request_id=request_id,
         )
-    logger.info("patient_notification.dispatched", kind=kind.value, written=written)
-    return written
+    logger.info("patient_notification.dispatched", kind=kind.value, written=written, pushed=pushed)
+    return Delivery(written=written, in_app=in_app, pushed=pushed)
 
 
 # --- The bell (R67, R68) ------------------------------------------------------------------------

@@ -42,6 +42,8 @@ class ReminderStatus(StrEnum):
     CANCELLED = "CANCELLED"
     SKIPPED_NO_CONSENT = "SKIPPED_NO_CONSENT"
     FAILED = "FAILED"
+    # M7e-E4 (web-push R43): no WhatsApp consent, but the patient's app account was reminded.
+    SENT_IN_APP = "SENT_IN_APP"
 
 
 @dataclass(slots=True)
@@ -180,6 +182,10 @@ class Reminder:
     def skipped_no_consent(self, now: datetime) -> None:
         """R5: no consent at send time; no message row."""
         self._settle(ReminderStatus.SKIPPED_NO_CONSENT, None, now)
+
+    def sent_in_app(self, now: datetime) -> None:
+        """M7e-E4: no WhatsApp consent, and the linked account was told in the app instead."""
+        self._settle(ReminderStatus.SENT_IN_APP, None, now)
 
     def failed(self, code: str, now: datetime) -> None:
         self._settle(ReminderStatus.FAILED, code, now)

@@ -3944,7 +3944,8 @@ export interface paths {
          * A patient's follow-up reminders, latest due first
          * @description FR-REM-05; M5-P4 decision 3A. At most 50. `status` is the message's status once the
          *     reminder was sent (SENT, DELIVERED, READ, FAILED), else the reminder's own (SCHEDULED,
-         *     CANCELLED, SKIPPED_NO_CONSENT, FAILED). Permission REMINDERS_SCHEDULE.
+         *     CANCELLED, SKIPPED_NO_CONSENT, FAILED, or from M7e-E4 SENT_IN_APP: no WhatsApp consent,
+         *     and the app account linked to the record was told). Permission REMINDERS_SCHEDULE.
          */
         readonly get: operations["listPatientReminders"];
         readonly put?: never;
@@ -4448,7 +4449,7 @@ export interface components {
          * @description FR-REM-05 (the message's status once sent, decision 3A)
          * @enum {string}
          */
-        readonly ReminderStatus: "SCHEDULED" | "SENT" | "DELIVERED" | "READ" | "FAILED" | "CANCELLED" | "SKIPPED_NO_CONSENT";
+        readonly ReminderStatus: "SCHEDULED" | "SENT" | "DELIVERED" | "READ" | "FAILED" | "CANCELLED" | "SKIPPED_NO_CONSENT" | "SENT_IN_APP";
         readonly Reminder: {
             /** Format: uuid */
             readonly id: string;
@@ -5867,10 +5868,10 @@ export interface components {
             readonly until: string;
         };
         /**
-         * @description M6b-P6 (R57)
+         * @description M6b-P6 (R57); M7e-E4 adds the clinic's reminders (web-push R41)
          * @enum {string}
          */
-        readonly PatientNotificationKind: "booking.accepted" | "booking.declined" | "booking.proposed" | "booking.expired" | "appointment.confirmed" | "appointment.moved" | "appointment.cancelled" | "prescription.ready" | "medicine.due";
+        readonly PatientNotificationKind: "booking.accepted" | "booking.declined" | "booking.proposed" | "booking.expired" | "appointment.confirmed" | "appointment.moved" | "appointment.cancelled" | "prescription.ready" | "medicine.due" | "appointment.reminder" | "follow_up.due";
         readonly PortalNotification: {
             /** Format: uuid */
             readonly id: string;

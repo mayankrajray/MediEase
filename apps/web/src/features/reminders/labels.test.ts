@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { formatPaise } from "@/lib/format/money";
 import { formatDayTime } from "@/lib/format/time";
 
-import { explainFailure, shouldCall, templateLabel } from "./labels";
+import { REMINDER_STATUS_LABELS, explainFailure, shouldCall, templateLabel } from "./labels";
 
 describe("failed messages in plain words (M5-P6 decision 5A)", () => {
   it("explains each known code and never shows the code itself", () => {
@@ -22,6 +22,12 @@ describe("failed messages in plain words (M5-P6 decision 5A)", () => {
     }
     expect(shouldCall("FAILED")).toBe(true);
     expect(shouldCall("SKIPPED_NO_CONSENT")).toBe(true);
+  });
+
+  it("M7e-E4: a reminder sent in the app needs no call and no explanation", () => {
+    expect(REMINDER_STATUS_LABELS.SENT_IN_APP).toBe("Sent in the app");
+    expect(shouldCall("SENT_IN_APP")).toBe(false);
+    expect(explainFailure("SENT_IN_APP", null)).toBeNull();
   });
 
   it("names each template and falls back for an unknown one", () => {

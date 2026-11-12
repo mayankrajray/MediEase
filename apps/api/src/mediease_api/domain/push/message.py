@@ -65,6 +65,15 @@ _PATIENT: dict[PatientNotificationKind, dict[Language, tuple[str, str]]] = {
         Language.EN: ("Reminder", "You have a reminder."),
         Language.HI: ("रिमाइंडर", "आपके लिए एक रिमाइंडर है।"),
     },
+    # M7e-E4: the design's own example (decision 3).
+    _P.APPOINTMENT_REMINDER: {
+        Language.EN: ("Appointment reminder", "You have an upcoming appointment."),
+        Language.HI: ("अपॉइंटमेंट रिमाइंडर", "आपका एक अपॉइंटमेंट आने वाला है।"),
+    },
+    _P.FOLLOW_UP_DUE: {
+        Language.EN: ("Follow-up reminder", "It is time to book your follow-up visit."),
+        Language.HI: ("फ़ॉलो-अप रिमाइंडर", "आपकी फ़ॉलो-अप विज़िट बुक करने का समय है।"),
+    },
 }
 
 _S = NotificationKind

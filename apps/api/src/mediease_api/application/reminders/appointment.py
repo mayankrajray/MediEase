@@ -2,8 +2,9 @@
 
 Scheduled and cancelled by the notification service, in the transaction of the booking, the
 reschedule or the cancellation that raised the event; each is a ``reminders`` row with its own
-send job, like a follow-up. A walk-in gets none, nor does a patient who cannot be messaged on
-WhatsApp at booking time (the send job reads consent again). Each change is audited as SYSTEM.
+send job, like a follow-up. A walk-in gets none, nor does a patient who can be reached neither
+on WhatsApp nor (M7e-E4) through an app account linked to the record, at booking time (the send
+job reads both again). Each change is audited as SYSTEM.
 
 At send time (``send.py``) the reminder applies only while its appointment is ``BOOKED`` in an
 ``OPEN`` session and the visit has not started; otherwise the system cancels it
@@ -17,6 +18,7 @@ from uuid import UUID
 
 import structlog
 
+from mediease_api.application.reminders.app import can_remind
 from mediease_api.application.reminders.scheduling import audit, enqueue_send
 from mediease_api.domain.appointments.appointment import Appointment
 from mediease_api.domain.appointments.status import AppointmentSource, AppointmentStatus
@@ -53,7 +55,7 @@ def schedule_appointment_reminders(
     request_id: str | None,
     now: datetime,
 ) -> list[Reminder]:
-    if appointment.source is AppointmentSource.WALK_IN or not patient.may_receive_whatsapp:
+    if appointment.source is AppointmentSource.WALK_IN or not can_remind(tenant, patient):
         return []
     times = appointment_reminder_times(
         starts_at=visit_start(appointment, session),

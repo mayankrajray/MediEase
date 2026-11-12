@@ -172,7 +172,7 @@ class SqlAlchemyReminderRepository(TenantScopedRepository[ReminderRow]):
         query = self._scoped_select().where(
             ReminderRow.source_id == chain_id,
             ReminderRow.follow_up_date == follow_up_date,
-            ReminderRow.status == ReminderStatus.SENT.value,
+            ReminderRow.status.in_([ReminderStatus.SENT.value, ReminderStatus.SENT_IN_APP.value]),
         )
         return self._session.scalars(query.limit(1)).first() is not None
 
