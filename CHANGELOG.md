@@ -7,6 +7,15 @@ first production release.
 ## [Unreleased]
 
 ### Added
+- M7e (#73): the installable app and pop-up alerts (web push) for patients and staff (spec
+  web-push; ADR-0025). MediEase installs from the browser and shows an offline page; staff and
+  patients turn alerts on per device (Settings → Notifications, portal Account) and per kind.
+  Every notice also goes by push with fixed words per kind, never a name, time or medicine, held
+  until 08:00 at night; expired devices are disabled. Appointment and follow-up reminders now
+  reach app users without WhatsApp (status `SENT_IN_APP`). Migrations `0043`, `0044`; contracts
+  0.52.0, 0.53.0; settings `VAPID_*`, `PUSH_PROVIDER`, `PUBLIC_READS_PER_MINUTE`,
+  `TRUSTED_PROXY_SECRET`; `make vapid-keys`; dependency `pywebpush`. Android and iPhone checks:
+  see the design §8.
 - M7b (#65): verified prescription uploads (FR-UPL-01..05, NFR-20; spec prescription-uploads;
   ADR-0023). On `/portal/assistant` a patient account uploads a photo or PDF of a MediEase
   prescription, or types its verification code. The file is held in quarantine, scanned by

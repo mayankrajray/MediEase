@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-NTF-01..06 (push channel), NFR-02, NFR-08, NFR-19 |
 | Milestone / phases | M7e / E1–E5 (design `docs/milestones/M7e-pwa-push.md`) |
-| Status | E1–E4 Implemented (12–13 Nov 2026); E5 Approved |
+| Status | E1–E5 Implemented (12–13 Nov 2026); the real-device checks are pending (§9 AC20, AC21) |
 | Owner | Developer |
 | Last updated | 2026-11-12 |
 
@@ -133,6 +133,31 @@ are built.
   notice never arrives between 21:00 and 08:00. A record linked after the booking gets reminders
   only for bookings made after the link.
 
+### E5 — Settings and the alert on the screen
+- **R50** The portal's Account and staff Settings → Notifications each have a *Pop-up alerts on
+  this device* card: *On* or *Off* for this browser, with *Turn on* / *Turn off*. It is on only
+  when this browser holds a push subscription and the person's device list still has it active.
+- **R51** The browser's permission prompt appears only after *Turn on* is pressed, never on its
+  own. *Turn on* subscribes with the server's VAPID public key (a subscription made under another
+  key is replaced) and adds the device (R11); *Turn off* removes it (R17) and unsubscribes.
+- **R52** Where an alert cannot work, the card says why in words and offers no switch: the
+  browser blocks notifications (how to allow them), the browser has no push or the page is not
+  HTTPS, an iPhone or iPad outside the installed app ("add MediEase to your Home Screen first"),
+  or the server has no key ("not available yet"). Ten devices already is said plainly (R19).
+- **R53** Beside each kind's *In the app* switch is a *Pop-up alert* switch (the `PUSH` channel,
+  R20), for patients (English or Hindi) and staff. Each saves at once.
+- **R54** One browser holds one subscription for the whole site, so turning alerts on here for
+  one person moves the device from whoever had it (R14); the card then shows *Off* for the
+  other. The device ID is remembered in the browser only to show the state.
+- **R55** The service worker shows a push with the words the server sent (R32), the app icon,
+  and the kind as its tag (a newer one replaces the older and still alerts). A message that is not
+  the expected JSON shows a plain "MediEase · Open MediEase to see it."
+- **R56** Tapping an alert opens the notice's path on this site only: an open MediEase window is
+  sent there and focused, else a new one opens. Any other origin, a protocol-relative URL or a
+  backslash opens `/` instead.
+- **R57** A signed-out person who taps an alert signs in first and lands on its page (the
+  proxy's `?next=`, which the sign-in pages accept only inside their own area).
+
 ## 5. API surface
 | Method | Path | Request | Success | Errors |
 |---|---|---|---|---|
@@ -144,7 +169,10 @@ are built.
 
 ## 6. UI notes
 E1: the install card and the iPhone steps on staff Today and the portal's Home and Account; the
-update banner; the offline page. The device switches arrive in E5.
+update banner; the offline page. E5: the *Pop-up alerts on this device* card (portal Account, staff
+Settings → Notifications) and a *Pop-up alert* switch per kind. "Pop-up alert" is the word people
+see; "push" stays in code and docs. The portal card loads only when Account renders, so pages
+that link to Account stay within 200 KB.
 
 ## 7. Events and side effects
 | Trigger | Audit action | Job enqueued | Analytics event |
@@ -196,6 +224,16 @@ update banner; the offline page. The device switches arrive in E5.
 - **AC16 (R44)** — Given the appointment was cancelled, then nobody is told.
 - **AC17 (R45)** — Given a Hindi account and a follow-up added by staff, then a Hindi
   `follow_up.due` notice and `SENT_IN_APP`.
+- **AC18 (R50, R51, R53)** — Given a signed-in patient on a phone and a staff member, when each
+  presses *Turn on* (push manager stubbed), then the API lists one active device, *Turn off* removes
+  it, and a kind's *Pop-up alert* switch saves the `PUSH` channel (journey `push-settings`).
+- **AC19 (R55, R56)** — Given the real `public/sw.js`, then a push shows only the sent words and a
+  tap opens only a same-site path (`sw.test.ts`).
+- **AC20 (all)** — Given Android Chrome through a tunnel, in the browser and installed, then a
+  staff and a patient alert arrive with the generic words and open their pages (RUNBOOK §36).
+  *Pending: the developer's phone.*
+- **AC21 (R52)** — Given an iPhone (iOS 16.4+) with the app on the Home Screen, then the same.
+  *Pending: no iPhone available (developer, 13 Nov 2026).*
 
 ## 10. Observability
 Logs `push.device_added` (owner kind, device ID, moved), `push.device_refreshed`,

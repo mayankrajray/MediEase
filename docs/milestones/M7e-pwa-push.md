@@ -253,3 +253,42 @@ both switches off, a Hindi follow-up allowed and told, still refused without eit
 covers the two kinds; web `labels.test.ts` (1). Journeys `patient-notifications`,
 `reminders-follow-ups`, `notifications`, `bookings-to-move`, `booking-answers`, `portal-screens`
 10/10 on the CI-like stack.
+
+### E5 — Settings, the alert on the screen, docs (13 Nov 2026)
+
+Built as designed; rules in spec `web-push.md` R50–R57. The real-device checks are pending
+(AC20 Android with the developer; AC21 iPhone later, none available).
+
+| Part | Where |
+|---|---|
+| Browser glue | `features/pwa/push.ts`: support (no push, not HTTPS, iPhone outside the installed app), permission, subscribe with the VAPID key (replacing a subscription made under another key), unsubscribe, this device's ID in `localStorage` (`me_push_device`, with its owner) |
+| The switch | `features/pwa/DevicePush.tsx`, one component for both sides behind a small `PushApi` |
+| Portal | `features/portal/PortalDevicePush.tsx` (loaded with `next/dynamic` when Account renders) and a *Pop-up alert* switch per kind in `PortalAccountPage.tsx` |
+| Staff | Settings → Notifications: the device card and a *Pop-up alerts* fieldset beside *In the app* (`NotificationPreferences.tsx`; the E2 `IN_APP` filter is gone) |
+| Words | `lib/i18n/push.ts` (EN/HI), apart from the install prompts' words; `patient-notifications.ts` gains `push` |
+| Service worker | `public/sw.js`: `push` (the server's words, icon, tag with `renotify`) and `notificationclick` (same-site path only; reuse an open window, else open one) |
+| Keys | `make vapid-keys` (`delivery/cli/vapid_keys.py`) |
+
+Choices made while building, within the approved design:
+
+- **"Pop-up alert"** is the word on screen (English and Hindi), not "push".
+- **The device card is loaded on demand.** `/portal` prefetches Account's code, and the card's
+  code and Hindi words put `/portal` 4 bytes over the 200 KB budget; with `next/dynamic` it is
+  202,252 bytes and Account 203,316.
+- **No `pushsubscriptionchange` handler.** Renewing a subscription from the service worker would
+  need the session's CSRF token, which a worker cannot read. If a browser replaces it, the push
+  service answers 410, the device is disabled (R34) and the card shows *Off* until the person
+  turns it on again.
+- **The journey stubs the push manager and the config** (Q4 A): CI has no VAPID keys and a
+  container cannot reach the push services; the device it stores is real.
+- **`sw.js` keeps cache `v1`**: the caching rules did not change, so the update replaces the
+  worker without throwing away the cached assets.
+
+**Tests.** `sw.test.ts` (6 new: words, fallback, other origins, new window, reused window,
+unsteerable window); `DevicePush.test.tsx` (8: on and off, permission only after the press,
+expired or moved device, blocked, refused prompt, iPhone, no push or no key, ten devices); the
+portal and staff screens (1 each); `test_vapid_keys.py`. Journey `push-settings` (2: a patient
+on a phone and a staff member), with `notifications` scoped to *In the app*. Page weights:
+`/portal` 202,252, `/portal/account` 203,316, `/portal/appointments` 199,472 bytes.
+
+**Real-device checks.** *(To fill in from RUNBOOK §36 when done.)*
