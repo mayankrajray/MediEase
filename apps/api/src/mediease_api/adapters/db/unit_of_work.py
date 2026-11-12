@@ -60,6 +60,7 @@ from mediease_api.adapters.db.portal_links import (
     SqlAlchemyPortalLookup,
     SqlAlchemyReminderPrefRepository,
 )
+from mediease_api.adapters.db.push import SqlAlchemyPushSubscriptionRepository
 from mediease_api.adapters.db.reminders import SqlAlchemyNoShowSweep, SqlAlchemyReminderRepository
 from mediease_api.adapters.db.repositories import (
     SqlAlchemyAppointmentHistoryRepository,
@@ -317,6 +318,8 @@ class _OpenUnit:
         self.subscriptions = SqlAlchemySubscriptionRepository(session)
         # M7b: prescription uploads (account-owned) and a prescription's clinic (reviewed read).
         self.prescription_uploads = SqlAlchemyPrescriptionUploadRepository(session)
+        # M7e: web push devices, owned by an account or a user.
+        self.push_subscriptions = SqlAlchemyPushSubscriptionRepository(session)
         self.prescription_lookup = SqlAlchemyPrescriptionLookup(session)
 
 
@@ -454,6 +457,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def prescription_uploads(self) -> SqlAlchemyPrescriptionUploadRepository:
         return self._require_open().prescription_uploads
+
+    @property
+    def push_subscriptions(self) -> SqlAlchemyPushSubscriptionRepository:
+        return self._require_open().push_subscriptions
 
     @property
     def prescription_lookup(self) -> SqlAlchemyPrescriptionLookup:
