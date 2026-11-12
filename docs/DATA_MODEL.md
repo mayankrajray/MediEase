@@ -48,6 +48,7 @@ Alembic revisions in `apps/api/migrations/versions/` (how to add one: `apps/api/
 | `0040` | `visit_attachments` (reports on visits) | M6d-P6 |
 | `0041` | `clinic_subscriptions` (plans and trials); every existing clinic on `PLUS` with no trial | M6d-P7 |
 | `0042` | `prescription_uploads`; `ck_jobs_system_kind` gains `process_prescription_upload` and `purge_prescription_uploads` | M7b-P6 |
+| `0043` | `push_subscriptions`; `PUSH` in the channel CHECKs of `notification_preferences` and `patient_notification_preferences` | M7e-E2 |
 
 Constraint names follow one convention (`adapters/db/models/base.py`): `pk_<table>`,
 `fk_<table>_<column>_<referred table>`, `uq_<table>_<columns>`, `ck_<table>_<name>`,
@@ -1190,3 +1191,31 @@ Indexes: `(account_id, created_at DESC)`; unfinished uploads by `created_at` (pa
 `created_at` for retention. The sweep (`purge_prescription_uploads`, every 10 minutes) rejects
 uploads still checking after 1 hour (`UPL_ABANDONED`) and checks pending for 24 hours
 (`UPL_EXPIRED`), deleting any file, and deletes rows 30 days after creation.
+
+## M7e — Web push (migration `0043`, M7e-E2)
+
+Spec `web-push.md` §3, ADR-0025. **Platform data owned by a person:** each row belongs to exactly
+one patient account or one staff user, never a clinic, so the table has no `clinic_id` and no
+clinic read reaches it. The endpoint and keys are stored only encrypted (Fernet, the
+`MESSAGING_PHONE_KEYS` keys and rotation). The API never returns them, and logs and audit rows
+never hold them.
+
+### `push_subscriptions`
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid pk | UUIDv7 |
+| account_id | uuid null → patient_accounts.id, on delete cascade | Set for a patient's device |
+| user_id | uuid null → users.id, on delete cascade | Set for a staff member's device; `ck_push_subscriptions_one_owner`: exactly one of the two |
+| endpoint_digest | text not null, unique | SHA-256 hex of the endpoint (`ck_..._endpoint_digest_hex`); one browser is one row |
+| endpoint_encrypted | text not null | The push service URL |
+| p256dh_encrypted, auth_encrypted | text not null | The browser's public key and auth secret |
+| label | text not null, 1–60 | Fixed vocabulary from the user agent ("Chrome on Android"); never the agent itself |
+| last_success_at | timestamptz null | Set by delivery (E3) |
+| disabled_at, disabled_reason | timestamptz null, text null (`EXPIRED`) | Both or neither (`ck_..._disabled_has_reason`); set when the push service says the browser unsubscribed |
+| created_at, updated_at | timestamptz not null | |
+
+Indexes: `ix_push_subscriptions_account_id`, `ix_push_subscriptions_user_id`.
+
+`notification_preferences.channel` and `patient_notification_preferences.channel` also allow
+`PUSH`. A missing row means on.

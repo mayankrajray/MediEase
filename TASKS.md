@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M7e — Installable app (PWA) and web push notifications** (issue #73, branch `m7e/73-pwa-push` on `main` after M7d merged in PR #72 on 12 Nov 2026, PR #74). Next: M9 (deployment on Vercel, Supabase and Oracle Cloud) |
-| Active phase | **M7e-E2** (push subscriptions); E1 done 12 Nov 2026; design approved 12 Nov 2026 (`docs/milestones/M7e-pwa-push.md` §7, all as recommended) |
+| Active phase | **M7e-E3** (delivery); E1, A11 and E2 done 12 Nov 2026; design approved 12 Nov 2026 (`docs/milestones/M7e-pwa-push.md` §7, all as recommended) |
 | Design notes | `docs/milestones/M7e-pwa-push.md`; M7d (done) in `docs/milestones/M7d-discovery-booking.md`; M8 designed in `docs/milestones/M8-multi-clinic-whatsapp.md` (skipped for now by the developer) |
 | Approved plan | `NEXT_STEPS_PLAN.md` §0 (M7e phases); M7d, M7c and M7 below it as history |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -302,7 +302,7 @@ PR #72, 12 Nov 2026), PR #74, one PR. Nothing is built yet.
 |---|---|---|
 | M7e-E1 | Installable app: manifest, icons, service worker, offline page, install prompt | ✅ 12 Nov 2026: 24 unit tests (cache rules on the real `sw.js`, manifest and icons, prompts, gate, nonce script, proxy); `pwa` journey 2/2; portal pages 194–197 KB, `/` and `/find` unchanged; design §8 |
 | M7e-A11 | Client addresses (moved up from M9 by the developer, 12 Nov 2026) and the public read limit as a setting, after CI's shared-address 429 | ✅ 12 Nov 2026: API 81 and web 124 tests; checked on the real stack (own budget per edge address, browser-sent address ignored); design §8 |
-| M7e-E2 | Push subscriptions per device (migration `0043`), API and contract | ☐ |
+| M7e-E2 | Push subscriptions per device (migration `0043`), API and contract | ✅ 12 Nov 2026: migration `0043`, ADR-0025, spec `web-push.md` R10–R21, contract 0.52.0; 37 domain, 13 HTTP, 4 contract and 1 migration test; tenancy and policy guards extended |
 | M7e-E3 | Delivery: `send_push` jobs, `WebPushPort`, generic text, expiry and retries | ☐ |
 | M7e-E4 | Appointment and follow-up reminders for app users | ☐ |
 | M7e-E5 | Settings, offline, docs, full suites and real-device checks | ☐ |
