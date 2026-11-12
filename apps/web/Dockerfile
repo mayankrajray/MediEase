@@ -53,6 +53,9 @@ WORKDIR /app
 # Files stay owned by root, so the unprivileged runtime user cannot modify them.
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+# The standalone server does not include public/; without this, /brand/ (the logo the emails link
+# to) and the installable app's files (M7e-E1: sw.js, offline.html, icons) answer 404.
+COPY --from=build /app/public ./public
 
 # The node image's built-in unprivileged user (uid 1000).
 USER node
