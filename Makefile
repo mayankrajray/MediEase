@@ -28,7 +28,7 @@ CORE_COVERAGE := --include='*/mediease_api/domain/*,*/mediease_api/application/*
 
 .PHONY: help env-check up down ps logs psql migrate seed config-check smoke install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
-	typecheck-web dev-web contract contract-check audit e2e worker dose-data
+	typecheck-web dev-web contract contract-check audit e2e worker dose-data vapid-keys
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | \
@@ -59,6 +59,10 @@ config-check: env-check ## Show which real services .env selects, no secrets (LI
 dose-data: env-check ## A patient's dose records on request: ARGS="export <id> --out /exports/<id>.json" or "delete <id> --confirm"
 	@mkdir -p .exports && chmod 700 .exports
 	$(COMPOSE) run --rm --no-deps -v "$(CURDIR)/.exports:/exports" api python -m mediease_api.delivery.cli.dose_data $(ARGS)
+
+vapid-keys: env-check ## Print a new VAPID key pair for web push, to put in .env (nothing is stored; RUNBOOK §36)
+	@$(COMPOSE) build --quiet api
+	@$(COMPOSE) run --rm --no-deps -T api python -m mediease_api.delivery.cli.vapid_keys
 
 worker: env-check ## Run a job worker in the foreground (make up already runs one; a second is safe)
 	$(COMPOSE) run --rm --no-deps worker
