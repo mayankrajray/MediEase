@@ -1,4 +1,4 @@
-﻿# AGENTS.md — Operating Instructions for AI Coding Agents
+# AGENTS.md — Operating Instructions for AI Coding Agents
 
 Tool-agnostic instructions for any AI agent (Claude Code, Codex, Cursor, Copilot, Gemini) working in
 this repository. `CLAUDE.md` imports this file and adds the engineering principles. If the two ever
@@ -112,6 +112,7 @@ do not exist.
 | `make contract` / `make contract-check` | Regenerate web types from `contracts/openapi.yaml` / fail if the committed types are stale | now |
 | `make seed` | Load synthetic demo data: one clinic, owner, doctor, front desk, ops user (`APP_ENV=local` only; RUNBOOK §1) | now |
 | `make config-check` | Which real services `.env` selects, secrets shown only as set / not set; `LIVE=1` calls each once, `EMAIL_TO=` / `WHATSAPP_TO=` send one test (RUNBOOK §35) | now (M7c-P6) |
+| `make vapid-keys` | Print a new VAPID key pair for web push, to put in `.env` yourself; nothing is stored (RUNBOOK §36) | now (M7e-E5) |
 | `make worker` | Run a job worker in the foreground (`make up` already runs one; a second is safe, `SKIP LOCKED`). `make up` also runs `upload-worker` (`WORKER_QUEUE=uploads`) beside `clamav` (M7b) | now (M5-P1) |
 
 Verification before declaring a phase done: `make lint typecheck test` must pass. API tests include
