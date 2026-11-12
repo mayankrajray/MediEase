@@ -92,3 +92,36 @@ no `pywebpush`, reminders gated on `may_receive_whatsapp`). The four points:
 
 Also proposed: ADR-0025 "Web push as a notification channel" (VAPID, payload rules, subscription
 ownership, failure handling), written at E2.
+
+## 8. As built
+
+### E1 — Installable app (12 Nov 2026)
+
+| Part | Where | Notes |
+|---|---|---|
+| Manifest | `src/lib/pwa/manifest.ts`, served by `src/app/manifest.webmanifest/route.ts` | Start URL and scope `/`, `standalone`, brand theme `#147d72`, canvas background. A route, not `app/manifest.ts`, so it is linked only where the layouts ask (below) |
+| Icons | `public/icons/icon-192.png`, `icon-512.png`, `maskable-512.png` | Rendered once from `src/app/icon.svg` on white. The maskable one keeps the emblem in the 80% safe zone |
+| Service worker | `public/sw.js` | Cache-first for `/_next/static/`, `/brand/`, `/icons/`. Navigations go to the network, with `/offline.html` when it fails. The API and other origins are left alone. It never stores a page or an API answer. Old `mediease-*` caches are removed on activate. A new version waits for `SKIP_WAITING` |
+| Offline page | `public/offline.html` | Plain HTML, English and Hindi, no script; "Nothing was sent or changed", 112 for emergencies |
+| Registration | `public/sw-register.js` (1.5 KB) via `features/pwa/RegisterServiceWorker.tsx` | An async `<script>` with the response's CSP nonce, scope `/`. It passes install and update moments to the page as `mediease:*` events |
+| Prompts | `features/pwa/AppPrompts.tsx`, `AppPromptsGate.tsx`, `signals.ts`, `lib/i18n/pwa.ts` | Install once per device (remembered in `localStorage` `me_app_prompt`), iPhone Add to Home Screen steps, and "A new version is ready · Update". The gate loads the prompts only when there is something to offer. Shown on staff Today and on the portal's Home and Account |
+| Public paths | `src/proxy.ts` | `/manifest.webmanifest`, `/sw.js`, `/sw-register.js`, `/offline.html`, `/icons/` |
+| Image | `apps/web/Dockerfile` | `public/` is now copied into the runtime image. It was missing, so `/brand/` (the logo emails link to) answered 404 in the container |
+
+**Q2 in practice (fallback B).** The manifest link, the iPhone tags and the registration script
+are added by the staff, ops, staff sign-in and portal layouts only. They are left out of the
+landing page, `/find`, clinic and doctor pages and the token pages (`/p`, `/q`, `/r`). `/` was
+at 204.7 of 204.8 KB, and next/script plus the prompts in the shells added 6 KB to every portal
+page. One registration covers the whole site (scope `/`), so a page that does not register the
+worker is still controlled by it and gets the offline page.
+
+**First-load weights after E1 (360 px, budget 204,800 bytes):** `/` 204,660 and `/find` 169,360
+(unchanged); `/c/sample-clinic` 193,726; `/portal` 201,942; `/portal/appointments` 199,296;
+`/portal/account` 198,506; `/portal/request` 203,113 (was 200,452).
+
+**Tests.** Unit: `sw.test.ts` runs the real `public/sw.js` in a sandbox (9 cases);
+`lib/pwa/manifest.test.ts` (4); `AppPrompts.test.tsx` (7); `AppPromptsGate.test.tsx` (3);
+`RegisterServiceWorker.test.tsx` (2); `proxy.test.ts` (1 new). Journey `e2e/pwa.spec.ts` (2). It
+runs on full Chromium (`channel: "chromium"`) with `--unsafely-treat-insecure-origin-as-secure`
+for the compose origin, because service workers need a secure context and the default headless
+shell ignores the flag.
