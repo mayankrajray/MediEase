@@ -173,7 +173,8 @@ describe("My medicines (M6b-P3, spec R28-R44)", () => {
     mockApi({ ...me({ language: "hi" }), "GET /api/v1/portal/medicine-plan": () => json(200, plan({ language: "hi" })) });
     await renderPortal(<PortalMedicines />);
     expect(await screen.findByRole("heading", { name: "मेरी दवाइयाँ" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "अपने क्लिनिक से संपर्क करें" })).toBeInTheDocument();
+    // The heading is the shell's (from the account); the link is the plan's, which loads after it.
+    expect(await screen.findByRole("link", { name: "अपने क्लिनिक से संपर्क करें" })).toBeInTheDocument();
   });
 
   it("R29: the screen never reads a frequency; the API's plan is all it shows", () => {
