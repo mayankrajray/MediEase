@@ -88,6 +88,8 @@ where = ["src"]
 "mediease_api.adapters.pdf" = ["assets/*"]
 # The message template catalogue (M5-P2) and the price table (M5-P5).
 "mediease_api.adapters.messaging" = ["templates.yaml", "prices.yaml"]
+# M9-P1 (spec clinic-import): the bundled, invented demo clinic for `import_clinic --demo`.
+"mediease_api.delivery.cli" = ["demo_clinic/*.csv"]
 
 # --- Ruff: lint + format -----------------------------------------------------
 [tool.ruff]

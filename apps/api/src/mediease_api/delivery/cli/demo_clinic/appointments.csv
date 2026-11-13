@@ -1,0 +1,11 @@
+patient_ref,doctor_email,date,time,reason
+P04,mentor.doctor@demo-clinic.example,today+1,10:15,Fever follow-up
+P07,mentor.doctor@demo-clinic.example,today+1,10:40,Blood pressure review
+P13,doctor.two@demo-clinic.example,today+1,11:20,Ear review
+P01,mentor.doctor@demo-clinic.example,today+2,11:30,Migraine review
+P10,mentor.doctor@demo-clinic.example,today+2,17:15,Knee pain review
+P18,mentor.doctor@demo-clinic.example,today+3,10:30,Cough review
+P16,doctor.two@demo-clinic.example,today+3,12:00,Ankle review
+P09,mentor.doctor@demo-clinic.example,today+4,11:00,Blood pressure review
+P19,doctor.two@demo-clinic.example,today+5,11:45,Throat review
+P20,mentor.doctor@demo-clinic.example,today+6,10:20,ECG report
