@@ -84,3 +84,7 @@ class PyWebPushAdapter:
             raise PushFailed(PushFailure.REFUSED) from None
         except requests.RequestException:
             raise PushFailed(PushFailure.UNAVAILABLE) from None
+        except (ValueError, TypeError):
+            # The browser's keys cannot be encrypted for (not a P-256 point, or not base64url):
+            # nothing was sent, and no retry would change it.
+            raise PushFailed(PushFailure.REFUSED) from None

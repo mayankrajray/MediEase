@@ -14,6 +14,7 @@ from mediease_api.domain.push.subscription import MAX_DEVICES, SUBSCRIBES_PER_HO
 from tests.conftest import UowFactory, World
 from tests.integration.test_portal_http import portal_csrf
 from tests.portal_helpers import portal_client, staff_csrf
+from tests.unit.domain.test_push import point
 
 PORTAL_DEVICES = "/api/v1/portal/push-subscriptions"
 STAFF_DEVICES = "/api/v1/me/push-subscriptions"
@@ -30,7 +31,7 @@ def subscription(n: int = 1, *, auth_byte: int = 0) -> dict[str, Any]:
         "endpoint": f"https://fcm.googleapis.com/fcm/send/device-{n}:APA91b-test",
         "expirationTime": None,
         "keys": {
-            "p256dh": _b64(b"\x04" + bytes([n % 256]) * 64),
+            "p256dh": _b64(point(n)),
             "auth": _b64(bytes([auth_byte]) * 16),
         },
     }

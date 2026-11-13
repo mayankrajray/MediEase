@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 
 import pytest
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from mediease_api.domain.push.subscription import (
     LABEL_MAX,
@@ -23,7 +25,13 @@ def b64(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
-P256DH = b64(b"\x04" + bytes(range(64)))
+def point(seed: int) -> bytes:
+    """A real uncompressed P-256 public key, the same for the same seed."""
+    key = ec.derive_private_key(seed, ec.SECP256R1())
+    return key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+
+
+P256DH = b64(point(7))
 AUTH = b64(bytes(16))
 
 
@@ -81,6 +89,9 @@ def test_r13_keys_are_a_p256_point_and_a_16_byte_secret() -> None:
     [
         (b64(b"\x02" + bytes(64)), AUTH, "keys.p256dh"),  # compressed or not a point
         (b64(b"\x04" + bytes(32)), AUTH, "keys.p256dh"),  # too short
+        # M7e-E5: the right size and prefix, but not a point on the curve (found on a real device
+        # test: such a key fails every send).
+        (b64(b"\x04" + bytes(range(64))), AUTH, "keys.p256dh"),
         ("not base64!", AUTH, "keys.p256dh"),
         (P256DH, b64(bytes(15)), "keys.auth"),
         (P256DH, "a/b+c", "keys.auth"),  # standard base64, not base64url
