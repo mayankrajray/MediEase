@@ -149,3 +149,21 @@ C5 against the local stack. Full suites and CI as usual.
 - **Q4** `mediease.duckdns.org`.
 - **Q5** Brevo sends from `mediease.official@gmail.com` until the domain is bought in December.
 - **Q6** After 12 Feb 2027 the developer buys service until 31 Mar 2027.
+
+## 9. Deployment record (developer, 13–14 Nov 2026)
+
+| Check | Result |
+|---|---|
+| VM | e2-standard-2, Ubuntu 24.04 x86_64, 40 GB balanced disk, asia-south1-a, static IPv4, dedicated service account (scope `cloud-platform`; roles only on the backup bucket) |
+| Software | Docker Engine, Compose v5.7.1, make, unattended-upgrades, 2 GB swap |
+| Code | `m9/75-deploy-demo` at `efe7bbf` (the first `make up` stopped at `migrate`: `PUBLIC_BASE_URL` was never passed to the containers; fixed, DEBUG_JOURNAL 2026-11-13) |
+| `make up` | Every service healthy, migration `0044`, certificate from Let's Encrypt for `mediease.duckdns.org` (valid to 11 Feb 2027, renewed by Caddy) |
+| `make config-check LIVE=1` | Brevo SMTP ok and a test email delivered; Google ok; Groq ok; WhatsApp skipped (`disabled`); push keys set |
+| `make import-clinic DEMO=1` | Kesar Bagh Family Clinic: 20 patients, 26 visits, 24 prescriptions, 26 bills, 23 payments, 10 upcoming appointments (12 reminders), 3 follow-up reminders, 6 logins |
+| Backups | Timer active; first backup in the bucket; `restore-check.sh` passed (10 tables equal, schema `0044`) |
+| `make smoke-live` | Passed: certificate, redirect, health, HSTS, CSP, no Server header, sign-in protection, 413, public clinic page, ports 22/3000/3310/5432/8000 closed from outside |
+| Browser | Desk login (Today, Patients, 4 pending follow-ups, Bills); patient login (appointment, prescriptions); Google sign-in after adding the redirect URI and a test user |
+
+Open: the mentor's Gmail as a Google test user; the first scheduled backup (03:00 IST) to be
+confirmed in the journal; the console-side security items of SECURITY_AND_COMPLIANCE §3
+"Production host" to be confirmed (firewall rules, bucket access, OS Login).
