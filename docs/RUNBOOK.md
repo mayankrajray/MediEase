@@ -976,7 +976,9 @@ stack changes: the browser calls the same origin, which proxies `/api` to the AP
 2. Start a quick tunnel on the same machine: `cloudflared tunnel --url http://localhost:3000`. It
    prints an address like `https://<words>.trycloudflare.com`; open it on the phone in Chrome.
    Google sign-in will not work through it (its redirect goes to localhost): use the password
-   sign-in, e.g. the seeded `doctor@sample-clinic.example` with the demo password.
+   sign-in, e.g. the seeded `doctor@sample-clinic.example` with the demo password. Keep the same
+   tunnel for the whole test: a new tunnel is a new address, so alerts must be turned on again,
+   and a phone subscribed on the old address still gets alerts whose tap opens the offline page.
 3. **Staff alert.** On the phone, as the doctor: Settings → Notifications → *Turn on*, allow
    notifications. On the computer, as `desk@sample-clinic.example`: book that doctor for a
    patient. Between 08:00 and 21:00 IST the phone shows "New appointment · An appointment was
