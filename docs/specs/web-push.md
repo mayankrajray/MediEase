@@ -52,8 +52,8 @@ last successful send, and `disabled_at` with a reason (`EXPIRED`) set by deliver
   `updates.push.services.mozilla.com`, `web.push.apple.com`, `*.push.apple.com`,
   `*.notify.windows.com`), without credentials, at most 2,048 characters. Anything else is 422
   `REQ_VALIDATION_FAILED` naming `endpoint`; the value is never echoed.
-- **R13** `keys.p256dh` must be base64url of a 65-byte uncompressed P-256 point and `keys.auth` of
-  16 bytes, else 422 naming the key.
+- **R13** `keys.p256dh` must be base64url of a 65-byte uncompressed P-256 point (from E5: one that
+  is on the curve) and `keys.auth` of 16 bytes, else 422 naming the key.
 - **R14** One browser is one device. The same owner subscribing it again gets 200, the same ID,
   refreshed keys and the device active again. Another person subscribing it gets 201 and takes
   it over; the previous owner no longer lists it.
@@ -143,7 +143,9 @@ are built.
 - **R52** Where an alert cannot work, the card says why in words and offers no switch: the
   browser blocks notifications (how to allow them), the browser has no push or the page is not
   HTTPS, an iPhone or iPad outside the installed app ("add MediEase to your Home Screen first"),
-  or the server has no key ("not available yet"). Ten devices already is said plainly (R19).
+  or the server has no key ("not available yet"). Ten devices already is said plainly (R19), and
+  a browser that refuses to subscribe for another reason says what to check (notifications allowed
+  for the site and the installed app, then reopen).
 - **R53** Beside each kind's *In the app* switch is a *Pop-up alert* switch (the `PUSH` channel,
   R20), for patients (English or Hindi) and staff. Each saves at once.
 - **R54** One browser holds one subscription for the whole site, so turning alerts on here for
@@ -231,7 +233,8 @@ that link to Account stay within 200 KB.
   tap opens only a same-site path (`sw.test.ts`).
 - **AC20 (all)** — Given Android Chrome through a tunnel, in the browser and installed, then a
   staff and a patient alert arrive with the generic words and open their pages (RUNBOOK §36).
-  *Pending: the developer's phone.*
+  *Staff alerts passed on two Android phones, 13 Nov 2026 (design §8); the patient alert is still
+  to try on a device.*
 - **AC21 (R52)** — Given an iPhone (iOS 16.4+) with the app on the Home Screen, then the same.
   *Pending: no iPhone available (developer, 13 Nov 2026).*
 

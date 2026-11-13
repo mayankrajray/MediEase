@@ -291,4 +291,28 @@ portal and staff screens (1 each); `test_vapid_keys.py`. Journey `push-settings`
 on a phone and a staff member), with `notifications` scoped to *In the app*. Page weights:
 `/portal` 202,252, `/portal/account` 203,316, `/portal/appointments` 199,472 bytes.
 
-**Real-device checks.** *(To fill in from RUNBOOK §36 when done.)*
+**Real-device check, Android (developer, 13 Nov 2026).** Stack with `PUSH_PROVIDER=webpush` and a
+`make vapid-keys` pair, reached through a `cloudflared` quick tunnel on two Android phones.
+
+| Check | Seen |
+|---|---|
+| Doctor alert in Chrome (desk booked the doctor on the PC) | Arrived in 2–3 s: "New appointment · An appointment was booked. Open MediEase to see it.", MediEase icon, no patient detail; Chrome added its own *Unsubscribe* button. Tap opened that day's queue with the booking |
+| Desk alert (owner removed the doctor's leave) | "Bookings to move · Some bookings need a new time…"; tap opened Bookings to move with the booking |
+| Installed app, app swiped away | Both alerts arrived, in Chrome and in the app; taps opened the right pages |
+| Turn off | No alert for the next booking |
+| Offline page | Shown |
+| Patient alert | Not tried yet |
+
+Found and fixed:
+
+1. **Devices whose browser key is not a point on the curve** (left in the local database by
+   an earlier journey run with made-up keys) made every send raise `ValueError`, retried as
+   `JOB_HANDLER_ERROR`. Subscribing now checks the key is on P-256 (R13), the adapter maps any
+   key it cannot encrypt for to `PSH_REFUSED` (never retried), and the journey stubs real keys.
+2. **"Something went wrong" when turning alerts on in the installed app on the first phone.** The
+   API saw no failed call, so the browser refused to subscribe. The card now says what to check
+   instead (R52); the browser's reason goes to the console.
+3. **A tap on the first phone opened the offline page.** Most likely that phone's subscription was
+   made on an earlier tunnel address (each quick tunnel is a new site): the push still arrives,
+   but its page is gone, so the service worker shows the offline page. To confirm with the
+   developer; on a fixed HTTPS address it cannot happen.
