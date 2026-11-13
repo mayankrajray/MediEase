@@ -164,6 +164,10 @@ C5 against the local stack. Full suites and CI as usual.
 | `make smoke-live` | Passed: certificate, redirect, health, HSTS, CSP, no Server header, sign-in protection, 413, public clinic page, ports 22/3000/3310/5432/8000 closed from outside |
 | Browser | Desk login (Today, Patients, 4 pending follow-ups, Bills); patient login (appointment, prescriptions); Google sign-in after adding the redirect URI and a test user |
 
+Security review in Cloud Shell (14 Nov 2026): SSH only from the IAP range, default SSH/RDP rules
+gone, OS Login on and project SSH keys blocked; the bucket private (uniform access, public access
+prevention, 30-day deletion) with the VM account limited to object create and view; no
+service-account keys. Google sign-in with a new, unlinked account shows no records, as intended.
+
 Open: the mentor's Gmail as a Google test user; the first scheduled backup (03:00 IST) to be
-confirmed in the journal; the console-side security items of SECURITY_AND_COMPLIANCE §3
-"Production host" to be confirmed (firewall rules, bucket access, OS Login).
+confirmed in the journal.
