@@ -26,7 +26,7 @@ export TEST_DATABASE_URL
 # in pyproject.toml. CI runs the same command (.github/workflows/ci.yml).
 CORE_COVERAGE := --include='*/mediease_api/domain/*,*/mediease_api/application/*' --fail-under=80
 
-.PHONY: help env-check up down ps logs psql migrate seed import-clinic config-check smoke install-api install-web api-venv-check \
+.PHONY: help env-check up down ps logs psql migrate seed import-clinic config-check smoke smoke-live install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
 	typecheck-web dev-web contract contract-check audit e2e worker dose-data vapid-keys
 
@@ -42,6 +42,10 @@ up: env-check ## Build images and start the stack: db -> migrate -> api -> web
 
 smoke: ## Check the running stack end to end, incl. least privilege (make up first)
 	API_PORT=$(or $(API_PORT),8000) WEB_PORT=$(or $(WEB_PORT),3000) bash scripts/smoke.sh
+
+smoke-live: ## Check a deployed site from outside: URL=https://host [SLUG=clinic-slug] (RUNBOOK §38)
+	@test -n "$(URL)" || { echo "usage: make smoke-live URL=https://mediease.duckdns.org [SLUG=...]"; exit 2; }
+	bash scripts/smoke-live.sh "$(URL)" "$(SLUG)"
 
 down: ## Stop the local stack (data volume is kept)
 	$(COMPOSE) down
