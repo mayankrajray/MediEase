@@ -26,7 +26,8 @@ production-shaped stack except the ports the dev stack holds) and C7 (RUNBOOK §
 built. 14 Nov 2026: deployed by the developer on the VM (RUNBOOK §38) at `efe7bbf`, after one
 fix (`PUBLIC_BASE_URL` was not passed to the containers); config-check, the demo import, the
 backup and restore drill, `make smoke-live` and the browser checks passed (design §9). Open: the
-mentor's Google test user, the first scheduled backup, the console-side security checks.
+mentor's Google test user and the first scheduled backup. 14 Nov 2026: the security review passed
+(design §9); M9-P1 done, PR #76 ready for review. M9-P2..P5 follow on a new issue and branch.
 
 ---
 

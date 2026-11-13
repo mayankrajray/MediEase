@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M9 — Pilot hardening and deployment** (issue #75, branch `m9/75-deploy-demo` on `main` after M7e merged in PR #74 on 13 Nov 2026) |
-| Active phase | **M9-P1 — Go live for the Phase 2 demo on Google Cloud** (one Compute Engine VM in Mumbai, Docker Compose, PostgreSQL in Docker, Caddy on `mediease.duckdns.org`) |
+| Active phase | **M9-P1 done 14 Nov 2026**: live at https://mediease.duckdns.org (one Compute Engine VM in Mumbai, Docker Compose, PostgreSQL in Docker, Caddy); PR #76 waits for the developer's merge. Then M9-P2..P5 on a new issue and branch (developer, 14 Nov 2026) |
 | Design notes | `docs/milestones/M9-deploy-demo.md`; M7e (done) in `docs/milestones/M7e-pwa-push.md`; M8 designed in `docs/milestones/M8-multi-clinic-whatsapp.md` (skipped for now by the developer) |
 | Approved plan | `NEXT_STEPS_PLAN.md` §0 (M9-P1); M7e, M7d, M7c and M7 below it as history |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -321,7 +321,7 @@ drill completed; security checklist signed; two pilot clinics onboarded. (Was M6
 
 | Phase | Scope | Status |
 |---|---|---|
-| M9-P1 | Go live for the Phase 2 demo: C1 messaging `disabled`, C2 `make import-clinic` (CSV, bundled demo), C3 `infra/gcp/` compose override and Caddy (TLS on `mediease.duckdns.org`), C4 backups and the restore drill, C5 `make smoke-live`, C7 docs; secrets in an owner-only `.env` on the VM | ▶ ACTIVE — code done 13 Nov 2026; live at https://mediease.duckdns.org since 14 Nov 2026 (design §9) |
+| M9-P1 | Go live for the Phase 2 demo: C1 messaging `disabled`, C2 `make import-clinic` (CSV, bundled demo), C3 `infra/gcp/` compose override and Caddy (TLS on `mediease.duckdns.org`), C4 backups and the restore drill, C5 `make smoke-live`, C7 docs; secrets in an owner-only `.env` on the VM | ✅ 14 Nov 2026: live at https://mediease.duckdns.org; deploy, backup and restore drill, smoke-live and the security review recorded (design §9); PR #76 |
 | M9-P2 | Backups, restore drill, uptime and error alerting | ☐ |
 | M9-P3 | Security review against `docs/SECURITY_AND_COMPLIANCE.md` checklist; dependency scan; audited export and `scripts/erase_patient.py` procedures | ☐ |
 | M9-P4 | Ops clinic-health view; usage metrics for the pilot scorecard | ☐ |
