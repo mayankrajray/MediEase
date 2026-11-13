@@ -23,7 +23,10 @@
 locally: Caddy healthy, only 80/443 published, HTTPS, HSTS, redirect), C4 (backup and restore
 drill, checked locally with a stand-in bucket), C5 (`make smoke-live`, passing against the local
 production-shaped stack except the ports the dev stack holds) and C7 (RUNBOOK §37–§39, ADR-0026)
-built. Next: the developer's VM steps (RUNBOOK §38) and the live check.
+built. 14 Nov 2026: deployed by the developer on the VM (RUNBOOK §38) at `efe7bbf`, after one
+fix (`PUBLIC_BASE_URL` was not passed to the containers); config-check, the demo import, the
+backup and restore drill, `make smoke-live` and the browser checks passed (design §9). Open: the
+mentor's Google test user, the first scheduled backup, the console-side security checks.
 
 ---
 
