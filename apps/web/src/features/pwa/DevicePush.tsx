@@ -28,6 +28,11 @@ export interface PushApi {
   readonly remove: (id: string) => Promise<void>;
 }
 
+/** The browser would not subscribe (`SubscribeResult` `failed`); shown in plain words. */
+class AlertSetupFailed extends Error {
+  override readonly name = "AlertSetupFailed";
+}
+
 type State = "checking" | "on" | "off" | "blocked" | "unsupported" | "ios-install" | "not-offered";
 
 /**
@@ -105,6 +110,7 @@ export function DevicePush({
       if (onSessionError(failure)) return;
       setError(failure);
       if (failure instanceof ApiError && failure.code === "PSH_TOO_MANY_DEVICES") setMessage(words.tooMany);
+      if (failure instanceof AlertSetupFailed) setMessage(words.failed);
     } finally {
       setBusy(false);
     }
@@ -115,6 +121,7 @@ export function DevicePush({
     const result = await subscribe(key);
     if (result.kind === "blocked") return "blocked";
     if (result.kind === "unavailable") return "unsupported";
+    if (result.kind === "failed") throw new AlertSetupFailed(result.reason);
     const device = await api.add(result.body);
     rememberDevice(owner, device.id);
     return "on";

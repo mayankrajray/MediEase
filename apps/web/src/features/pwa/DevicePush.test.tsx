@@ -170,6 +170,22 @@ describe("pop-up alerts on this device (M7e-E5)", () => {
     await screen.findByText(WORDS.notOffered);
   });
 
+  it("R52: a browser that cannot subscribe says what to check, and a refused one is 'blocked'", async () => {
+    const b = browser();
+    b.subscribe.mockRejectedValueOnce(Object.assign(new Error("push service error"), { name: "AbortError" }));
+    const calls = api();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    show(calls);
+    fireEvent.click(await screen.findByRole("button", { name: WORDS.turnOn }));
+    await screen.findByText(WORDS.failed);
+    expect(calls.add).not.toHaveBeenCalled();
+    expect(screen.getByText(WORDS.off)).toBeTruthy();
+
+    b.subscribe.mockRejectedValueOnce(Object.assign(new Error("denied"), { name: "NotAllowedError" }));
+    fireEvent.click(screen.getByRole("button", { name: WORDS.turnOn }));
+    await screen.findByText(WORDS.blocked);
+  });
+
   it("R19: ten devices already says so in plain words", async () => {
     browser();
     show(api({ add: vi.fn(async () => Promise.reject(new ApiError("PSH_TOO_MANY_DEVICES", "Too many", 409, "rid", {}))) }));

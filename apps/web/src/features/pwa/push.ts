@@ -93,7 +93,10 @@ function sameKey(current: ArrayBuffer | null | undefined, wanted: Uint8Array): b
 export type SubscribeResult =
   | { readonly kind: "subscribed"; readonly body: PushSubscriptionIn }
   | { readonly kind: "blocked" }
-  | { readonly kind: "unavailable" };
+  | { readonly kind: "unavailable" }
+  // The browser refused to subscribe for another reason (its push service failed, the installed
+  // app's notifications are off in Android's settings): the DOMException's name, for the console.
+  | { readonly kind: "failed"; readonly reason: string };
 
 /** Ask once for permission (only after the person pressed "Turn on", R51) and subscribe. */
 export async function subscribe(publicKey: string): Promise<SubscribeResult> {
@@ -108,7 +111,15 @@ export async function subscribe(publicKey: string): Promise<SubscribeResult> {
     await existing.unsubscribe();
     existing = null;
   }
-  const subscription = existing ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }));
+  let subscription: PushSubscription;
+  try {
+    subscription = existing ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }));
+  } catch (failure) {
+    const reason = failure instanceof Error ? failure.name : "Error";
+    if (reason === "NotAllowedError") return { kind: "blocked" };
+    console.warn("MediEase: the browser did not turn on alerts", reason);
+    return { kind: "failed", reason };
+  }
   const json = subscription.toJSON();
   const p256dh = json.keys?.p256dh;
   const auth = json.keys?.auth;

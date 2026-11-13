@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createECDH, randomBytes } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -17,12 +17,14 @@ const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 test.use({ channel: "chromium", launchOptions: { args: [`--unsafely-treat-insecure-origin-as-secure=${new URL(BASE).origin}`] } });
 
 const b64 = (bytes: Buffer) => bytes.toString("base64url");
-const PUBLIC_KEY = b64(Buffer.concat([Buffer.from([4]), randomBytes(64)]));
+/** A real uncompressed P-256 public key (the API refuses a point that is not on the curve). */
+const point = () => b64(createECDH("prime256v1").generateKeys());
+const PUBLIC_KEY = point();
 
 /** A fake browser subscription at FCM, and a permission prompt that says yes. */
 async function stubPush(page: Page): Promise<string> {
   const endpoint = `https://fcm.googleapis.com/fcm/send/e2e-${randomBytes(8).toString("hex")}:APA91b-e2e`;
-  const keys = { p256dh: b64(Buffer.concat([Buffer.from([4]), randomBytes(64)])), auth: b64(randomBytes(16)) };
+  const keys = { p256dh: point(), auth: b64(randomBytes(16)) };
   await page.addInitScript(
     ({ endpoint, keys }) => {
       let permission: NotificationPermission = "default";
