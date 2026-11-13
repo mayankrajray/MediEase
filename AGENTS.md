@@ -111,6 +111,8 @@ do not exist.
 | `make dev-web` | Next.js dev server on :3000 proxying to the API on localhost (`make up` first) | now |
 | `make contract` / `make contract-check` | Regenerate web types from `contracts/openapi.yaml` / fail if the committed types are stale | now |
 | `make seed` | Load synthetic demo data: one clinic, owner, doctor, front desk, ops user (`APP_ENV=local` only; RUNBOOK §1) | now |
+| `make import-clinic` | One clinic with people and history from CSV files: `DIR=/folder` or `DEMO=1` (the bundled invented clinic), `DRY_RUN=1` to only check; asks for the slug in production (spec clinic-import, RUNBOOK §37) | now (M9-P1) |
+| `make smoke-live` | Check a deployed site from outside: `URL=https://host [SLUG=…]` (HTTPS, headers, access, closed ports; RUNBOOK §38) | now (M9-P1) |
 | `make config-check` | Which real services `.env` selects, secrets shown only as set / not set; `LIVE=1` calls each once, `EMAIL_TO=` / `WHATSAPP_TO=` send one test (RUNBOOK §35) | now (M7c-P6) |
 | `make vapid-keys` | Print a new VAPID key pair for web push, to put in `.env` yourself; nothing is stored (RUNBOOK §36) | now (M7e-E5) |
 | `make worker` | Run a job worker in the foreground (`make up` already runs one; a second is safe, `SKIP LOCKED`). `make up` also runs `upload-worker` (`WORKER_QUEUE=uploads`) beside `clamav` (M7b) | now (M5-P1) |

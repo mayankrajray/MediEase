@@ -105,7 +105,7 @@ only here; values are generated on the VM (`openssl rand`), never shown to the a
 | # | Change | Why |
 |---|---|---|
 | C1 | `MESSAGING_PROVIDER=disabled`: an adapter that sends nothing; each WhatsApp send is recorded as not sent with the stable code `MSG_CHANNEL_DISABLED`, ends the job normally (no retry, no SMS fallback, no "message failed" alert to the desk), allowed in production; `make config-check` says so. The console adapter stays refused in production | Decision 1 |
-| C2 | `seed --demo`: one realistic invented clinic (a Lucknow general practice: two doctors, a front desk, an owner; about 25 synthetic patients; schedules; past visits, prescriptions, bills and follow-ups over the last 4 weeks; upcoming appointments; one patient app account). Allowed in production only with `--demo --password <chosen>` and a typed confirmation; refuses if the demo clinic exists. `make seed` stays local-only | Decision 3 |
+| C2 | `make import-clinic` (spec `clinic-import`): one clinic with its people and recent history from a folder of CSV files, built through the domain's rules in one transaction; a complete invented demo clinic is bundled (`DEMO=1`: Kesar Bagh Family Clinic, Lucknow; two doctors, a desk, an owner, 20 patients, 26 visits over two weeks with prescriptions, bills and payments, 4 overdue follow-ups, 10 upcoming appointments, one patient app login). The test logins are `mentor.owner@`, `mentor.doctor@`, `mentor.desk@` and `mentor.patient@demo-clinic.example`; passwords are generated and printed once. Production asks for the slug; an existing slug or login is refused. `make seed` stays local-only | Decision 3; Q1 (the partners' data in the same format) |
 | C3 | `infra/gcp/`: `docker-compose.prod.yml` (caddy service; no published ports for db, api, clamav, web; no mailpit; `restart: unless-stopped`; log rotation) and `Caddyfile` | One repeatable deploy |
 | C4 | `scripts/backup.sh` (`pg_dump`, gzip, upload with the VM's service account) and a systemd timer; restore steps | Backups from day one |
 | C5 | `make smoke-live`: `scripts/smoke.sh` against a base URL (health, readiness, pages, security headers) | Proof the deploy works |
@@ -137,11 +137,13 @@ C5 against the local stack. Full suites and CI as usual.
 ## 8. Answers (developer, 13 Nov 2026)
 
 - **Q1 Usage evidence.** The design partners' 4 weeks of usage live on the developer's other
-  website and will be shared later to load into this database. **Open:** what that data
-  contains. Real patient data is not handled by the agent (CLAUDE.md "No real patient data
-  outside production"); an import into production is designed separately once the format is
-  known.
-- **Q2 Test logins.** Invented addresses such as `mentor.staff@demo.example`.
+  website. The developer exports them into the CSV format of `docs/specs/clinic-import.md` and
+  runs the import on the VM (RUNBOOK §37); the agent never sees the data (CLAUDE.md "No real
+  patient data outside production").
+- **Q2 Test logins.** `mentor.owner@`, `mentor.doctor@`, `mentor.desk@` and
+  `mentor.patient@demo-clinic.example`, with generated passwords printed once at import. These
+  addresses receive no email; a mentor who wants to try *Forgot password* uses their own email
+  (an owner invites it as staff, or they sign up as a patient). Not in the "Try this" script.
 - **Q3** The demo clinic shares the production database; it is test data and is deleted
   afterwards.
 - **Q4** `mediease.duckdns.org`.

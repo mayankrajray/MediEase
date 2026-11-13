@@ -109,8 +109,18 @@ Use this list in the M6 security review. Each row names where it is implemented.
 - [ ] Log review confirms no PII/clinical leakage (M6)
 
 ### Resilience
-- [ ] Daily backups, PITR, 30-day retention, monthly restore drill (M6)
+- [ ] Daily backups, PITR, 30-day retention, monthly restore drill (M6). M9-P1 (ADR-0026): nightly database dump and files tar to a private bucket with 30-day retention and a daily disk snapshot; restore drill `scripts/restore-check.sh`. No point-in-time recovery yet
 - [ ] Documented incident and breach procedures (RUNBOOK §15)
+
+### Production host (M9-P1, ADR-0026)
+- [x] Only ports 80 and 443 are published (Caddy); the database, API, scanner and web app are on the compose network only (`infra/gcp/docker-compose.prod.yml`, checked by `make smoke-live`)
+- [x] TLS from Let's Encrypt with automatic renewal; HSTS one year, without `includeSubDomains` (the parent domain is not ours); HTTP redirects to HTTPS
+- [ ] SSH only from Google's IAP range, OS Login, no project-wide SSH keys, default open SSH/RDP rules deleted (Console, RUNBOOK §38)
+- [ ] The VM's own service account with access to the backup bucket only; no service-account key files and no HMAC keys (RUNBOOK §38)
+- [ ] Buckets with uniform access and public access prevention; nothing public (RUNBOOK §38)
+- [x] Secrets only in the VM's `.env`, owner-readable (`chmod 600`), generated on the VM, never in git, images or logs; `make config-check` reports set / not set
+- [x] Container logs rotate (5 × 10 MB); the import and backup print no values from the data
+- [ ] Unattended security upgrades on the VM; images rebuilt on each deploy
 
 ### Governance
 - [ ] Data processing agreement template between clinic and MediEase (*Counsel*, L-04)

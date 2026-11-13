@@ -544,6 +544,13 @@ flowchart LR
 - Release: `migrate` runs first as a one-off job; then `api`, `worker`, `web` roll.
 - Environments: `local`, `staging` (synthetic data only), `production`.
 
+**As built for the pilot (M9-P1, ADR-0026).** One Compute Engine VM (e2-standard-2, Mumbai) runs
+the compose stack with `infra/gcp/docker-compose.prod.yml` on top: Caddy is the reverse proxy
+(TLS, HSTS, the only published ports 80 and 443), PostgreSQL runs in Docker on the VM's disk,
+files stay on the `blobs` volume, and images are built on the VM. Backups go nightly to a private
+Cloud Storage bucket (`scripts/backup.sh`) and the disk is snapshotted daily; the restore drill is
+`scripts/restore-check.sh`. Managed PostgreSQL and a bucket for files are the next step.
+
 ## 12. Local stack (M0)
 
 `docker-compose.yml` defines the whole local stack; `make up` starts it with one command:

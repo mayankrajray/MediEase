@@ -47,6 +47,9 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 34. Prescription uploads and ClamAV (M7b)
 35. Checking real configuration (M7c-P6)
 36. Web push keys, delivery and the phone test (M7e-E3, E5)
+37. Import a clinic from CSV files (M9-P1)
+38. Production on Google Cloud (M9-P1)
+39. Backups and the restore drill (M9-P1)
 
 ---
 
@@ -997,3 +1000,111 @@ stack changes: the browser calls the same origin, which proxies `/api` to the AP
 
 iPhone and iPad (iOS 16.4+) deliver web push only to the app added to the Home Screen; the
 switch says so in Safari. That check is still to do when an iPhone is available.
+
+### 37. Import a clinic from CSV files (M9-P1, spec clinic-import)
+**When:** loading the demo clinic, or a design partner's people and history, into a database.
+The format of each file is in `docs/specs/clinic-import.md`; the bundled demo
+(`apps/api/src/mediease_api/delivery/cli/demo_clinic/`) is a complete, invented example to copy.
+
+1. Prepare the folder on your own computer (Excel or Google Sheets → *CSV UTF-8*, one file per
+   kind). Use relative dates (`today-3`) so "the last two weeks" stays true on import day.
+2. Check it locally first, against your local stack: `make import-clinic DIR=/path/to/folder
+   DRY_RUN=1`. Fix what it names (file, line, column), until it says *checked*.
+3. On the server, copy the folder to the VM (from the Console's SSH window: *Upload file*, then
+   `mkdir -p ~/import && mv ~/*.csv ~/import/`), and run in `/opt/mediease`:
+   ```bash
+   make import-clinic DIR=~/import DRY_RUN=1    # check
+   make import-clinic DIR=~/import              # write; type the slug when asked
+   ```
+   Or the bundled demo: `make import-clinic DEMO=1`.
+4. The logins and their passwords are printed **once**. Put them in your password manager, then
+   clear the terminal (`clear`) and delete the folder: `rm -rf ~/import`.
+
+**Confirm:** sign in as the desk login; *Today*, *Patients*, *Pending follow-ups* and *Bills*
+show the imported clinic. A second run with the same slug is refused and changes nothing (R2).
+To redo an import, use a new slug; deleting an imported clinic is not supported.
+
+### 38. Production on Google Cloud (M9-P1, ADR-0026)
+**Shape:** one VM (e2-standard-2, Ubuntu 24.04 x86_64, asia-south1, static IP), the repository in
+`/opt/mediease`, the compose stack with `infra/gcp/docker-compose.prod.yml` (Caddy on 80/443,
+nothing else published), the `.env` owner-only. Console set-up (project, budget, service account,
+bucket, IP, VM, firewall, snapshots) is in the M9 design §6 and the M9 issue.
+
+**First deploy** (in the Console's *SSH* window, which connects through IAP):
+1. Docker Engine and the compose plugin from Docker's own repository
+   (docs.docker.com/engine/install/ubuntu), then `sudo usermod -aG docker $USER` and reconnect.
+   `docker compose version` must be 2.24 or later. `sudo apt-get install -y make`.
+2. Swap and security updates: `sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile &&
+   sudo mkswap /swapfile && sudo swapon /swapfile && echo '/swapfile none swap sw 0 0' | sudo tee -a
+   /etc/fstab`; `sudo apt-get install -y unattended-upgrades`.
+3. The code: `sudo mkdir -p /opt/mediease && sudo chown $USER /opt/mediease && git clone
+   https://github.com/mayankrajray/MediEase.git /opt/mediease && cd /opt/mediease && git checkout
+   <reviewed commit or main>`.
+4. Settings: `bash infra/gcp/new-env.sh` writes `.env` with new internal secrets and lists the
+   values to fill. Fill them with `nano .env`. For the push pair: `make vapid-keys` (it builds the
+   API image first) and copy both lines in. Never paste `.env` anywhere.
+5. Start: `make up` (builds the images on the VM, runs the migration, starts everything; the
+   first start waits for ClamAV's signatures, a few minutes). `make ps`: every service healthy,
+   `migrate` exited 0. Caddy gets the certificate on its first start (`make logs` shows
+   `certificate obtained successfully`); DuckDNS must already point at the static IP.
+6. Check the real services: `make config-check LIVE=1 EMAIL_TO=<your address>`.
+7. Data: RUNBOOK §37 (`make import-clinic DEMO=1`, or your folder).
+8. From your own computer: `make smoke-live URL=https://mediease.duckdns.org
+   SLUG=kesar-bagh-family-clinic` must end with *Live smoke test passed*.
+9. Backups: §39.
+
+**Update to a new commit:** `cd /opt/mediease && git fetch && git checkout <commit>` (read the
+CHANGELOG and whether a migration is backward compatible), then `make up` (rebuilds, migrates,
+restarts what changed), then `make smoke-live` from your computer. The site is down for about a
+minute while the containers restart.
+
+**Roll back:** `git checkout <previous commit> && make up`. If the release ran a migration that
+is not backward compatible, stop: restore from the backup taken before the update (§39) with the
+developer's approval; data written since is lost.
+
+**Moving to `mediease.care` (December):** point the domain at the static IP (Cloudflare DNS,
+*DNS only*, not proxied, so Caddy can get its certificate), set `PUBLIC_HOST` and
+`PUBLIC_BASE_URL` in `.env`, add the new redirect URI to the Google OAuth client and a sender on
+the domain in Brevo, then `make up`. People turn pop-up alerts on again once (they are tied to the
+address).
+
+**Costs and the trial:** the Free Trial stops the VM when the credit or the 90 days run out
+(12 Feb 2027) and charges nothing; upgrade to a paid account before then to stay live until
+31 Mar 2027. A stopped VM still pays for its disk and IP; to end all charges delete the VM, its
+disk and snapshots, the static IP and the bucket.
+
+### 39. Backups and the restore drill (M9-P1)
+**What:** every night at 03:00 IST `scripts/backup.sh` writes the database (`pg_dump`, custom
+format) and the files volume (`blobs`, a tar.gz) to `gs://$BACKUP_BUCKET/db/` and `/blobs/`, with
+the VM's service account. The bucket deletes objects after 30 days. The VM's disk is also
+snapshotted daily (kept 7 days) by the Console's snapshot schedule.
+
+**Install the timer** (once, in `/opt/mediease`):
+```bash
+sudo cp infra/gcp/mediease-backup.service infra/gcp/mediease-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now mediease-backup.timer
+sudo systemctl start mediease-backup.service     # the first backup now
+journalctl -u mediease-backup.service -n 20      # backup: done (… database, … files)
+systemctl list-timers mediease-backup.timer      # the next run
+```
+
+**Restore drill** (after the first backup, then monthly): `sudo scripts/restore-check.sh`
+restores the newest dump into a scratch database beside the live one, prints live and restored
+row counts and the schema version, and drops the scratch database. The live database is only
+read. Record the date and the time it took in the M9 design.
+
+**Real restore** (data lost or corrupted; declare it first, §5):
+1. `make down`, then keep the broken volume for later study: `docker volume ls` shows
+   `mediease_pgdata`.
+2. Either restore the disk snapshot from the Console (a new disk from the snapshot, swapped into
+   the VM: everything returns to the snapshot's time), or restore a dump:
+   ```bash
+   gcloud storage cp gs://$BACKUP_BUCKET/db/<db-….dump> /tmp/restore.dump
+   docker volume rm mediease_pgdata && docker compose up -d --wait db
+   docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --exit-on-error' < /tmp/restore.dump
+   rm /tmp/restore.dump && make up
+   ```
+   Files: `gcloud storage cp gs://$BACKUP_BUCKET/blobs/<blobs-….tar.gz> /tmp/b.tgz && docker
+   compose exec -T api tar -xzf - -C /var/lib/mediease/blobs < /tmp/b.tgz` needs a writable
+   volume; the API container mounts it read-write.
+3. `make smoke-live` from your computer; sign in and check the latest visits.

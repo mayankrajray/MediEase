@@ -12,13 +12,18 @@
 | Order | Change | Objective | Verify |
 |---|---|---|---|
 | 1 | **C1** | `MESSAGING_PROVIDER=disabled`, allowed in production | Unit and wiring tests; config-check |
-| 2 | **C2** | `seed --demo` with explicit flags in production | Refusals, idempotence, domain rules |
+| 2 | **C2** | `make import-clinic` from CSV files, with the bundled demo clinic | Refusals, located problems, the demo end to end on PostgreSQL |
 | 3 | **C3** | `infra/gcp/` compose override and Caddyfile | `docker compose config`; local run with the override |
 | 4 | **C4** | Backup script, timer, restore steps | Dump and restore into a scratch database |
 | 5 | **C5** | `make smoke-live` | Against the local stack, then the live site |
 | 6 | **C7** | Runbook, ADR, security, architecture, CHANGELOG | Review |
 
-**Progress.** 13 Nov 2026: issue #75 and branch opened; design rewritten for Google Cloud.
+**Progress.** 13 Nov 2026: issue #75 and branch opened; design rewritten for Google Cloud. C1
+(messaging `disabled`), C2 (`make import-clinic` with the bundled demo), C3 (`infra/gcp/`, checked
+locally: Caddy healthy, only 80/443 published, HTTPS, HSTS, redirect), C4 (backup and restore
+drill, checked locally with a stand-in bucket), C5 (`make smoke-live`, passing against the local
+production-shaped stack except the ports the dev stack holds) and C7 (RUNBOOK §37–§39, ADR-0026)
+built. Next: the developer's VM steps (RUNBOOK §38) and the live check.
 
 ---
 

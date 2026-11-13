@@ -7,6 +7,15 @@ first production release.
 ## [Unreleased]
 
 ### Added
+- M9 (#75): `make import-clinic` loads one clinic with its people and recent history (visits,
+  prescriptions, bills, payments, follow-ups, upcoming appointments, patient app logins) from CSV
+  files, through the domain's rules, in one transaction (spec clinic-import). A complete invented
+  demo clinic is bundled (`DEMO=1`); passwords are generated and printed once; production asks
+  for the slug.
+- M9 (#75): production on one Google Cloud VM (ADR-0026): `infra/gcp/` (compose override with
+  Caddy for HTTPS, the production settings by name, `new-env.sh`, the backup timer),
+  `scripts/backup.sh` and `scripts/restore-check.sh` (nightly dump and files to a private bucket,
+  the restore drill), and `make smoke-live` for the deployed site (RUNBOOK §37–§39).
 - M9 (#75): `MESSAGING_PROVIDER=disabled` for a deployment while WhatsApp may not send
   (reminders-and-messaging R23). Nothing is sent; each message shows "Not sent: WhatsApp messages
   are switched off for now" (`MSG_CHANNEL_DISABLED`), with no retry, no alert to the desk and no
