@@ -321,7 +321,7 @@ drill completed; security checklist signed; two pilot clinics onboarded. (Was M6
 
 | Phase | Scope | Status |
 |---|---|---|
-| M9-P1 | Go live for the Phase 2 demo: C1 messaging `disabled`, C2 `seed --demo`, C3 `infra/gcp/` compose override and Caddy (TLS on `mediease.duckdns.org`), C4 backups, C5 `make smoke-live`, C7 docs; secrets in an owner-only `.env` on the VM | ▶ ACTIVE |
+| M9-P1 | Go live for the Phase 2 demo: C1 messaging `disabled`, C2 `make import-clinic` (CSV, bundled demo), C3 `infra/gcp/` compose override and Caddy (TLS on `mediease.duckdns.org`), C4 backups and the restore drill, C5 `make smoke-live`, C7 docs; secrets in an owner-only `.env` on the VM | ▶ ACTIVE — code done 13 Nov 2026; the VM deploy and live check next |
 | M9-P2 | Backups, restore drill, uptime and error alerting | ☐ |
 | M9-P3 | Security review against `docs/SECURITY_AND_COMPLIANCE.md` checklist; dependency scan; audited export and `scripts/erase_patient.py` procedures | ☐ |
 | M9-P4 | Ops clinic-health view; usage metrics for the pilot scorecard | ☐ |

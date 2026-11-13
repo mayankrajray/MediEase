@@ -27,6 +27,7 @@
 | [0023](0023-printed-verification-code-and-verified-uploads.md) | A printed verification code, and uploads that only point to the database record | Accepted (M7) |
 | [0024](0024-assistant-turns-confirmations-and-guard-rails.md) | Stateless assistant turns, signed confirmations, and guard rails on both sides | Accepted (M7a) |
 | [0025](0025-web-push-as-a-notification-channel.md) | Web push as a notification channel, with devices owned by a person | Accepted (M7e-E2) |
+| [0026](0026-pilot-hosting-on-one-compute-engine-vm.md) | The pilot runs on one Compute Engine VM with Docker Compose, PostgreSQL included | Accepted (M9-P1) |
 
 New ADR: copy [0000-template.md](0000-template.md), take the next number, and add a row here.
 Accepted ADRs are never edited; supersede them with a new ADR.
