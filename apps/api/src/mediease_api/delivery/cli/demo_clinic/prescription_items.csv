@@ -1,0 +1,29 @@
+visit_ref,medicine_name,form,strength,dose,frequency,frequency_text,timing,duration_days,duration_kind,quantity,notes
+# Placeholder medicine names: the demo shows the screens, not a treatment.
+V01,Demo Tablet A,Tablet,,1 tablet,1-0-1,,AFTER_FOOD,3,,6,
+V01,Demo Tablet B,Tablet,,1 tablet,SOS,,AFTER_FOOD,,,4,For fever only
+V02,Demo Tablet C,Tablet,,1 tablet,1-0-0,,BEFORE_FOOD,,ONGOING,,
+V03,Demo Syrup D,Syrup,,5 ml,1-1-1,,AFTER_FOOD,5,,1 bottle,
+V04,Demo Gel E,Gel,,Apply thin layer,1-0-1,,ANY,7,,1 tube,
+V05,Demo Tablet F,Tablet,,1 tablet,1-0-1,,AFTER_FOOD,,UNTIL_REVIEW,,
+V06,Demo Cream G,Cream,,Apply thin layer,0-0-1,,ANY,5,,1 tube,
+V06,Demo Tablet H,Tablet,,1 tablet,0-0-1,,AFTER_FOOD,5,,5,
+V07,Demo Capsule J,Capsule,,1 capsule,1-0-0,,EMPTY_STOMACH,14,,14,
+V08,Demo Drops K,Drops,,2 drops,1-1-1,,ANY,5,,1 bottle,Right ear
+V08,Demo Syrup D,Syrup,,5 ml,SOS,,AFTER_FOOD,,,1 bottle,For pain or fever
+V09,Demo Tablet B,Tablet,,1 tablet,SOS,,AFTER_FOOD,,,6,For headache
+V11,Demo Gel E,Gel,,Apply thin layer,1-1-1,,ANY,5,,1 tube,
+V11,Demo Tablet B,Tablet,,1 tablet,SOS,,AFTER_FOOD,,,6,For pain
+V12,Demo Syrup L,Syrup,,10 ml,1-1-1,,AFTER_FOOD,7,,1 bottle,
+V12,Demo Inhaler M,Inhaler,,2 puffs,SOS,,ANY,,,1,For breathlessness
+V13,Demo Tablet N,Tablet,,1 tablet,1-0-1,,AFTER_FOOD,5,,10,
+V14,Demo Tablet P,Tablet,,1 tablet,1-0-1,,AFTER_FOOD,5,,10,
+V15,Demo Tablet Q,Tablet,,1 tablet,1-0-0,,EMPTY_STOMACH,,ONGOING,,
+V16,Demo Sachet R,Sachet,,1 sachet in water,SOS,,ANY,,,6,After each loose stool
+V18,Demo Tablet C,Tablet,,1 tablet,1-0-0,,BEFORE_FOOD,,ONGOING,,
+V19,Demo Drops S,Drops,,1 drop,1-1-1-1,,ANY,5,,1 bottle,Both eyes
+V20,Demo Tablet F,Tablet,,1 tablet,1-0-1,,AFTER_FOOD,,UNTIL_REVIEW,,
+V21,Demo Syrup D,Syrup,,5 ml,1-1-1,,AFTER_FOOD,3,,1 bottle,
+V22,Demo Tablet T,Tablet,,1 tablet,SOS,,AFTER_FOOD,,,4,At the start of a headache
+V24,Demo Capsule J,Capsule,,1 capsule,1-0-0,,EMPTY_STOMACH,14,,14,
+V26,Demo Tablet H,Tablet,,1 tablet,0-0-1,,AFTER_FOOD,5,,5,

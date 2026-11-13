@@ -1,0 +1,6 @@
+email,full_name,role,phone,practises,qualification,registration_number,registration_council,specialty,languages
+mentor.owner@demo-clinic.example,Ritu Malhotra,OWNER,+919000000201,no,,,,,
+mentor.doctor@demo-clinic.example,Dr. Arjun Mehra,DOCTOR,+919000000202,yes,"MBBS, MD (General Medicine)",DEMO-UP-10234,Demo State Medical Council,General Medicine,English;Hindi
+doctor.two@demo-clinic.example,Dr. Kavya Iyer,DOCTOR,+919000000203,yes,"MBBS, DCH",DEMO-UP-20871,Demo State Medical Council,Paediatrics,English;Hindi
+mentor.desk@demo-clinic.example,Pooja Verma,FRONT_DESK,+919000000204,,,,,,
+ops@demo-clinic.example,MediEase Ops (demo),OPS,+919000000205,,,,,,
