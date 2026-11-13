@@ -4,7 +4,7 @@
 |---|---|
 | Requirements | FR-NTF-01..06 (push channel), NFR-02, NFR-08, NFR-19 |
 | Milestone / phases | M7e / E1–E5 (design `docs/milestones/M7e-pwa-push.md`) |
-| Status | E1–E5 Implemented (12–13 Nov 2026); the real-device checks are pending (§9 AC20, AC21) |
+| Status | E1–E5 Implemented (12–13 Nov 2026); Android checked on two phones (AC20); iPhone pending (AC21) |
 | Owner | Developer |
 | Last updated | 2026-11-12 |
 
@@ -233,8 +233,7 @@ that link to Account stay within 200 KB.
   tap opens only a same-site path (`sw.test.ts`).
 - **AC20 (all)** — Given Android Chrome through a tunnel, in the browser and installed, then a
   staff and a patient alert arrive with the generic words and open their pages (RUNBOOK §36).
-  *Staff alerts passed on two Android phones, 13 Nov 2026 (design §8); the patient alert is still
-  to try on a device.*
+  *Passed on two Android phones, staff and patient, 13 Nov 2026 (design §8).*
 - **AC21 (R52)** — Given an iPhone (iOS 16.4+) with the app on the Home Screen, then the same.
   *Pending: no iPhone available (developer, 13 Nov 2026).*
 

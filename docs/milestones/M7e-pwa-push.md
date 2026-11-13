@@ -301,7 +301,7 @@ on a phone and a staff member), with `notifications` scoped to *In the app*. Pag
 | Installed app, app swiped away | Both alerts arrived, in Chrome and in the app; taps opened the right pages |
 | Turn off | No alert for the next booking |
 | Offline page | Shown |
-| Patient alert | Not tried yet |
+| Patient alert (signed up on the phone, linked from the patient's profile, booked) | All the patient's alerts arrived |
 
 Found and fixed:
 
@@ -311,8 +311,12 @@ Found and fixed:
    key it cannot encrypt for to `PSH_REFUSED` (never retried), and the journey stubs real keys.
 2. **"Something went wrong" when turning alerts on in the installed app on the first phone.** The
    API saw no failed call, so the browser refused to subscribe. The card now says what to check
-   instead (R52); the browser's reason goes to the console.
-3. **A tap on the first phone opened the offline page.** Most likely that phone's subscription was
-   made on an earlier tunnel address (each quick tunnel is a new site): the push still arrives,
-   but its page is gone, so the service worker shows the offline page. To confirm with the
-   developer; on a fixed HTTPS address it cannot happen.
+   instead (R52); the browser's reason goes to the console. After the fixes it turned on at the
+   first try (developer, 13 Nov 2026).
+3. **A tap on the first phone opened the offline page.** That phone's subscription was made on an
+   earlier tunnel address (confirmed: Chrome listed two `trycloudflare.com` sites): the push still
+   arrives, but its page is gone, so the service worker shows the offline page. Not a defect; on
+   a fixed HTTPS address it cannot happen.
+
+The four leftover journey devices were deleted from the local database with the developer's
+agreement. AC20 (Android) passed; AC21 (iPhone) waits for a device.
