@@ -1,6 +1,28 @@
-# NEXT_STEPS_PLAN.md — Plan for M7e (installable app and web push), with M7d, M7c and M7 below as history
+# NEXT_STEPS_PLAN.md — Plan for M9-P1 (go live for the Phase 2 demo), with M7e, M7d, M7c and M7 below as history
 
-## 0. Active: M7e — Installable app (PWA) and web push notifications
+## 0. Active: M9-P1 — Go live for the Phase 2 demo on Google Cloud
+
+| Field | Value |
+|---|---|
+| Status | **Approved by the developer 13 Nov 2026**: Option A (one Compute Engine VM, e2-standard-2, asia-south1, Docker Compose with PostgreSQL), answers Q1–Q6 (`docs/milestones/M9-deploy-demo.md` §8) |
+| Issue / branch | #75 / `m9/75-deploy-demo`, on `main` after M7e merged (PR #74) |
+| Deadline | Live on 14 Nov 2026; Phase 2 submission 15 Nov 2026, 23:59 IST |
+| Needs from the developer | Console steps (project, budget done; service account, bucket, static IP, VM, firewall, snapshots), DuckDNS, OAuth redirect, Brevo sender, Groq key; the VM `.env`, written by the developer |
+
+| Order | Change | Objective | Verify |
+|---|---|---|---|
+| 1 | **C1** | `MESSAGING_PROVIDER=disabled`, allowed in production | Unit and wiring tests; config-check |
+| 2 | **C2** | `seed --demo` with explicit flags in production | Refusals, idempotence, domain rules |
+| 3 | **C3** | `infra/gcp/` compose override and Caddyfile | `docker compose config`; local run with the override |
+| 4 | **C4** | Backup script, timer, restore steps | Dump and restore into a scratch database |
+| 5 | **C5** | `make smoke-live` | Against the local stack, then the live site |
+| 6 | **C7** | Runbook, ADR, security, architecture, CHANGELOG | Review |
+
+**Progress.** 13 Nov 2026: issue #75 and branch opened; design rewritten for Google Cloud.
+
+---
+
+## History: M7e — Installable app (PWA) and web push notifications
 
 | Field | Value |
 |---|---|
@@ -23,8 +45,7 @@ reminders for app users, spec R40–R46, migration `0044`, contract 0.53.0, push
 E5 done 13 Nov 2026: settings, alerts on the screen, `make vapid-keys`; Android checked on two
 phones through a tunnel (two fixes); the iPhone check when one is available. PR #74 to merge.
 
-Then M9 (deployment: Vercel, Supabase and an Oracle Cloud VM, design to be written at M9's
-start). M8 is skipped for now (developer, 11 Nov 2026).
+PR #74 merged 13 Nov 2026. M8 is skipped for now (developer, 11 Nov 2026).
 
 ---
 
