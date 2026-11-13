@@ -1,0 +1,11 @@
+# 03:00 India time every night (21:30 UTC); a missed run (VM stopped) runs at the next start.
+[Unit]
+Description=Nightly MediEase backup
+
+[Timer]
+OnCalendar=*-*-* 21:30:00 UTC
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,17 @@
+# Nightly backup of the database and files to Cloud Storage (M9-P1 C4; RUNBOOK §39).
+# Install: sudo cp infra/gcp/mediease-backup.* /etc/systemd/system/ &&
+#          sudo systemctl daemon-reload && sudo systemctl enable --now mediease-backup.timer
+[Unit]
+Description=MediEase backup to Cloud Storage
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/mediease
+ExecStart=/bin/bash /opt/mediease/scripts/backup.sh
+# Root runs docker and uses the VM's service account through the metadata server.
+User=root
+Nice=10
+IOSchedulingClass=idle

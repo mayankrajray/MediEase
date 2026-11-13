@@ -1,0 +1,27 @@
+# Caddy in front of the web app on the production VM (M9-P1; RUNBOOK §38).
+# The site name is PUBLIC_HOST from .env: mediease.duckdns.org now, mediease.care from December.
+# Caddy obtains and renews the certificate itself and redirects HTTP to HTTPS.
+{
+	# The admin API stays inside the container (the health check uses it).
+	admin 127.0.0.1:2019
+}
+
+{$PUBLIC_HOST} {
+	encode zstd gzip
+
+	header {
+		# A year; no includeSubDomains: the parent domain is not ours (duckdns.org).
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# The web app and the API refuse uploads over 10 MB with a 413 of their own; this cap only
+	# stops anything far larger from reaching them.
+	request_body {
+		max_size 12MB
+	}
+
+	# Caddy writes the visitor's address into X-Forwarded-For and ignores what the visitor sent,
+	# so CLIENT_IP_HEADER=x-forwarded-for gives the web app the real address (A11).
+	reverse_proxy web:3000
+}

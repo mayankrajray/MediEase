@@ -1,0 +1,86 @@
+# Production overrides for one Compute Engine VM (M9-P1; docs/milestones/M9-deploy-demo.md,
+# RUNBOOK §38). Layered on the base file by the VM's .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:infra/gcp/docker-compose.prod.yml
+#
+# so every `make` target and `docker compose` command on the VM uses both files.
+#
+# - Only Caddy publishes ports (80 and 443). db, api, clamav and web are reachable on the compose
+#   network only: `!reset []` drops the base file's localhost ports (Compose 2.24 or later).
+# - Mailpit does not start (profile `local-mail`); email goes to Brevo (SMTP_* in .env).
+# - Every container's log rotates: 5 files of 10 MB.
+# - The containers keep the base file's hardening (read-only, no capabilities, no new privileges).
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  db:
+    <<: *logging
+    ports: !reset []
+
+  migrate:
+    <<: *logging
+
+  api:
+    <<: *logging
+    ports: !reset []
+
+  worker:
+    <<: *logging
+
+  upload-worker:
+    <<: *logging
+
+  clamav:
+    <<: *logging
+    ports: !reset []
+
+  web:
+    <<: *logging
+    ports: !reset []
+
+  mailpit:
+    profiles: ["local-mail"]
+
+  # HTTPS in front of the web app. Caddy gets and renews the Let's Encrypt certificate for
+  # PUBLIC_HOST itself (port 80 answers the challenge and redirects everything else to HTTPS).
+  caddy:
+    <<: *logging
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    # Binding ports 80 and 443 is the only privilege it needs.
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST in .env (e.g. mediease.duckdns.org)}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./infra/gcp/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The certificate and account key: keep them, or Let's Encrypt's rate limits bite.
+      - caddy-data:/data
+      - caddy-config:/config
+    tmpfs: ["/tmp"]
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      # The admin API listens on the container's localhost only (Caddyfile).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  caddy-data:
+  caddy-config:
