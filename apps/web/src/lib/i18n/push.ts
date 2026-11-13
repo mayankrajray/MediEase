@@ -20,6 +20,8 @@ export interface DeviceWords {
   readonly iosInstall: string;
   readonly notOffered: string;
   readonly tooMany: string;
+  /** The browser would not turn alerts on, for a reason it does not say. */
+  readonly failed: string;
 }
 
 const EN: DeviceWords = {
@@ -37,6 +39,7 @@ const EN: DeviceWords = {
   iosInstall: "On iPhone and iPad, add MediEase to your Home Screen first, then turn alerts on in the app.",
   notOffered: "Pop-up alerts are not available yet.",
   tooMany: "Alerts are already on for 10 devices. Turn one off first.",
+  failed: "This device did not turn alerts on. Check that notifications are allowed for MediEase (and for the installed app in the phone's settings), close MediEase completely, open it again and try once more.",
 };
 
 const HI: DeviceWords = {
@@ -54,6 +57,7 @@ const HI: DeviceWords = {
   iosInstall: "iPhone और iPad पर पहले MediEase को होम स्क्रीन पर जोड़ें, फिर ऐप में अलर्ट चालू करें।",
   notOffered: "पॉप-अप अलर्ट अभी उपलब्ध नहीं हैं।",
   tooMany: "10 डिवाइस पर अलर्ट पहले से चालू हैं। पहले किसी एक को बंद करें।",
+  failed: "इस डिवाइस पर अलर्ट चालू नहीं हुए। देखें कि MediEase के लिए (और फ़ोन की सेटिंग में इंस्टॉल किए हुए ऐप के लिए) सूचनाएँ चालू हैं, MediEase पूरी तरह बंद करके फिर खोलें और एक बार और कोशिश करें।",
 };
 
 export function deviceWords(language: PwaLanguage): DeviceWords {
