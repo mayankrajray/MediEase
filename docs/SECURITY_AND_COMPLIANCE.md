@@ -115,12 +115,12 @@ Use this list in the M6 security review. Each row names where it is implemented.
 ### Production host (M9-P1, ADR-0026)
 - [x] Only ports 80 and 443 are published (Caddy); the database, API, scanner and web app are on the compose network only (`infra/gcp/docker-compose.prod.yml`, checked by `make smoke-live`)
 - [x] TLS from Let's Encrypt with automatic renewal; HSTS one year, without `includeSubDomains` (the parent domain is not ours); HTTP redirects to HTTPS
-- [ ] SSH only from Google's IAP range (port 22 does not answer from outside: `make smoke-live`, 14 Nov 2026); OS Login, no project-wide SSH keys and the deleted default SSH/RDP rules still to be confirmed in the Console
-- [ ] The VM's own service account (confirmed from the VM, 14 Nov 2026); its roles limited to the backup bucket and no key files or HMAC keys still to be confirmed (RUNBOOK §38)
-- [ ] Buckets with uniform access and public access prevention; nothing public (RUNBOOK §38)
+- [x] SSH only from Google's IAP range: the only port-22 rule allows `35.235.240.0/20`, the default SSH and RDP rules are deleted, OS Login is on and project-wide SSH keys are blocked (Cloud Shell, 14 Nov 2026); port 22 does not answer from outside (`make smoke-live`). The default ICMP and internal-network rules remain (ping only; one VM in the network)
+- [x] The VM's own service account, with only Storage Object Creator and Object Viewer on the backup bucket and no user-managed keys; from the VM it is refused firewall, bucket-settings, IAM and project reads and cannot enable services (14 Nov 2026). No HMAC keys are used
+- [x] The backup bucket has uniform access, public access prevention enforced, a 30-day delete rule, and no public members (14 Nov 2026)
 - [x] Secrets only in the VM's `.env`, owner-readable (`chmod 600`), generated on the VM, never in git, images or logs; `make config-check` reports set / not set
 - [x] Container logs rotate (5 × 10 MB); the import and backup print no values from the data
-- [ ] Unattended security upgrades on the VM; images rebuilt on each deploy
+- [x] Unattended security upgrades installed on the VM (14 Nov 2026); images are rebuilt from the reviewed commit on each deploy (`make up`)
 
 ### Governance
 - [ ] Data processing agreement template between clinic and MediEase (*Counsel*, L-04)
