@@ -12,6 +12,7 @@ from mediease_api.adapters.db.unit_of_work import build_session_factory
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
 from mediease_api.adapters.messaging.console import ConsoleMessagingAdapter
 from mediease_api.adapters.messaging.console_sms import ConsoleSmsAdapter
+from mediease_api.adapters.messaging.disabled import DisabledMessagingAdapter
 from mediease_api.adapters.messaging.whatsapp_cloud import WhatsAppCloudAdapter
 from mediease_api.bootstrap import _messaging_handlers, build_messaging, build_sms, build_worker
 from mediease_api.config.settings import load_settings
@@ -102,3 +103,22 @@ def test_m5_p2_the_console_provider_is_refused_in_production(
     factory = build_session_factory(build_engine(settings))
     with pytest.raises(ValueError, match="console"):
         _messaging_handlers(settings, factory, SystemClock(), Uuid7Generator())
+
+
+def test_m9_p1_disabled_messaging_is_allowed_in_production(
+    set_env: SetEnv, valid_env: dict[str, str]
+) -> None:
+    set_env(
+        {
+            **valid_env,
+            "APP_ENV": "production",
+            "COOKIE_SECURE": "true",
+            "MESSAGING_PROVIDER": "disabled",
+        }
+    )
+    settings = load_settings()
+    assert isinstance(build_messaging(settings), DisabledMessagingAdapter)
+    factory = build_session_factory(build_engine(settings))
+    handlers = _messaging_handlers(settings, factory, SystemClock(), Uuid7Generator())
+    assert REMINDER_KIND in handlers and RX_LINK_KIND in handlers
+    assert build_sms(settings) is None

@@ -13,6 +13,10 @@ Three short transactions and no lock held over the provider call:
 3. Record the outcome: accepted (``SENT``, plus the handler's after-step in the same
    transaction), refused (retryable: not started again, so the retry calls once more; permanent
    or out of attempts: ``FAILED``) or unknown (``FAILED``, never retried).
+
+M9-P1: a provider switched off by configuration (``ChannelDisabled``) is a settled outcome, not
+a failure: the row is closed as ``FAILED`` with ``MSG_CHANNEL_DISABLED`` so staff see it was not
+sent, the job ends normally, and there is no "message failed" alert and no SMS fallback.
 """
 
 from __future__ import annotations
@@ -27,7 +31,9 @@ import structlog
 from mediease_api.domain.jobs.job import ClaimedJob
 from mediease_api.domain.jobs.retry import JobFailure
 from mediease_api.domain.messaging.errors import (
+    MSG_CHANNEL_DISABLED,
     MSG_OUTCOME_UNKNOWN,
+    ChannelDisabled,
     ProviderOutcomeUnknown,
     ProviderRefused,
     TemplateParamsInvalid,
@@ -124,6 +130,15 @@ class MessageSender:
         )
         try:
             accepted = self._messaging.send_template(outbound)
+        except ChannelDisabled:
+            self._finish(
+                clinic_id,
+                key,
+                lambda m, now: m.fail(MSG_CHANNEL_DISABLED, now),
+                alert=False,
+            )
+            log.info("message.channel_disabled", error_code=MSG_CHANNEL_DISABLED)
+            return
         except ProviderRefused as refusal:
             final = not refusal.retryable or job.attempts >= job.max_attempts
             code = refusal.code
@@ -256,6 +271,7 @@ class MessageSender:
         *,
         failed: AfterFailed | None = None,
         units: int = 1,
+        alert: bool = True,
     ) -> None:
         with self._uow as uow:
             tenant = uow.tenant(clinic_id)
@@ -272,7 +288,7 @@ class MessageSender:
                 after(uow, tenant, now)
             if failed is not None:
                 failed(uow, tenant, message, now)
-            if not was_failed and message.status is MessageStatus.FAILED:
+            if alert and not was_failed and message.status is MessageStatus.FAILED:
                 # M6a-P7 (FR-NTF-04): the front desk and the owners are told, in this transaction.
                 # Imported here: the service enqueues the M5 jobs, whose handlers use this sender.
                 from mediease_api.application.notifications.service import publish

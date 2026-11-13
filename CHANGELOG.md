@@ -7,6 +7,10 @@ first production release.
 ## [Unreleased]
 
 ### Added
+- M9 (#75): `MESSAGING_PROVIDER=disabled` for a deployment while WhatsApp may not send
+  (reminders-and-messaging R23). Nothing is sent; each message shows "Not sent: WhatsApp messages
+  are switched off for now" (`MSG_CHANNEL_DISABLED`), with no retry, no alert to the desk and no
+  SMS fallback. Allowed in production; the console provider stays refused there.
 - M7e (#73): the installable app and pop-up alerts (web push) for patients and staff (spec
   web-push; ADR-0025). MediEase installs from the browser and shows an offline page; staff and
   patients turn alerts on per device (Settings → Notifications, portal Account) and per kind.

@@ -79,6 +79,16 @@ def test_m7c_p6_console_settings_skip_every_live_check() -> None:
     assert config_check.send_whatsapp(s, "9000000101").startswith("skipped")
 
 
+def test_m9_p1_disabled_messaging_is_reported_and_skips_the_whatsapp_checks() -> None:
+    s = _settings(MESSAGING_PROVIDER="disabled")
+    text = "\n".join(" ".join(line) for line in config_check.describe(s))
+    assert "MESSAGING_PROVIDER disabled" in text
+    assert "each message is recorded as not sent" in text
+    assert "WHATSAPP_ACCESS_TOKEN" not in text
+    assert config_check.check_whatsapp(s) == "skipped (MESSAGING_PROVIDER=disabled)"
+    assert config_check.send_whatsapp(s, "9000000101") == "skipped (MESSAGING_PROVIDER=disabled)"
+
+
 def test_m7c_p6_whatsapp_reads_the_number_and_reports_metas_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -376,7 +376,10 @@ class MessagingPort(Protocol):
 
 - Adapters: `ConsoleMessagingAdapter` (dev/test — one log line with variable *names*, never values;
   the `messages` row is the record; refused by the worker when `APP_ENV=production`),
-  `WhatsAppCloudAdapter` (P3), `SmsAdapter` (P5). Selected by settings, wired in `bootstrap.py`.
+  `WhatsAppCloudAdapter` (P3), `SmsAdapter` (P5), `DisabledMessagingAdapter` (M9-P1,
+  `MESSAGING_PROVIDER=disabled`: sends nothing; each message is closed as `FAILED` with
+  `MSG_CHANNEL_DISABLED`, the job ends normally, no alert and no SMS fallback; allowed in
+  production). Selected by settings, wired in `bootstrap.py`.
 - Sending (M5-P2, `application/messaging/sender.py`): three short transactions, no lock held over
   the call. (1) Find the row by idempotency key; settled ends the job; a row still marked started
   means an earlier attempt died mid-call, so it is `FAILED` with `MSG_OUTCOME_UNKNOWN` and never

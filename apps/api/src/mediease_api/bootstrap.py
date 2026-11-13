@@ -38,6 +38,7 @@ from mediease_api.adapters.malware.clamd import ClamdScanner
 from mediease_api.adapters.messaging.catalog import YamlTemplateCatalog
 from mediease_api.adapters.messaging.console import ConsoleMessagingAdapter
 from mediease_api.adapters.messaging.console_sms import ConsoleSmsAdapter
+from mediease_api.adapters.messaging.disabled import DisabledMessagingAdapter
 from mediease_api.adapters.messaging.prices import load_price_table
 from mediease_api.adapters.messaging.whatsapp_cloud import WhatsAppCloudAdapter
 from mediease_api.adapters.messaging.whatsapp_webhook import PROVIDER as WHATSAPP_PROVIDER
@@ -1407,7 +1408,12 @@ def build_llm(settings: AppSettings) -> LlmPort:
 
 
 def build_messaging(settings: AppSettings) -> MessagingPort:
-    """The provider named by ``MESSAGING_PROVIDER`` (M5-P3); console is refused in production."""
+    """The provider named by ``MESSAGING_PROVIDER`` (M5-P3); console is refused in production.
+
+    M9-P1: ``disabled`` sends nothing and says so on each message, so it is allowed there.
+    """
+    if settings.MESSAGING_PROVIDER == "disabled":
+        return DisabledMessagingAdapter()
     if settings.MESSAGING_PROVIDER == "whatsapp_cloud":
         return WhatsAppCloudAdapter(
             phone_number_id=settings.WHATSAPP_PHONE_NUMBER_ID,

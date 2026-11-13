@@ -65,6 +65,9 @@ def describe(s: AppSettings) -> list[Line]:
             ("whatsapp", "Graph API", f"{s.WHATSAPP_GRAPH_URL}/{s.WHATSAPP_API_VERSION}"),
             ("whatsapp", "webhook URL to register", "<public API URL>/webhooks/whatsapp"),
         ]
+    if s.MESSAGING_PROVIDER == "disabled":
+        # M9-P1: say plainly what staff will see, so "disabled" is not mistaken for a fault.
+        lines.append(("whatsapp", "sending", "off: each message is recorded as not sent"))
     lines.append(("sms", "MESSAGING_SMS_FALLBACK_ENABLED", str(s.MESSAGING_SMS_FALLBACK_ENABLED)))
     lines.append(("email", "EMAIL_PROVIDER", s.EMAIL_PROVIDER))
     lines.append(("push", "PUSH_PROVIDER", s.PUSH_PROVIDER))
@@ -132,7 +135,7 @@ def _graph_error(body: dict[str, object]) -> str:
 
 def check_whatsapp(s: AppSettings) -> str:
     if s.MESSAGING_PROVIDER != "whatsapp_cloud":
-        return "skipped (MESSAGING_PROVIDER=console)"
+        return f"skipped (MESSAGING_PROVIDER={s.MESSAGING_PROVIDER})"
     url = (
         f"{s.WHATSAPP_GRAPH_URL}/{s.WHATSAPP_API_VERSION}/{s.WHATSAPP_PHONE_NUMBER_ID}"
         "?fields=verified_name,display_phone_number,quality_rating"
@@ -225,7 +228,7 @@ def send_email(s: AppSettings, to: str) -> str:
 
 def send_whatsapp(s: AppSettings, to: str) -> str:
     if s.MESSAGING_PROVIDER != "whatsapp_cloud":
-        return "skipped (MESSAGING_PROVIDER=console)"
+        return f"skipped (MESSAGING_PROVIDER={s.MESSAGING_PROVIDER})"
     phone = PhoneNumber.parse(to, field="whatsapp_to")
     payload = {
         "messaging_product": "whatsapp",

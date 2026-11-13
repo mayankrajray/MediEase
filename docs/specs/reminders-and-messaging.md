@@ -74,6 +74,13 @@ window the patient's own STOP message opens:
 - **R8** Message variables are validated against the template schema before sending; they may only
   include clinic name, doctor display name, dates/times, token numbers, the clinic phone and signed
   links.
+- **R23** *Messaging switched off (M9-P1 decision 1).* With `MESSAGING_PROVIDER=disabled` nothing
+  is sent. A send that would have happened (after R5's consent check and R8's values check) leaves
+  one message row, `WHATSAPP`, provider `disabled`, closed as `FAILED` with
+  `MSG_CHANNEL_DISABLED` and cost 0; the job ends normally (no retry, never `dead`), the desk gets
+  no "message failed" notice, and the SMS fallback (R19) does not apply. Staff see "Not sent:
+  WhatsApp messages are switched off for now." The setting is allowed in production; the console
+  provider stays refused there.
 
 ### Jobs
 - **R9** Workers claim up to 10 due jobs per poll using `FOR UPDATE SKIP LOCKED`, poll every 2
