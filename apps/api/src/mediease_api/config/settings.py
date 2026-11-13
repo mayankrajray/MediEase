@@ -65,8 +65,9 @@ LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 BlobBackend = Literal["local", "s3"]
 # M7b: which jobs a worker claims (prescription-uploads R4).
 WorkerQueue = Literal["default", "uploads", "all"]
-# M5-P2: the console provider; M5-P3 adds the WhatsApp Cloud API.
-MessagingProvider = Literal["console", "whatsapp_cloud"]
+# M5-P2: the console provider; M5-P3 adds the WhatsApp Cloud API; M9-P1 `disabled` (sends nothing,
+# says so on each message, allowed in production).
+MessagingProvider = Literal["console", "whatsapp_cloud", "disabled"]
 # M5-P5: the SMS fallback's provider; a real one follows L-03.
 SmsProvider = Literal["console"]
 # M6a-P3: Google sign-in, or the local-only fake (ADR-0015 decision 6).
@@ -174,7 +175,8 @@ class AppSettings(BaseSettings):
     CLAMD_PORT: int = Field(default=3310, ge=1, le=65535)
     CLAMD_TIMEOUT_SECONDS: int = Field(default=30, ge=1, le=120)
     # Messaging (M5-P2). `console` writes a log line instead of sending; the worker refuses it in
-    # production (bootstrap.build_worker), the API never sends.
+    # production (bootstrap.build_worker), the API never sends. `disabled` (M9-P1) sends nothing
+    # and closes each message with MSG_CHANNEL_DISABLED; allowed in production.
     MESSAGING_PROVIDER: MessagingProvider = "console"
     # Fernet keys for the phone numbers stored on messages, comma-separated; the first encrypts,
     # all decrypt. Empty in local and test means a fixed development key; required when deployed.

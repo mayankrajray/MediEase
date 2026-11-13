@@ -58,6 +58,8 @@ const EXPLANATIONS: Record<string, string> = {
   MSG_TEMPLATE_NOT_FOUND: "This message is not approved yet. Tell MediEase support.",
   MSG_TEMPLATE_PARAMS: "This message could not be prepared. Tell MediEase support.",
   MSG_NOT_APPLICABLE: "Not sent: it no longer applied.",
+  // M9-P1: WhatsApp is switched off for this deployment; nothing was sent.
+  MSG_CHANNEL_DISABLED: "Not sent: WhatsApp messages are switched off for now.",
   REM_CLINIC_PHONE_MISSING: "Not sent: the clinic has no phone number in its settings.",
   // M6a-P8: an appointment reminder the system cancelled when it was due.
   REM_APPOINTMENT_CHANGED: "Not sent: the appointment changed (cancelled, moved, arrived or closed by leave).",

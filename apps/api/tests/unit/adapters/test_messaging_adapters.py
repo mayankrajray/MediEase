@@ -11,7 +11,9 @@ from mediease_api.adapters.messaging.catalog import (
     parse_templates,
 )
 from mediease_api.adapters.messaging.console import ConsoleMessagingAdapter
+from mediease_api.adapters.messaging.disabled import DisabledMessagingAdapter
 from mediease_api.adapters.security.phone_cipher import FernetPhoneCipher, PhoneDecryptionFailed
+from mediease_api.domain.messaging.errors import MSG_CHANNEL_DISABLED, ChannelDisabled
 from mediease_api.domain.messaging.jobs import REQUIRED_TEMPLATES
 from mediease_api.domain.messaging.message import Channel
 from mediease_api.domain.messaging.template import TemplateCategory, VariableKind
@@ -124,6 +126,21 @@ def test_the_console_provider_logs_names_not_values_and_repeats_its_answer(
     text = str(one)
     assert "secret-tok" not in text and "Sample Clinic" not in text and PHONE.e164 not in text
     assert "secret-tok" not in repr(msg) and PHONE.e164 not in repr(msg)
+
+
+def test_m9_p1_the_disabled_provider_sends_nothing_and_says_so() -> None:
+    disabled = DisabledMessagingAdapter()
+    msg = OutboundTemplateMessage(
+        idempotency_key="rx_link:2",
+        to=PHONE,
+        template=YamlTemplateCatalog.from_package().get("rx_ready"),
+        language=Language.EN,
+        variables={"clinic_name": "Sample Clinic", "link": "https://app.example.test/p/tok"},
+    )
+    with pytest.raises(ChannelDisabled) as refused:
+        disabled.send_template(msg)
+    assert refused.value.code == MSG_CHANNEL_DISABLED and refused.value.retryable is False
+    assert (disabled.channel, disabled.provider) == (Channel.WHATSAPP, "disabled")
 
 
 # --- The phone cipher (decision 1A) -------------------------------------------------------------

@@ -24,6 +24,7 @@ from mediease_api.adapters.clock.system import SystemClock
 from mediease_api.adapters.db.unit_of_work import SqlAlchemyUnitOfWork
 from mediease_api.adapters.ids.uuid7 import Uuid7Generator
 from mediease_api.adapters.messaging.catalog import YamlTemplateCatalog
+from mediease_api.adapters.messaging.disabled import DisabledMessagingAdapter
 from mediease_api.adapters.security.link_signer import HmacLinkSigner
 from mediease_api.adapters.security.phone_cipher import FernetPhoneCipher
 from mediease_api.application.links.use_cases import LinkTokens
@@ -33,6 +34,7 @@ from mediease_api.application.messaging.sender import MessageSender
 from mediease_api.domain.jobs.job import ClaimedJob
 from mediease_api.domain.jobs.retry import JobFailure
 from mediease_api.domain.messaging.errors import (
+    MSG_CHANNEL_DISABLED,
     MSG_OUTCOME_UNKNOWN,
     MSG_PROVIDER_RATE_LIMIT,
     MSG_RECIPIENT_INVALID,
@@ -368,6 +370,40 @@ def test_r7_a_permanent_refusal_or_the_last_attempt_fails_the_message(
         rig.booking(_job(db, f"booking_confirmed:{second}", attempts=5, max_attempts=5))
     row = _messages(db, f"booking_confirmed:{second}")[0]
     assert (row.status, row.error_code) == ("FAILED", MSG_PROVIDER_RATE_LIMIT)
+
+
+def test_m9_p1_disabled_messaging_records_not_sent_without_retry_or_alert(
+    world: World, db: Engine, session_factory: sessionmaker[Session]
+) -> None:
+    _, appointment_id = _booked(world)
+    key = f"booking_confirmed:{appointment_id}"
+    sender = MessageSender(
+        uow=SqlAlchemyUnitOfWork(session_factory),
+        clock=SystemClock(),
+        ids=Uuid7Generator(),
+        messaging=DisabledMessagingAdapter(),
+        templates=YamlTemplateCatalog.from_package(),
+        phones=FernetPhoneCipher([Fernet.generate_key()]),
+    )
+    booking = SendBookingConfirmation(sender=sender)
+
+    booking(_job(db, key))  # ends normally: no JobFailure, so no retry and no dead job
+
+    [row] = _messages(db, key)
+    assert (row.status, row.error_code, row.channel, row.provider) == (
+        "FAILED",
+        MSG_CHANNEL_DISABLED,
+        "WHATSAPP",
+        "disabled",
+    )
+    assert row.sending_started_at is None and row.cost_millipaise == 0
+    with db.connect() as conn:
+        alerts = conn.execute(
+            text("SELECT count(*) FROM notifications WHERE kind = 'message.failed'")
+        ).scalar_one()
+    assert alerts == 0
+    booking(_job(db, key, attempts=2))  # the same job again changes nothing
+    assert len(_messages(db, key)) == 1
 
 
 # --- Prescription links (prescriptions R14, R15) ------------------------------------------------

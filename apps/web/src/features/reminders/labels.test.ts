@@ -10,6 +10,8 @@ describe("failed messages in plain words (M5-P6 decision 5A)", () => {
     expect(explainFailure("FAILED", "MSG_RECIPIENT_INVALID")).toBe("This number can't receive WhatsApp.");
     expect(explainFailure("FAILED", "MSG_OUTCOME_UNKNOWN")).toMatch(/can't tell whether it arrived/);
     expect(explainFailure("FAILED", "REM_CLINIC_PHONE_MISSING")).toMatch(/clinic has no phone/);
+    // M9-P1: messaging switched off for the deployment.
+    expect(explainFailure("FAILED", "MSG_CHANNEL_DISABLED")).toMatch(/switched off/);
     expect(explainFailure("SKIPPED_NO_CONSENT", null)).toMatch(/hasn't agreed/);
     expect(explainFailure("FAILED", "MSG_SOMETHING_NEW")).toBe("The message could not be delivered.");
     expect(explainFailure("FAILED", null)).toBe("The message could not be delivered.");

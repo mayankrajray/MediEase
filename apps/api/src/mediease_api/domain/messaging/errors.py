@@ -26,6 +26,9 @@ MSG_PROVIDER_REJECTED = "MSG_PROVIDER_REJECTED"
 # A message row that was prepared, refused, and no longer applies at its retry.
 MSG_NO_CONSENT = "MSG_NO_CONSENT"
 MSG_NOT_APPLICABLE = "MSG_NOT_APPLICABLE"
+# M9-P1 (decision 1): the clinic-wide channel is switched off (``MESSAGING_PROVIDER=disabled``).
+# Nothing was sent; the message is closed with this code, never retried, and not an alert.
+MSG_CHANNEL_DISABLED = "MSG_CHANNEL_DISABLED"
 
 RETRYABLE_CODES = frozenset({MSG_PROVIDER_RATE_LIMIT, MSG_PROVIDER_UNAVAILABLE})
 
@@ -40,6 +43,13 @@ class ProviderRefused(Exception):
 
     def __str__(self) -> str:
         return self.code
+
+
+class ChannelDisabled(ProviderRefused):
+    """M9-P1: sending is switched off by configuration. A settled outcome, not a failure."""
+
+    def __init__(self) -> None:
+        super().__init__(MSG_CHANNEL_DISABLED)
 
 
 class ProviderOutcomeUnknown(Exception):
