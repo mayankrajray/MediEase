@@ -15,6 +15,9 @@ x-api-environment: &api-environment
   DB_ECHO_PARAMS: ${DB_ECHO_PARAMS:-false}
   DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
   COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  # Where the web app lives, for the links we hand out (invitations, patient links, Google's
+  # redirect URI). https in staging and production (M9-P1: it was not passed before).
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
   JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY in .env}
   AUDIT_IP_SALT: ${AUDIT_IP_SALT:?set AUDIT_IP_SALT in .env}
   ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}

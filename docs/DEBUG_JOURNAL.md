@@ -29,6 +29,25 @@ Rules:
 
 ---
 
+### 2026-11-13 — The first production start stops at migrate: PUBLIC_BASE_URL never reached the containers (`CFG_INVALID`)
+
+- **Milestone / area:** M9-P1 / deployment (`docker-compose.yml`, `x-api-environment`)
+- **Symptom:** `make up` on the new Compute Engine VM: `migrate` exited 1, nothing else started.
+  Its log: `CFG_INVALID … PUBLIC_BASE_URL: must use https when APP_ENV=production`, although the
+  VM's `.env` set `PUBLIC_BASE_URL=https://mediease.duckdns.org`.
+- **Impact:** Production first deploy only; nothing had started, no data.
+- **Reproduction:** `tests/unit/config/test_compose_environment.py` fails on the old compose file.
+- **Investigation:** Compared `AppSettings.model_fields` with the keys of `x-api-environment`:
+  `PUBLIC_BASE_URL` was the only setting missing. The containers therefore always used the
+  default `http://localhost:3000`, which is valid locally and in CI, so it never showed.
+- **Root cause:** compose passes the API's settings explicitly; one was never added to the list.
+- **Fix:** `PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}` in `x-api-environment`.
+  Commit: see PR #76.
+- **Guard:** `tests/unit/config/test_compose_environment.py::test_m9_p1_compose_passes_every_api_setting_and_nothing_else`
+  (every setting is passed, and nothing that is not a setting).
+- **Prevention / follow-up:** a new setting now fails that test until it is in compose.
+- **Search keywords:** PUBLIC_BASE_URL, CFG_INVALID, compose environment, migrate exit 1, production
+
 ### 2026-11-11 — CI's API job cannot install the PDF libraries: no Ubuntu mirror answers
 
 - **Milestone / area:** M7c / CI (`.github/workflows/ci.yml`, API job)
