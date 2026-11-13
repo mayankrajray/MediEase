@@ -153,6 +153,16 @@ def test_failure_for_unknown_answers_is_refused() -> None:
     assert failure_for(302) is PushFailure.REFUSED
 
 
+def test_m7e_e5_a_key_that_cannot_be_encrypted_for_is_refused_not_retried() -> None:
+    """Found on the developer's device test: such a key raised ValueError and the job retried."""
+    session = Session(201)
+    bad = PushTarget(ENDPOINT, _b64(b"\x04" + bytes(range(64))), _b64(bytes(16)))
+    with pytest.raises(PushFailed) as raised:
+        _adapter(session).send(bad, "{}", ttl=60)
+    assert raised.value.failure is PushFailure.REFUSED and not raised.value.failure.retryable
+    assert session.calls == []
+
+
 def test_r37_the_console_logs_no_endpoint_or_message(json_logs: Any) -> None:
     console = ConsolePushAdapter()
     target = Browser().target

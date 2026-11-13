@@ -37,6 +37,16 @@ PUSH_HOST_SUFFIXES = (".push.apple.com", ".notify.windows.com")
 
 _P256DH_BYTES = 65  # an uncompressed P-256 point: 0x04, then X and Y
 _AUTH_BYTES = 16
+# The P-256 curve y^2 = x^3 - 3x + b over the prime p (FIPS 186-4, D.1.2.3). A key that is not a
+# point on it cannot be encrypted for, so it is refused here rather than failing at every send.
+_P = 2**256 - 2**224 + 2**192 + 2**96 - 1
+_B = 0x5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B
+
+
+def _on_p256(point: bytes) -> bool:
+    x = int.from_bytes(point[1:33], "big")
+    y = int.from_bytes(point[33:65], "big")
+    return x < _P and y < _P and (y * y - (x * x * x - 3 * x + _B)) % _P == 0
 
 
 class OwnerKind(StrEnum):
@@ -111,7 +121,8 @@ def _decode(value: str, field: str, size: int) -> bytes:
 
 def check_keys(p256dh: str, auth: str) -> tuple[str, str]:
     """The browser's public key (a P-256 point) and its 16-byte auth secret, as base64url."""
-    if _decode(p256dh, "keys.p256dh", _P256DH_BYTES)[0] != 0x04:
+    point = _decode(p256dh, "keys.p256dh", _P256DH_BYTES)
+    if point[0] != 0x04 or not _on_p256(point):
         raise InvalidValue("keys.p256dh", "must be an uncompressed P-256 public key")
     _decode(auth, "keys.auth", _AUTH_BYTES)
     return p256dh, auth
