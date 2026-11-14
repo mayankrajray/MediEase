@@ -1011,7 +1011,8 @@ The format of each file is in `docs/specs/clinic-import.md`; the bundled demo
 2. Check it locally first, against your local stack: `make import-clinic DIR=/path/to/folder
    DRY_RUN=1`. Fix what it names (file, line, column), until it says *checked*.
 3. On the server, copy the folder to the VM (from the Console's SSH window: *Upload file*, then
-   `mkdir -p ~/import && mv ~/*.csv ~/import/`), and run in `/opt/mediease`:
+   `mkdir -p ~/import && mv ~/*.csv ~/import/ && chmod -R a+rX ~/import`; the import runs as
+   the container's own user, which must be able to read the files), and run in `/opt/mediease`:
    ```bash
    make import-clinic DIR=~/import DRY_RUN=1    # check
    make import-clinic DIR=~/import              # write; type the slug when asked

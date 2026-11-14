@@ -223,3 +223,13 @@ def test_m9_p1_dates_may_be_relative_to_the_import_day(raw: str, expected: int |
         assert (day - today).days == expected
     with pytest.raises(ValueError, match="today-3"):
         import_clinic.parse_day("yesterday", today)
+
+
+def test_m9_p1_an_unreadable_file_is_a_named_problem_not_a_crash(tmp_path: Path) -> None:
+    folder = _demo_copy(tmp_path)
+    (folder / "clinic.csv").chmod(0)
+    try:
+        with pytest.raises(import_clinic.ImportProblem, match=r"clinic\.csv: cannot be read"):
+            import_clinic.read_rows(folder, import_clinic.FILES["clinic.csv"])
+    finally:
+        (folder / "clinic.csv").chmod(0o644)
