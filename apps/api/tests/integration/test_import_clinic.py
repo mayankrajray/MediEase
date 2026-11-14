@@ -225,11 +225,14 @@ def test_m9_p1_dates_may_be_relative_to_the_import_day(raw: str, expected: int |
         import_clinic.parse_day("yesterday", today)
 
 
-def test_m9_p1_an_unreadable_file_is_a_named_problem_not_a_crash(tmp_path: Path) -> None:
-    folder = _demo_copy(tmp_path)
-    (folder / "clinic.csv").chmod(0)
-    try:
-        with pytest.raises(import_clinic.ImportProblem, match=r"clinic\.csv: cannot be read"):
-            import_clinic.read_rows(folder, import_clinic.FILES["clinic.csv"])
-    finally:
-        (folder / "clinic.csv").chmod(0o644)
+def test_m9_p1_an_unreadable_file_is_a_named_problem_not_a_crash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The container's user cannot read a folder only the VM user can (mode 700). Simulated: the
+    # test may run as root, which reads anything.
+    def refuse(source: object, spec: object) -> list[import_clinic.Row]:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(import_clinic, "_read_rows", refuse)
+    with pytest.raises(import_clinic.ImportProblem, match=r"clinic\.csv: cannot be read"):
+        import_clinic.read_rows(_demo_copy(tmp_path), import_clinic.FILES["clinic.csv"])
