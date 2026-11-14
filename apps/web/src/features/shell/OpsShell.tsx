@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, ClipboardCheck, MessageSquare } from "lucide-react";
+import { Activity, Building2, ClipboardCheck, MessageSquare } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
@@ -15,6 +15,8 @@ type OpsRole = "OPS_ADMIN" | "OPS_REVIEWER";
 const OPS_LINKS: readonly (ShellLink & { readonly role: OpsRole | null })[] = [
   { href: "/ops", label: "Home", exact: true, role: null, icon: Building2 },
   { href: "/ops/applications", label: "Applications", role: "OPS_REVIEWER", icon: ClipboardCheck },
+  // M9-P4 (FR-OPS-03): each clinic's activity in counts.
+  { href: "/ops/usage", label: "Clinic usage", role: "OPS_ADMIN", icon: Activity },
   { href: "/ops/messaging-costs", label: "Messaging costs", role: "OPS_ADMIN", icon: MessageSquare },
 ];
 
