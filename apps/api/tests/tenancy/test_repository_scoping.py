@@ -135,6 +135,12 @@ class Tenant:
 # clinic and channel only, never a message, patient or number, and only ops reach it
 # (tests/integration/test_message_costs_db.py).
 #
+# Reviewed exception (M9-P4, FR-OPS-03): SqlAlchemyClinicUsageReport counts each clinic's
+# patients, appointments, visits, prescriptions and bills by week, its active staff and its failed
+# messages and jobs, for the ops console's usage view. It returns counts, dates and the clinic's
+# name only, never a row about a patient or a person, and only ops reach it
+# (tests/integration/test_ops_usage_http.py).
+#
 # Reviewed exception (M6b-P1 decision 6A): SqlAlchemyPortalLookup reads patient_account_links and
 # patient_portal_invites across clinics, because a portal caller names no clinic. It returns an
 # account's active links (IDs, method, dates) and an invite digest's clinic ID, nothing else; every

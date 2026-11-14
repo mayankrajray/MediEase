@@ -36,6 +36,7 @@ from mediease_api.ports.messaging import (
 )
 from mediease_api.ports.notifications import NotificationRepository, PreferenceRepository
 from mediease_api.ports.onboarding import ApplicationRepository
+from mediease_api.ports.ops import ClinicUsageReport
 from mediease_api.ports.patient_notifications import (
     PatientNotificationLookup,
     PatientNotificationRepository,
@@ -312,6 +313,11 @@ class UnitOfWork(Protocol):
     @property
     def message_costs(self) -> MessageCostReport:
         """Monthly message counts and costs per clinic (M5-P5, a reviewed ops read)."""
+        ...
+
+    @property
+    def clinic_usage(self) -> ClinicUsageReport:
+        """Each clinic's activity in counts (M9-P4, FR-OPS-03, a reviewed ops read)."""
         ...
 
     def tenant(self, clinic_id: UUID) -> TenantRepositories:
