@@ -285,6 +285,16 @@ Source = Traversable
 
 
 def read_rows(source: Source, spec: FileSpec) -> list[Row]:
+    try:
+        return _read_rows(source, spec)
+    except PermissionError:
+        # The import runs as the container's own user, which must be able to read the folder.
+        raise ImportProblem(
+            f"{spec.name}: cannot be read (permissions); run: chmod -R a+rX <the folder>"
+        ) from None
+
+
+def _read_rows(source: Source, spec: FileSpec) -> list[Row]:
     path = source / spec.name
     if not path.is_file():
         if spec.must_exist:
