@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MediEase API
-  version: 0.53.0
+  version: 0.54.0
   description: |
     Source of truth for the MediEase HTTP contract (ADR-0008).
     Endpoints are added here in the same change that implements them.
@@ -5981,6 +5981,59 @@ paths:
           $ref: '#/components/responses/PermissionError'
         '422':
           description: REQ_VALIDATION_FAILED (month is missing or not YYYY-MM)
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/ops/clinic-usage:
+    get:
+      tags: [ops]
+      operationId: getOpsClinicUsage
+      summary: Each clinic's activity in counts, by week
+      description: |
+        Spec ops-clinic-usage (M9-P4; FR-OPS-03; PRD 11.2). Ops only. For every clinic, newest
+        first: its staff, the members active in the last 7 days (signed in or did something
+        audited there), when it was last used, the patients registered, appointments booked
+        (not cancelled), visits, prescriptions issued and bills issued, all time and in each of
+        the last `weeks` weeks (Monday to Sunday, India time, the current week last), and its
+        failed messages and failed jobs in the last 7 days. Messages held back because
+        messaging is switched off (MSG_CHANNEL_DISABLED) are counted apart as not sent.
+        Counts, dates and clinic names only: never a patient, a person, a number or anything
+        clinical.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: weeks
+          in: query
+          required: false
+          description: How many weeks to show, 1-12 (default 4)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            default: 4
+      responses:
+        '200':
+          description: Every clinic's activity
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsClinicUsage'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/PermissionError'
+        '422':
+          description: REQ_VALIDATION_FAILED (weeks is not 1-12)
           headers:
             X-Request-ID:
               $ref: '#/components/headers/RequestId'
@@ -13441,6 +13494,153 @@ components:
           properties:
             doctors: {type: integer, description: Active doctor profiles}
             users: {type: integer, description: Invited or active members}
+    OpsClinicUsage:
+      type: object
+      description: M9-P4 (FR-OPS-03). Counts, dates and clinic names only.
+      required: [generated_at, weeks, summary, clinics]
+      additionalProperties: false
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        weeks:
+          type: array
+          description: The weeks shown, oldest first; the current week is the last
+          items:
+            $ref: '#/components/schemas/OpsUsageWeekRange'
+        summary:
+          $ref: '#/components/schemas/OpsUsageSummary'
+        clinics:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsClinicUsageRow'
+    OpsUsageWeekRange:
+      type: object
+      required: [start, end]
+      additionalProperties: false
+      properties:
+        start:
+          type: string
+          format: date
+          description: A Monday
+        end:
+          type: string
+          format: date
+          description: The Sunday after it
+    OpsUsageSummary:
+      type: object
+      required: [clinics, active_clinics, totals]
+      additionalProperties: false
+      properties:
+        clinics:
+          type: integer
+          minimum: 0
+        active_clinics:
+          type: integer
+          minimum: 0
+          description: Clinics with an active member in the last 7 days or a record this week
+        totals:
+          $ref: '#/components/schemas/OpsUsageCounts'
+    OpsUsageCounts:
+      type: object
+      description: Records made, by the time they were made
+      required: [patients, appointments, visits, prescriptions, bills]
+      additionalProperties: false
+      properties:
+        patients:
+          type: integer
+          minimum: 0
+        appointments:
+          type: integer
+          minimum: 0
+        visits:
+          type: integer
+          minimum: 0
+        prescriptions:
+          type: integer
+          minimum: 0
+        bills:
+          type: integer
+          minimum: 0
+    OpsClinicUsageRow:
+      type: object
+      required:
+        [clinic_id, name, slug, status, timezone, created_at, last_active_at, active_this_week,
+         staff, totals, weeks, health]
+      additionalProperties: false
+      properties:
+        clinic_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        status:
+          $ref: '#/components/schemas/ClinicStatus'
+        timezone:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_active_at:
+          type: [string, 'null']
+          format: date-time
+          description: The latest sign-in, audited action or record; null when never used
+        active_this_week:
+          type: boolean
+        staff:
+          type: object
+          required: [owners, doctors, front_desk, members, active_7d]
+          additionalProperties: false
+          properties:
+            owners:
+              type: integer
+              minimum: 0
+            members:
+              type: integer
+              minimum: 0
+              description: Distinct people with an active membership, each counted once
+            doctors:
+              type: integer
+              minimum: 0
+              description: Active doctor profiles (a practising owner counts here too)
+            front_desk:
+              type: integer
+              minimum: 0
+            active_7d:
+              type: integer
+              minimum: 0
+              description: Members who signed in or did something audited in the last 7 days
+        totals:
+          $ref: '#/components/schemas/OpsUsageCounts'
+        weeks:
+          type: array
+          items:
+            type: object
+            required: [start, counts]
+            additionalProperties: false
+            properties:
+              start:
+                type: string
+                format: date
+              counts:
+                $ref: '#/components/schemas/OpsUsageCounts'
+        health:
+          type: object
+          required: [failed_messages_7d, not_sent_7d, failed_jobs_7d]
+          additionalProperties: false
+          properties:
+            failed_messages_7d:
+              type: integer
+              minimum: 0
+            not_sent_7d:
+              type: integer
+              minimum: 0
+              description: Messages not sent because messaging is switched off
+            failed_jobs_7d:
+              type: integer
+              minimum: 0
     OpsMessagingCosts:
       type: object
       description: M5-P5 (R18). Money in paise, excluding GST.

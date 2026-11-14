@@ -40,6 +40,7 @@ from mediease_api.adapters.db.notifications import (
     SqlAlchemyNotificationRepository,
     SqlAlchemyPreferenceRepository,
 )
+from mediease_api.adapters.db.ops_usage import SqlAlchemyClinicUsageReport
 from mediease_api.adapters.db.patient_notifications import (
     SqlAlchemyPatientNotificationLookup,
     SqlAlchemyPatientNotificationRepository,
@@ -314,6 +315,8 @@ class _OpenUnit:
         # M5-P5: who a STOP reply opts out (IDs only).
         self.opt_out_lookup = SqlAlchemyOptOutLookup(session)
         self.message_costs = SqlAlchemyMessageCostReport(session)
+        # M9-P4 (FR-OPS-03): each clinic's activity in counts, for the ops console.
+        self.clinic_usage = SqlAlchemyClinicUsageReport(session)
         # M6d-P7: each clinic's plan and trial (platform data, one row per clinic).
         self.subscriptions = SqlAlchemySubscriptionRepository(session)
         # M7b: prescription uploads (account-owned) and a prescription's clinic (reviewed read).
@@ -453,6 +456,10 @@ class SqlAlchemyUnitOfWork:
     @property
     def message_costs(self) -> SqlAlchemyMessageCostReport:
         return self._require_open().message_costs
+
+    @property
+    def clinic_usage(self) -> SqlAlchemyClinicUsageReport:
+        return self._require_open().clinic_usage
 
     @property
     def prescription_uploads(self) -> SqlAlchemyPrescriptionUploadRepository:

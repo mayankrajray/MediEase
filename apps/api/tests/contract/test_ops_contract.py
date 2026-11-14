@@ -158,6 +158,19 @@ def test_adr_0008_the_ops_messaging_costs_match_contract(openapi: OpenAPI, world
     _check(openapi, staff, validate_request=False)
 
 
+def test_adr_0008_the_ops_clinic_usage_matches_contract(openapi: OpenAPI, world: World) -> None:
+    ops = world.client_for(world.ops)
+    ok = _send(ops, "GET", "/api/v1/ops/clinic-usage")
+    assert ok.status_code == 200 and ok.get_json()["clinics"]
+    _check(openapi, ok, validate_request=False)
+    bad = _send(ops, "GET", "/api/v1/ops/clinic-usage?weeks=13")
+    assert bad.status_code == 422
+    _check(openapi, bad, validate_request=False)
+    staff = _send(world.client_for(world.a.owner), "GET", "/api/v1/ops/clinic-usage")
+    assert staff.status_code == 403
+    _check(openapi, staff, validate_request=False)
+
+
 def test_adr_0008_the_owner_management_endpoints_match_contract(
     openapi: OpenAPI, world: World
 ) -> None:

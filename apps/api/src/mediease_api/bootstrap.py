@@ -207,6 +207,7 @@ from mediease_api.application.onboarding.review import (
 from mediease_api.application.onboarding.submit import ConfirmApplication, SubmitApplication
 from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinics, MessagingCosts
 from mediease_api.application.ops.suspension import ReactivateClinic, SuspendClinic
+from mediease_api.application.ops.usage import GetClinicUsage
 from mediease_api.application.patients.consent import OptIn, OptOut, RecordConsent
 from mediease_api.application.patients.import_patients import ImportPatients
 from mediease_api.application.patients.my_patients import ListMyPatients
@@ -1094,6 +1095,9 @@ class _UseCases:
 
     def messaging_costs(self) -> MessagingCosts:
         return MessagingCosts(uow=self._uow())
+
+    def clinic_usage(self) -> GetClinicUsage:
+        return GetClinicUsage(uow=self._uow(), clock=self.clock)
 
     # --- M6c-P1: clinic applications ------------------------------------------------------------
     def submit_application(self) -> SubmitApplication:

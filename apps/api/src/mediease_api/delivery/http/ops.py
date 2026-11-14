@@ -10,6 +10,7 @@
 | ``POST /api/v1/ops/clinics/{id}/patient-imports`` | CSV patient import, dry run by default |
 | ``PUT /api/v1/ops/clinics/{id}/doctors/{doctor_id}/schedule`` | Weekly schedule (D5) |
 | ``GET /api/v1/ops/messaging-costs?month=YYYY-MM`` | Messages and their cost per clinic (M5-P5) |
+| ``GET /api/v1/ops/clinic-usage?weeks=4`` | Each clinic's activity in counts (M9-P4, FR-OPS-03) |
 
 Every route is ``@ops``: platform staff only, and clinic staff are refused
 even as owners (spec R10). Ops users have no membership, so the clinic is
@@ -17,8 +18,7 @@ named in the path — the use cases still reach tenant rows only through
 ``uow.tenant(clinic_id)``.
 
 Ops never see clinical content: these endpoints return clinics, doctors,
-staff names and timestamps. The clinic-health view (FR-OPS-03) arrives in
-M6-P4 on top of ``v_clinic_activity``.
+staff names and timestamps. The clinic usage view (FR-OPS-03, M9-P4) returns counts only.
 
 The response that creates an invitation contains the acceptance URL — the one
 time the secret is visible anywhere.
@@ -27,7 +27,8 @@ time the secret is visible anywhere.
 from __future__ import annotations
 
 import re
-from datetime import date
+from collections.abc import Mapping
+from datetime import date, timedelta
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -54,6 +55,12 @@ from mediease_api.application.ops.queries import (
     MessagingCosts,
     paise,
 )
+from mediease_api.application.ops.usage import (
+    DEFAULT_WEEKS,
+    MAX_WEEKS,
+    GetClinicUsage,
+    UsageReport,
+)
 from mediease_api.application.patients.import_patients import (
     ImportPatients,
     ImportPatientsCommand,
@@ -77,6 +84,7 @@ from mediease_api.domain.clinics.clinic import PaperSize
 from mediease_api.domain.identity.membership import Role
 from mediease_api.domain.scheduling.mode import BookingMode
 from mediease_api.domain.subscriptions.subscription import Plan
+from mediease_api.ports.ops import UsageMetric
 
 # The patient import's body limit (M2-P4): 5,000 rows fit with room to spare.
 MAX_IMPORT_BYTES = 2 * 1024 * 1024
@@ -93,6 +101,7 @@ class OpsUseCases(Protocol):
     def import_patients(self) -> ImportPatients: ...
     def replace_schedule(self) -> ReplaceSchedule: ...
     def messaging_costs(self) -> MessagingCosts: ...
+    def clinic_usage(self) -> GetClinicUsage: ...
 
 
 class NewClinicRequest(BaseModel):
@@ -263,7 +272,71 @@ def create_ops_blueprint(use_cases: OpsUseCases, *, public_base_url: str) -> Blu
             }
         )
 
+    @bp.get("/clinic-usage")
+    @ops
+    def clinic_usage() -> Response:
+        return jsonify(usage_body(use_cases.clinic_usage().execute(_weeks())))
+
     return bp
+
+
+def _weeks() -> int:
+    """``weeks``, 1-12, four when left out."""
+    raw = request.args.get("weeks", str(DEFAULT_WEEKS)).strip()
+    if not raw.isdigit() or not 1 <= int(raw) <= MAX_WEEKS:
+        raise RequestValidationFailed([{"field": "weeks", "reason": f"must be 1-{MAX_WEEKS}"}])
+    return int(raw)
+
+
+def _counts(values: Mapping[UsageMetric, int]) -> dict[str, int]:
+    return {metric.value: values[metric] for metric in UsageMetric}
+
+
+def usage_body(report: UsageReport) -> dict[str, Any]:
+    """Counts, dates and clinic names only (spec ops-clinic-usage R2)."""
+    return {
+        "generated_at": report.generated_at.isoformat(),
+        "weeks": [
+            {"start": start.isoformat(), "end": (start + timedelta(days=6)).isoformat()}
+            for start in report.week_starts
+        ],
+        "summary": {
+            "clinics": len(report.clinics),
+            "active_clinics": report.active_clinics,
+            "totals": {metric.value: report.total(metric) for metric in UsageMetric},
+        },
+        "clinics": [
+            {
+                "clinic_id": str(c.facts.clinic_id),
+                "name": c.facts.name,
+                "slug": c.facts.slug,
+                "status": c.facts.status,
+                "timezone": c.facts.timezone,
+                "created_at": c.facts.created_at.isoformat(),
+                "last_active_at": c.facts.last_active_at.isoformat()
+                if c.facts.last_active_at
+                else None,
+                "active_this_week": c.active_this_week,
+                "staff": {
+                    "owners": c.facts.owners,
+                    "doctors": c.facts.doctors,
+                    "front_desk": c.facts.front_desk,
+                    "members": c.facts.members,
+                    "active_7d": c.facts.active_users_7d,
+                },
+                "totals": _counts(c.totals),
+                "weeks": [
+                    {"start": w.start.isoformat(), "counts": _counts(w.counts)} for w in c.weeks
+                ],
+                "health": {
+                    "failed_messages_7d": c.facts.failed_messages_7d,
+                    "not_sent_7d": c.facts.not_sent_7d,
+                    "failed_jobs_7d": c.facts.failed_jobs_7d,
+                },
+            }
+            for c in report.clinics
+        ],
+    }
 
 
 _MONTH = re.compile(r"(\d{4})-(0[1-9]|1[0-2])")
