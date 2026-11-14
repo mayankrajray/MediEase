@@ -3178,6 +3178,34 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/v1/ops/clinic-usage": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Each clinic's activity in counts, by week
+         * @description Spec ops-clinic-usage (M9-P4; FR-OPS-03; PRD 11.2). Ops only. For every clinic, newest
+         *     first: its staff, the members active in the last 7 days (signed in or did something
+         *     audited there), when it was last used, the patients registered, appointments booked
+         *     (not cancelled), visits, prescriptions issued and bills issued, all time and in each of
+         *     the last `weeks` weeks (Monday to Sunday, India time, the current week last), and its
+         *     failed messages and failed jobs in the last 7 days. Messages held back because
+         *     messaging is switched off (MSG_CHANNEL_DISABLED) are counted apart as not sent.
+         *     Counts, dates and clinic names only: never a patient, a person, a number or anything
+         *     clinical.
+         */
+        readonly get: operations["getOpsClinicUsage"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/health": {
         readonly parameters: {
             readonly query?: never;
@@ -7051,6 +7079,79 @@ export interface components {
                 readonly doctors: number;
                 /** @description Invited or active members */
                 readonly users: number;
+            };
+        };
+        /** @description M9-P4 (FR-OPS-03). Counts, dates and clinic names only. */
+        readonly OpsClinicUsage: {
+            /** Format: date-time */
+            readonly generated_at: string;
+            /** @description The weeks shown, oldest first; the current week is the last */
+            readonly weeks: readonly components["schemas"]["OpsUsageWeekRange"][];
+            readonly summary: components["schemas"]["OpsUsageSummary"];
+            readonly clinics: readonly components["schemas"]["OpsClinicUsageRow"][];
+        };
+        readonly OpsUsageWeekRange: {
+            /**
+             * Format: date
+             * @description A Monday
+             */
+            readonly start: string;
+            /**
+             * Format: date
+             * @description The Sunday after it
+             */
+            readonly end: string;
+        };
+        readonly OpsUsageSummary: {
+            readonly clinics: number;
+            /** @description Clinics with an active member in the last 7 days or a record this week */
+            readonly active_clinics: number;
+            readonly totals: components["schemas"]["OpsUsageCounts"];
+        };
+        /** @description Records made, by the time they were made */
+        readonly OpsUsageCounts: {
+            readonly patients: number;
+            readonly appointments: number;
+            readonly visits: number;
+            readonly prescriptions: number;
+            readonly bills: number;
+        };
+        readonly OpsClinicUsageRow: {
+            /** Format: uuid */
+            readonly clinic_id: string;
+            readonly name: string;
+            readonly slug: string;
+            readonly status: components["schemas"]["ClinicStatus"];
+            readonly timezone: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /**
+             * Format: date-time
+             * @description The latest sign-in, audited action or record; null when never used
+             */
+            readonly last_active_at: string | null;
+            readonly active_this_week: boolean;
+            readonly staff: {
+                readonly owners: number;
+                /** @description Distinct people with an active membership, each counted once */
+                readonly members: number;
+                /** @description Active doctor profiles (a practising owner counts here too) */
+                readonly doctors: number;
+                readonly front_desk: number;
+                /** @description Members who signed in or did something audited in the last 7 days */
+                readonly active_7d: number;
+            };
+            readonly totals: components["schemas"]["OpsUsageCounts"];
+            readonly weeks: readonly {
+                /** Format: date */
+                readonly start: string;
+                readonly counts: components["schemas"]["OpsUsageCounts"];
+            }[];
+            readonly health: {
+                readonly failed_messages_7d: number;
+                /** @description Messages not sent because messaging is switched off */
+                readonly not_sent_7d: number;
+                readonly failed_jobs_7d: number;
             };
         };
         /** @description M5-P5 (R18). Money in paise, excluding GST. */
@@ -13346,6 +13447,46 @@ export interface operations {
             readonly 401: components["responses"]["AuthError"];
             readonly 403: components["responses"]["PermissionError"];
             /** @description REQ_VALIDATION_FAILED (month is missing or not YYYY-MM) */
+            readonly 422: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    readonly getOpsClinicUsage: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description How many weeks to show, 1-12 (default 4) */
+                readonly weeks?: number;
+            };
+            readonly header?: {
+                /** @description Correlation ID. Generated by the API when absent and always echoed back. */
+                readonly "X-Request-ID"?: components["parameters"]["RequestId"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Every clinic's activity */
+            readonly 200: {
+                headers: {
+                    readonly "X-Request-ID": components["headers"]["RequestId"];
+                    readonly "Cache-Control": components["headers"]["NoStore"];
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["OpsClinicUsage"];
+                };
+            };
+            readonly 401: components["responses"]["AuthError"];
+            readonly 403: components["responses"]["PermissionError"];
+            /** @description REQ_VALIDATION_FAILED (weeks is not 1-12) */
             readonly 422: {
                 headers: {
                     readonly "X-Request-ID": components["headers"]["RequestId"];
