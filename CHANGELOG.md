@@ -7,6 +7,11 @@ first production release.
 ## [Unreleased]
 
 ### Added
+- M9-P4 (#77): ops *Clinic usage* (`/ops/usage`, FR-OPS-03; spec ops-clinic-usage). For each
+  clinic: last active, its people and who was active in 7 days, patients, appointments, visits,
+  prescriptions and bills per week (4, 8 or 12 weeks, Monday–Sunday India time) and in total,
+  and failed messages and dead jobs in 7 days. Counts only. *Download CSV* gives the usage
+  evidence for all clinics or one. `GET /api/v1/ops/clinic-usage`, contract 0.54.0.
 - M9 (#75): `make import-clinic` loads one clinic with its people and recent history (visits,
   prescriptions, bills, payments, follow-ups, upcoming appointments, patient app logins) from CSV
   files, through the domain's rules, in one transaction (spec clinic-import). A complete invented

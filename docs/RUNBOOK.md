@@ -50,6 +50,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 37. Import a clinic from CSV files (M9-P1)
 38. Production on Google Cloud (M9-P1)
 39. Backups and the restore drill (M9-P1)
+40. Clinic usage and the usage evidence (M9-P4)
 
 ---
 
@@ -1109,3 +1110,17 @@ read. Record the date and the time it took in the M9 design.
    compose exec -T api tar -xzf - -C /var/lib/mediease/blobs < /tmp/b.tgz` needs a writable
    volume; the API container mounts it read-write.
 3. `make smoke-live` from your computer; sign in and check the latest visits.
+
+### 40. Clinic usage and the usage evidence (M9-P4, spec ops-clinic-usage)
+
+Sign in as an ops admin (`ops@demo-clinic.example` on the demo; `ops@mediease.example` locally
+after `make seed`) and open **Ops console → Clinic usage** (`/ops/usage`). Each clinic
+shows when it was last active, its people, visits per week, prescriptions and message delivery,
+in counts only. Choose 4, 8 or 12 weeks.
+
+**Evidence for a design partner or the pilot scorecard:** *Download CSV* (top) writes every
+clinic; *Details* on a row, then *Download CSV*, writes one clinic's weeks with an all-time line.
+The file has clinic names and counts, no patient data, and can be shared as it is.
+
+"Not sent" counts messages held back while `MESSAGING_PROVIDER=disabled`; they are not failures.
+Failed messages or dead jobs in the last 7 days show in *Delivery*: see §6 for dead jobs.

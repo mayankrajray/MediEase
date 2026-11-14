@@ -1,6 +1,26 @@
-# NEXT_STEPS_PLAN.md — Plan for M9-P1 (go live for the Phase 2 demo), with M7e, M7d, M7c and M7 below as history
+# NEXT_STEPS_PLAN.md — Plan for M9-P2..P5 (pilot hardening), with M9-P1, M7e, M7d, M7c and M7 below as history
 
-## 0. Active: M9-P1 — Go live for the Phase 2 demo on Google Cloud
+## 0. Active: M9-P2..P5 — Pilot hardening
+
+| Field | Value |
+|---|---|
+| Status | **Approved by the developer 14 Nov 2026**: P4 first, for the Phase 2 video; then P2, P3, P5 |
+| Issue / branch | #77 / `m9/77-pilot-hardening`, from `main` after M9-P1 merged (PR #76) |
+| Deadline | Phase 2 submission 15 Nov 2026, 23:59 IST (P4); P2, P3, P5 after |
+
+| Order | Phase | Objective | Verify |
+|---|---|---|---|
+| 1 | **P4** | Ops clinic usage: `GET /api/v1/ops/clinic-usage` and `/ops/usage`, with CSV evidence (spec `ops-clinic-usage.md`, design §10) | Integration test on the demo import; contract test; web component tests |
+| 2 | **P2** | Uptime and error alerting (backups and the drill landed in P1) | Alert fires on a stopped API |
+| 3 | **P3** | Security checklist, dependency scan, audited export and erase procedures | `make audit`; checklist signed |
+| 4 | **P5** | Onboard a test clinic end to end in under 60 minutes | Timed rehearsal recorded |
+
+**Progress.** 14 Nov 2026: issue #77 and branch opened; P4 built (API, contract 0.54.0, web page,
+docs).
+
+---
+
+## M9-P1 — Go live for the Phase 2 demo on Google Cloud (done, history)
 
 | Field | Value |
 |---|---|

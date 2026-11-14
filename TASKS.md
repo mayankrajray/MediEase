@@ -11,10 +11,10 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M9 — Pilot hardening and deployment** (issue #75, branch `m9/75-deploy-demo` on `main` after M7e merged in PR #74 on 13 Nov 2026) |
-| Active phase | **M9-P1 done 14 Nov 2026**: live at https://mediease.duckdns.org (one Compute Engine VM in Mumbai, Docker Compose, PostgreSQL in Docker, Caddy); PR #76 waits for the developer's merge. Then M9-P2..P5 on a new issue and branch (developer, 14 Nov 2026) |
+| Active milestone | **M9 — Pilot hardening and deployment** (M9-P1 on issue #75, merged in PR #76; M9-P2..P5 on issue #77, branch `m9/77-pilot-hardening`) |
+| Active phase | **M9-P4 done 14 Nov 2026** (ops clinic usage, built first for the Phase 2 video, developer 14 Nov 2026); then M9-P2, P3 and P5 on the same branch. M9-P1 done 14 Nov 2026: live at https://mediease.duckdns.org |
 | Design notes | `docs/milestones/M9-deploy-demo.md`; M7e (done) in `docs/milestones/M7e-pwa-push.md`; M8 designed in `docs/milestones/M8-multi-clinic-whatsapp.md` (skipped for now by the developer) |
-| Approved plan | `NEXT_STEPS_PLAN.md` §0 (M9-P1); M7e, M7d, M7c and M7 below it as history |
+| Approved plan | `NEXT_STEPS_PLAN.md` §0 (M9-P2..P5); M9-P1, M7e, M7d, M7c and M7 below it as history |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
 | Open decisions | L-09 (Google sign-in), L-10 (Groq key) and L-11 (Brevo email) are done (9 Nov 2026). The issue #49 title still says "MVP demo" (rename on GitHub by the developer). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test checks the index plan in CI and the 150 ms bound locally (11 Nov 2026) |
@@ -316,7 +316,8 @@ PR #72, 12 Nov 2026), PR #74, one PR. Nothing is built yet.
 
 **Covers:** NFR-03..07, NFR-16, FR-OPS-03. **Exit:** production deployed in India region; restore
 drill completed; security checklist signed; two pilot clinics onboarded. (Was M6 before PRD v1.1.)
-**Issue:** #75, branch `m9/75-deploy-demo`. **Design:** `docs/milestones/M9-deploy-demo.md`
+**Issue:** #75, branch `m9/75-deploy-demo` (P1, merged in PR #76); #77, branch
+`m9/77-pilot-hardening` (P2..P5). **Design:** `docs/milestones/M9-deploy-demo.md`
 (Google Cloud, one VM in Mumbai, approved 13 Nov 2026).
 
 | Phase | Scope | Status |
@@ -324,7 +325,7 @@ drill completed; security checklist signed; two pilot clinics onboarded. (Was M6
 | M9-P1 | Go live for the Phase 2 demo: C1 messaging `disabled`, C2 `make import-clinic` (CSV, bundled demo), C3 `infra/gcp/` compose override and Caddy (TLS on `mediease.duckdns.org`), C4 backups and the restore drill, C5 `make smoke-live`, C7 docs; secrets in an owner-only `.env` on the VM | ✅ 14 Nov 2026: live at https://mediease.duckdns.org; deploy, backup and restore drill, smoke-live and the security review recorded (design §9); PR #76 |
 | M9-P2 | Backups, restore drill, uptime and error alerting | ☐ |
 | M9-P3 | Security review against `docs/SECURITY_AND_COMPLIANCE.md` checklist; dependency scan; audited export and `scripts/erase_patient.py` procedures | ☐ |
-| M9-P4 | Ops clinic-health view; usage metrics for the pilot scorecard | ☐ |
+| M9-P4 | Ops clinic-health view; usage metrics for the pilot scorecard | ✅ 14 Nov 2026: `/ops/usage` and `GET /api/v1/ops/clinic-usage` (spec `ops-clinic-usage.md`, design §10); issue #77, branch `m9/77-pilot-hardening` |
 | M9-P5 | Pilot runbook rehearsal: onboard a test clinic end-to-end in < 60 min | ☐ |
 
 ---

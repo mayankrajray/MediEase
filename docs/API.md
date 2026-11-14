@@ -190,7 +190,8 @@ the person holding the link knows whether to ask for a new one.
 | POST | `/api/v1/ops/clinics/{clinic_id}/doctors` | Add a doctor while onboarding | Implemented (M1-P5) |
 | POST | `/api/v1/ops/clinics/{clinic_id}/staff-invites` | Invite the owner (or any role) | Implemented (M1-P5) |
 | PUT | `/api/v1/ops/clinics/{clinic_id}/doctors/{doctor_id}/schedule` | Set a doctor's weekly schedule while onboarding; `POST /ops/clinics` also takes `booking_mode` | Implemented (M3-P1) |
-| GET | `/api/v1/ops/clinics/{clinic_id}/health` | Usage metrics, no clinical data (FR-OPS-03) | M6-P4 |
+| GET | `/api/v1/ops/clinics/{clinic_id}/health` | Usage metrics, no clinical data (FR-OPS-03) | Superseded by `/ops/clinic-usage` (M9-P4) |
+| GET | `/api/v1/ops/clinic-usage?weeks=1-12` | Every clinic's records per week (Monday–Sunday, India time) and in total, people, last active, failed messages and dead jobs in 7 days; counts only (FR-OPS-03, spec ops-clinic-usage) | Implemented (M9-P4) |
 | POST | `/api/v1/ops/clinics/{clinic_id}/patient-imports?dry_run=true` | CSV import (FR-PAT-08), dry run unless `dry_run=false` | Implemented (M2-P4) |
 | GET | `/api/v1/ops/jobs?state=dead` | Dead jobs | M5-P1 |
 | GET | `/api/v1/ops/messaging-costs?month=YYYY-MM` | Each clinic's messages and their cost in a month (spec R18) | Implemented (M5-P5) |
