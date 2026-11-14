@@ -171,3 +171,24 @@ service-account keys. Google sign-in with a new, unlinked account shows no recor
 
 Open: the mentor's Gmail as a Google test user; the first scheduled backup (03:00 IST) to be
 confirmed in the journal.
+
+## 10. M9-P4 — Ops clinic usage (developer, 14 Nov 2026)
+
+Issue #77, branch `m9/77-pilot-hardening` (from `main` after PR #76 merged). Built first, ahead of
+P2 and P3, so the Phase 2 video can show the ops console and the design partners' usage evidence
+(developer, 14 Nov 2026). Spec: `docs/specs/ops-clinic-usage.md`.
+
+| Decision | Choice | Rejected |
+|---|---|---|
+| Where | A new page `/ops/usage` ("Clinic usage"), beside the clinics list | Widening the clinics list, which is about onboarding |
+| Source | One cross-clinic read model over existing tables, like `SqlAlchemyMessageCostReport`; no migration | A usage table filled by a job (more moving parts for the same counts) |
+| Weeks | Monday to Sunday, India time; each clinic's records bucketed in its own timezone | Rolling 7-day windows (harder to compare with a partner's week) |
+| People | Distinct active members (`staff.members`) from the database | Adding owners, doctors and front desk (a doctor-owner would count twice) |
+| Evidence | CSV made in the browser, for all clinics or one | A server CSV endpoint (the JSON already has every number) |
+| Health | Failed messages and dead jobs in 7 days; `MSG_CHANNEL_DISABLED` counted apart as "not sent" | Counting disabled-channel messages as failures (every message fails while messaging is `disabled`) |
+
+UI: the existing ops components (`PageHeader`, `Segmented`, `StatTile`, the shared table and
+`KeyValue`), following DESIGN.md; numbers as text beside every bar for screen readers; the detail
+row renders only when open. No surface brief existed for this screen, so the developer's
+instruction to build it stood in for the design questions (impeccable "operate" mode); the
+impeccable detector found nothing on the new files.
