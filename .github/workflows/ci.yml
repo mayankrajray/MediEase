@@ -191,7 +191,7 @@ jobs:
       # image, and tzdata makes the TZ above real. The .deb files are cached per base image (the
       # key names its digest: change both together), so a hit installs them without the network.
       - name: Cache the system packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /var/cache/apt-ci
           key: apt-v2-python-3.12.15-slim-trixie-29113dcae7aa
@@ -214,7 +214,7 @@ jobs:
       # Python); a hit only re-registers the editable package.
       - name: Cache the virtual environment
         id: venv
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: apps/api/.venv
           key: venv-v3-python-3.12.15-slim-trixie-${{ hashFiles('apps/api/pyproject.toml') }}
@@ -231,7 +231,7 @@ jobs:
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       # mypy's own incremental cache: it re-checks only changed modules and their dependants.
       - name: Cache mypy results
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: apps/api/.mypy_cache
           key: mypy-v1-${{ hashFiles('apps/api/pyproject.toml') }}-${{ github.sha }}
@@ -270,7 +270,7 @@ jobs:
       # node_modules, keyed on the lockfile and the Node version; npm ci only on a miss.
       - name: Cache node_modules
         id: modules
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: apps/web/node_modules
           key: modules-v1-${{ runner.os }}-${{ hashFiles('apps/web/.nvmrc', 'apps/web/package-lock.json') }}
@@ -278,7 +278,7 @@ jobs:
         run: npm ci
       # Next.js's own build cache: unchanged pages and modules are not compiled again.
       - name: Cache the Next.js build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: apps/web/.next/cache
           key: next-v1-${{ hashFiles('apps/web/package-lock.json') }}-${{ hashFiles('apps/web/src/**', 'apps/web/next.config.ts') }}
@@ -342,7 +342,7 @@ jobs:
           node-version-file: apps/web/.nvmrc
       - name: Cache node_modules
         id: modules
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: apps/web/node_modules
           key: modules-v1-${{ runner.os }}-${{ hashFiles('apps/web/.nvmrc', 'apps/web/package-lock.json') }}
