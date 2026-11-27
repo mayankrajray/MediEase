@@ -24,6 +24,8 @@ describe("the landing page (M6c-P8, FR-LND-01..03)", () => {
   it("M7c-P7: one primary action above the fold, how joining works, and the tagline at full colour without motion", () => {
     render(<Landing language="en" />);
     const hero = screen.getByRole("region", { name: /Your clinic, organised/ });
+    // #82: the square full stops are drawing only; the heading still reads exactly as written.
+    expect(screen.getByRole("heading", { level: 1 })).toHaveAccessibleName("Your clinic, organised. Your patients, informed.");
     expect(within(hero).getAllByRole("link").map((l) => l.textContent)).toEqual(["Apply to join MediEase", "Find a doctor→"]);
     // #80: the hero is the headline, text and actions only; the queue screen drawing was removed.
     expect(screen.queryByRole("img", { name: /example of the MediEase queue screen/ })).toBeNull();

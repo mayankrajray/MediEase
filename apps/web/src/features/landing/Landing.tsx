@@ -13,7 +13,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import { BRAND_FONT } from "@/app/fonts";
 import { buttonClasses } from "@/components/ui/Button";
@@ -424,10 +424,13 @@ function Hero({ w, q }: { w: LandingWords; q: string }) {
             className="text-[clamp(2.75rem,6vw,6rem)] font-extrabold leading-[0.98] tracking-[-0.035em] text-balance text-brand-900 [&:lang(hi)]:leading-[1.25] [&:lang(hi)]:tracking-normal"
           >
             {lines.map((s, i) => (
-              <span key={s} className="block">
-                {i > 0 && <span className="sr-only"> </span>}
-                <HeadlineSentence text={s} last={i === lines.length - 1} />
-              </span>
+              <Fragment key={s}>
+                {/* Between the lines, so the heading's name reads "organised. Your" with a space. */}
+                {i > 0 && " "}
+                <span className="block">
+                  <HeadlineSentence text={s} last={i === lines.length - 1} />
+                </span>
+              </Fragment>
             ))}
           </h1>
           <div className="lg:pb-3">
@@ -468,18 +471,22 @@ function Hero({ w, q }: { w: LandingWords; q: string }) {
 
 /**
  * One headline sentence. An English full stop is drawn as a small square, the last one in the
- * brand's mint; screen readers still read the full stop. Hindi keeps its own "।".
+ * brand's mint. The real "." stays in the text, inline and transparent, so the heading's accessible
+ * name is exactly its text ("organised.", not "organised ."); the square sits on the baseline
+ * (Manrope's descent is 0.3 em). Hindi keeps its own "।".
  */
 function HeadlineSentence({ text, last }: { text: string; last: boolean }) {
   if (!text.endsWith(".")) return <>{text}</>;
   return (
     <>
       {text.slice(0, -1)}
-      <span className="sr-only">.</span>
-      <span
-        aria-hidden="true"
-        className={cx("ml-[0.06em] inline-block size-[0.17em] align-baseline", last ? "bg-brand-400" : "bg-current")}
-      />
+      <span className="relative text-transparent">
+        .
+        <span
+          aria-hidden="true"
+          className={cx("absolute bottom-[0.3em] left-[0.05em] size-[0.17em]", last ? "bg-brand-400" : "bg-brand-900")}
+        />
+      </span>
     </>
   );
 }
