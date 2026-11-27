@@ -422,8 +422,9 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
               letters apart, so Hindi keeps normal spacing. The Hindi choices are made here rather
               than with :lang() CSS, to keep the page inside its size budget. */}
           <p
+            style={{ ["--stage" as string]: "150ms" }}
             className={cx(
-              "inline-flex items-center gap-2.5 rounded-full border border-brand-200 bg-white px-3 py-1.5 text-xs font-bold uppercase text-brand-900 sm:text-sm",
+              "me-stage inline-flex items-center gap-2.5 rounded-full border border-brand-200 bg-white px-3 py-1.5 text-xs font-bold uppercase text-brand-900 sm:text-sm",
               !hindi && "tracking-[0.18em]",
             )}
           >
@@ -450,8 +451,8 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
               </Fragment>
             ))}
           </h1>
-          <div className="mt-10 flex flex-wrap items-center gap-4">
-            <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), "gap-2", WINDUP)}>
+          <div style={{ ["--stage" as string]: "350ms" }} className="me-stage mt-10 flex flex-wrap items-center gap-4">
+            <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), "gap-2", WINDUP, "me-spotlight")}>
               {w.hero.apply}
               <ArrowUpRight aria-hidden="true" className="me-arrow-up size-5" />
             </Link>
@@ -474,7 +475,7 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
               </span>
             </Link>
           </div>
-          <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-700">
+          <ul style={{ ["--stage" as string]: "550ms" }} className="me-stage mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-700">
             {w.proof.map((p) => (
               <li key={p} className="inline-flex items-center gap-2">
                 <Check aria-hidden="true" className="size-4 text-brand-700" />

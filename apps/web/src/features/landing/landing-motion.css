@@ -80,7 +80,48 @@
   display: inline-block;
 }
 
+/*
+ * Staging: the hero leads the eye. The headline is there at once (it is the focus, and the
+ * page's largest paint, so it is never hidden); the pill, the buttons and the proof points rise
+ * in after it, in reading order (`.me-stage`, with its delay in `--stage`). The drawing stages
+ * its own parts (public/brand/landing-clinic-day.svg). Once all is in, Apply's outline pulses
+ * twice (`.me-spotlight`), so the eye ends on the main action. Nothing moves with "reduce motion".
+ * `.me-stage` goes on wrappers, never on a button: a button's hover animation would replace the
+ * entrance and replay it when the pointer leaves.
+ */
+@keyframes me-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes me-ring {
+  from {
+    box-shadow: 0 0 0 0 rgb(20 125 114 / 0.45);
+  }
+  to {
+    box-shadow: 0 0 0 14px rgb(20 125 114 / 0);
+  }
+}
+
+.me-spotlight {
+  position: relative;
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  .me-stage {
+    animation: me-rise 600ms var(--ease-brand) both;
+    animation-delay: var(--stage, 0ms);
+  }
+  .me-spotlight::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: me-ring 1.4s ease-out 1.3s 2;
+  }
   .me-squash:hover,
   .me-squash:focus-visible {
     animation: me-squash 520ms var(--ease-brand);

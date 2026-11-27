@@ -2,95 +2,127 @@
   <!-- The landing hero's drawing (#82): the clinic's day in MediEase, with no words so it needs no
        translation. A queue card (tokens, patients, status), a prescription with its QR code, a
        booked slot in the calendar, and two notes: "verified, Rx ready" and "token #14 is next".
-       Decorative: the page shows it with alt="". Colours are the brand scale (globals.css). -->
+       Decorative: the page shows it with alt="". Colours are the brand scale (globals.css).
+
+       Staging: the parts arrive in the order of the story (the backdrop, then the queue, the
+       prescription, the calendar and the two notes), then the "next" dot pulses three times, so
+       the eye ends on the patient being called. With "reduce motion" it is drawn complete. -->
+  <style>
+    @keyframes r { from { opacity: 0; transform: translateY(18px); } }
+    @keyframes f { from { opacity: 0; } }
+    @keyframes p { from { opacity: .45; transform: scale(1); } to { opacity: 0; transform: scale(2.6); } }
+    .p { opacity: 0; }
+    @media (prefers-reduced-motion: no-preference) {
+      .a { animation: r .6s cubic-bezier(.22, 1, .36, 1) both; transform-box: fill-box; }
+      .b0 { animation-name: f; }
+      .b1 { animation-delay: .2s; }
+      .b2 { animation-delay: .4s; }
+      .b3 { animation-delay: .6s; }
+      .b4 { animation-delay: .8s; }
+      .b5 { animation-delay: 1s; }
+      .p { transform-box: fill-box; transform-origin: center; animation: p 1.6s ease-out 1.7s 3; }
+    }
+  </style>
   <defs>
     <pattern id="d" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.6" fill="#b8e5dc"/></pattern>
     <filter id="s" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dy="12" stdDeviation="14" flood-color="#0e504a" flood-opacity=".13"/></filter>
   </defs>
 
-  <circle cx="320" cy="250" r="225" fill="#ddf3ee" opacity=".55"/>
-  <rect x="400" y="0" width="200" height="250" fill="url(#d)"/>
+  <g class="a b0">
+    <circle cx="320" cy="250" r="225" fill="#ddf3ee" opacity=".55"/>
+    <rect x="400" y="0" width="200" height="250" fill="url(#d)"/>
+  </g>
 
   <!-- The prescription, tilted behind the queue -->
-  <g transform="rotate(-7 160 340)" filter="url(#s)">
-    <rect x="40" y="205" width="230" height="270" rx="18" fill="#fff"/>
-    <path d="M58 205h194a18 18 0 0 1 18 18v28H40v-28a18 18 0 0 1 18-18z" fill="#ddf3ee"/>
-    <text x="60" y="238" font-size="24" font-weight="700" fill="#147d72">℞</text>
-    <rect x="96" y="222" width="90" height="8" rx="4" fill="#86d0c2"/>
-    <rect x="62" y="276" width="150" height="8" rx="4" fill="#cbd5e1"/>
-    <rect x="62" y="296" width="118" height="8" rx="4" fill="#e2e8f0"/>
-    <rect x="62" y="324" width="140" height="8" rx="4" fill="#cbd5e1"/>
-    <rect x="62" y="344" width="96" height="8" rx="4" fill="#e2e8f0"/>
-    <path d="M62 378c14-18 24-18 30-4s16 10 26-6 18-8 24 4" fill="none" stroke="#147d72" stroke-width="2.5" stroke-linecap="round"/>
-    <g fill="#0e504a">
-      <path d="M70 400h22v22H70zm4 4v14h14v-14zM116 400h22v22h-22zm4 4v14h14v-14zM70 446h22v22H70zm4 4v14h14v-14z" fill-rule="evenodd"/>
-      <rect x="78" y="408" width="6" height="6"/><rect x="124" y="408" width="6" height="6"/><rect x="78" y="454" width="6" height="6"/>
-      <rect x="98" y="402" width="6" height="6"/><rect x="102" y="416" width="6" height="6"/><rect x="96" y="430" width="6" height="6"/>
-      <rect x="110" y="430" width="6" height="6"/><rect x="124" y="434" width="6" height="6"/><rect x="100" y="446" width="6" height="6"/>
-      <rect x="114" y="452" width="6" height="6"/><rect x="128" y="460" width="6" height="6"/><rect x="102" y="462" width="6" height="6"/>
+  <g class="a b2">
+    <g transform="rotate(-7 160 340)" filter="url(#s)">
+      <rect x="40" y="205" width="230" height="270" rx="18" fill="#fff"/>
+      <path d="M58 205h194a18 18 0 0 1 18 18v28H40v-28a18 18 0 0 1 18-18z" fill="#ddf3ee"/>
+      <text x="60" y="238" font-size="24" font-weight="700" fill="#147d72">℞</text>
+      <rect x="96" y="222" width="90" height="8" rx="4" fill="#86d0c2"/>
+      <rect x="62" y="276" width="150" height="8" rx="4" fill="#cbd5e1"/>
+      <rect x="62" y="296" width="118" height="8" rx="4" fill="#e2e8f0"/>
+      <rect x="62" y="324" width="140" height="8" rx="4" fill="#cbd5e1"/>
+      <rect x="62" y="344" width="96" height="8" rx="4" fill="#e2e8f0"/>
+      <path d="M62 378c14-18 24-18 30-4s16 10 26-6 18-8 24 4" fill="none" stroke="#147d72" stroke-width="2.5" stroke-linecap="round"/>
+      <g fill="#0e504a">
+        <path d="M70 400h22v22H70zm4 4v14h14v-14zM116 400h22v22h-22zm4 4v14h14v-14zM70 446h22v22H70zm4 4v14h14v-14z" fill-rule="evenodd"/>
+        <rect x="78" y="408" width="6" height="6"/><rect x="124" y="408" width="6" height="6"/><rect x="78" y="454" width="6" height="6"/>
+        <rect x="98" y="402" width="6" height="6"/><rect x="102" y="416" width="6" height="6"/><rect x="96" y="430" width="6" height="6"/>
+        <rect x="110" y="430" width="6" height="6"/><rect x="124" y="434" width="6" height="6"/><rect x="100" y="446" width="6" height="6"/>
+        <rect x="114" y="452" width="6" height="6"/><rect x="128" y="460" width="6" height="6"/><rect x="102" y="462" width="6" height="6"/>
+      </g>
     </g>
   </g>
 
   <!-- Today's queue -->
-  <g filter="url(#s)">
-    <rect x="170" y="70" width="330" height="300" rx="24" fill="#fff"/>
+  <g class="a b1">
+    <g filter="url(#s)">
+      <rect x="170" y="70" width="330" height="300" rx="24" fill="#fff"/>
+    </g>
+    <circle cx="208" cy="112" r="17" fill="#ddf3ee"/>
+    <path d="M208 103v18M199 112h18" stroke="#147d72" stroke-width="3.5" stroke-linecap="round"/>
+    <rect x="236" y="101" width="120" height="10" rx="5" fill="#0e504a" opacity=".85"/>
+    <rect x="236" y="119" width="78" height="8" rx="4" fill="#cbd5e1"/>
+    <rect x="428" y="100" width="50" height="26" rx="13" fill="#f0f9f7"/>
+    <text x="453" y="118" font-size="14" font-weight="700" fill="#0e504a" text-anchor="middle">3</text>
+    <g font-size="15" font-weight="700" fill="#334155">
+      <text x="192" y="190">#7</text>
+      <text x="192" y="250">#8</text>
+      <text x="192" y="310">#9</text>
+    </g>
+    <path d="M190 214h290M190 274h290" stroke="#eef2f6" stroke-width="2"/>
+    <circle cx="246" cy="185" r="13" fill="#fef3c7"/><rect x="268" y="180" width="92" height="10" rx="5" fill="#cbd5e1"/>
+    <circle cx="246" cy="245" r="13" fill="#e0f2fe"/><rect x="268" y="240" width="76" height="10" rx="5" fill="#cbd5e1"/>
+    <circle cx="246" cy="305" r="13" fill="#d1fae5"/><rect x="268" y="300" width="84" height="10" rx="5" fill="#cbd5e1"/>
+    <rect x="398" y="173" width="80" height="24" rx="12" fill="#fffbeb" stroke="#fcd34d"/><circle cx="412" cy="185" r="4" fill="#f59e0b"/><rect x="422" y="181" width="44" height="8" rx="4" fill="#f59e0b" opacity=".45"/>
+    <rect x="398" y="233" width="80" height="24" rx="12" fill="#f0f9ff" stroke="#7dd3fc"/><circle cx="412" cy="245" r="4" fill="#0ea5e9"/><rect x="422" y="241" width="44" height="8" rx="4" fill="#0ea5e9" opacity=".45"/>
+    <rect x="398" y="293" width="80" height="24" rx="12" fill="#ecfdf5" stroke="#6ee7b7"/><circle cx="412" cy="305" r="4" fill="#10b981"/><rect x="422" y="301" width="44" height="8" rx="4" fill="#10b981" opacity=".45"/>
+    <rect x="190" y="334" width="290" height="22" rx="11" fill="#f1f5f9"/><rect x="204" y="341" width="130" height="8" rx="4" fill="#cbd5e1"/>
   </g>
-  <circle cx="208" cy="112" r="17" fill="#ddf3ee"/>
-  <path d="M208 103v18M199 112h18" stroke="#147d72" stroke-width="3.5" stroke-linecap="round"/>
-  <rect x="236" y="101" width="120" height="10" rx="5" fill="#0e504a" opacity=".85"/>
-  <rect x="236" y="119" width="78" height="8" rx="4" fill="#cbd5e1"/>
-  <rect x="428" y="100" width="50" height="26" rx="13" fill="#f0f9f7"/>
-  <text x="453" y="118" font-size="14" font-weight="700" fill="#0e504a" text-anchor="middle">3</text>
-
-  <g font-size="15" font-weight="700" fill="#334155">
-    <text x="192" y="190">#7</text>
-    <text x="192" y="250">#8</text>
-    <text x="192" y="310">#9</text>
-  </g>
-  <path d="M190 214h290M190 274h290" stroke="#eef2f6" stroke-width="2"/>
-  <circle cx="246" cy="185" r="13" fill="#fef3c7"/><rect x="268" y="180" width="92" height="10" rx="5" fill="#cbd5e1"/>
-  <circle cx="246" cy="245" r="13" fill="#e0f2fe"/><rect x="268" y="240" width="76" height="10" rx="5" fill="#cbd5e1"/>
-  <circle cx="246" cy="305" r="13" fill="#d1fae5"/><rect x="268" y="300" width="84" height="10" rx="5" fill="#cbd5e1"/>
-  <rect x="398" y="173" width="80" height="24" rx="12" fill="#fffbeb" stroke="#fcd34d"/><circle cx="412" cy="185" r="4" fill="#f59e0b"/><rect x="422" y="181" width="44" height="8" rx="4" fill="#f59e0b" opacity=".45"/>
-  <rect x="398" y="233" width="80" height="24" rx="12" fill="#f0f9ff" stroke="#7dd3fc"/><circle cx="412" cy="245" r="4" fill="#0ea5e9"/><rect x="422" y="241" width="44" height="8" rx="4" fill="#0ea5e9" opacity=".45"/>
-  <rect x="398" y="293" width="80" height="24" rx="12" fill="#ecfdf5" stroke="#6ee7b7"/><circle cx="412" cy="305" r="4" fill="#10b981"/><rect x="422" y="301" width="44" height="8" rx="4" fill="#10b981" opacity=".45"/>
-  <rect x="190" y="334" width="290" height="22" rx="11" fill="#f1f5f9"/><rect x="204" y="341" width="130" height="8" rx="4" fill="#cbd5e1"/>
 
   <!-- A booked slot in the calendar, below the queue's right corner -->
-  <g transform="translate(10 150)">
-    <g filter="url(#s)">
-      <rect x="452" y="178" width="132" height="128" rx="18" fill="#fff"/>
+  <g class="a b3">
+    <g transform="translate(10 150)">
+      <g filter="url(#s)">
+        <rect x="452" y="178" width="132" height="128" rx="18" fill="#fff"/>
+      </g>
+      <path d="M470 178h96a18 18 0 0 1 18 18v12H452v-12a18 18 0 0 1 18-18z" fill="#147d72"/>
+      <path d="M484 172v14M552 172v14" stroke="#0e504a" stroke-width="4" stroke-linecap="round"/>
+      <g fill="#f0f9f7">
+        <rect x="466" y="220" width="22" height="18" rx="5"/><rect x="494" y="220" width="22" height="18" rx="5"/><rect x="550" y="220" width="22" height="18" rx="5"/>
+        <rect x="466" y="244" width="22" height="18" rx="5"/><rect x="494" y="244" width="22" height="18" rx="5"/><rect x="522" y="244" width="22" height="18" rx="5"/><rect x="550" y="244" width="22" height="18" rx="5"/>
+        <rect x="466" y="268" width="22" height="18" rx="5"/><rect x="494" y="268" width="22" height="18" rx="5"/><rect x="522" y="268" width="22" height="18" rx="5"/>
+      </g>
+      <rect x="522" y="220" width="22" height="18" rx="5" fill="#147d72"/>
+      <path d="M527 229l4 4 8-8" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
     </g>
-    <path d="M470 178h96a18 18 0 0 1 18 18v12H452v-12a18 18 0 0 1 18-18z" fill="#147d72"/>
-    <path d="M484 172v14M552 172v14" stroke="#0e504a" stroke-width="4" stroke-linecap="round"/>
-    <g fill="#f0f9f7">
-      <rect x="466" y="220" width="22" height="18" rx="5"/><rect x="494" y="220" width="22" height="18" rx="5"/><rect x="550" y="220" width="22" height="18" rx="5"/>
-      <rect x="466" y="244" width="22" height="18" rx="5"/><rect x="494" y="244" width="22" height="18" rx="5"/><rect x="522" y="244" width="22" height="18" rx="5"/><rect x="550" y="244" width="22" height="18" rx="5"/>
-      <rect x="466" y="268" width="22" height="18" rx="5"/><rect x="494" y="268" width="22" height="18" rx="5"/><rect x="522" y="268" width="22" height="18" rx="5"/>
-    </g>
-    <rect x="522" y="220" width="22" height="18" rx="5" fill="#147d72"/>
-    <path d="M527 229l4 4 8-8" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 
   <!-- Note: verified, Rx ready -->
-  <g filter="url(#s)">
-    <rect x="330" y="22" width="210" height="46" rx="23" fill="#fff"/>
+  <g class="a b4">
+    <g filter="url(#s)">
+      <rect x="330" y="22" width="210" height="46" rx="23" fill="#fff"/>
+    </g>
+    <circle cx="356" cy="45" r="13" fill="#ddf3ee"/>
+    <path d="M350 45l4 4 8-8" fill="none" stroke="#147d72" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="378" y="40" width="66" height="10" rx="5" fill="#0e504a" opacity=".8"/>
+    <circle cx="456" cy="45" r="2" fill="#86d0c2"/>
+    <rect x="468" y="35" width="15" height="20" rx="3" fill="none" stroke="#147d72" stroke-width="2"/>
+    <path d="M472 42h7M472 47h5" stroke="#147d72" stroke-width="2" stroke-linecap="round"/>
+    <rect x="490" y="40" width="34" height="10" rx="5" fill="#4fb3a3"/>
   </g>
-  <circle cx="356" cy="45" r="13" fill="#ddf3ee"/>
-  <path d="M350 45l4 4 8-8" fill="none" stroke="#147d72" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="378" y="40" width="66" height="10" rx="5" fill="#0e504a" opacity=".8"/>
-  <circle cx="456" cy="45" r="2" fill="#86d0c2"/>
-  <rect x="468" y="35" width="15" height="20" rx="3" fill="none" stroke="#147d72" stroke-width="2"/>
-  <path d="M472 42h7M472 47h5" stroke="#147d72" stroke-width="2" stroke-linecap="round"/>
-  <rect x="490" y="40" width="34" height="10" rx="5" fill="#4fb3a3"/>
 
-  <!-- Note: token #14 is next -->
-  <g filter="url(#s)">
-    <rect x="198" y="392" width="238" height="50" rx="25" fill="#fff"/>
+  <!-- Note: token #14 is next; its dot pulses once everything is in -->
+  <g class="a b5">
+    <g filter="url(#s)">
+      <rect x="198" y="392" width="238" height="50" rx="25" fill="#fff"/>
+    </g>
+    <circle class="p" cx="224" cy="417" r="11" fill="#10b981"/>
+    <circle cx="224" cy="417" r="11" fill="#10b981" opacity=".2"/>
+    <circle cx="224" cy="417" r="5.5" fill="#10b981"/>
+    <text x="244" y="424" font-size="19" font-weight="800" fill="#147d72">#14</text>
+    <rect x="330" y="402" width="94" height="30" rx="15" fill="#147d72"/>
+    <path d="M356 417h40m-8-7 8 7-8 7" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
-  <circle cx="224" cy="417" r="11" fill="#10b981" opacity=".2"/>
-  <circle cx="224" cy="417" r="5.5" fill="#10b981"/>
-  <text x="244" y="424" font-size="19" font-weight="800" fill="#147d72">#14</text>
-  <rect x="330" y="402" width="94" height="30" rx="15" fill="#147d72"/>
-  <path d="M356 417h40m-8-7 8 7-8 7" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
