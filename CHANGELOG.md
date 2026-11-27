@@ -61,6 +61,11 @@ first production release.
   stays at 16.3.8 (dev only).
 
 ### Changed
+- #82 (FR-LND-01): the landing page sections run up to 1440 px with a 48 px margin. The hero is
+  a mint band with a small kicker line and "Your clinic, organised. Your patients, informed." as
+  a large extra-bold headline (square full stops in English), with the description and actions
+  beside it on desktop; the queue drawing below it is gone, and Find a doctor grows and changes
+  colour while pressed.
 - #80 (FR-LND-01): the landing page header is a solid, full-width bar with its contents edge to
   edge: the logo and section links on the left; a rounded language pill, Staff sign in and Apply
   on the right. Below desktop width the extra items move into the full-screen menu, which now
