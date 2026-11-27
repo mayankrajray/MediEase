@@ -139,3 +139,47 @@
     animation: me-arrow-right 480ms var(--ease-brand) forwards;
   }
 }
+
+/*
+ * Staging on hover (#82): in a group of links or buttons (`.me-focus-group`), the one under the
+ * pointer or with keyboard focus (`.me-focus`) becomes the focus: it grows, and the others in the
+ * group fade back, so only one thing asks for attention. A press grows it a little more.
+ *
+ * - Growth uses the `scale` property, so it adds to the squash and the wind-up, which animate
+ *   `transform`; this file is unlayered, so its `scale` also wins over Tailwind's.
+ * - Hover rules apply only where the device can hover, so a tap on a phone never leaves a
+ *   button stuck large and the rest faded.
+ * - With "reduce motion" nothing grows; the others still fade back, which is not motion.
+ */
+.me-focus {
+  transition-property: color, background-color, border-color, box-shadow, opacity, scale, translate;
+  transition-duration: 220ms;
+  transition-timing-function: var(--ease-brand);
+}
+
+.me-focus-group:has(.me-focus:focus-visible) .me-focus:not(:focus-visible) {
+  opacity: 0.55;
+}
+
+@media (hover: hover) {
+  .me-focus-group:has(.me-focus:hover) .me-focus:not(:hover) {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .me-focus:focus-visible {
+    scale: 1.07;
+  }
+  .me-focus:active {
+    scale: 1.1;
+  }
+  @media (hover: hover) {
+    .me-focus:hover {
+      scale: 1.07;
+    }
+    .me-focus:hover:active {
+      scale: 1.1;
+    }
+  }
+}

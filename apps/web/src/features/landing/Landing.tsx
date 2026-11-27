@@ -28,9 +28,11 @@ import { LandingMotion } from "./LandingMotion";
 import "./landing-motion.css";
 
 // #82: hover motion from landing-motion.css. Squash and stretch for links and section buttons;
-// anticipation (a wind-up before the move) for the main calls to action and their arrows.
-const SQUASH = "me-squash";
-const WINDUP = "me-windup";
+// anticipation (a wind-up before the move) for the main calls to action and their arrows; and
+// staging: in a group (FOCUS_GROUP), the item under the pointer grows and the others fade back.
+const SQUASH = "me-squash me-focus";
+const WINDUP = "me-windup me-focus";
+const FOCUS_GROUP = "me-focus-group";
 
 // Up to 1440 px wide with a 48 px margin at each side from laptop width up, so the sections use most
 // of the screen but keep some breathing room.
@@ -174,7 +176,7 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
                 );
               })}
             </ul>
-            <div className="mt-10 flex flex-wrap items-center gap-4">
+            <div className={cx("mt-10 flex flex-wrap items-center gap-4", FOCUS_GROUP)}>
               <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), SQUASH)}>
                 {w.clinics.apply}
               </Link>
@@ -190,7 +192,7 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
                 {w.patients.title}
               </h2>
               <p className="mt-3 max-w-xl text-pretty text-lg text-slate-700">{w.patients.body}</p>
-              <div className="mt-8 flex flex-wrap gap-3">
+              <div className={cx("mt-8 flex flex-wrap gap-3", FOCUS_GROUP)}>
                 <Link prefetch={false} href={`/find${q}`} data-analytics="find" className={cx(buttonClasses("primary", "lg"), SQUASH)}>
                   {w.patients.find}
                 </Link>
@@ -282,7 +284,7 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
                 {w.final.title}
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-pretty text-lg text-brand-100">{w.final.body}</p>
-              <div className="mt-8 flex justify-center">
+              <div className={cx("mt-8 flex justify-center", FOCUS_GROUP)}>
                 <Link prefetch={false}
                   href="/apply"
                   data-analytics="apply"
@@ -331,7 +333,7 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
           `position: fixed` panel, which would then be clipped to the bar. */}
       <nav aria-label="MediEase" className="me-landing-nav border-b border-line bg-surface">
         {/* The bar and its contents span the viewport: logo at the left edge, actions at the right. */}
-        <div className="flex h-16 items-center gap-2 px-4 sm:px-6 lg:px-8">
+        <div className={cx("flex h-16 items-center gap-2 px-4 sm:px-6 lg:px-8", FOCUS_GROUP)}>
           <Link prefetch={false} href={other === "hi" ? "/" : "/?lang=hi"} className="inline-flex min-h-11 shrink-0 items-center rounded-lg pr-2">
             <Logo />
           </Link>
@@ -451,21 +453,20 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
               </Fragment>
             ))}
           </h1>
-          <div style={{ ["--stage" as string]: "350ms" }} className="me-stage mt-10 flex flex-wrap items-center gap-4">
+          <div style={{ ["--stage" as string]: "350ms" }} className={cx("me-stage mt-10 flex flex-wrap items-center gap-4", FOCUS_GROUP)}>
             <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), "gap-2", WINDUP, "me-spotlight")}>
               {w.hero.apply}
               <ArrowUpRight aria-hidden="true" className="me-arrow-up size-5" />
             </Link>
-            {/* An outlined button. Feedback: darker text and border on hover; on press it grows
-                and turns a lighter teal (brand-700, 5:1 on white); no growth with "reduce motion".
-                The hover wind-up animates `transform`, and Tailwind's scale uses the separate
-                `scale` property, so the two combine. */}
+            {/* An outlined button. Feedback: darker text and border on hover, where it also grows
+                (staging, landing-motion.css); on press it grows more (110%) and turns a lighter
+                teal (brand-700, 5:1 on white). It grows from its left edge, away from Apply. */}
             <Link
               prefetch={false}
               href={`/find${q}`}
               data-analytics="find"
               className={cx(
-                "inline-flex min-h-12 origin-left items-center rounded-lg border border-brand-200 bg-white px-5 font-semibold text-brand-800 shadow-sm transition ease-brand hover:border-brand-300 hover:text-brand-950 active:scale-110 active:text-brand-700 motion-reduce:active:scale-100",
+                "inline-flex min-h-12 origin-left items-center rounded-lg border border-brand-200 bg-white px-5 font-semibold text-brand-800 shadow-sm hover:border-brand-300 hover:text-brand-950 active:text-brand-700",
                 WINDUP,
               )}
             >
