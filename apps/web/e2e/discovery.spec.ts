@@ -12,8 +12,12 @@ import { expectAccessible, firstLoadBytes, noHorizontalScroll } from "./portal-s
  */
 
 const BUDGET = 200 * 1024;
+// The landing page only (#82, the developer, 27 Nov 2026): 210 KB, for the hero's 2 KB drawing and
+// its layout, which left `/` a few hundred bytes from 200 KB. NFR-02's 200 KB is for the patient
+// prescription page; every other page here keeps 200 KB.
+const LANDING_BUDGET = 210 * 1024;
 
-async function light(browser: Browser, page: Page, heading: string | RegExp): Promise<void> {
+async function light(browser: Browser, page: Page, heading: string | RegExp, budget = BUDGET): Promise<void> {
   await noHorizontalScroll(page);
   await expectAccessible(page);
   const url = new URL(page.url());
@@ -21,7 +25,7 @@ async function light(browser: Browser, page: Page, heading: string | RegExp): Pr
     await expect(p.getByRole("heading", { level: 1, name: heading })).toBeVisible();
   });
   console.log(`NFR-02 ${url.pathname}${url.search}: ${bytes} bytes`);
-  expect(bytes, `${url.pathname} under 200 KB`).toBeLessThan(BUDGET);
+  expect(bytes, `${url.pathname} under ${budget / 1024} KB`).toBeLessThan(budget);
 }
 
 test.describe("discovery at 360 px", () => {
@@ -36,7 +40,7 @@ test.describe("discovery at 360 px", () => {
     await expect(h1).toBeVisible();
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /index, follow/);
     await expect(page.getByRole("link", { name: "Apply to join MediEase" }).first()).toHaveAttribute("href", "/apply");
-    await light(browser, page, (await h1.textContent()) ?? "");
+    await light(browser, page, (await h1.textContent()) ?? "", LANDING_BUDGET);
     const lcp = await page.evaluate(
       () =>
         new Promise<number>((resolve) => {
