@@ -78,6 +78,7 @@ x-api-environment: &api-environment
   # M7e (booking-requests R15): public reads a minute per client address; 60 unless set. The
   # journeys' browsers share one address, so .env.example raises it for local runs and CI.
   PUBLIC_READS_PER_MINUTE: ${PUBLIC_READS_PER_MINUTE:-60}
+  SIGN_INS_PER_MINUTE: ${SIGN_INS_PER_MINUTE:-30}
   # M7e, A11: the secret the web server sends with the browser's address; empty turns it off.
   TRUSTED_PROXY_SECRET: ${TRUSTED_PROXY_SECRET:-}
   # M7e-E2 (ADR-0025): the VAPID public key browsers subscribe with; empty: push not offered.

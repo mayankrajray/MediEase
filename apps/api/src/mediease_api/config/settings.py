@@ -134,6 +134,9 @@ class AppSettings(BaseSettings):
     # client address. 60 in production; compose raises it for the journeys, whose browsers all
     # share one address.
     PUBLIC_READS_PER_MINUTE: int = Field(default=60, ge=10, le=10_000)
+    # M9-P3: password sign-ins a minute per client address, staff and patients (30 in production,
+    # the default). Locally and in CI every browser shares one address, so .env.example raises it.
+    SIGN_INS_PER_MINUTE: int = Field(default=30, ge=5, le=10_000)
     # M7e, A11 (ARCHITECTURE §9): the secret the web server sends with the browser's address
     # (X-MediEase-Proxy-Secret with X-MediEase-Client-IP). Empty: the API ignores both headers
     # and uses the connection's address, as before A11.

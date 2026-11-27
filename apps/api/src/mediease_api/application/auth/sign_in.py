@@ -72,9 +72,11 @@ class SignIn:
         hasher: PasswordHasher,
         sessions: SessionIssuer,
         dummy_password_hash: str,
+        sign_ins_per_minute: int = SIGN_IN_PER_MINUTE,
     ) -> None:
         # dummy_password_hash: a real hash of a random password, made once at
         # start-up, so unknown accounts cost one Argon2 verification too.
+        self._sign_ins_per_minute = sign_ins_per_minute
         self._uow = uow
         self._clock = clock
         self._ids = ids
@@ -87,7 +89,7 @@ class SignIn:
         # M9-P3: per caller, like the portal's sign-in, before any lookup or hash, so guessing
         # across many accounts from one address is slowed too (the lockout covers one account).
         enforce_rate_limit(
-            self._uow, self._clock, info, bucket="staff-sign-in", limit=SIGN_IN_PER_MINUTE
+            self._uow, self._clock, info, bucket="staff-sign-in", limit=self._sign_ins_per_minute
         )
         identifier = _parse_identifier(cmd.identifier)
         with self._uow as uow:

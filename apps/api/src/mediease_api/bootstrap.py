@@ -88,6 +88,7 @@ from mediease_api.application.auth.password_reset import (
     ResendVerification,
     VerifyEmail,
 )
+from mediease_api.application.auth.rate_limit import SIGN_IN_PER_MINUTE
 from mediease_api.application.auth.refresh_session import RefreshSession
 from mediease_api.application.auth.sign_in import SignIn
 from mediease_api.application.auth.sign_out import SignOut
@@ -465,6 +466,8 @@ class _UseCases:
     public_base_url: str = ""
     # M7e: the public page, availability and search limit per address (booking-requests R15).
     public_reads_per_minute: int = READS_PER_MINUTE_PER_IP
+    # M9-P3: password sign-ins a minute per address, staff and patients (SIGN_INS_PER_MINUTE).
+    sign_ins_per_minute: int = SIGN_IN_PER_MINUTE
     # M7e-E2 (ADR-0025): push devices' secrets at rest, and the key browsers subscribe with.
     push_cipher: TextCipherPort | None = None
     vapid_public_key: str = ""
@@ -608,6 +611,7 @@ class _UseCases:
             hasher=self.hasher,
             sessions=self.sessions,
             dummy_password_hash=self.dummy_password_hash,
+            sign_ins_per_minute=self.sign_ins_per_minute,
         )
 
     def refresh(self) -> RefreshSession:
@@ -651,6 +655,7 @@ class _UseCases:
             hasher=self.hasher,
             sessions=self.patient_sessions,
             dummy_password_hash=self.dummy_password_hash,
+            sign_ins_per_minute=self.sign_ins_per_minute,
         )
 
     def refresh_patient(self) -> RefreshPatientSession:
@@ -1722,6 +1727,7 @@ def create_app(
         phones=FernetPhoneCipher(settings.messaging_phone_keys()),
         public_base_url=settings.PUBLIC_BASE_URL,
         public_reads_per_minute=settings.PUBLIC_READS_PER_MINUTE,
+        sign_ins_per_minute=settings.SIGN_INS_PER_MINUTE,
         push_cipher=FernetTextCipher(settings.messaging_phone_keys()),
         vapid_public_key=settings.VAPID_PUBLIC_KEY,
         llm=llm or build_llm(settings),
