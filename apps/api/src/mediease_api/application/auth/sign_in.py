@@ -20,8 +20,9 @@ Order of checks, and why:
 Audited (M1-P4): the successful sign-in, and the failures that are bounded —
 a wrong password (the lockout caps them) and an account that cannot hold a
 session despite the correct password. Unknown identifiers, users with no
-password and attempts while locked are logged only, because nothing
-rate-limits them and an audit row per attempt would be a flood.
+password and attempts while locked are logged only, so that an audit row per
+attempt cannot become a flood; since M9-P3 every attempt is also counted per
+caller (30 a minute, ``staff-sign-in``), as on the portal.
 
 Logs carry the user ID and an enum ``reason`` — never the identifier.
 """
@@ -36,6 +37,7 @@ import structlog
 from mediease_api.application.audit import record_event
 from mediease_api.application.auth._session import SessionIssuer, may_hold_session, session_result
 from mediease_api.application.auth.errors import AccountDisabled, AccountLocked, InvalidCredentials
+from mediease_api.application.auth.rate_limit import SIGN_IN_PER_MINUTE, enforce_rate_limit
 from mediease_api.application.auth.views import SessionResult
 from mediease_api.application.context import Actor, RequestInfo
 from mediease_api.domain.audit.actions import AuditAction
@@ -82,6 +84,11 @@ class SignIn:
 
     def execute(self, cmd: SignInCommand, info: RequestInfo | None = None) -> SessionResult:
         info = info or RequestInfo()
+        # M9-P3: per caller, like the portal's sign-in, before any lookup or hash, so guessing
+        # across many accounts from one address is slowed too (the lockout covers one account).
+        enforce_rate_limit(
+            self._uow, self._clock, info, bucket="staff-sign-in", limit=SIGN_IN_PER_MINUTE
+        )
         identifier = _parse_identifier(cmd.identifier)
         with self._uow as uow:
             now = self._clock.now()
@@ -90,8 +97,8 @@ class SignIn:
             if user is None or user.password_hash is None:
                 self._hasher.verify(self._dummy_hash, cmd.password)
                 reason = "unknown_identifier" if user is None else "no_password"
-                # Not audited: neither path is rate-limited, so recording them
-                # would let anyone grow the audit table (M1-P4 design).
+                # Not audited: an audit row per guess would let anyone grow the table; the
+                # per-caller limit above bounds them (M1-P4 design, M9-P3).
                 logger.info("auth.sign_in_failed", reason=reason)
                 raise InvalidCredentials()
 

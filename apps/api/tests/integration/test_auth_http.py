@@ -122,6 +122,20 @@ def test_ac1_fr_auth_04_sixth_attempt_with_correct_password_is_423(
     assert 0 < int(resp.headers["Retry-After"]) <= 900
 
 
+def test_m9_p3_staff_sign_in_is_rate_limited_per_caller(db_client: FlaskClient) -> None:
+    """Guessing across many accounts from one address is slowed too (the lockout is per account)."""
+    # 61 attempts: even if a minute boundary splits them, one window holds more than 30.
+    responses = [
+        _sign_in(db_client, f"guess{n}@example.test", "not-the-password") for n in range(61)
+    ]
+    codes = {r.status_code for r in responses}
+    assert codes == {401, 429}
+    limited = next(r for r in responses if r.status_code == 429)
+    assert limited.get_json()["error"]["code"] == "AUTH_RATE_LIMITED"
+    assert 0 < int(limited.headers["Retry-After"]) <= 60
+    assert "Set-Cookie" not in limited.headers
+
+
 def test_r7_disabled_user_is_403(db_client: FlaskClient, uow_factory: UowFactory) -> None:
     user = seed_staff(uow_factory)
     with uow_factory() as uow:

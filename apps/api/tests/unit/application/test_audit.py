@@ -161,7 +161,8 @@ def test_r11_a_failed_audit_write_stops_the_change() -> None:
     with pytest.raises(RuntimeError, match=r"auth\.signed_in"):
         auth.session_of(user)
 
-    assert auth.uow.commits == 0
+    # Only the caller's attempt count was committed (M9-P3), before the sign-in's transaction.
+    assert auth.uow.commits == 1 and len(auth.uow.committed.rate_hits) == 1
     assert auth.uow.committed.refresh_tokens == {}
     assert auth.stored(user).last_signed_in_at is None
     assert auth.events() == []
