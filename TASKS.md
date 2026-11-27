@@ -337,7 +337,7 @@ Small changes the developer approved as their own issue, branch and PR while a m
 | Issue | Change | Requirement | Branch | Status |
 |---|---|---|---|---|
 | #80 | Landing page: full-width, edge-to-edge navbar; phone menu scroll lock and Escape fixes | FR-LND-01 | `m9/80-landing-navbar` | ✅ 27 Nov 2026: PR #81 merged |
-| #82 | Landing page: wider sections; display-headline hero without the queue drawing; Find a doctor press feedback | FR-LND-01 | `m9/82-landing-hero` | ▶ 27 Nov 2026: draft PR, waits for review |
+| #82 | Landing page: wider sections; display-headline hero with a clinic-day drawing on the right; Find a doctor outlined button with press feedback; 210 KB budget for `/` | FR-LND-01 | `m9/82-landing-hero` | ▶ 27 Nov 2026: draft PR #83, waits for review |
 
 ---
 
