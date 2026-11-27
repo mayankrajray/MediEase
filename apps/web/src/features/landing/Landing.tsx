@@ -437,7 +437,14 @@ function Hero({ w, q }: { w: LandingWords; q: string }) {
                 {w.hero.apply}
                 <ArrowUpRight aria-hidden="true" className="size-5" />
               </Link>
-              <Link prefetch={false} href={`/find${q}`} data-analytics="find" className="inline-flex min-h-12 items-center font-semibold text-brand-800 underline-offset-4 hover:underline">
+              {/* Feedback: the colour deepens on hover, and on press the link grows and turns a
+                  lighter teal (brand-700, 4.7:1 on the mint); no movement with "reduce motion". */}
+              <Link
+                prefetch={false}
+                href={`/find${q}`}
+                data-analytics="find"
+                className="inline-flex min-h-12 origin-left items-center font-semibold text-brand-800 underline-offset-4 transition duration-150 ease-brand hover:text-brand-950 hover:underline active:scale-110 active:text-brand-700 motion-reduce:transition-none motion-reduce:active:scale-100"
+              >
                 {w.hero.find}
                 <span aria-hidden="true" className="ml-1">
                   →
