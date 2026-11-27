@@ -277,13 +277,20 @@ def test_m7a_p1_layout_2_files_are_unchanged() -> None:
 
 
 def qr_texts(pdf: bytes, *, scale: float = 3) -> list[list[str]]:
-    """Every page rasterised (scale 3 = 216 dpi) and its QR codes decoded with zxing-cpp."""
+    """Every page rasterised (scale 3 = 216 dpi) and its QR codes decoded with zxing-cpp.
+
+    QR only, as the upload reader does (adapters/extraction/identifier.py): with every format
+    on, a run of printed text was sometimes read as a short 1D barcode ("8472")."""
     import zxingcpp
 
+    qr = zxingcpp.BarcodeFormats(zxingcpp.BarcodeFormat.QRCode)
     document = pdfium.PdfDocument(pdf)
     try:
         return [
-            [code.text for code in zxingcpp.read_barcodes(page.render(scale=scale).to_pil())]
+            [
+                code.text
+                for code in zxingcpp.read_barcodes(page.render(scale=scale).to_pil(), formats=qr)
+            ]
             for page in document
         ]
     finally:
