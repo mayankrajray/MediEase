@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   Stethoscope,
   UserRound,
-  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -455,9 +454,6 @@ function Hero({ w, q }: { w: LandingWords; q: string }) {
             </ul>
           </div>
         </div>
-        <div className="mx-auto mt-16 max-w-3xl sm:mt-20">
-          <QueuePreview w={w} />
-        </div>
       </div>
     </section>
   );
@@ -478,39 +474,6 @@ function HeadlineSentence({ text, last }: { text: string; last: boolean }) {
         className={cx("ml-[0.06em] inline-block size-[0.17em] align-baseline", last ? "bg-brand-400" : "bg-current")}
       />
     </>
-  );
-}
-
-/** A drawing of the queue screen in the product's own components, with sample patients. */
-function QueuePreview({ w }: { w: LandingWords }) {
-  const p = w.preview;
-  return (
-    <div role="img" aria-label={p.label} className="relative">
-      <div aria-hidden="true" className="absolute -inset-6 -z-10 rounded-[2rem] bg-brand-50" />
-      <div className="rounded-2xl border border-line bg-surface p-5 shadow-modal">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="font-semibold text-slate-900">{p.title}</p>
-            <p className="text-sm text-slate-700">{p.doctor}</p>
-          </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-900">
-            <UsersRound className="size-3.5" />3
-          </span>
-        </div>
-        <ul className="mt-4 divide-y divide-line">
-          {p.rows.map((r) => (
-            <li key={r.token} className="flex items-center gap-3 py-3">
-              <span className="w-9 font-semibold text-slate-700" data-numeric>
-                {r.token}
-              </span>
-              <span className="flex-1 truncate font-medium text-slate-900">{r.name}</span>
-              <StatusBadge tone={r.tone}>{r.status}</StatusBadge>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 rounded-xl bg-surface-muted px-3 py-2 text-sm text-slate-700">{p.next}</p>
-      </div>
-    </div>
   );
 }
 

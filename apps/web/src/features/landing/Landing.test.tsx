@@ -25,7 +25,8 @@ describe("the landing page (M6c-P8, FR-LND-01..03)", () => {
     render(<Landing language="en" />);
     const hero = screen.getByRole("region", { name: /Your clinic, organised/ });
     expect(within(hero).getAllByRole("link").map((l) => l.textContent)).toEqual(["Apply to join MediEase", "Find a doctor→"]);
-    expect(screen.getByRole("img", { name: /example of the MediEase queue screen/ })).toBeInTheDocument();
+    // #80: the hero is the headline, text and actions only; the queue screen drawing was removed.
+    expect(screen.queryByRole("img", { name: /example of the MediEase queue screen/ })).toBeNull();
     const steps = within(screen.getByRole("region", { name: "How joining works" })).getAllByRole("listitem");
     expect(steps).toHaveLength(3);
     // Without IntersectionObserver (jsdom) the motion never starts, so nothing is hidden or muted.
