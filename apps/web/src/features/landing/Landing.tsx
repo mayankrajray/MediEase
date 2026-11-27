@@ -25,17 +25,21 @@ import type { PortalLanguage } from "@/lib/i18n/portal";
 
 import { LandingAnalytics } from "./LandingAnalytics";
 import { LandingMotion } from "./LandingMotion";
+import "./landing-motion.css";
+
+// #82: hover motion from landing-motion.css. Squash and stretch for links and section buttons;
+// anticipation (a wind-up before the move) for the main calls to action and their arrows.
+const SQUASH = "me-squash";
+const WINDUP = "me-windup";
 
 // Up to 1440 px wide with a 48 px margin at each side from laptop width up, so the sections use most
 // of the screen but keep some breathing room.
 const WRAP = "mx-auto w-full max-w-[90rem] px-4 sm:px-6 lg:px-12";
 const SECTION = "py-16 sm:py-24";
 const CARD = "rounded-2xl border border-line bg-surface p-6 shadow-card";
-const NAV_LINK =
-  "inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900";
+const NAV_LINK = `inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900 ${SQUASH}`;
 
-const LANG_PILL =
-  "inline-flex h-10 items-center gap-1.5 rounded-full border border-line px-3.5 text-sm font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900";
+const LANG_PILL = `inline-flex h-10 items-center gap-1.5 rounded-full border border-line px-3.5 text-sm font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900 ${SQUASH}`;
 /** Each language's own name, for the language pill (the page switches to this language). */
 const LANGUAGE_NAME = { en: "English", hi: "हिंदी" } as const;
 
@@ -168,7 +172,7 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
               })}
             </ul>
             <div className="mt-10 flex flex-wrap items-center gap-4">
-              <Link prefetch={false} href="/apply" data-analytics="apply" className={buttonClasses("primary", "lg")}>
+              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), SQUASH)}>
                 {w.clinics.apply}
               </Link>
               <p className="max-w-md text-pretty text-slate-700">{w.clinics.demo}</p>
@@ -184,10 +188,10 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
               </h2>
               <p className="mt-3 max-w-xl text-pretty text-lg text-slate-700">{w.patients.body}</p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link prefetch={false} href={`/find${q}`} data-analytics="find" className={buttonClasses("primary", "lg")}>
+                <Link prefetch={false} href={`/find${q}`} data-analytics="find" className={cx(buttonClasses("primary", "lg"), SQUASH)}>
                   {w.patients.find}
                 </Link>
-                <Link prefetch={false} href="/portal/sign-in" data-analytics="patient_sign_in" className={buttonClasses("secondary", "lg")}>
+                <Link prefetch={false} href="/portal/sign-in" data-analytics="patient_sign_in" className={cx(buttonClasses("secondary", "lg"), SQUASH)}>
                   {w.patients.signIn}
                 </Link>
               </div>
@@ -279,7 +283,7 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
                 <Link prefetch={false}
                   href="/apply"
                   data-analytics="apply"
-                  className={cx(buttonClasses("secondary", "lg"), "border-white hover:border-white hover:bg-brand-50")}
+                  className={cx(buttonClasses("secondary", "lg"), "border-white hover:border-white hover:bg-brand-50", WINDUP)}
                 >
                   {w.hero.apply}
                 </Link>
@@ -354,7 +358,7 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
               </Link>
             </span>
             <span className="hidden sm:block">
-              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "sm"), "whitespace-nowrap")}>
+              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "sm"), "whitespace-nowrap", SQUASH)}>
                 {w.footer.apply}
               </Link>
             </span>
@@ -445,20 +449,25 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
           </h1>
           <p className="mt-6 max-w-xl text-pretty text-lg text-slate-700 sm:text-xl">{w.hero.body}</p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
-            <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), "gap-2")}>
+            <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), "gap-2", WINDUP)}>
               {w.hero.apply}
-              <ArrowUpRight aria-hidden="true" className="size-5" />
+              <ArrowUpRight aria-hidden="true" className="me-arrow-up size-5" />
             </Link>
             {/* An outlined button. Feedback: darker text and border on hover; on press it grows
-                and turns a lighter teal (brand-700, 5:1 on white); no growth with "reduce motion". */}
+                and turns a lighter teal (brand-700, 5:1 on white); no growth with "reduce motion".
+                The hover wind-up animates `transform`, and Tailwind's scale uses the separate
+                `scale` property, so the two combine. */}
             <Link
               prefetch={false}
               href={`/find${q}`}
               data-analytics="find"
-              className="inline-flex min-h-12 origin-left items-center rounded-lg border border-brand-200 bg-white px-5 font-semibold text-brand-800 shadow-sm transition ease-brand hover:border-brand-300 hover:text-brand-950 active:scale-110 active:text-brand-700 motion-reduce:active:scale-100"
+              className={cx(
+                "inline-flex min-h-12 origin-left items-center rounded-lg border border-brand-200 bg-white px-5 font-semibold text-brand-800 shadow-sm transition ease-brand hover:border-brand-300 hover:text-brand-950 active:scale-110 active:text-brand-700 motion-reduce:active:scale-100",
+                WINDUP,
+              )}
             >
               {w.hero.find}
-              <span aria-hidden="true" className="ml-1">
+              <span aria-hidden="true" className="me-arrow-right ml-1">
                 →
               </span>
             </Link>
