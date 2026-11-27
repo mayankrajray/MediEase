@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Status | **Approved by the developer 14 Nov 2026**: P4 first, for the Phase 2 video; then P2, P3, P5 |
-| Issue / branch | #77 / `m9/77-pilot-hardening`, from `main` after M9-P1 merged (PR #76) |
+| Issue / branch | P4: #77 / `m9/77-pilot-hardening`, PR #78, from `main` after M9-P1 merged (PR #76). P2, P3, P5: a new issue and branch from `main` once PR #78 merges (developer, 16 Nov 2026, option A) |
 | Deadline | Phase 2 submission 15 Nov 2026, 23:59 IST (P4); P2, P3, P5 after |
 
 | Order | Phase | Objective | Verify |
@@ -16,7 +16,8 @@
 | 4 | **P5** | Onboard a test clinic end to end in under 60 minutes | Timed rehearsal recorded |
 
 **Progress.** 14 Nov 2026: issue #77 and branch opened; P4 built (API, contract 0.54.0, web page,
-docs).
+docs). 16 Nov 2026: after the Phase 2 deadline the developer chose to merge P4 alone (PR #78) so
+`main` matches the live site; P2 is planned and waits for the developer's answers.
 
 ---
 

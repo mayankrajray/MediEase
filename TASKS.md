@@ -11,8 +11,8 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M9 — Pilot hardening and deployment** (M9-P1 on issue #75, merged in PR #76; M9-P2..P5 on issue #77, branch `m9/77-pilot-hardening`) |
-| Active phase | **M9-P4 done 14 Nov 2026** (ops clinic usage, built first for the Phase 2 video, developer 14 Nov 2026); then M9-P2, P3 and P5 on the same branch. M9-P1 done 14 Nov 2026: live at https://mediease.duckdns.org |
+| Active milestone | **M9 — Pilot hardening and deployment** (M9-P1 on issue #75, merged in PR #76; M9-P4 on issue #77, branch `m9/77-pilot-hardening`, PR #78; M9-P2, P3 and P5 on a new issue and branch after PR #78 merges) |
+| Active phase | **M9-P4 done 14 Nov 2026** (ops clinic usage, built first for the Phase 2 video, developer 14 Nov 2026). PR #78 carries P4 alone and goes to review now, so `main` matches the live site after the Phase 2 deadline (developer, 16 Nov 2026, option A); M9-P2, P3 and P5 follow on a new issue and branch. M9-P1 done 14 Nov 2026: live at https://mediease.duckdns.org |
 | Design notes | `docs/milestones/M9-deploy-demo.md`; M7e (done) in `docs/milestones/M7e-pwa-push.md`; M8 designed in `docs/milestones/M8-multi-clinic-whatsapp.md` (skipped for now by the developer) |
 | Approved plan | `NEXT_STEPS_PLAN.md` §0 (M9-P2..P5); M9-P1, M7e, M7d, M7c and M7 below it as history |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -317,7 +317,7 @@ PR #72, 12 Nov 2026), PR #74, one PR. Nothing is built yet.
 **Covers:** NFR-03..07, NFR-16, FR-OPS-03. **Exit:** production deployed in India region; restore
 drill completed; security checklist signed; two pilot clinics onboarded. (Was M6 before PRD v1.1.)
 **Issue:** #75, branch `m9/75-deploy-demo` (P1, merged in PR #76); #77, branch
-`m9/77-pilot-hardening` (P2..P5). **Design:** `docs/milestones/M9-deploy-demo.md`
+`m9/77-pilot-hardening` (P4, PR #78); P2, P3 and P5 on a new issue after that. **Design:** `docs/milestones/M9-deploy-demo.md`
 (Google Cloud, one VM in Mumbai, approved 13 Nov 2026).
 
 | Phase | Scope | Status |
