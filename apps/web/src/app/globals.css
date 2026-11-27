@@ -387,15 +387,19 @@
   }
 }
 
-/* M7c-P7 (M1, the developer's review): while the landing page's phone menu is open, the bar drops
-   its backdrop blur (a backdrop-filter makes the bar the containing block of the menu's fixed
-   panel, which then shrank to the bar's height) and the page behind stops scrolling, so the menu
-   covers the screen in front of the hero. Unlayered, so it beats the bar's utilities. */
+/* M7c-P7 (M1, the developer's review): while the landing page's phone menu is open, the bar has no
+   backdrop blur (a backdrop-filter makes the bar the containing block of the menu's fixed panel,
+   which then shrank to the bar's height) and the page behind stops scrolling, so the menu covers
+   the screen in front of the hero. Unlayered, so it beats the bar's utilities. The scroll lock
+   applies only below `lg`, where the menu is shown: widening the window with the menu open hides
+   the menu, and the page must still scroll. */
 .me-landing-nav:has(details[open]) {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background-color: var(--color-surface);
 }
-html:has(.me-landing-nav details[open]) {
-  overflow: hidden;
+@media (max-width: 63.98rem) {
+  html:has(.me-landing-nav details[open]) {
+    overflow: hidden;
+  }
 }
