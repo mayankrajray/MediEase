@@ -219,3 +219,26 @@ no address) and `tests/unit/delivery/test_ops_alert.py`; shellcheck clean.
 
 Open (developer, on the VM): set `OPS_ALERT_EMAIL`, install the timer and create the uptime check
 (RUNBOOK §41), then stop the API once to see both emails.
+
+## 12. M9-P3 — Security review (27 Nov 2026)
+
+Issue #86, branch `m9/86-alerting-security`. The review of `docs/SECURITY_AND_COMPLIANCE.md` §3
+against the code and the deployment, with evidence in each row.
+
+| Found | Done |
+|---|---|
+| `make audit`: the API clean; the web app's Next.js 16.4.3 had seven moderate advisories (production), and dev-only zod (high) and minimatch (moderate) | Next.js 16.4.6; `npm audit fix` for the dev tree (typescript-eslint 8.74, zod 4.6.7, minimatch 11). Both audits now report 0 |
+| Staff password sign-in had the per-account lockout but no per-caller limit (the portal's had one) | 30 a minute per caller (`staff-sign-in`), like the portal; an HTTP test |
+| PostgreSQL's log printed rows on constraint errors (`DETAIL: Key (phone_e164)=…`, "Failing row contains …", `STATEMENT`) | `log_error_verbosity=terse`, `log_min_error_statement=panic` on `db`; `scripts/log-review.sh` and RUNBOOK §42 |
+| The breach procedure had no clocks | RUNBOOK §15: the clinic told within 24 hours, so it can report to the Board within 72 hours (DPDP Rules, Rule 7); CERT-In within 6 hours when reportable; a written timeline |
+| No sub-processor list | SECURITY_AND_COMPLIANCE §5 |
+| Rows claiming "signed URL" for files, "Pydantic at every boundary", "no string-built SQL" | Reworded to what the code does, with the files named |
+| TLS 1.2+, HSTS, encryption at rest, India hosting, no clinical content in messages | Ticked with the evidence (Caddy defaults, Google-managed encryption, `asia-south1`, the template variable kinds) |
+
+Still open: the cross-tenant guard covers one method per URL and not IDs in query strings or
+bodies; owner-granted support access (FR-OPS-05); Row-Level Security (post-pilot); point-in-time
+recovery; the DPA, patient notice and sharing the sub-processor list (L-04); the log review on the
+VM; alerts for sign-in failure spikes and webhook signature failures.
+
+**Patient export and erasure:** designed, not built; they wait for the developer's decisions
+(below, in NEXT_STEPS_PLAN.md §0).

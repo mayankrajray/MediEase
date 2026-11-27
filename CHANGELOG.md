@@ -7,6 +7,10 @@ first production release.
 ## [Unreleased]
 
 ### Added
+- M9-P3 (#86): the security review (SECURITY_AND_COMPLIANCE §3, M9 design §12).
+  `scripts/log-review.sh` counts phone-, email- and Aadhaar-like values in each service's log
+  without printing them (RUNBOOK §42); the breach procedure gains its clocks (RUNBOOK §15); the
+  sub-processor list (SECURITY_AND_COMPLIANCE §5).
 - M9-P2 (#86): alerting (NFR-03, NFR-04; RUNBOOK §41). A Google Cloud Monitoring uptime check on
   `/ready`, and `scripts/watch.sh` on a 5-minute systemd timer on the VM
   (`infra/gcp/mediease-watch.*`) that emails `OPS_ALERT_EMAIL` when a container is down or
@@ -67,6 +71,9 @@ first production release.
   413 envelope from a size-checked route handler instead of an occasional 500 from the proxy.
 
 ### Security
+- M9-P3 (#86): staff password sign-in is limited to 30 attempts a minute per caller, like the
+  portal's; PostgreSQL logs constraint errors without the row's values (`log_error_verbosity=terse`);
+  Next.js 16.4.6 and the dev tree updated, so `make audit` reports nothing.
 - Next.js 16.4.0 → 16.4.3 (#49): the October 2026 out-of-band release fixing GHSA-2464-fhr4-w9xw
   (critical: remote code execution in the Image Optimization API with SVG files), GHSA-673q-mjm6-r5xr
   (critical: remote code execution in `use cache` functions) and GHSA-p3m5-59mp-jv5r (denial of

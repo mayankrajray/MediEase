@@ -324,7 +324,7 @@ drill completed; security checklist signed; two pilot clinics onboarded. (Was M6
 |---|---|---|
 | M9-P1 | Go live for the Phase 2 demo: C1 messaging `disabled`, C2 `make import-clinic` (CSV, bundled demo), C3 `infra/gcp/` compose override and Caddy (TLS on `mediease.duckdns.org`), C4 backups and the restore drill, C5 `make smoke-live`, C7 docs; secrets in an owner-only `.env` on the VM | ✅ 14 Nov 2026: live at https://mediease.duckdns.org; deploy, backup and restore drill, smoke-live and the security review recorded (design §9); PR #76 |
 | M9-P2 | Backups, restore drill, uptime and error alerting | ✅ 27 Nov 2026 (built; the VM setup is the developer's, RUNBOOK §41): Cloud Monitoring uptime check on `/ready`, `scripts/watch.sh` timer emailing `OPS_ALERT_EMAIL` (design §11); issue #86, branch `m9/86-alerting-security` |
-| M9-P3 | Security review against `docs/SECURITY_AND_COMPLIANCE.md` checklist; dependency scan; audited export and `scripts/erase_patient.py` procedures | ☐ |
+| M9-P3 | Security review against `docs/SECURITY_AND_COMPLIANCE.md` checklist; dependency scan; audited export and `scripts/erase_patient.py` procedures | ▶ 27 Nov 2026: review and dependency scan done (design §12): Next.js 16.4.6, staff sign-in rate limit, PostgreSQL log made terse, `scripts/log-review.sh`, breach clocks, sub-processor list. Patient export and erasure wait for the developer's decisions |
 | M9-P4 | Ops clinic-health view; usage metrics for the pilot scorecard | ✅ 14 Nov 2026: `/ops/usage` and `GET /api/v1/ops/clinic-usage` (spec `ops-clinic-usage.md`, design §10); issue #77, branch `m9/77-pilot-hardening` |
 | M9-P5 | Pilot runbook rehearsal: onboard a test clinic end-to-end in < 60 min | ☐ |
 

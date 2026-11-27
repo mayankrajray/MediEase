@@ -52,6 +52,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 39. Backups and the restore drill (M9-P1)
 40. Clinic usage and the usage evidence (M9-P4)
 41. Alerts: the uptime check and the watch (M9-P2)
+42. Log review for personal data (M9-P3)
 
 ---
 
@@ -314,12 +315,28 @@ link answers `LINK_INVALID`, and staff use *Replace link*
 `scripts/inspect_link_token.py <token>` shows which `kid` a token uses, offline.
 
 ### 15. Suspected data breach — SEV1
-1. Contain: revoke access, rotate secrets, block the vector.
-2. Preserve evidence: logs, audit events, snapshots. Do not delete anything.
-3. Inform the founder immediately and each affected clinic without delay, with what is known.
+MediEase is the clinic's **Data Processor**: the clinic (the Data Fiduciary) reports to the Board
+and its patients; MediEase tells the clinic quickly and helps. The clocks below come from the DPDP
+Rules 2025 (Rule 7) and the CERT-In Directions of 28 April 2022; *Counsel* confirms them (L-04).
+
+| Clock (from becoming aware) | Who | What |
+|---|---|---|
+| At once | The developer | Contain and preserve (steps 1–2); tell the founder |
+| Within 6 hours | MediEase, if the incident is reportable to CERT-In | Report to CERT-In (incident@cert-in.org.in) |
+| Within 24 hours | MediEase | Tell each affected clinic in writing: what happened, which data and which patients (by count and IDs), when, what is done, a contact. Our target, so the clinic can meet its own deadlines |
+| Without delay | The clinic, helped by MediEase | Tell each affected patient (nature, extent, time, likely impact, what they can do, a contact) |
+| Within 72 hours | The clinic, helped by MediEase | The detailed report to the Data Protection Board |
+
+1. Contain: revoke access, rotate secrets (§13), block the vector; take the site down
+   (`make down`) if data is still leaving.
+2. Preserve evidence: logs (`docker compose logs > <file>` before they rotate), audit events,
+   a disk snapshot. Do not delete anything.
+3. Inform the founder immediately and each affected clinic within 24 hours (table above), with
+   what is known; update them as more is known.
 4. Support clinics in meeting their notification obligations under the DPDP framework (to the
    Board and affected individuals) — counsel involved from the start.
-5. Post-incident review within 5 working days; journal entry and control improvements.
+5. Keep a written timeline: when we became aware, each action, each message sent.
+6. Post-incident review within 5 working days; journal entry and control improvements.
 
 ### 16. Break-glass production database access
 Only for SEV1/SEV2 when no application path exists. Requires the founder's approval, a named
@@ -1182,3 +1199,23 @@ are held and sent at 08:00 IST. If the email itself fails, the watch tries again
 Thresholds can be changed with `WATCH_5XX_THRESHOLD`, `WATCH_QUEUE_AGE_SECONDS`,
 `WATCH_DISK_PERCENT` and `WATCH_CERT_DAYS` lines in `.env` (the script reads only those).
 Alert emails carry service names, counts and codes only, never patient data (NFR-07).
+
+### 42. Log review for personal data (M9-P3)
+
+**When:** monthly, after a release that adds logging, and during an incident (§15).
+In `/opt/mediease` on the VM: `bash scripts/log-review.sh` (the last 7 days; `SINCE=24h` for a
+day). It looks in every service's log for values shaped like an Indian mobile number, an email
+address or an Aadhaar number, skips masked ones (`+91******3210`, `a***@example.com`), and prints
+only counts and the event names that carried them, never the values, so its output can be pasted
+into a ticket.
+
+- "nothing … in the last 168h": record the date in the M9 design (§12) and stop.
+- A finding in `api`, `worker` or `upload-worker` names the event: find the `logger` call for it,
+  mask the value (`PhoneNumber.masked()`, `EmailAddress.masked()`) or drop it, add a log-capture
+  test, and release. The old lines rotate out within days (5 × 10 MB per service).
+- A finding in `caddy`, `db`, `clamav` or `mailpit` is a third-party image: check what it logs
+  (for example a URL with a query string) before changing anything. `db` was found logging
+  constraint errors with the row's values and now runs with `log_error_verbosity=terse` and
+  `log_min_error_statement=panic` (M9-P3). On a VM deployed before that, the old lines stay until
+  Docker rotates them; to clear them at once: `docker compose up -d --force-recreate db`
+  (a new container starts with an empty log; the data volume is kept).
