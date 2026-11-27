@@ -1,4 +1,5 @@
 import {
+  ArrowUpRight,
   BellRing,
   CalendarClock,
   Check,
@@ -406,43 +407,77 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
 }
 
 function Hero({ w, q }: { w: LandingWords; q: string }) {
+  const lines = sentences(w.hero.title);
   return (
-    <section aria-labelledby="hero-heading" className="overflow-hidden pb-16 pt-12 sm:pb-24 sm:pt-20">
-      <div className={cx(WRAP, "grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]")}>
-        <div>
-          <h1 id="hero-heading" className="heading-1 max-w-[680px] text-slate-900">
-            {/* B5: break where the thought breaks, one sentence a line. */}
-            {sentences(w.hero.title).map((s, i) => (
+    <section aria-labelledby="hero-heading" className="overflow-hidden bg-brand-50">
+      <div className={cx(WRAP, "pb-16 pt-12 sm:pb-20 sm:pt-16 lg:pt-20")}>
+        {/* A small line above the headline, like a magazine's kicker. Letter spacing would break
+            Devanagari's joined letters apart, so Hindi keeps normal spacing. */}
+        <p className="inline-flex items-center gap-2.5 text-xs font-bold uppercase tracking-[0.18em] text-brand-900 sm:text-sm [&:lang(hi)]:tracking-normal">
+          <span aria-hidden="true" className="size-2 rounded-full bg-brand-600" />
+          {w.footerMore.tagline}
+        </p>
+        <div className="mt-6 grid items-end gap-10 lg:mt-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-14">
+          {/* B5: one sentence a line, wrapping into balanced halves at display sizes (44 px on a
+              phone to 96 px on a wide desktop); Devanagari gets more line height for its marks. */}
+          <h1
+            id="hero-heading"
+            className="text-[clamp(2.75rem,6vw,6rem)] font-extrabold leading-[0.98] tracking-[-0.035em] text-balance text-brand-900 [&:lang(hi)]:leading-[1.25] [&:lang(hi)]:tracking-normal"
+          >
+            {lines.map((s, i) => (
               <span key={s} className="block">
-                {i > 0 && " "}
-                {s}
+                {i > 0 && <span className="sr-only"> </span>}
+                <HeadlineSentence text={s} last={i === lines.length - 1} />
               </span>
             ))}
           </h1>
-          <p className="mt-6 max-w-[680px] text-pretty text-lg text-slate-700 sm:text-xl">{w.hero.body}</p>
-          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
-            <Link prefetch={false} href="/apply" data-analytics="apply" className={buttonClasses("primary", "lg")}>
-              {w.hero.apply}
-            </Link>
-            <Link prefetch={false} href={`/find${q}`} data-analytics="find" className="inline-flex min-h-12 items-center font-semibold text-brand-800 underline-offset-4 hover:underline">
-              {w.hero.find}
-              <span aria-hidden="true" className="ml-1">
-                →
-              </span>
-            </Link>
+          <div className="lg:pb-3">
+            <p className="max-w-xl text-pretty text-lg text-slate-700 sm:text-xl">{w.hero.body}</p>
+            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
+              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), "gap-2")}>
+                {w.hero.apply}
+                <ArrowUpRight aria-hidden="true" className="size-5" />
+              </Link>
+              <Link prefetch={false} href={`/find${q}`} data-analytics="find" className="inline-flex min-h-12 items-center font-semibold text-brand-800 underline-offset-4 hover:underline">
+                {w.hero.find}
+                <span aria-hidden="true" className="ml-1">
+                  →
+                </span>
+              </Link>
+            </div>
+            <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-700">
+              {w.proof.map((p) => (
+                <li key={p} className="inline-flex items-center gap-2">
+                  <Check aria-hidden="true" className="size-4 text-brand-700" />
+                  {p}
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-700">
-            {w.proof.map((p) => (
-              <li key={p} className="inline-flex items-center gap-2">
-                <Check aria-hidden="true" className="size-4 text-brand-700" />
-                {p}
-              </li>
-            ))}
-          </ul>
         </div>
-        <QueuePreview w={w} />
+        <div className="mx-auto mt-16 max-w-3xl sm:mt-20">
+          <QueuePreview w={w} />
+        </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * One headline sentence. An English full stop is drawn as a small square, the last one in the
+ * brand's mint; screen readers still read the full stop. Hindi keeps its own "।".
+ */
+function HeadlineSentence({ text, last }: { text: string; last: boolean }) {
+  if (!text.endsWith(".")) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, -1)}
+      <span className="sr-only">.</span>
+      <span
+        aria-hidden="true"
+        className={cx("ml-[0.06em] inline-block size-[0.17em] align-baseline", last ? "bg-brand-400" : "bg-current")}
+      />
+    </>
   );
 }
 
