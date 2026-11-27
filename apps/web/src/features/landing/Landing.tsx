@@ -32,6 +32,11 @@ const CARD = "rounded-2xl border border-line bg-surface p-6 shadow-card";
 const NAV_LINK =
   "inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900";
 
+const LANG_PILL =
+  "inline-flex h-10 items-center gap-1.5 rounded-full border border-line px-3.5 text-sm font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900";
+/** Each language's own name, for the language pill (the page switches to this language). */
+const LANGUAGE_NAME = { en: "English", hi: "हिंदी" } as const;
+
 const FEATURE_ICONS = [CalendarClock, FileText, Inbox, BellRing] as const;
 const ROLE_ICONS = [UserRound, Stethoscope, ClipboardList] as const;
 const TRUST_ICONS = [ShieldCheck, LockKeyhole, FileText, Check] as const;
@@ -300,7 +305,11 @@ function IconTile({ children }: { children: ReactNode }) {
   );
 }
 
-/** A floating, translucent bar (B7), with a full-height phone menu built on <details> (no script). */
+/**
+ * A solid, full-width bar (B7): the logo and section links on the left; the language pill, staff
+ * sign-in and Apply on the right. Below desktop width the rest moves into a full-screen menu built
+ * on <details> (no script needed to open it); Apply stays in the bar from tablet width up.
+ */
 function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
   const links = [
     { href: "#clinics", label: w.nav.clinics },
@@ -308,84 +317,86 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
     { href: "#pricing", label: w.nav.pricing, analytics: "pricing" },
   ];
   return (
-    <header className="sticky top-0 z-40 px-3 pt-3">
-      <nav
-        aria-label="MediEase"
-        // While the phone menu is open the bar drops its backdrop blur: a backdrop-filter makes the
-        // bar the containing block of the menu's `position: fixed` panel, which would then be
-        // clipped to the bar instead of covering the screen.
-        className="me-landing-nav mx-auto flex max-w-6xl items-center justify-between gap-2 rounded-2xl border border-line bg-surface/85 px-3 py-2 shadow-card backdrop-blur-md sm:px-4"
-      >
-        <Link prefetch={false} href={other === "hi" ? "/" : "/?lang=hi"} className="inline-flex min-h-11 items-center rounded-lg pr-2">
-          <Logo />
-        </Link>
-        <ul className="hidden items-center gap-1 lg:flex">
-          {links.map((l) => (
-            <li key={l.href}>
-              <a href={l.href} {...(l.analytics === undefined ? {} : { "data-analytics": l.analytics })} className={NAV_LINK}>
-                {l.label}
-              </a>
-            </li>
-          ))}
-          <li>
-            <Link prefetch={false} href="/sign-in" data-analytics="staff_sign_in" className={NAV_LINK}>
-              {w.nav.signIn}
-            </Link>
-          </li>
-          <li>
-            <Link prefetch={false} href={`/?lang=${other}`} lang={other} aria-label={w.switchLabel} data-analytics="language" className={NAV_LINK}>
-              <Languages aria-hidden="true" className="mr-1.5 size-4" />
-              {w.switchTo}
-            </Link>
-          </li>
-        </ul>
-        <div className="flex items-center gap-2">
-          {/* A wrapper hides it on phones: the link's own inline-flex would beat `hidden` (cx does
-              not merge classes). The phone menu has its own Apply button. */}
-          <span className="hidden sm:block">
-            <Link prefetch={false} href="/apply" data-analytics="apply" className={buttonClasses("primary", "sm")}>
-              {w.footer.apply}
-            </Link>
-          </span>
-          <details className="lg:hidden">
-            <summary
-              aria-label={w.menu.label}
-              className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-900 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
-            >
-              <span aria-hidden="true" className="me-menu-icon flex w-4 flex-col gap-1">
-                <span className="block h-0.5 w-4 rounded bg-current" />
-                <span className="block h-0.5 w-4 rounded bg-current" />
-                <span className="block h-0.5 w-4 rounded bg-current" />
-              </span>
-              {w.menu.open}
-            </summary>
-            <div className="me-menu-panel fixed inset-x-0 bottom-0 top-[4.75rem] z-30 overflow-y-auto overscroll-contain bg-surface px-6 py-6">
-              <ul className="space-y-1 text-lg">
-                {links.map((l, i) => (
-                  <li key={l.href} style={{ ["--i" as string]: i }}>
-                    <a href={l.href} className="flex min-h-12 items-center rounded-lg px-3 font-semibold hover:bg-slate-100">
-                      {l.label}
-                    </a>
+    <header className="sticky top-0 z-40">
+      {/* No backdrop-filter on the bar: it would make the bar the containing block of the menu's
+          `position: fixed` panel, which would then be clipped to the bar. */}
+      <nav aria-label="MediEase" className="me-landing-nav border-b border-line bg-surface">
+        {/* The bar and its contents span the viewport: logo at the left edge, actions at the right. */}
+        <div className="flex h-16 items-center gap-2 px-4 sm:px-6 lg:px-8">
+          <Link prefetch={false} href={other === "hi" ? "/" : "/?lang=hi"} className="inline-flex min-h-11 shrink-0 items-center rounded-lg pr-2">
+            <Logo />
+          </Link>
+          <ul className="ml-4 hidden items-center gap-1 lg:flex">
+            {links.map((l) => (
+              <li key={l.href}>
+                <a href={l.href} {...(l.analytics === undefined ? {} : { "data-analytics": l.analytics })} className={NAV_LINK}>
+                  {l.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+          <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            {/* Wrappers hide these on smaller screens: a link's own inline-flex would beat `hidden`
+                (cx does not merge classes). The phone menu has all three; on a phone the bar is
+                only the logo and Menu (the developer's review, e2e/landing.spec.ts). */}
+            <span className="hidden lg:block">
+              <Link prefetch={false} href={`/?lang=${other}`} lang={other} aria-label={w.switchLabel} data-analytics="language" className={LANG_PILL}>
+                <Languages aria-hidden="true" className="size-4" />
+                {LANGUAGE_NAME[other]}
+              </Link>
+            </span>
+            <span className="hidden lg:block">
+              <Link prefetch={false} href="/sign-in" data-analytics="staff_sign_in" className={NAV_LINK}>
+                <UserRound aria-hidden="true" className="mr-1.5 size-4" />
+                {w.nav.signIn}
+              </Link>
+            </span>
+            <span className="hidden sm:block">
+              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "sm"), "whitespace-nowrap")}>
+                {w.footer.apply}
+              </Link>
+            </span>
+            <details className="lg:hidden">
+              <summary
+                aria-label={w.menu.label}
+                className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-900 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
+              >
+                <span aria-hidden="true" className="me-menu-icon flex w-4 flex-col gap-1">
+                  <span className="block h-0.5 w-4 rounded bg-current" />
+                  <span className="block h-0.5 w-4 rounded bg-current" />
+                  <span className="block h-0.5 w-4 rounded bg-current" />
+                </span>
+                {w.menu.open}
+              </summary>
+              {/* Starts right under the bar: 4rem tall plus its 1px bottom border. */}
+              <div className="me-menu-panel fixed inset-x-0 bottom-0 top-[calc(4rem+1px)] z-30 overflow-y-auto overscroll-contain bg-surface px-4 py-6 sm:px-6">
+                <ul className="space-y-1 text-lg">
+                  {links.map((l, i) => (
+                    <li key={l.href} style={{ ["--i" as string]: i }}>
+                      <a href={l.href} className="flex min-h-12 items-center rounded-lg px-3 font-semibold hover:bg-slate-100">
+                        {l.label}
+                      </a>
+                    </li>
+                  ))}
+                  <li style={{ ["--i" as string]: 3 }}>
+                    <Link prefetch={false} href="/sign-in" className="flex min-h-12 items-center rounded-lg px-3 font-semibold hover:bg-slate-100">
+                      {w.nav.signIn}
+                    </Link>
                   </li>
-                ))}
-                <li style={{ ["--i" as string]: 3 }}>
-                  <Link prefetch={false} href="/sign-in" className="flex min-h-12 items-center rounded-lg px-3 font-semibold hover:bg-slate-100">
-                    {w.nav.signIn}
-                  </Link>
-                </li>
-                <li style={{ ["--i" as string]: 4 }}>
-                  <Link prefetch={false} href={`/?lang=${other}`} lang={other} className="flex min-h-12 items-center rounded-lg px-3 font-semibold hover:bg-slate-100">
-                    {w.switchTo}
-                  </Link>
-                </li>
-                <li style={{ ["--i" as string]: 5 }} className="pt-4">
-                  <Link prefetch={false} href="/apply" className={cx(buttonClasses("primary", "lg"), "w-full")}>
-                    {w.hero.apply}
-                  </Link>
-                </li>
-              </ul>
-            </div>
-          </details>
+                  <li style={{ ["--i" as string]: 4 }}>
+                    <Link prefetch={false} href={`/?lang=${other}`} lang={other} className="flex min-h-12 items-center rounded-lg px-3 font-semibold hover:bg-slate-100">
+                      {w.switchTo}
+                    </Link>
+                  </li>
+                  <li style={{ ["--i" as string]: 5 }} className="pt-4">
+                    <Link prefetch={false} href="/apply" className={cx(buttonClasses("primary", "lg"), "w-full")}>
+                      {w.hero.apply}
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+            </details>
+          </div>
         </div>
       </nav>
     </header>
