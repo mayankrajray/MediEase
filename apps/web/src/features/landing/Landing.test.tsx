@@ -27,8 +27,12 @@ describe("the landing page (M6c-P8, FR-LND-01..03)", () => {
     // #82: the square full stops are drawing only; the heading still reads exactly as written.
     expect(screen.getByRole("heading", { level: 1 })).toHaveAccessibleName("Your clinic, organised. Your patients, informed.");
     expect(within(hero).getAllByRole("link").map((l) => l.textContent)).toEqual(["Apply to join MediEase", "Find a doctor→"]);
-    // #80: the hero is the headline, text and actions only; the queue screen drawing was removed.
+    // #80, #82: the hero is the headline and the actions only; the queue screen drawing was removed,
+    // and the description moved down to introduce "Why clinics move to MediEase".
     expect(screen.queryByRole("img", { name: /example of the MediEase queue screen/ })).toBeNull();
+    expect(within(hero).queryByText(/MediEase runs appointments/)).toBeNull();
+    const problem = screen.getByRole("region", { name: "Why clinics move to MediEase" });
+    expect(within(problem).getByText(/MediEase runs appointments, the waiting queue/)).toBeInTheDocument();
     const steps = within(screen.getByRole("region", { name: "How joining works" })).getAllByRole("listitem");
     expect(steps).toHaveLength(3);
     // Without IntersectionObserver (jsdom) the motion never starts, so nothing is hidden or muted.

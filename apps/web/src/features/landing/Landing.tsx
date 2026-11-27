@@ -81,6 +81,9 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
             <h2 id="problem-heading" className="heading-4 max-w-2xl">
               {w.problem.title}
             </h2>
+            {/* #82: what MediEase does, moved here from the hero so the hero is the headline and
+                the actions only (the developer: less text on the first screen). */}
+            <p className="mt-3 max-w-2xl text-pretty text-lg text-slate-700">{w.hero.body}</p>
             <ul className="mt-8 grid gap-4 sm:grid-cols-3">
               {w.problem.points.map((p, i) => (
                 <li key={p} className={CARD}>
@@ -447,8 +450,7 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
               </Fragment>
             ))}
           </h1>
-          <p className="mt-6 max-w-xl text-pretty text-lg text-slate-700 sm:text-xl">{w.hero.body}</p>
-          <div className="mt-8 flex flex-wrap items-center gap-4">
+          <div className="mt-10 flex flex-wrap items-center gap-4">
             <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), "gap-2", WINDUP)}>
               {w.hero.apply}
               <ArrowUpRight aria-hidden="true" className="me-arrow-up size-5" />
