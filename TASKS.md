@@ -329,6 +329,17 @@ drill completed; security checklist signed; two pilot clinics onboarded. (Was M6
 
 ---
 
+## Outside the milestones
+
+Small changes the developer approved as their own issue, branch and PR while a milestone is open
+(an exception to "one milestone branch open at a time").
+
+| Issue | Change | Requirement | Branch | Status |
+|---|---|---|---|---|
+| #80 | Landing page: full-width, edge-to-edge navbar; phone menu scroll lock and Escape fixes | FR-LND-01 | `m9/80-landing-navbar` | ▶ 27 Nov 2026: draft PR, waits for review |
+
+---
+
 ## Backlog (post-pilot, ordered by evidence)
 
 | ID | Item | Requirement | Evidence |

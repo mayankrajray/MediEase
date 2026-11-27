@@ -61,6 +61,10 @@ first production release.
   stays at 16.3.8 (dev only).
 
 ### Changed
+- #80 (FR-LND-01): the landing page header is a solid, full-width bar with its contents edge to
+  edge: the logo and section links on the left; a rounded language pill, Staff sign in and Apply
+  on the right. Below desktop width the extra items move into the full-screen menu, which now
+  unlocks page scrolling when it is hidden at desktop width and closes on Escape.
 - M6d-P1 (#63, D8): the public doctor fee is now the consultation price from the fee schedule,
   shown only when the owner turns on *Show the consultation fee publicly* (*Directory*). The
   profile `PUT` takes `show_fee` and refuses `fee_paise`; the `Doctor` body has `show_fee`
