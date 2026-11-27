@@ -9,6 +9,7 @@ Adding and removing are audited with the device's ID and label only.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -108,7 +109,9 @@ class SubscribeDevice:
             uow.commit()
         if hits > SUBSCRIBES_PER_HOUR:
             logger.info("push.rate_limited", owner_kind=owner.kind.value)
-            raise PushRateLimited(int((window + timedelta(hours=1) - now).total_seconds()))
+            # At least 1: in the window's last second the rest rounds down to 0 (seen in CI).
+            left = (window + timedelta(hours=1) - now).total_seconds()
+            raise PushRateLimited(max(1, math.ceil(left)))
 
     def execute(
         self,
