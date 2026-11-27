@@ -26,6 +26,7 @@ import type { PortalLanguage } from "@/lib/i18n/portal";
 import { LandingAnalytics } from "./LandingAnalytics";
 import { LandingMotion } from "./LandingMotion";
 import "./landing-motion.css";
+import "./landing-theme.css";
 
 // #82: hover motion from landing-motion.css. Squash and stretch for links and section buttons;
 // anticipation (a wind-up before the move) for the main calls to action and their arrows; and
@@ -38,7 +39,9 @@ const FOCUS_GROUP = "me-focus-group";
 // of the screen but keep some breathing room.
 const WRAP = "mx-auto w-full max-w-[90rem] px-4 sm:px-6 lg:px-12";
 const SECTION = "py-16 sm:py-24";
-const CARD = "rounded-2xl border border-line bg-surface p-6 shadow-card";
+const CARD = "rounded-2xl border border-line bg-surface p-6 me-soft-shadow";
+// #82: the main buttons' teal to sea-green gradient (landing-theme.css).
+const CTA = "me-cta";
 const NAV_LINK = `inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900 ${SQUASH}`;
 
 const LANG_PILL = `inline-flex h-10 items-center gap-1.5 rounded-full border border-line px-3.5 text-sm font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900 ${SQUASH}`;
@@ -177,7 +180,7 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
               })}
             </ul>
             <div className={cx("mt-10 flex flex-wrap items-center gap-4", FOCUS_GROUP)}>
-              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), SQUASH)}>
+              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), CTA, SQUASH)}>
                 {w.clinics.apply}
               </Link>
               <p className="max-w-md text-pretty text-slate-700">{w.clinics.demo}</p>
@@ -193,7 +196,7 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
               </h2>
               <p className="mt-3 max-w-xl text-pretty text-lg text-slate-700">{w.patients.body}</p>
               <div className={cx("mt-8 flex flex-wrap gap-3", FOCUS_GROUP)}>
-                <Link prefetch={false} href={`/find${q}`} data-analytics="find" className={cx(buttonClasses("primary", "lg"), SQUASH)}>
+                <Link prefetch={false} href={`/find${q}`} data-analytics="find" className={cx(buttonClasses("primary", "lg"), CTA, SQUASH)}>
                   {w.patients.find}
                 </Link>
                 <Link prefetch={false} href="/portal/sign-in" data-analytics="patient_sign_in" className={cx(buttonClasses("secondary", "lg"), SQUASH)}>
@@ -363,7 +366,7 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
               </Link>
             </span>
             <span className="hidden sm:block">
-              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "sm"), "whitespace-nowrap", SQUASH)}>
+              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "sm"), "whitespace-nowrap", CTA, SQUASH)}>
                 {w.footer.apply}
               </Link>
             </span>
@@ -417,7 +420,7 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
 function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
   const lines = sentences(w.hero.title);
   return (
-    <section aria-labelledby="hero-heading" className="overflow-hidden bg-brand-50">
+    <section aria-labelledby="hero-heading" className="me-hero-bg overflow-hidden">
       <div className={cx(WRAP, "grid items-center gap-12 pb-16 pt-12 sm:pb-20 sm:pt-16 lg:grid-cols-2 lg:pt-20")}>
         <div>
           {/* A small pill above the headline. Letter spacing would break Devanagari's joined
@@ -426,7 +429,7 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
           <p
             style={{ ["--stage" as string]: "150ms" }}
             className={cx(
-              "me-stage inline-flex items-center gap-2.5 rounded-full border border-brand-200 bg-white px-3 py-1.5 text-xs font-bold uppercase text-brand-900 sm:text-sm",
+              "me-stage me-pill inline-flex items-center gap-2.5 rounded-full border px-3 py-1.5 text-xs font-bold uppercase text-brand-900 sm:text-sm",
               !hindi && "tracking-[0.18em]",
             )}
           >
@@ -439,7 +442,7 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
           <h1
             id="hero-heading"
             className={cx(
-              "mt-6 text-[clamp(2.75rem,4.8vw,4.75rem)] font-extrabold text-balance text-brand-900",
+              "me-ink mt-6 text-[clamp(2.75rem,4.8vw,4.75rem)] font-extrabold text-balance",
               hindi ? "leading-[1.25]" : "leading-[0.98] tracking-[-0.035em]",
             )}
           >
@@ -454,7 +457,7 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
             ))}
           </h1>
           <div style={{ ["--stage" as string]: "350ms" }} className={cx("me-stage mt-10 flex flex-wrap items-center gap-4", FOCUS_GROUP)}>
-            <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), "gap-2", WINDUP, "me-spotlight")}>
+            <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), "gap-2", CTA, WINDUP, "me-spotlight")}>
               {w.hero.apply}
               <ArrowUpRight aria-hidden="true" className="me-arrow-up size-5" />
             </Link>
@@ -513,7 +516,7 @@ function HeadlineSentence({ text, last }: { text: string; last: boolean }) {
         .
         <span
           aria-hidden="true"
-          className={cx("absolute bottom-[0.3em] left-[0.05em] size-[0.17em]", last ? "bg-brand-400" : "bg-brand-900")}
+          className={cx("absolute bottom-[0.3em] left-[0.05em] size-[0.17em]", last ? "bg-brand-400" : "me-ink-bg")}
         />
       </span>
     </>
