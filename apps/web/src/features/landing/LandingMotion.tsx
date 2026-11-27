@@ -17,14 +17,25 @@ import { useEffect } from "react";
  */
 export function LandingMotion() {
   // The phone menu (a <details> in the header) closes when one of its links is chosen, so the
-  // page scrolls to that section with the menu out of the way.
+  // page scrolls to that section with the menu out of the way, and on Escape, like other menus.
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
       const link = event.target instanceof Element ? event.target.closest(".me-menu-panel a") : null;
       link?.closest("details")?.removeAttribute("open");
     };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const menu = document.querySelector<HTMLDetailsElement>(".me-landing-nav details[open]");
+      if (menu === null) return;
+      menu.removeAttribute("open");
+      menu.querySelector("summary")?.focus();
+    };
     document.addEventListener("click", onClick);
-    return () => document.removeEventListener("click", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
   }, []);
 
   useEffect(() => {
