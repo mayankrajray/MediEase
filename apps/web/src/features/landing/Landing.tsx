@@ -451,7 +451,7 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
                 {/* Between the lines, so the heading's name reads "organised. Your" with a space. */}
                 {i > 0 && " "}
                 <span className="block">
-                  <HeadlineSentence text={s} last={i === lines.length - 1} />
+                  <HeadlineSentence text={s} />
                 </span>
               </Fragment>
             ))}
@@ -502,12 +502,13 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
 }
 
 /**
- * One headline sentence. An English full stop is drawn as a small square, the last one in the
- * brand's mint. The real "." stays in the text, inline and transparent, so the heading's accessible
- * name is exactly its text ("organised.", not "organised ."); the square sits on the baseline
- * (Manrope's descent is 0.3 em). Hindi keeps its own "।".
+ * One headline sentence. An English full stop is drawn as a small square in the headline's own
+ * near-black ink (the developer, 27 Nov 2026: no mint accent on the last one). The real "." stays
+ * in the text, inline and transparent, so the heading's accessible name is exactly its text
+ * ("organised.", not "organised ."); the square sits on the baseline (Manrope's descent is
+ * 0.3 em). Hindi keeps its own "।".
  */
-function HeadlineSentence({ text, last }: { text: string; last: boolean }) {
+function HeadlineSentence({ text }: { text: string }) {
   if (!text.endsWith(".")) return <>{text}</>;
   return (
     <>
@@ -516,7 +517,7 @@ function HeadlineSentence({ text, last }: { text: string; last: boolean }) {
         .
         <span
           aria-hidden="true"
-          className={cx("absolute bottom-[0.3em] left-[0.05em] size-[0.17em]", last ? "bg-brand-400" : "me-ink-bg")}
+          className="me-ink-bg absolute bottom-[0.3em] left-[0.05em] size-[0.17em]"
         />
       </span>
     </>
