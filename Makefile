@@ -26,7 +26,7 @@ export TEST_DATABASE_URL
 # in pyproject.toml. CI runs the same command (.github/workflows/ci.yml).
 CORE_COVERAGE := --include='*/mediease_api/domain/*,*/mediease_api/application/*' --fail-under=80
 
-.PHONY: help env-check up down ps logs psql migrate seed import-clinic config-check smoke smoke-live install-api install-web api-venv-check \
+.PHONY: help env-check up down ps logs psql migrate seed import-clinic config-check watch alert-test smoke smoke-live install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
 	typecheck-web dev-web contract contract-check audit e2e worker dose-data vapid-keys
 
@@ -66,6 +66,14 @@ import-clinic: env-check ## Import a clinic from CSV files: DIR=/path/to/folder 
 config-check: env-check ## Show which real services .env selects, no secrets (LIVE=1 to call them; EMAIL_TO=, WHATSAPP_TO= to send one test)
 	$(COMPOSE) run --rm --no-deps --build api python -m mediease_api.delivery.cli.config_check \
 		$(if $(LIVE),--live) $(if $(EMAIL_TO),--email-to "$(EMAIL_TO)") $(if $(WHATSAPP_TO),--whatsapp-to "$(WHATSAPP_TO)")
+
+# M9-P2 (RUNBOOK §41): the watch the VM's timer runs every 5 minutes, once, without emailing or
+# changing its state; and one test alert to OPS_ALERT_EMAIL.
+watch: env-check ## Run the production watch once and show what it finds (sends nothing)
+	WATCH_DRY_RUN=1 bash scripts/watch.sh
+
+alert-test: env-check ## Send one test alert to OPS_ALERT_EMAIL (Mailpit locally)
+	$(COMPOSE) run --rm --no-deps --build -T api python -m mediease_api.delivery.cli.ops_alert --test
 
 dose-data: env-check ## A patient's dose records on request: ARGS="export <id> --out /exports/<id>.json" or "delete <id> --confirm"
 	@mkdir -p .exports && chmod 700 .exports

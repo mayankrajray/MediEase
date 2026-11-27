@@ -1,0 +1,19 @@
+# The production watch: checks the stack and emails OPS_ALERT_EMAIL on a change (M9-P2;
+# RUNBOOK §41). Install: sudo cp infra/gcp/mediease-watch.* /etc/systemd/system/ &&
+#          sudo systemctl daemon-reload && sudo systemctl enable --now mediease-watch.timer
+[Unit]
+Description=MediEase watch (alerts by email)
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/mediease
+ExecStart=/bin/bash /opt/mediease/scripts/watch.sh
+# Root runs docker and reads systemd's view of the backup; the state lives in
+# /var/lib/mediease-watch (StateDirectory, owner-only).
+User=root
+StateDirectory=mediease-watch
+StateDirectoryMode=0700
+TimeoutStartSec=120
+Nice=10
