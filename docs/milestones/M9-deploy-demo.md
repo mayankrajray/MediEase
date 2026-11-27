@@ -192,3 +192,30 @@ UI: the existing ops components (`PageHeader`, `Segmented`, `StatTile`, the shar
 row renders only when open. No surface brief existed for this screen, so the developer's
 instruction to build it stood in for the design questions (impeccable "operate" mode); the
 impeccable detector found nothing on the new files.
+
+## 11. M9-P2 — Alerting (developer, 27 Nov 2026)
+
+Issue #86, branch `m9/86-alerting-security`. Backups and the restore drill landed in P1 (§9);
+P2 adds the alerting ARCHITECTURE §10 listed (NFR-03, NFR-04). Answers (developer, 27 Nov 2026):
+the developer's own address in `OPS_ALERT_EMAIL`, set later on the VM; the recommendations below.
+
+| Decision | Choice | Rejected |
+|---|---|---|
+| Outside check | Google Cloud Monitoring uptime check on `/ready` (5 minutes, Google's regions, content `"database":"ok"`), email channel; one request covers Caddy, the certificate, web, API and database | UptimeRobot (a new account for the same result) |
+| Inside check | `scripts/watch.sh` on a systemd timer every 5 minutes, beside the backup timer; emails through a small CLI in the API image (`ops_alert`), so the script never holds SMTP credentials and works while the api container is down (`compose run`) | Alerting from inside the app (dies with the app); Cloud Monitoring alerts on logs (needs log shipping) |
+| When | Only on a change (new, resolved) and once a day while a problem lasts; "critical" (db, api, web, caddy, Docker) at any hour, warnings 08:00–22:00 IST and held till then | Every run (noise); clinic hours for everything (a night outage would wait) |
+| Logs | Stay on the VM (Docker's rotated files) | The Ops Agent and Cloud Logging: cost, and its default storage is outside India (NFR-07) |
+| Content | Service names, counts and codes only; the CLI keeps printable characters and caps the body | Log lines or request paths in the email |
+
+Thresholds: 5 API server errors in 5 minutes, dead jobs in 24 hours, a running job stuck over
+5 minutes, the oldest due job over 10 minutes, the backup failed or older than 26 hours, the disk
+over 85%, the certificate under 14 days; each a `WATCH_*` line in `.env`.
+
+Verified locally (27 Nov 2026): `make watch` all clear on a healthy stack; `make alert-test` sent;
+`docker compose stop api` → one `[critical]` email, start → one "resolved"; a stopped worker at
+23:00 IST held. Tests: `tests/unit/test_watch_script.py` (the real script against fake `docker`,
+`systemctl`, `df`, `openssl`: each check, held warnings, daily repeat, retry after a failed email,
+no address) and `tests/unit/delivery/test_ops_alert.py`; shellcheck clean.
+
+Open (developer, on the VM): set `OPS_ALERT_EMAIL`, install the timer and create the uptime check
+(RUNBOOK §41), then stop the API once to see both emails.

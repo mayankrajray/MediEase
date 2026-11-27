@@ -7,6 +7,14 @@ first production release.
 ## [Unreleased]
 
 ### Added
+- M9-P2 (#86): alerting (NFR-03, NFR-04; RUNBOOK §41). A Google Cloud Monitoring uptime check on
+  `/ready`, and `scripts/watch.sh` on a 5-minute systemd timer on the VM
+  (`infra/gcp/mediease-watch.*`) that emails `OPS_ALERT_EMAIL` when a container is down or
+  unhealthy, the API has 5 server errors in 5 minutes, jobs die, stick or wait over 10 minutes,
+  the backup fails or is older than 26 hours, the disk passes 85% or the certificate has under 14
+  days. Only on a change and once a day while it lasts; site-down at any hour, the rest
+  08:00–22:00 IST. New setting `OPS_ALERT_EMAIL`, `make watch` (shows, sends nothing) and
+  `make alert-test`; `make config-check` shows the alert address masked.
 - M9-P4 (#77): ops *Clinic usage* (`/ops/usage`, FR-OPS-03; spec ops-clinic-usage). For each
   clinic: last active, its people and who was active in 7 days, patients, appointments, visits,
   prescriptions and bills per week (4, 8 or 12 weeks, Monday–Sunday India time) and in total,

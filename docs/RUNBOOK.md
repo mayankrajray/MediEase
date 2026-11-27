@@ -51,6 +51,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 38. Production on Google Cloud (M9-P1)
 39. Backups and the restore drill (M9-P1)
 40. Clinic usage and the usage evidence (M9-P4)
+41. Alerts: the uptime check and the watch (M9-P2)
 
 ---
 
@@ -1124,3 +1125,60 @@ The file has clinic names and counts, no patient data, and can be shared as it i
 
 "Not sent" counts messages held back while `MESSAGING_PROVIDER=disabled`; they are not failures.
 Failed messages or dead jobs in the last 7 days show in *Delivery*: see §6 for dead jobs.
+
+### 41. Alerts: the uptime check and the watch (M9-P2)
+
+Two layers, so a problem reaches you before a clinic calls:
+
+| Layer | What it notices | Sends |
+|---|---|---|
+| **Uptime check** (Google Cloud Monitoring, outside the VM) | `https://<PUBLIC_HOST>/ready` failing from Google's regions: the VM, Docker, Caddy, the certificate, the web app, the API or the database down | Google's own email, at any hour; again when it recovers |
+| **Watch** (`scripts/watch.sh`, every 5 minutes on the VM) | The problems below, which the site can have while it still looks up | An email to `OPS_ALERT_EMAIL` through Brevo, only when something changes |
+
+**Set up the watch (once, on the VM, in `/opt/mediease`):**
+1. `nano .env`: set `OPS_ALERT_EMAIL=<your address>` (one plain address). Until it is set the
+   watch still runs and writes what it finds to its journal, but emails nothing.
+2. `make config-check` shows `alerts OPS_ALERT_EMAIL` masked; `make alert-test` sends one test
+   email. Check that it arrived (and is not in spam).
+3. Install and start the timer:
+   ```bash
+   sudo cp infra/gcp/mediease-watch.service infra/gcp/mediease-watch.timer /etc/systemd/system/
+   sudo systemctl daemon-reload && sudo systemctl enable --now mediease-watch.timer
+   sudo systemctl start mediease-watch.service && journalctl -u mediease-watch.service -n 10
+   ```
+   The journal should end with `watch: all clear`. `make watch` runs the same checks by hand and
+   sends nothing.
+
+**Set up the uptime check (once, in the Console):** Monitoring → *Uptime checks* → *Create
+uptime check*:
+1. Protocol **HTTPS**, resource type **URL**, hostname `mediease.duckdns.org`, path `/ready`,
+   check frequency **5 minutes**.
+2. Regions: keep the default set (Google needs at least three).
+3. Response validation: content **contains** `"database":"ok"`; acceptable codes **2xx**.
+4. Alert and notification: create an alert policy with an **email** notification channel to your
+   address; it fires when the check fails.
+5. Name it `MediEase /ready` and create it. The check's page shows each region's result.
+
+**Test both** (in clinic hours): `docker compose stop api` → within about 10 minutes a
+"[MediEase alert] 1 new" email (`[critical] api is not running`) and Google's incident email;
+`docker compose start api` → "1 resolved" and Google's recovery email.
+
+**What each alert means and the first step:**
+
+| Alert | Sent | First step |
+|---|---|---|
+| `[critical] api / web / db / caddy is not running` or `unhealthy` | any hour | `make ps`, then `docker compose logs --tail 100 <service>`; `make up` restarts what stopped. A failed migration: §4 |
+| `[critical] docker compose does not answer` | any hour | `sudo systemctl status docker`; `sudo systemctl restart docker`, then `make up` |
+| `[warning] worker / upload-worker / clamav is not running` | 08:00–22:00 IST | As above. Reminders and scans wait in the queue; nothing is lost |
+| `[warning] N server errors in the API in the last 5 minutes` | 08:00–22:00 | `docker compose logs --since 15m api \| grep -E 'server_error\|unexpected_error'`; each line has a `request_id` (DEBUGGING.md) |
+| `[warning] N dead jobs in the last 24 hours` | 08:00–22:00 | §6. Clears 24 hours after the last one died |
+| `[warning] N running jobs stuck` / `the oldest due job has waited M minutes` | 08:00–22:00 | `make ps` (is the worker up?), then §6 |
+| `[warning] the last backup failed` / `no backup has finished in 26 hours` | 08:00–22:00 | `journalctl -u mediease-backup.service -n 30`; run it again: `sudo systemctl start mediease-backup.service` (§39) |
+| `[warning] the disk is N% full` | 08:00–22:00 | `df -h`, `docker system df`; `docker image prune -a` removes old images (never `docker volume prune`) |
+| `[warning] the certificate ends in N days` | 08:00–22:00 | Caddy renews by itself 30 days ahead: `docker compose logs caddy \| grep -i certificate`; port 80 must stay open |
+
+A problem that lasts is repeated once a day ("still failing"). Warnings that start after 22:00
+are held and sent at 08:00 IST. If the email itself fails, the watch tries again on the next run.
+Thresholds can be changed with `WATCH_5XX_THRESHOLD`, `WATCH_QUEUE_AGE_SECONDS`,
+`WATCH_DISK_PERCENT` and `WATCH_CERT_DAYS` lines in `.env` (the script reads only those).
+Alert emails carry service names, counts and codes only, never patient data (NFR-07).
