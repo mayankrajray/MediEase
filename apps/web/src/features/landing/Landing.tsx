@@ -70,7 +70,7 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
       <Header w={w} other={other} />
 
       <main id="main">
-        <Hero w={w} q={q} />
+        <Hero w={w} q={q} hindi={language === "hi"} />
 
         <section aria-labelledby="problem-heading" className={SECTION} data-reveal>
           <div className={WRAP}>
@@ -405,14 +405,15 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
   );
 }
 
-function Hero({ w, q }: { w: LandingWords; q: string }) {
+function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
   const lines = sentences(w.hero.title);
   return (
     <section aria-labelledby="hero-heading" className="overflow-hidden bg-brand-50">
       <div className={cx(WRAP, "pb-16 pt-12 sm:pb-20 sm:pt-16 lg:pt-20")}>
         {/* A small line above the headline, like a magazine's kicker. Letter spacing would break
-            Devanagari's joined letters apart, so Hindi keeps normal spacing. */}
-        <p className="inline-flex items-center gap-2.5 text-xs font-bold uppercase tracking-[0.18em] text-brand-900 sm:text-sm [&:lang(hi)]:tracking-normal">
+            Devanagari's joined letters apart, so Hindi keeps normal spacing. The Hindi choices are
+            made here rather than with :lang() CSS, to keep the page inside its 200 KB budget. */}
+        <p className={cx("inline-flex items-center gap-2.5 text-xs font-bold uppercase text-brand-900 sm:text-sm", !hindi && "tracking-[0.18em]")}>
           <span aria-hidden="true" className="size-2 rounded-full bg-brand-600" />
           {w.footerMore.tagline}
         </p>
@@ -421,7 +422,10 @@ function Hero({ w, q }: { w: LandingWords; q: string }) {
               phone to 96 px on a wide desktop); Devanagari gets more line height for its marks. */}
           <h1
             id="hero-heading"
-            className="text-[clamp(2.75rem,6vw,6rem)] font-extrabold leading-[0.98] tracking-[-0.035em] text-balance text-brand-900 [&:lang(hi)]:leading-[1.25] [&:lang(hi)]:tracking-normal"
+            className={cx(
+              "text-[clamp(2.75rem,6vw,6rem)] font-extrabold text-balance text-brand-900",
+              hindi ? "leading-[1.25]" : "leading-[0.98] tracking-[-0.035em]",
+            )}
           >
             {lines.map((s, i) => (
               <Fragment key={s}>
@@ -446,7 +450,7 @@ function Hero({ w, q }: { w: LandingWords; q: string }) {
                 prefetch={false}
                 href={`/find${q}`}
                 data-analytics="find"
-                className="inline-flex min-h-12 origin-left items-center font-semibold text-brand-800 underline-offset-4 transition duration-150 ease-brand hover:text-brand-950 hover:underline active:scale-110 active:text-brand-700 motion-reduce:transition-none motion-reduce:active:scale-100"
+                className="inline-flex min-h-12 origin-left items-center font-semibold text-brand-800 underline-offset-4 transition ease-brand hover:text-brand-950 hover:underline active:scale-110 active:text-brand-700 motion-reduce:active:scale-100"
               >
                 {w.hero.find}
                 <span aria-hidden="true" className="ml-1">
