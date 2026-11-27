@@ -26,7 +26,9 @@ import type { PortalLanguage } from "@/lib/i18n/portal";
 import { LandingAnalytics } from "./LandingAnalytics";
 import { LandingMotion } from "./LandingMotion";
 
-const WRAP = "mx-auto w-full max-w-6xl px-4 sm:px-6";
+// Up to 1440 px wide with a 48 px margin at each side from laptop width up, so the sections use most
+// of the screen but keep some breathing room.
+const WRAP = "mx-auto w-full max-w-[90rem] px-4 sm:px-6 lg:px-12";
 const SECTION = "py-16 sm:py-24";
 const CARD = "rounded-2xl border border-line bg-surface p-6 shadow-card";
 const NAV_LINK =
