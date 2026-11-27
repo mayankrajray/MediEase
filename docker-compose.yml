@@ -107,6 +107,10 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    # M9-P3 (RUNBOOK §42): a constraint error is logged as its message and constraint only.
+    # PostgreSQL's default also logs DETAIL ("Key (phone_e164)=(+91…) already exists", "Failing
+    # row contains (… name, email …)") and the STATEMENT, which put personal data in the log.
+    command: ["postgres", "-c", "log_error_verbosity=terse", "-c", "log_min_error_statement=panic"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
