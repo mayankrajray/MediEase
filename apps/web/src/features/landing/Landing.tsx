@@ -409,21 +409,27 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
   const lines = sentences(w.hero.title);
   return (
     <section aria-labelledby="hero-heading" className="overflow-hidden bg-brand-50">
-      <div className={cx(WRAP, "pb-16 pt-12 sm:pb-20 sm:pt-16 lg:pt-20")}>
-        {/* A small line above the headline, like a magazine's kicker. Letter spacing would break
-            Devanagari's joined letters apart, so Hindi keeps normal spacing. The Hindi choices are
-            made here rather than with :lang() CSS, to keep the page inside its 200 KB budget. */}
-        <p className={cx("inline-flex items-center gap-2.5 text-xs font-bold uppercase text-brand-900 sm:text-sm", !hindi && "tracking-[0.18em]")}>
-          <span aria-hidden="true" className="size-2 rounded-full bg-brand-600" />
-          {w.footerMore.tagline}
-        </p>
-        <div className="mt-6 grid items-end gap-10 lg:mt-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:gap-14">
-          {/* B5: one sentence a line, wrapping into balanced halves at display sizes (44 px on a
-              phone to 96 px on a wide desktop); Devanagari gets more line height for its marks. */}
+      <div className={cx(WRAP, "grid items-center gap-12 pb-16 pt-12 sm:pb-20 sm:pt-16 lg:grid-cols-2 lg:pt-20")}>
+        <div>
+          {/* A small pill above the headline. Letter spacing would break Devanagari's joined
+              letters apart, so Hindi keeps normal spacing. The Hindi choices are made here rather
+              than with :lang() CSS, to keep the page inside its size budget. */}
+          <p
+            className={cx(
+              "inline-flex items-center gap-2.5 rounded-full border border-brand-200 bg-white px-3 py-1.5 text-xs font-bold uppercase text-brand-900 sm:text-sm",
+              !hindi && "tracking-[0.18em]",
+            )}
+          >
+            <span aria-hidden="true" className="size-2 rounded-full bg-brand-600" />
+            {w.footerMore.tagline}
+          </p>
+          {/* B5: one sentence a line, wrapping into balanced halves (44 px on a phone to 76 px on
+              a wide desktop, so "Your patients," fits half the width); Devanagari gets more line
+              height for its marks. */}
           <h1
             id="hero-heading"
             className={cx(
-              "text-[clamp(2.75rem,6vw,6rem)] font-extrabold text-balance text-brand-900",
+              "mt-6 text-[clamp(2.75rem,4.8vw,4.75rem)] font-extrabold text-balance text-brand-900",
               hindi ? "leading-[1.25]" : "leading-[0.98] tracking-[-0.035em]",
             )}
           >
@@ -437,36 +443,42 @@ function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
               </Fragment>
             ))}
           </h1>
-          <div className="lg:pb-3">
-            <p className="max-w-xl text-pretty text-lg text-slate-700 sm:text-xl">{w.hero.body}</p>
-            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
-              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), "gap-2")}>
-                {w.hero.apply}
-                <ArrowUpRight aria-hidden="true" className="size-5" />
-              </Link>
-              {/* Feedback: the colour deepens on hover, and on press the link grows and turns a
-                  lighter teal (brand-700, 4.7:1 on the mint); no movement with "reduce motion". */}
-              <Link
-                prefetch={false}
-                href={`/find${q}`}
-                data-analytics="find"
-                className="inline-flex min-h-12 origin-left items-center font-semibold text-brand-800 underline-offset-4 transition ease-brand hover:text-brand-950 hover:underline active:scale-110 active:text-brand-700 motion-reduce:active:scale-100"
-              >
-                {w.hero.find}
-                <span aria-hidden="true" className="ml-1">
-                  →
-                </span>
-              </Link>
-            </div>
-            <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-700">
-              {w.proof.map((p) => (
-                <li key={p} className="inline-flex items-center gap-2">
-                  <Check aria-hidden="true" className="size-4 text-brand-700" />
-                  {p}
-                </li>
-              ))}
-            </ul>
+          <p className="mt-6 max-w-xl text-pretty text-lg text-slate-700 sm:text-xl">{w.hero.body}</p>
+          <div className="mt-8 flex flex-wrap items-center gap-4">
+            <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), "gap-2")}>
+              {w.hero.apply}
+              <ArrowUpRight aria-hidden="true" className="size-5" />
+            </Link>
+            {/* An outlined button. Feedback: darker text and border on hover; on press it grows
+                and turns a lighter teal (brand-700, 5:1 on white); no growth with "reduce motion". */}
+            <Link
+              prefetch={false}
+              href={`/find${q}`}
+              data-analytics="find"
+              className="inline-flex min-h-12 origin-left items-center rounded-lg border border-brand-200 bg-white px-5 font-semibold text-brand-800 shadow-sm transition ease-brand hover:border-brand-300 hover:text-brand-950 active:scale-110 active:text-brand-700 motion-reduce:active:scale-100"
+            >
+              {w.hero.find}
+              <span aria-hidden="true" className="ml-1">
+                →
+              </span>
+            </Link>
           </div>
+          <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-700">
+            {w.proof.map((p) => (
+              <li key={p} className="inline-flex items-center gap-2">
+                <Check aria-hidden="true" className="size-4 text-brand-700" />
+                {p}
+              </li>
+            ))}
+          </ul>
+        </div>
+        {/* #82: a drawing of the clinic's day (the queue, a prescription with its QR code, a booked
+            slot), with no words, so it needs no translation. A 2 KB static file, decorative
+            (alt=""); not shown on phones, where it would push the actions down. */}
+        <div className="mx-auto hidden w-full max-w-xl sm:block lg:max-w-none">
+          {/* A static drawing; next/image has nothing to optimise in an SVG. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/landing-clinic-day.svg" alt="" width={650} height={580} className="h-auto w-full" />
         </div>
       </div>
     </section>
