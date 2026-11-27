@@ -84,6 +84,14 @@ def describe(s: AppSettings) -> list[Line]:
             ("email", "SMTP_PASSWORD", _set(s.SMTP_PASSWORD)),
             ("email", "EMAIL_FROM", s.EMAIL_FROM),
         ]
+    # M9-P2: where the watch sends alerts (RUNBOOK §41); masked, like every address here.
+    lines.append(
+        (
+            "alerts",
+            "OPS_ALERT_EMAIL",
+            _mask_email(s.OPS_ALERT_EMAIL) if s.OPS_ALERT_EMAIL else "NOT SET",
+        )
+    )
     lines.append(("google", "GOOGLE_OIDC_PROVIDER", s.GOOGLE_OIDC_PROVIDER))
     if s.GOOGLE_OIDC_PROVIDER == "google":
         lines += [

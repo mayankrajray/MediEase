@@ -65,6 +65,7 @@ x-api-environment: &api-environment
   SMTP_SECURITY: ${SMTP_SECURITY:-none}
   SMTP_USERNAME: ${SMTP_USERNAME:-}
   SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  OPS_ALERT_EMAIL: ${OPS_ALERT_EMAIL:-}
   # M7a (ADR-0013, ADR-0024): the assistant's model. `console` (the default) needs no key;
   # `groq`, `mistral`, `nvidia` (M7c-P5), `deepinfra` and `openai` need LLM_API_KEY. Staging and
   # production also need LLM_PATIENT_DATA_ALLOWED=true.

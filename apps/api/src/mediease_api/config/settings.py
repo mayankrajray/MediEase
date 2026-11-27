@@ -213,6 +213,9 @@ class AppSettings(BaseSettings):
     SMTP_SECURITY: SmtpSecurity = "starttls"
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: SecretStr = SecretStr("")
+    # M9-P2: where the VM's watch (scripts/watch.sh) and `make alert-test` send operational alerts,
+    # through the email settings above. Empty: alerts are only written to the watch's journal.
+    OPS_ALERT_EMAIL: str = ""
     # The assistant's model (M7a-P2, ADR-0013, spec assistant R1). `console` answers by rules
     # (offline; refused in production); the others share one OpenAI-compatible adapter. Empty
     # LLM_BASE_URL / LLM_MODEL mean the provider's defaults (adapters/llm/openai_compatible.py).
@@ -252,6 +255,14 @@ class AppSettings(BaseSettings):
         value = value.strip()
         if "@" not in value or any(c in value for c in "\r\n"):
             raise ValueError("must be an address like 'MediEase <no-reply@example.com>'")
+        return value
+
+    @field_validator("OPS_ALERT_EMAIL")
+    @classmethod
+    def _ops_alert_email(cls, value: str) -> str:
+        value = value.strip()
+        if value and not re.fullmatch(r"[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+", value):
+            raise ValueError("must be one plain address like you@example.com, or empty")
         return value
 
     @field_validator("SMTP_HOST")
