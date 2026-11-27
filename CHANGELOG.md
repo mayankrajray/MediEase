@@ -66,6 +66,13 @@ first production release.
   stays at 16.3.8 (dev only).
 
 ### Changed
+- #82 (FR-LND-01): the landing page sections run up to 1440 px with a 48 px margin. The hero has
+  the text and buttons on the left and, from tablet width up, a wordless drawing of the clinic's
+  day (`public/brand/landing-clinic-day.svg`: the queue, a prescription with its QR code, a booked
+  slot) on the right; "Your clinic, organised. Your patients, informed." is a large extra-bold
+  headline (square full stops in English), and Find a doctor is an outlined button that grows and
+  changes colour while pressed. The landing page's first-load check allows 210 KB (other pages
+  keep 200 KB).
 - #80 (FR-LND-01): the landing page header is a solid, full-width bar with its contents edge to
   edge: the logo and section links on the left; a rounded language pill, Staff sign in and Apply
   on the right. Below desktop width the extra items move into the full-screen menu, which now

@@ -1,0 +1,56 @@
+/*
+ * #82: the landing page's colours and depth, from the developer's redesign. Imported by
+ * Landing.tsx only, so no other page (the patient pages' 200 KB budget) loads it.
+ *
+ * - `.me-hero-bg`: an airy gradient behind the hero: clinical ice-teal from the top left, a gentle
+ *   sky blue from the bottom right, over an off-white that fades into the page's canvas, so the
+ *   hero meets the next section without an edge.
+ * - `.me-ink` / `.me-ink-bg`: the headline and its square full stops in a deep slate navy-pine
+ *   (`--color-ink`, 14:1 on the hero) instead of the flat dark green.
+ * - `.me-pill`: the kicker pill, a soft teal tint instead of white.
+ * - `.me-cta`: the main buttons, a gradient from clinical teal to deep sea-green with soft,
+ *   tinted depth. Its lightest stop (#168276) keeps white text at 4.7:1 (WCAG AA).
+ * - `.me-soft-shadow`: faint, tinted card shadows instead of the darker default.
+ */
+
+.me-hero-bg {
+  /* The sky glow sits above the bottom edge and fades out before it, so the hero ends in the
+     page's canvas colour with no visible line where the next section starts. */
+  background:
+    radial-gradient(60% 75% at 6% 0%, rgb(205 238 232 / 0.8), transparent 70%),
+    radial-gradient(48% 58% at 92% 42%, rgb(209 228 247 / 0.95), transparent 70%),
+    linear-gradient(180deg, #f2f9f8 0%, #f8fbfc 55%, var(--color-canvas) 100%);
+}
+
+.me-ink {
+  color: var(--color-ink);
+}
+
+.me-ink-bg {
+  background-color: var(--color-ink);
+}
+
+.me-pill {
+  background-color: rgb(221 243 238 / 0.7);
+  border-color: rgb(184 229 220 / 0.9);
+}
+
+.me-cta {
+  background-image: linear-gradient(135deg, #168276 0%, #0c5650 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 8px 18px -8px rgb(12 86 80 / 0.6);
+}
+
+.me-cta:hover {
+  background-image: linear-gradient(135deg, #147d72 0%, #0a4a45 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 12px 24px -10px rgb(12 86 80 / 0.65);
+}
+
+.me-soft-shadow {
+  box-shadow:
+    0 1px 2px rgb(15 60 75 / 0.04),
+    0 10px 28px -12px rgb(15 60 75 / 0.14);
+}

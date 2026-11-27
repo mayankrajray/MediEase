@@ -1,0 +1,185 @@
+/*
+ * #82: hover motion for the landing page's links and buttons, from two animation principles.
+ * Imported by Landing.tsx only, so no other page (the patient pages' 200 KB budget) loads it.
+ *
+ * - Squash and stretch (`.me-squash`): on hover the target squashes wide and short, stretches
+ *   tall and narrow, and settles, like something soft being pressed and let go. For the navbar
+ *   links, the language pill and the section buttons.
+ * - Anticipation (`.me-windup`): before moving, the button winds up, pulling back and down a
+ *   little, then springs forward and up, and stays slightly lifted. Its arrow does the same:
+ *   it draws back first, then shoots out (`.me-arrow-up` for ↗, `.me-arrow-right` for →). For
+ *   the main calls to action.
+ *
+ * Hover and keyboard focus both play it. With "reduce motion" nothing moves.
+ */
+
+@keyframes me-squash {
+  0%,
+  100% {
+    transform: none;
+  }
+  25% {
+    transform: scale(1.12, 0.86);
+  }
+  50% {
+    transform: scale(0.94, 1.08);
+  }
+  75% {
+    transform: scale(1.03, 0.97);
+  }
+}
+
+@keyframes me-windup {
+  0% {
+    transform: none;
+  }
+  30% {
+    transform: translateY(2px) scale(0.95);
+  }
+  65% {
+    transform: translateY(-4px) scale(1.04);
+  }
+  100% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes me-arrow-up {
+  0% {
+    transform: none;
+  }
+  35% {
+    transform: translate(-3px, 3px);
+  }
+  70% {
+    transform: translate(5px, -5px);
+  }
+  100% {
+    transform: translate(2px, -2px);
+  }
+}
+
+@keyframes me-arrow-right {
+  0% {
+    transform: none;
+  }
+  35% {
+    transform: translateX(-5px);
+  }
+  70% {
+    transform: translateX(7px);
+  }
+  100% {
+    transform: translateX(3px);
+  }
+}
+
+/* Transforms need a box: the → is a text span. */
+.me-arrow-up,
+.me-arrow-right {
+  display: inline-block;
+}
+
+/*
+ * Staging: the hero leads the eye. The headline is there at once (it is the focus, and the
+ * page's largest paint, so it is never hidden); the pill, the buttons and the proof points rise
+ * in after it, in reading order (`.me-stage`, with its delay in `--stage`). The drawing stages
+ * its own parts (public/brand/landing-clinic-day.svg). Once all is in, Apply's outline pulses
+ * twice (`.me-spotlight`), so the eye ends on the main action. Nothing moves with "reduce motion".
+ * `.me-stage` goes on wrappers, never on a button: a button's hover animation would replace the
+ * entrance and replay it when the pointer leaves.
+ */
+@keyframes me-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes me-ring {
+  from {
+    box-shadow: 0 0 0 0 rgb(20 125 114 / 0.45);
+  }
+  to {
+    box-shadow: 0 0 0 14px rgb(20 125 114 / 0);
+  }
+}
+
+.me-spotlight {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .me-stage {
+    animation: me-rise 600ms var(--ease-brand) both;
+    animation-delay: var(--stage, 0ms);
+  }
+  .me-spotlight::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: me-ring 1.4s ease-out 1.3s 2;
+  }
+  .me-squash:hover,
+  .me-squash:focus-visible {
+    animation: me-squash 520ms var(--ease-brand);
+  }
+  .me-windup:hover,
+  .me-windup:focus-visible {
+    animation: me-windup 480ms var(--ease-brand) forwards;
+  }
+  .me-windup:hover .me-arrow-up,
+  .me-windup:focus-visible .me-arrow-up {
+    animation: me-arrow-up 480ms var(--ease-brand) forwards;
+  }
+  .me-windup:hover .me-arrow-right,
+  .me-windup:focus-visible .me-arrow-right {
+    animation: me-arrow-right 480ms var(--ease-brand) forwards;
+  }
+}
+
+/*
+ * Staging on hover (#82): in a group of links or buttons (`.me-focus-group`), the one under the
+ * pointer or with keyboard focus (`.me-focus`) becomes the focus: it grows, and the others in the
+ * group fade back, so only one thing asks for attention. A press grows it a little more.
+ *
+ * - Growth uses the `scale` property, so it adds to the squash and the wind-up, which animate
+ *   `transform`; this file is unlayered, so its `scale` also wins over Tailwind's.
+ * - Hover rules apply only where the device can hover, so a tap on a phone never leaves a
+ *   button stuck large and the rest faded.
+ * - With "reduce motion" nothing grows; the others still fade back, which is not motion.
+ */
+.me-focus {
+  transition-property: color, background-color, border-color, box-shadow, opacity, scale, translate;
+  transition-duration: 220ms;
+  transition-timing-function: var(--ease-brand);
+}
+
+.me-focus-group:has(.me-focus:focus-visible) .me-focus:not(:focus-visible) {
+  opacity: 0.55;
+}
+
+@media (hover: hover) {
+  .me-focus-group:has(.me-focus:hover) .me-focus:not(:hover) {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .me-focus:focus-visible {
+    scale: 1.07;
+  }
+  .me-focus:active {
+    scale: 1.1;
+  }
+  @media (hover: hover) {
+    .me-focus:hover {
+      scale: 1.07;
+    }
+    .me-focus:hover:active {
+      scale: 1.1;
+    }
+  }
+}

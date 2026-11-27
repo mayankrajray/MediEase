@@ -1,4 +1,5 @@
 import {
+  ArrowUpRight,
   BellRing,
   CalendarClock,
   Check,
@@ -10,10 +11,9 @@ import {
   ShieldCheck,
   Stethoscope,
   UserRound,
-  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import { BRAND_FONT } from "@/app/fonts";
 import { buttonClasses } from "@/components/ui/Button";
@@ -25,15 +25,26 @@ import type { PortalLanguage } from "@/lib/i18n/portal";
 
 import { LandingAnalytics } from "./LandingAnalytics";
 import { LandingMotion } from "./LandingMotion";
+import "./landing-motion.css";
+import "./landing-theme.css";
 
-const WRAP = "mx-auto w-full max-w-6xl px-4 sm:px-6";
+// #82: hover motion from landing-motion.css. Squash and stretch for links and section buttons;
+// anticipation (a wind-up before the move) for the main calls to action and their arrows; and
+// staging: in a group (FOCUS_GROUP), the item under the pointer grows and the others fade back.
+const SQUASH = "me-squash me-focus";
+const WINDUP = "me-windup me-focus";
+const FOCUS_GROUP = "me-focus-group";
+
+// Up to 1440 px wide with a 48 px margin at each side from laptop width up, so the sections use most
+// of the screen but keep some breathing room.
+const WRAP = "mx-auto w-full max-w-[90rem] px-4 sm:px-6 lg:px-12";
 const SECTION = "py-16 sm:py-24";
-const CARD = "rounded-2xl border border-line bg-surface p-6 shadow-card";
-const NAV_LINK =
-  "inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900";
+const CARD = "rounded-2xl border border-line bg-surface p-6 me-soft-shadow";
+// #82: the main buttons' teal to sea-green gradient (landing-theme.css).
+const CTA = "me-cta";
+const NAV_LINK = `inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900 ${SQUASH}`;
 
-const LANG_PILL =
-  "inline-flex h-10 items-center gap-1.5 rounded-full border border-line px-3.5 text-sm font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900";
+const LANG_PILL = `inline-flex h-10 items-center gap-1.5 rounded-full border border-line px-3.5 text-sm font-medium text-slate-700 transition-colors duration-200 ease-brand hover:bg-slate-100 hover:text-slate-900 ${SQUASH}`;
 /** Each language's own name, for the language pill (the page switches to this language). */
 const LANGUAGE_NAME = { en: "English", hi: "हिंदी" } as const;
 
@@ -68,13 +79,16 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
       <Header w={w} other={other} />
 
       <main id="main">
-        <Hero w={w} q={q} />
+        <Hero w={w} q={q} hindi={language === "hi"} />
 
         <section aria-labelledby="problem-heading" className={SECTION} data-reveal>
           <div className={WRAP}>
             <h2 id="problem-heading" className="heading-4 max-w-2xl">
               {w.problem.title}
             </h2>
+            {/* #82: what MediEase does, moved here from the hero so the hero is the headline and
+                the actions only (the developer: less text on the first screen). */}
+            <p className="mt-3 max-w-2xl text-pretty text-lg text-slate-700">{w.hero.body}</p>
             <ul className="mt-8 grid gap-4 sm:grid-cols-3">
               {w.problem.points.map((p, i) => (
                 <li key={p} className={CARD}>
@@ -165,8 +179,8 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
                 );
               })}
             </ul>
-            <div className="mt-10 flex flex-wrap items-center gap-4">
-              <Link prefetch={false} href="/apply" data-analytics="apply" className={buttonClasses("primary", "lg")}>
+            <div className={cx("mt-10 flex flex-wrap items-center gap-4", FOCUS_GROUP)}>
+              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), CTA, SQUASH)}>
                 {w.clinics.apply}
               </Link>
               <p className="max-w-md text-pretty text-slate-700">{w.clinics.demo}</p>
@@ -181,11 +195,11 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
                 {w.patients.title}
               </h2>
               <p className="mt-3 max-w-xl text-pretty text-lg text-slate-700">{w.patients.body}</p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Link prefetch={false} href={`/find${q}`} data-analytics="find" className={buttonClasses("primary", "lg")}>
+              <div className={cx("mt-8 flex flex-wrap gap-3", FOCUS_GROUP)}>
+                <Link prefetch={false} href={`/find${q}`} data-analytics="find" className={cx(buttonClasses("primary", "lg"), CTA, SQUASH)}>
                   {w.patients.find}
                 </Link>
-                <Link prefetch={false} href="/portal/sign-in" data-analytics="patient_sign_in" className={buttonClasses("secondary", "lg")}>
+                <Link prefetch={false} href="/portal/sign-in" data-analytics="patient_sign_in" className={cx(buttonClasses("secondary", "lg"), SQUASH)}>
                   {w.patients.signIn}
                 </Link>
               </div>
@@ -273,11 +287,11 @@ export function Landing({ language }: Readonly<{ language: PortalLanguage }>) {
                 {w.final.title}
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-pretty text-lg text-brand-100">{w.final.body}</p>
-              <div className="mt-8 flex justify-center">
+              <div className={cx("mt-8 flex justify-center", FOCUS_GROUP)}>
                 <Link prefetch={false}
                   href="/apply"
                   data-analytics="apply"
-                  className={cx(buttonClasses("secondary", "lg"), "border-white hover:border-white hover:bg-brand-50")}
+                  className={cx(buttonClasses("secondary", "lg"), "border-white hover:border-white hover:bg-brand-50", WINDUP)}
                 >
                   {w.hero.apply}
                 </Link>
@@ -322,7 +336,7 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
           `position: fixed` panel, which would then be clipped to the bar. */}
       <nav aria-label="MediEase" className="me-landing-nav border-b border-line bg-surface">
         {/* The bar and its contents span the viewport: logo at the left edge, actions at the right. */}
-        <div className="flex h-16 items-center gap-2 px-4 sm:px-6 lg:px-8">
+        <div className={cx("flex h-16 items-center gap-2 px-4 sm:px-6 lg:px-8", FOCUS_GROUP)}>
           <Link prefetch={false} href={other === "hi" ? "/" : "/?lang=hi"} className="inline-flex min-h-11 shrink-0 items-center rounded-lg pr-2">
             <Logo />
           </Link>
@@ -352,7 +366,7 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
               </Link>
             </span>
             <span className="hidden sm:block">
-              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "sm"), "whitespace-nowrap")}>
+              <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "sm"), "whitespace-nowrap", CTA, SQUASH)}>
                 {w.footer.apply}
               </Link>
             </span>
@@ -403,33 +417,69 @@ function Header({ w, other }: { w: LandingWords; other: "en" | "hi" }) {
   );
 }
 
-function Hero({ w, q }: { w: LandingWords; q: string }) {
+function Hero({ w, q, hindi }: { w: LandingWords; q: string; hindi: boolean }) {
+  const lines = sentences(w.hero.title);
   return (
-    <section aria-labelledby="hero-heading" className="overflow-hidden pb-16 pt-12 sm:pb-24 sm:pt-20">
-      <div className={cx(WRAP, "grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]")}>
+    <section aria-labelledby="hero-heading" className="me-hero-bg overflow-hidden">
+      <div className={cx(WRAP, "grid items-center gap-12 pb-16 pt-12 sm:pb-20 sm:pt-16 lg:grid-cols-2 lg:pt-20")}>
         <div>
-          <h1 id="hero-heading" className="heading-1 max-w-[680px] text-slate-900">
-            {/* B5: break where the thought breaks, one sentence a line. */}
-            {sentences(w.hero.title).map((s, i) => (
-              <span key={s} className="block">
+          {/* A small pill above the headline. Letter spacing would break Devanagari's joined
+              letters apart, so Hindi keeps normal spacing. The Hindi choices are made here rather
+              than with :lang() CSS, to keep the page inside its size budget. */}
+          <p
+            style={{ ["--stage" as string]: "150ms" }}
+            className={cx(
+              "me-stage me-pill inline-flex items-center gap-2.5 rounded-full border px-3 py-1.5 text-xs font-bold uppercase text-brand-900 sm:text-sm",
+              !hindi && "tracking-[0.18em]",
+            )}
+          >
+            <span aria-hidden="true" className="size-2 rounded-full bg-brand-600" />
+            {w.footerMore.tagline}
+          </p>
+          {/* B5: one sentence a line, wrapping into balanced halves (44 px on a phone to 76 px on
+              a wide desktop, so "Your patients," fits half the width); Devanagari gets more line
+              height for its marks. */}
+          <h1
+            id="hero-heading"
+            className={cx(
+              "me-ink mt-6 text-[clamp(2.75rem,4.8vw,4.75rem)] font-extrabold text-balance",
+              hindi ? "leading-[1.25]" : "leading-[0.98] tracking-[-0.035em]",
+            )}
+          >
+            {lines.map((s, i) => (
+              <Fragment key={s}>
+                {/* Between the lines, so the heading's name reads "organised. Your" with a space. */}
                 {i > 0 && " "}
-                {s}
-              </span>
+                <span className="block">
+                  <HeadlineSentence text={s} />
+                </span>
+              </Fragment>
             ))}
           </h1>
-          <p className="mt-6 max-w-[680px] text-pretty text-lg text-slate-700 sm:text-xl">{w.hero.body}</p>
-          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
-            <Link prefetch={false} href="/apply" data-analytics="apply" className={buttonClasses("primary", "lg")}>
+          <div style={{ ["--stage" as string]: "350ms" }} className={cx("me-stage mt-10 flex flex-wrap items-center gap-4", FOCUS_GROUP)}>
+            <Link prefetch={false} href="/apply" data-analytics="apply" className={cx(buttonClasses("primary", "lg"), "gap-2", CTA, WINDUP, "me-spotlight")}>
               {w.hero.apply}
+              <ArrowUpRight aria-hidden="true" className="me-arrow-up size-5" />
             </Link>
-            <Link prefetch={false} href={`/find${q}`} data-analytics="find" className="inline-flex min-h-12 items-center font-semibold text-brand-800 underline-offset-4 hover:underline">
+            {/* An outlined button. Feedback: darker text and border on hover, where it also grows
+                (staging, landing-motion.css); on press it grows more (110%) and turns a lighter
+                teal (brand-700, 5:1 on white). It grows from its left edge, away from Apply. */}
+            <Link
+              prefetch={false}
+              href={`/find${q}`}
+              data-analytics="find"
+              className={cx(
+                "inline-flex min-h-12 origin-left items-center rounded-lg border border-brand-200 bg-white px-5 font-semibold text-brand-800 shadow-sm hover:border-brand-300 hover:text-brand-950 active:text-brand-700",
+                WINDUP,
+              )}
+            >
               {w.hero.find}
-              <span aria-hidden="true" className="ml-1">
+              <span aria-hidden="true" className="me-arrow-right ml-1">
                 →
               </span>
             </Link>
           </div>
-          <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-700">
+          <ul style={{ ["--stage" as string]: "550ms" }} className="me-stage mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-700">
             {w.proof.map((p) => (
               <li key={p} className="inline-flex items-center gap-2">
                 <Check aria-hidden="true" className="size-4 text-brand-700" />
@@ -438,42 +488,39 @@ function Hero({ w, q }: { w: LandingWords; q: string }) {
             ))}
           </ul>
         </div>
-        <QueuePreview w={w} />
+        {/* #82: a drawing of the clinic's day (the queue, a prescription with its QR code, a booked
+            slot), with no words, so it needs no translation. A 2 KB static file, decorative
+            (alt=""); not shown on phones, where it would push the actions down. */}
+        <div className="mx-auto hidden w-full max-w-xl sm:block lg:max-w-none">
+          {/* A static drawing; next/image has nothing to optimise in an SVG. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/landing-clinic-day.svg" alt="" width={650} height={580} className="h-auto w-full" />
+        </div>
       </div>
     </section>
   );
 }
 
-/** A drawing of the queue screen in the product's own components, with sample patients. */
-function QueuePreview({ w }: { w: LandingWords }) {
-  const p = w.preview;
+/**
+ * One headline sentence. An English full stop is drawn as a small square in the headline's own
+ * near-black ink (the developer, 27 Nov 2026: no mint accent on the last one). The real "." stays
+ * in the text, inline and transparent, so the heading's accessible name is exactly its text
+ * ("organised.", not "organised ."); the square sits on the baseline (Manrope's descent is
+ * 0.3 em). Hindi keeps its own "।".
+ */
+function HeadlineSentence({ text }: { text: string }) {
+  if (!text.endsWith(".")) return <>{text}</>;
   return (
-    <div role="img" aria-label={p.label} className="relative">
-      <div aria-hidden="true" className="absolute -inset-6 -z-10 rounded-[2rem] bg-brand-50" />
-      <div className="rounded-2xl border border-line bg-surface p-5 shadow-modal">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="font-semibold text-slate-900">{p.title}</p>
-            <p className="text-sm text-slate-700">{p.doctor}</p>
-          </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-900">
-            <UsersRound className="size-3.5" />3
-          </span>
-        </div>
-        <ul className="mt-4 divide-y divide-line">
-          {p.rows.map((r) => (
-            <li key={r.token} className="flex items-center gap-3 py-3">
-              <span className="w-9 font-semibold text-slate-700" data-numeric>
-                {r.token}
-              </span>
-              <span className="flex-1 truncate font-medium text-slate-900">{r.name}</span>
-              <StatusBadge tone={r.tone}>{r.status}</StatusBadge>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 rounded-xl bg-surface-muted px-3 py-2 text-sm text-slate-700">{p.next}</p>
-      </div>
-    </div>
+    <>
+      {text.slice(0, -1)}
+      <span className="relative text-transparent">
+        .
+        <span
+          aria-hidden="true"
+          className="me-ink-bg absolute bottom-[0.3em] left-[0.05em] size-[0.17em]"
+        />
+      </span>
+    </>
   );
 }
 
