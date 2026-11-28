@@ -1,0 +1,11 @@
+# Runs the MediEase watch every 5 minutes (M9-P2; RUNBOOK §41).
+[Unit]
+Description=MediEase watch every 5 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

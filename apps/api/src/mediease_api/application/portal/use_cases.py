@@ -175,7 +175,9 @@ class SignInPatient:
         hasher: PasswordHasher,
         sessions: PatientSessionIssuer,
         dummy_password_hash: str,
+        sign_ins_per_minute: int = SIGN_IN_PER_MINUTE,
     ) -> None:
+        self._sign_ins_per_minute = sign_ins_per_minute
         self._uow = uow
         self._clock = clock
         self._ids = ids
@@ -185,7 +187,7 @@ class SignInPatient:
 
     def execute(self, cmd: PortalSignInCommand, info: RequestInfo) -> PatientSessionResult:
         enforce_rate_limit(
-            self._uow, self._clock, info, bucket="portal-sign-in", limit=SIGN_IN_PER_MINUTE
+            self._uow, self._clock, info, bucket="portal-sign-in", limit=self._sign_ins_per_minute
         )
         email = _parse_email(cmd.email)
         with self._uow as uow:

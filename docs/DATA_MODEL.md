@@ -1117,8 +1117,9 @@ Indexes: `bill_id`, `(clinic_id, local_date)`. Rows are never deleted.
 | Patient links | 30 days after expiry | Purge job |
 | Notifications | 90 days after creation | Purge job (M6a-P7) |
 
-Erasure requests are executed by a reviewed, audited procedure (`scripts/erase_patient.py`, M6)
-that respects legally required clinical retention — confirm with counsel (L-04).
+Erasure requests are executed by a reviewed, audited procedure (`make patient-data ARGS="erase
+<clinic-slug> <code>"`, `delivery/cli/patient_data.py`, M9-P3; RUNBOOK §43) that anonymises the
+patient and keeps the clinical record the clinic must retain — confirm with counsel (L-04).
 
 ## M6d — Reports on visits (migration `0040`, M6d-P6)
 

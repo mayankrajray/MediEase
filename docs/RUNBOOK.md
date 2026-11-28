@@ -51,6 +51,10 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 38. Production on Google Cloud (M9-P1)
 39. Backups and the restore drill (M9-P1)
 40. Clinic usage and the usage evidence (M9-P4)
+41. Alerts: the uptime check and the watch (M9-P2)
+42. Log review for personal data (M9-P3)
+43. Patient data requests: export and erasure (M9-P3)
+44. Onboarding rehearsal: a test clinic end to end in under 60 minutes (M9-P5)
 
 ---
 
@@ -254,7 +258,11 @@ curl -s -b jar -X PUT -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/jso
    pair. Leave and extra sessions are the owner's (`/api/v1/clinic/doctors/{id}/schedule-exceptions`).
 6. Import patients (M2-P4). Ask the clinic to save their list as **CSV UTF-8** with exactly these
    columns (any order): `name, phone, sex, dob_or_age, guardian_name, language`; a template with
-   synthetic rows is `scripts/fixtures/patients-import-sample.csv`. Dry-run first (the default),
+   synthetic rows is `scripts/fixtures/patients-import-sample.csv`. **In the browser (M9-P3):** ops
+   **Clinics → Import patients** on the clinic's row: choose the file, *Check file* (nothing is
+   saved), read the rows with a problem or a shared phone, fix the spreadsheet and check again if
+   needed, then *Import N patients*; the codes are shown. The same with the API, for scripts:
+   dry-run first (the default),
    fix the rows it reports in the spreadsheet (row numbers match it), dry-run again, then commit:
 
 ```bash
@@ -291,9 +299,10 @@ timestamp is the G4 measurement. Each step is also in `audit_events` (§18).
 ### 12. Patient data request (access, correction, erasure)
 The **clinic** is the Data Fiduciary and responds to the patient; MediEase assists.
 1. Receive the request via the clinic owner.
-2. Access → export that patient's record. Correction → clinic staff edit demographics; clinical
-   corrections are addenda. Erasure → run the erasure procedure, which respects clinical record
-   retention obligations (confirm with counsel, L-04).
+2. Access → export that patient's record (`make patient-data ARGS="export …"`, §43). Correction →
+   clinic staff edit demographics; clinical corrections are addenda. Erasure → `make
+   patient-data ARGS="erase …"` (§43), which keeps the clinical record the clinic must retain and
+   removes who the patient is (confirm the retention with counsel, L-04).
 3. Log the request and completion date; the statutory response window applies.
 
 ### 13. Secret exposure
@@ -313,12 +322,28 @@ link answers `LINK_INVALID`, and staff use *Replace link*
 `scripts/inspect_link_token.py <token>` shows which `kid` a token uses, offline.
 
 ### 15. Suspected data breach — SEV1
-1. Contain: revoke access, rotate secrets, block the vector.
-2. Preserve evidence: logs, audit events, snapshots. Do not delete anything.
-3. Inform the founder immediately and each affected clinic without delay, with what is known.
+MediEase is the clinic's **Data Processor**: the clinic (the Data Fiduciary) reports to the Board
+and its patients; MediEase tells the clinic quickly and helps. The clocks below come from the DPDP
+Rules 2025 (Rule 7) and the CERT-In Directions of 28 April 2022; *Counsel* confirms them (L-04).
+
+| Clock (from becoming aware) | Who | What |
+|---|---|---|
+| At once | The developer | Contain and preserve (steps 1–2); tell the founder |
+| Within 6 hours | MediEase, if the incident is reportable to CERT-In | Report to CERT-In (incident@cert-in.org.in) |
+| Within 24 hours | MediEase | Tell each affected clinic in writing: what happened, which data and which patients (by count and IDs), when, what is done, a contact. Our target, so the clinic can meet its own deadlines |
+| Without delay | The clinic, helped by MediEase | Tell each affected patient (nature, extent, time, likely impact, what they can do, a contact) |
+| Within 72 hours | The clinic, helped by MediEase | The detailed report to the Data Protection Board |
+
+1. Contain: revoke access, rotate secrets (§13), block the vector; take the site down
+   (`make down`) if data is still leaving.
+2. Preserve evidence: logs (`docker compose logs > <file>` before they rotate), audit events,
+   a disk snapshot. Do not delete anything.
+3. Inform the founder immediately and each affected clinic within 24 hours (table above), with
+   what is known; update them as more is known.
 4. Support clinics in meeting their notification obligations under the DPDP framework (to the
    Board and affected individuals) — counsel involved from the start.
-5. Post-incident review within 5 working days; journal entry and control improvements.
+5. Keep a written timeline: when we became aware, each action, each message sent.
+6. Post-incident review within 5 working days; journal entry and control improvements.
 
 ### 16. Break-glass production database access
 Only for SEV1/SEV2 when no application path exists. Requires the founder's approval, a named
@@ -1124,3 +1149,157 @@ The file has clinic names and counts, no patient data, and can be shared as it i
 
 "Not sent" counts messages held back while `MESSAGING_PROVIDER=disabled`; they are not failures.
 Failed messages or dead jobs in the last 7 days show in *Delivery*: see §6 for dead jobs.
+
+### 41. Alerts: the uptime check and the watch (M9-P2)
+
+Two layers, so a problem reaches you before a clinic calls:
+
+| Layer | What it notices | Sends |
+|---|---|---|
+| **Uptime check** (Google Cloud Monitoring, outside the VM) | `https://<PUBLIC_HOST>/ready` failing from Google's regions: the VM, Docker, Caddy, the certificate, the web app, the API or the database down | Google's own email, at any hour; again when it recovers |
+| **Watch** (`scripts/watch.sh`, every 5 minutes on the VM) | The problems below, which the site can have while it still looks up | An email to `OPS_ALERT_EMAIL` through Brevo, only when something changes |
+
+**Set up the watch (once, on the VM, in `/opt/mediease`):**
+1. `nano .env`: set `OPS_ALERT_EMAIL=<your address>` (one plain address). Until it is set the
+   watch still runs and writes what it finds to its journal, but emails nothing.
+2. `make config-check` shows `alerts OPS_ALERT_EMAIL` masked; `make alert-test` sends one test
+   email. Check that it arrived (and is not in spam).
+3. Install and start the timer:
+   ```bash
+   sudo cp infra/gcp/mediease-watch.service infra/gcp/mediease-watch.timer /etc/systemd/system/
+   sudo systemctl daemon-reload && sudo systemctl enable --now mediease-watch.timer
+   sudo systemctl start mediease-watch.service && journalctl -u mediease-watch.service -n 10
+   ```
+   The journal should end with `watch: all clear`. `make watch` runs the same checks by hand and
+   sends nothing.
+
+**Set up the uptime check (once, in the Console):** Monitoring → *Uptime checks* → *Create
+uptime check*:
+1. Protocol **HTTPS**, resource type **URL**, hostname `mediease.duckdns.org`, path `/ready`,
+   check frequency **5 minutes**.
+2. Regions: keep the default set (Google needs at least three).
+3. Response validation: content **contains** `"database":"ok"`; acceptable codes **2xx**.
+4. Alert and notification: create an alert policy with an **email** notification channel to your
+   address; it fires when the check fails.
+5. Name it `MediEase /ready` and create it. The check's page shows each region's result.
+
+**Test both** (in clinic hours): `docker compose stop api` → within about 10 minutes a
+"[MediEase alert] 1 new" email (`[critical] api is not running`) and Google's incident email;
+`docker compose start api` → "1 resolved" and Google's recovery email.
+
+**What each alert means and the first step:**
+
+| Alert | Sent | First step |
+|---|---|---|
+| `[critical] api / web / db / caddy is not running` or `unhealthy` | any hour | `make ps`, then `docker compose logs --tail 100 <service>`; `make up` restarts what stopped. A failed migration: §4 |
+| `[critical] docker compose does not answer` | any hour | `sudo systemctl status docker`; `sudo systemctl restart docker`, then `make up` |
+| `[warning] worker / upload-worker / clamav is not running` | 08:00–22:00 IST | As above. Reminders and scans wait in the queue; nothing is lost |
+| `[warning] N server errors in the API in the last 5 minutes` | 08:00–22:00 | `docker compose logs --since 15m api \| grep -E 'server_error\|unexpected_error'`; each line has a `request_id` (DEBUGGING.md) |
+| `[warning] N failed sign-ins and M accounts locked in the last 5 minutes` | 08:00–22:00 | Possible password guessing: §17 step 3, then §15 if it continues. The per-address limit (30 a minute) already slows one source |
+| `[warning] N webhook calls with a wrong signature or token` | 08:00–22:00 | Someone is probing `/webhooks/whatsapp`; nothing is accepted without the signature. If it is Meta itself, `WHATSAPP_APP_SECRET` changed: §13 |
+| `[warning] N dead jobs in the last 24 hours` | 08:00–22:00 | §6. Clears 24 hours after the last one died |
+| `[warning] N running jobs stuck` / `the oldest due job has waited M minutes` | 08:00–22:00 | `make ps` (is the worker up?), then §6 |
+| `[warning] the last backup failed` / `no backup has finished in 26 hours` | 08:00–22:00 | `journalctl -u mediease-backup.service -n 30`; run it again: `sudo systemctl start mediease-backup.service` (§39) |
+| `[warning] the disk is N% full` | 08:00–22:00 | `df -h`, `docker system df`; `docker image prune -a` removes old images (never `docker volume prune`) |
+| `[warning] the certificate ends in N days` | 08:00–22:00 | Caddy renews by itself 30 days ahead: `docker compose logs caddy \| grep -i certificate`; port 80 must stay open |
+
+A problem that lasts is repeated once a day ("still failing"). Warnings that start after 22:00
+are held and sent at 08:00 IST. If the email itself fails, the watch tries again on the next run.
+Thresholds can be changed with `WATCH_5XX_THRESHOLD`, `WATCH_SIGNIN_FAILURES`,
+`WATCH_WEBHOOK_FAILURES`, `WATCH_QUEUE_AGE_SECONDS`,
+`WATCH_DISK_PERCENT` and `WATCH_CERT_DAYS` lines in `.env` (the script reads only those).
+Alert emails carry service names, counts and codes only, never patient data (NFR-07).
+
+### 42. Log review for personal data (M9-P3)
+
+**When:** monthly, after a release that adds logging, and during an incident (§15).
+In `/opt/mediease` on the VM: `bash scripts/log-review.sh` (the last 7 days; `SINCE=24h` for a
+day). It looks in every service's log for values shaped like an Indian mobile number, an email
+address or an Aadhaar number, skips masked ones (`+91******3210`, `a***@example.com`), and prints
+only counts and the event names that carried them, never the values, so its output can be pasted
+into a ticket.
+
+- "nothing … in the last 168h": record the date in the M9 design (§12) and stop.
+- A finding in `api`, `worker` or `upload-worker` names the event: find the `logger` call for it,
+  mask the value (`PhoneNumber.masked()`, `EmailAddress.masked()`) or drop it, add a log-capture
+  test, and release. The old lines rotate out within days (5 × 10 MB per service).
+- A finding in `caddy`, `db`, `clamav` or `mailpit` is a third-party image: check what it logs
+  (for example a URL with a query string) before changing anything. `db` was found logging
+  constraint errors with the row's values and now runs with `log_error_verbosity=terse` and
+  `log_min_error_statement=panic` (M9-P3). On a VM deployed before that, the old lines stay until
+  Docker rotates them; to clear them at once: `docker compose up -d --force-recreate db`
+  (a new container starts with an empty log; the data volume is kept).
+
+### 43. Patient data requests: export and erasure (M9-P3, spec patient-data-requests)
+
+**Only on the clinic owner's written request** (an email from the owner's address, naming the
+patient's code). The clinic answers the patient; MediEase does what the clinic asks (§12). Keep
+the request email; note its date and the completion date in the M9 design.
+
+**Export (the patient asks for their data).** On the VM, in `/opt/mediease`:
+```bash
+make patient-data ARGS="export <clinic-slug> <patient-code>"
+```
+It writes `.exports/<slug>-<code>-<date>.zip` (owner-only), an AES-256 zip with `record.json`
+(every row about the patient, by table), the issued prescriptions as printed and the visit
+reports, and prints a password **once**. Copy the file off the VM (the Console's SSH window →
+*Download file*), send it to the owner, and tell them the password **by phone**, never in the
+same email. Then delete it on the VM: `rm .exports/<file>.zip`. It opens with 7-Zip or WinRAR
+(not Windows Explorer). Audited as `patient.data_exported`.
+
+**Erasure (the patient asks to be forgotten).**
+1. If the command says the patient has upcoming appointments or open booking requests, ask the
+   clinic to cancel or answer them first.
+2. `make patient-data ARGS="erase <clinic-slug> <patient-code>"`: it lists what it changes and
+   asks you to type the code again.
+3. What goes: the name (becomes "Erased patient"), phone, exact date of birth (the age at
+   registration stays), guardian, consents (messages stop); their app links, invitations,
+   reminder choices and dose marks; open patient links; scheduled reminders; the phone on
+   messages and on booking requests (with the age, sex and reason given there); the name in staff
+   notifications; the stored prescription and receipt PDFs (drawn again, anonymised, if the clinic
+   downloads them).
+4. What the clinic keeps, under the code, for its legal record-keeping (*Counsel*, L-04): visits
+   and addenda, prescriptions, bills and payments, reports attached to visits, the audit log. A
+   patient app account is the person's own and is not deleted; if they want it gone too, it is a
+   separate request (FR-PRT-10).
+5. Backups keep the old rows for up to 30 days, then they are gone (§39). Audited as
+   `patient.erased`, with counts only. It cannot be undone, and a second run is refused.
+
+### 44. Onboarding rehearsal: a test clinic end to end in under 60 minutes (M9-P5)
+
+**Why:** goal G4 (PRD) and the M9 exit criteria. The clock is the clinic's onboarding checklist,
+which the app writes once per step and never overwrites; `make onboarding-report SLUG=<slug>`
+reads it. Rehearse on the production VM, as a real pilot would run, with **invented** data only.
+
+**Before the clock (not timed, about 10 minutes):**
+- A name and slug that are plainly a test: *Rehearsal Clinic*, `rehearsal-clinic-<yyyymmdd>`.
+- Two invented doctors (`Dr. Test One`, qualification `MBBS`, registration `TEST-0001`, council
+  `Test Medical Council`), invented phones (`+919000000xxx`).
+- Addresses you can read, using Gmail's plus addresses: `you+rh-owner@gmail.com`,
+  `you+rh-doctor@gmail.com`, `you+rh-desk@gmail.com` all arrive in your inbox.
+- Four windows: the ops user (normal), owner, doctor and desk (incognito or separate Chrome
+  profiles). A note open to write down anything that slowed you.
+
+**Timed (the clock starts when the ops wizard opens):**
+1. Ops: **Clinics → Create clinic**: the clinic, both doctors, the owner's invitation. Copy the
+   link (shown once).
+2. Owner: open the link, set a password, sign in.
+3. Owner: **Team** → invite the second doctor and the front desk by email; each accepts from the
+   email in their own window.
+4. Owner: **Settings → Schedule**: each doctor's weekly hours. **Settings → Fees**: the
+   consultation fee.
+5. Patients: ops **Clinics → Import patients** on the clinic's row, with an invented CSV
+   (`scripts/fixtures/patients-import-sample.csv` is one): *Check file*, read the report, then
+   *Import N patients*. Or the desk registers three invented patients by hand.
+6. Desk: book one of them today; **Queue** → *Arrived*.
+7. Doctor: open the patient, write and **issue** a prescription. The clock stops here
+   (`first_prescription_at`).
+
+**After:**
+1. `make onboarding-report SLUG=rehearsal-clinic-<yyyymmdd>`: minutes per step and `total N
+   minutes; target under 60 (G4) MET` or `NOT MET`.
+2. Write the result and every slowdown in the M9 design (§13); turn each real slowdown into an
+   issue.
+3. Take the test clinic out of sight: ops **Clinics → Suspend…** on its row, reason *Other* with
+   the note "onboarding rehearsal". It disappears from search, its page and booking; its rows
+   stay (clinics are not deleted).

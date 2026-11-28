@@ -104,6 +104,8 @@ class Store:
     audit_events: list[AuditEvent] = field(default_factory=list)
     # Not owned by the use cases under test: arranged by tests, read-only here.
     access: dict[UUID, list[ClinicAccess]] = field(default_factory=dict)
+    # Per-caller request counts (M9-P3: staff sign-in is limited like the portal's).
+    rate_hits: dict[tuple[str, datetime], int] = field(default_factory=dict)
 
     def copy(self) -> Store:
         """A private copy for one unit of work.
@@ -117,6 +119,7 @@ class Store:
             refresh_tokens=copy.deepcopy(self.refresh_tokens),
             audit_events=list(self.audit_events),
             access=copy.deepcopy(self.access),
+            rate_hits=dict(self.rate_hits),
         )
 
 
@@ -216,6 +219,16 @@ class _Audit:
             self.record(event)
 
 
+class _RateLimits:
+    def __init__(self, store: Store) -> None:
+        self._store = store
+
+    def hit(self, bucket: str, *, window_start: datetime) -> int:
+        key = (bucket, window_start)
+        self._store.rate_hits[key] = self._store.rate_hits.get(key, 0) + 1
+        return self._store.rate_hits[key]
+
+
 class AuditWriteFailed(RuntimeError):
     """Raised by the fake audit writer when a test asks it to fail."""
 
@@ -265,6 +278,10 @@ class InMemoryUnitOfWork:
     @property
     def audit(self) -> _Audit:
         return _Audit(self._open(), fail=self._audit_fails)
+
+    @property
+    def rate_limits(self) -> _RateLimits:
+        return _RateLimits(self._open())
 
     def _open(self) -> Store:
         if self._working is None:

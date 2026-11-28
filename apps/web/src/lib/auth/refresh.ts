@@ -22,6 +22,7 @@ import {
   apiPatch,
   apiPost,
   apiPostForm,
+  apiPostRaw,
   apiPut,
   type DeletePath,
   type DeleteResponse,
@@ -146,6 +147,11 @@ export function sessionPost<P extends PostPath>(path: P, body: PostBody<P>, opti
 /** M6d-P6: a multipart POST (a report on a visit) that survives an expired access token. */
 export function sessionPostForm<P extends PostPath>(path: P, form: FormData, options: RequestOptions = {}): Promise<ApiResult<PostResponse<P>>> {
   return withSessionRefresh(() => apiPostForm(path, form, options));
+}
+
+/** M9-P3: a POST of a file as it is (the ops patient import's CSV) that survives an expired token. */
+export function sessionPostRaw<P extends PostPath>(path: P, body: Blob, contentType: string, options: RequestOptions = {}): Promise<ApiResult<PostResponse<P>>> {
+  return withSessionRefresh(() => apiPostRaw(path, body, contentType, options));
 }
 
 /** `apiPut` that survives an expired access token. */

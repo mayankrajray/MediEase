@@ -54,7 +54,10 @@ def test_r2_unknown_identifier_is_invalid_credentials_and_still_hashes(
         auth.sign_in.execute(_cmd(identifier))
     assert excinfo.value.code == "AUTH_INVALID_CREDENTIALS"
     assert auth.hasher.verifications == 1  # constant-time path: one verification either way
-    assert auth.uow.commits == 0
+    # Nothing about any account is written; only the caller's attempt is counted (M9-P3).
+    assert auth.uow.committed.audit_events == []
+    assert [b.split(":")[0] for b, _ in auth.uow.committed.rate_hits] == ["staff-sign-in"]
+    assert auth.uow.commits == 1
 
 
 def test_r2_wrong_password_gives_the_same_error_as_unknown_user(auth: Auth) -> None:
@@ -277,7 +280,7 @@ def test_fr_auth_02_sign_out_revokes_the_family(auth: Auth, json_logs: LogReader
 def test_sign_out_is_idempotent(auth: Auth, token: str | None) -> None:
     _signed_in(auth)
     auth.sign_out.execute(token)
-    assert auth.uow.commits == 1  # only the sign-in committed
+    assert auth.uow.commits == 2  # only the sign-in committed: its rate count, then the session
 
 
 def test_sign_out_twice_is_harmless(auth: Auth) -> None:

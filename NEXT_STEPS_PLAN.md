@@ -4,8 +4,8 @@
 
 | Field | Value |
 |---|---|
-| Status | **Approved by the developer 14 Nov 2026**: P4 first, for the Phase 2 video; then P2, P3, P5 |
-| Issue / branch | P4: #77 / `m9/77-pilot-hardening`, PR #78, from `main` after M9-P1 merged (PR #76). P2, P3, P5: a new issue and branch from `main` once PR #78 merges (developer, 16 Nov 2026, option A) |
+| Status | **Approved by the developer 14 Nov 2026**: P4 first, for the Phase 2 video; then P2, P3, P5. P2's answers 27 Nov 2026 (design §11) |
+| Issue / branch | P4: #77 / `m9/77-pilot-hardening`, merged in PR #78 (27 Nov 2026). P2, P3, P5: #86 / `m9/86-alerting-security`, from `main` after PR #78 (developer, 16 Nov 2026, option A) |
 | Deadline | Phase 2 submission 15 Nov 2026, 23:59 IST (P4); P2, P3, P5 after |
 
 | Order | Phase | Objective | Verify |
@@ -17,7 +17,16 @@
 
 **Progress.** 14 Nov 2026: issue #77 and branch opened; P4 built (API, contract 0.54.0, web page,
 docs). 16 Nov 2026: after the Phase 2 deadline the developer chose to merge P4 alone (PR #78) so
-`main` matches the live site; P2 is planned and waits for the developer's answers.
+`main` matches the live site; P2 is planned and waits for the developer's answers. 27 Nov 2026:
+PR #78 merged, and `main` made green again (the demo import on a Sunday, PR #78; a flaky QR
+decode, PR #85). Issue #86 and branch opened; P2 built (design §11): the uptime check and the
+watch timer, verified locally. Open for the developer: `OPS_ALERT_EMAIL`, the timer and the
+uptime check on the VM (RUNBOOK §41). 27–28 Nov 2026: P3 built (design §12): the review and
+dependency scan; the developer chose the support command, anonymising erasure and an AES zip, and
+`make patient-data` was built (spec `patient-data-requests.md`). The developer's VM steps for P2
+and P3 are in `docs/DEVELOPER_ACTIONS.md`. 28 Nov 2026: P5 prepared (RUNBOOK §44,
+`make onboarding-report`); the timed run is the developer's. Then the milestone PR #87 is ready
+once the developer's steps are done.
 
 ---
 

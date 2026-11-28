@@ -134,6 +134,9 @@ class AppSettings(BaseSettings):
     # client address. 60 in production; compose raises it for the journeys, whose browsers all
     # share one address.
     PUBLIC_READS_PER_MINUTE: int = Field(default=60, ge=10, le=10_000)
+    # M9-P3: password sign-ins a minute per client address, staff and patients (30 in production,
+    # the default). Locally and in CI every browser shares one address, so .env.example raises it.
+    SIGN_INS_PER_MINUTE: int = Field(default=30, ge=5, le=10_000)
     # M7e, A11 (ARCHITECTURE §9): the secret the web server sends with the browser's address
     # (X-MediEase-Proxy-Secret with X-MediEase-Client-IP). Empty: the API ignores both headers
     # and uses the connection's address, as before A11.
@@ -213,6 +216,9 @@ class AppSettings(BaseSettings):
     SMTP_SECURITY: SmtpSecurity = "starttls"
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: SecretStr = SecretStr("")
+    # M9-P2: where the VM's watch (scripts/watch.sh) and `make alert-test` send operational alerts,
+    # through the email settings above. Empty: alerts are only written to the watch's journal.
+    OPS_ALERT_EMAIL: str = ""
     # The assistant's model (M7a-P2, ADR-0013, spec assistant R1). `console` answers by rules
     # (offline; refused in production); the others share one OpenAI-compatible adapter. Empty
     # LLM_BASE_URL / LLM_MODEL mean the provider's defaults (adapters/llm/openai_compatible.py).
@@ -252,6 +258,14 @@ class AppSettings(BaseSettings):
         value = value.strip()
         if "@" not in value or any(c in value for c in "\r\n"):
             raise ValueError("must be an address like 'MediEase <no-reply@example.com>'")
+        return value
+
+    @field_validator("OPS_ALERT_EMAIL")
+    @classmethod
+    def _ops_alert_email(cls, value: str) -> str:
+        value = value.strip()
+        if value and not re.fullmatch(r"[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+", value):
+            raise ValueError("must be one plain address like you@example.com, or empty")
         return value
 
     @field_validator("SMTP_HOST")

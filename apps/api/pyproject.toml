@@ -48,6 +48,10 @@ dependencies = [
     # through py-vapid), both on PyCA cryptography. It brings requests (the HTTP call we use) and
     # aiohttp (its async API, which we do not use). Only adapters/push imports it.
     "pywebpush==2.5.0",
+    # M9-P3 (RUNBOOK §43): a patient's data export is an AES-256 encrypted zip (WinZip AE-2),
+    # opened with the password the support command prints once; the standard zipfile module can
+    # only read such archives. Brings pycryptodomex. Only delivery/cli/patient_data.py imports it.
+    "pyzipper==0.4.0",
 ]
 
 [project.optional-dependencies]
@@ -122,11 +126,12 @@ strict = true
 
 # WeasyPrint ships no type information; only adapters/pdf imports it. pypdfium2 neither; only
 # adapters/extraction imports it at runtime (M7b). pywebpush and py-vapid neither; only
-# adapters/push imports them (M7e-E3).
+# adapters/push imports them (M7e-E3). pyzipper neither; only delivery/cli/patient_data (M9-P3).
 [[tool.mypy.overrides]]
 module = [
     "weasyprint", "weasyprint.*", "pypdfium2", "pypdfium2.*",
     "pywebpush", "pywebpush.*", "py_vapid", "py_vapid.*",
+    "pyzipper", "pyzipper.*",
 ]
 ignore_missing_imports = true
 

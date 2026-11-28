@@ -7,6 +7,33 @@ first production release.
 ## [Unreleased]
 
 ### Added
+- M9 (#86): ops **Import patients** (`/ops/clinics/<id>/import`, FR-OPS-02, FR-PAT-08), opened from
+  each clinic's row: choose a CSV, *Check file* (a dry run; nothing is saved), read what each row
+  would do (rows with a problem by column, a phone already in use, already registered), then
+  *Import N patients*, which names the new codes. A blank template downloads from the page. The
+  checklist's "Patients imported" step shows in the clinic list.
+- M9-P3 (#86): failed sign-in spikes and webhook signature failures are alerted by the watch.
+- M9-P5 (#86): the onboarding rehearsal (RUNBOOK §44) and `make onboarding-report SLUG=<slug>`,
+  which reads a clinic's onboarding checklist and prints the minutes to each step and whether the
+  60-minute goal (G4) was met.
+- M9-P3 (#86): patient data requests (spec patient-data-requests, RUNBOOK §43).
+  `make patient-data ARGS="export <clinic-slug> <code>"` writes one patient's whole record and
+  files as an AES-256 zip whose password is shown once; `ARGS="erase …"` anonymises the patient
+  and keeps the clinical record the clinic must retain. Both run only on the clinic owner's
+  written request and are audited. New dependency `pyzipper`. `docs/DEVELOPER_ACTIONS.md` lists
+  what the developer does by hand for each phase.
+- M9-P3 (#86): the security review (SECURITY_AND_COMPLIANCE §3, M9 design §12).
+  `scripts/log-review.sh` counts phone-, email- and Aadhaar-like values in each service's log
+  without printing them (RUNBOOK §42); the breach procedure gains its clocks (RUNBOOK §15); the
+  sub-processor list (SECURITY_AND_COMPLIANCE §5).
+- M9-P2 (#86): alerting (NFR-03, NFR-04; RUNBOOK §41). A Google Cloud Monitoring uptime check on
+  `/ready`, and `scripts/watch.sh` on a 5-minute systemd timer on the VM
+  (`infra/gcp/mediease-watch.*`) that emails `OPS_ALERT_EMAIL` when a container is down or
+  unhealthy, the API has 5 server errors in 5 minutes, jobs die, stick or wait over 10 minutes,
+  the backup fails or is older than 26 hours, the disk passes 85% or the certificate has under 14
+  days. Only on a change and once a day while it lasts; site-down at any hour, the rest
+  08:00–22:00 IST. New setting `OPS_ALERT_EMAIL`, `make watch` (shows, sends nothing) and
+  `make alert-test`; `make config-check` shows the alert address masked.
 - M9-P4 (#77): ops *Clinic usage* (`/ops/usage`, FR-OPS-03; spec ops-clinic-usage). For each
   clinic: last active, its people and who was active in 7 days, patients, appointments, visits,
   prescriptions and bills per week (4, 8 or 12 weeks, Monday–Sunday India time) and in total,
@@ -59,6 +86,9 @@ first production release.
   413 envelope from a size-checked route handler instead of an occasional 500 from the proxy.
 
 ### Security
+- M9-P3 (#86): staff password sign-in is limited to 30 attempts a minute per caller, like the
+  portal's; PostgreSQL logs constraint errors without the row's values (`log_error_verbosity=terse`);
+  Next.js 16.4.6 and the dev tree updated, so `make audit` reports nothing.
 - Next.js 16.4.0 → 16.4.3 (#49): the October 2026 out-of-band release fixing GHSA-2464-fhr4-w9xw
   (critical: remote code execution in the Image Optimization API with SVG files), GHSA-673q-mjm6-r5xr
   (critical: remote code execution in `use cache` functions) and GHSA-p3m5-59mp-jv5r (denial of

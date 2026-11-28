@@ -192,3 +192,74 @@ UI: the existing ops components (`PageHeader`, `Segmented`, `StatTile`, the shar
 row renders only when open. No surface brief existed for this screen, so the developer's
 instruction to build it stood in for the design questions (impeccable "operate" mode); the
 impeccable detector found nothing on the new files.
+
+## 11. M9-P2 — Alerting (developer, 27 Nov 2026)
+
+Issue #86, branch `m9/86-alerting-security`. Backups and the restore drill landed in P1 (§9);
+P2 adds the alerting ARCHITECTURE §10 listed (NFR-03, NFR-04). Answers (developer, 27 Nov 2026):
+the developer's own address in `OPS_ALERT_EMAIL`, set later on the VM; the recommendations below.
+
+| Decision | Choice | Rejected |
+|---|---|---|
+| Outside check | Google Cloud Monitoring uptime check on `/ready` (5 minutes, Google's regions, content `"database":"ok"`), email channel; one request covers Caddy, the certificate, web, API and database | UptimeRobot (a new account for the same result) |
+| Inside check | `scripts/watch.sh` on a systemd timer every 5 minutes, beside the backup timer; emails through a small CLI in the API image (`ops_alert`), so the script never holds SMTP credentials and works while the api container is down (`compose run`) | Alerting from inside the app (dies with the app); Cloud Monitoring alerts on logs (needs log shipping) |
+| When | Only on a change (new, resolved) and once a day while a problem lasts; "critical" (db, api, web, caddy, Docker) at any hour, warnings 08:00–22:00 IST and held till then | Every run (noise); clinic hours for everything (a night outage would wait) |
+| Logs | Stay on the VM (Docker's rotated files) | The Ops Agent and Cloud Logging: cost, and its default storage is outside India (NFR-07) |
+| Content | Service names, counts and codes only; the CLI keeps printable characters and caps the body | Log lines or request paths in the email |
+
+Thresholds: 5 API server errors in 5 minutes, dead jobs in 24 hours, a running job stuck over
+5 minutes, the oldest due job over 10 minutes, the backup failed or older than 26 hours, the disk
+over 85%, the certificate under 14 days; each a `WATCH_*` line in `.env`.
+
+Verified locally (27 Nov 2026): `make watch` all clear on a healthy stack; `make alert-test` sent;
+`docker compose stop api` → one `[critical]` email, start → one "resolved"; a stopped worker at
+23:00 IST held. Tests: `tests/unit/test_watch_script.py` (the real script against fake `docker`,
+`systemctl`, `df`, `openssl`: each check, held warnings, daily repeat, retry after a failed email,
+no address) and `tests/unit/delivery/test_ops_alert.py`; shellcheck clean.
+
+Open (developer, on the VM): set `OPS_ALERT_EMAIL`, install the timer and create the uptime check
+(RUNBOOK §41), then stop the API once to see both emails.
+
+## 12. M9-P3 — Security review (27 Nov 2026)
+
+Issue #86, branch `m9/86-alerting-security`. The review of `docs/SECURITY_AND_COMPLIANCE.md` §3
+against the code and the deployment, with evidence in each row.
+
+| Found | Done |
+|---|---|
+| `make audit`: the API clean; the web app's Next.js 16.4.3 had seven moderate advisories (production), and dev-only zod (high) and minimatch (moderate) | Next.js 16.4.6; `npm audit fix` for the dev tree (typescript-eslint 8.74, zod 4.6.7, minimatch 11). Both audits now report 0 |
+| Staff password sign-in had the per-account lockout but no per-caller limit (the portal's had one) | 30 a minute per caller (`staff-sign-in`), like the portal; an HTTP test |
+| PostgreSQL's log printed rows on constraint errors (`DETAIL: Key (phone_e164)=…`, "Failing row contains …", `STATEMENT`) | `log_error_verbosity=terse`, `log_min_error_statement=panic` on `db`; `scripts/log-review.sh` and RUNBOOK §42 |
+| The breach procedure had no clocks | RUNBOOK §15: the clinic told within 24 hours, so it can report to the Board within 72 hours (DPDP Rules, Rule 7); CERT-In within 6 hours when reportable; a written timeline |
+| No sub-processor list | SECURITY_AND_COMPLIANCE §5 |
+| Rows claiming "signed URL" for files, "Pydantic at every boundary", "no string-built SQL" | Reworded to what the code does, with the files named |
+| TLS 1.2+, HSTS, encryption at rest, India hosting, no clinical content in messages | Ticked with the evidence (Caddy defaults, Google-managed encryption, `asia-south1`, the template variable kinds) |
+
+Still open: the cross-tenant guard covers one method per URL and not IDs in query strings or
+bodies; owner-granted support access (FR-OPS-05); Row-Level Security (post-pilot); point-in-time
+recovery; the DPA, patient notice and sharing the sub-processor list (L-04); the log review on the
+VM; alerts for sign-in failure spikes and webhook signature failures.
+
+**Patient export and erasure (built 28 Nov 2026, spec `patient-data-requests.md`):** the
+developer chose (27 Nov 2026) a support command on the VM, erasure that anonymises and keeps the
+clinical record, and an AES-256 zip whose password is told by phone. `make patient-data`
+(`delivery/cli/patient_data.py`, `application/patients/data_requests.py`,
+`adapters/db/patient_data.py`, a reviewed tenancy exception); new dependency `pyzipper` 0.4.0
+(the standard library cannot write encrypted zips; `pip-audit` clean). RUNBOOK §43.
+
+## 13. M9-P5 — Onboarding rehearsal (prepared 28 Nov 2026)
+
+The developer onboards an invented clinic on the production VM, from the ops wizard to the first
+issued prescription, against the 60-minute target (G4). Steps: RUNBOOK §44. The clock is the
+onboarding checklist (written once per step), read by `make onboarding-report SLUG=<slug>`
+(`scripts/onboarding-report.sh`), so the result is a fact in the database, not a stopwatch.
+The test clinic is suspended afterwards (clinics are not deleted).
+
+Found before the run, and fixed (28 Nov 2026): there was no screen for importing a patient list;
+ops now have **Clinics → Import patients** (`/ops/clinics/<id>/import`): the file is checked
+first, the report lists each row with a problem, a shared phone or an existing registration, and
+only *Import N patients* writes.
+
+| Date | Total (minutes) | Met? | Slowdowns found | Issues |
+|---|---|---|---|---|
+| _to be filled from the developer's run_ | | | | |

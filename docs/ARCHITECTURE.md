@@ -523,6 +523,13 @@ See [DEBUGGING.md](DEBUGGING.md) for how to use it.
   webhook failures, sign-in failures.
 - Alerts (M6): API 5xx rate, `/ready` failing, oldest queued job > 10 minutes, dead jobs > 0,
   WhatsApp failure rate > 5% in 15 minutes, backup job failure.
+- **Built in M9-P2 (RUNBOOK §41):** a Google Cloud Monitoring uptime check on `/ready` from
+  outside the VM, and `scripts/watch.sh` on the VM every 5 minutes (systemd timer) for
+  containers, API 5xx (5 in 5 minutes), dead and stuck jobs, the oldest due job (> 10 minutes),
+  the backup, the disk and the certificate. It emails `OPS_ALERT_EMAIL` through the email adapter
+  (`delivery/cli/ops_alert.py`) only on a change, once a day while a problem lasts; site-down at
+  any hour, the rest 08:00–22:00 IST. Logs stay on the VM (no log shipping, NFR-07). Not yet:
+  the WhatsApp failure rate (WhatsApp is off), sign-in failure spikes, webhook signature failures.
 
 ## 11. Deployment (pilot)
 

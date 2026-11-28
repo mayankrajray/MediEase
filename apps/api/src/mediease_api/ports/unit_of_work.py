@@ -37,6 +37,7 @@ from mediease_api.ports.messaging import (
 from mediease_api.ports.notifications import NotificationRepository, PreferenceRepository
 from mediease_api.ports.onboarding import ApplicationRepository
 from mediease_api.ports.ops import ClinicUsageReport
+from mediease_api.ports.patient_data import PatientDataStore
 from mediease_api.ports.patient_notifications import (
     PatientNotificationLookup,
     PatientNotificationRepository,
@@ -318,6 +319,11 @@ class UnitOfWork(Protocol):
     @property
     def clinic_usage(self) -> ClinicUsageReport:
         """Each clinic's activity in counts (M9-P4, FR-OPS-03, a reviewed ops read)."""
+        ...
+
+    @property
+    def patient_data(self) -> PatientDataStore:
+        """One patient's whole record, and its erasure (M9-P3, support only, reviewed)."""
         ...
 
     def tenant(self, clinic_id: UUID) -> TenantRepositories:

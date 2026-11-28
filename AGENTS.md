@@ -115,6 +115,9 @@ do not exist.
 | `make smoke-live` | Check a deployed site from outside: `URL=https://host [SLUG=…]` (HTTPS, headers, access, closed ports; RUNBOOK §38) | now (M9-P1) |
 | `make config-check` | Which real services `.env` selects, secrets shown only as set / not set; `LIVE=1` calls each once, `EMAIL_TO=` / `WHATSAPP_TO=` send one test (RUNBOOK §35) | now (M7c-P6) |
 | `make vapid-keys` | Print a new VAPID key pair for web push, to put in `.env` yourself; nothing is stored (RUNBOOK §36) | now (M7e-E5) |
+| `make watch` / `make alert-test` | Run the production watch once and show what it finds, sending nothing / send one test alert to `OPS_ALERT_EMAIL` (RUNBOOK §41) | now (M9-P2) |
+| `make patient-data` | A clinic owner's written request for one patient: `ARGS="export <clinic-slug> <code>"` (an AES-256 zip, password shown once) or `ARGS="erase <clinic-slug> <code>"` (anonymise, asks for the code again) (RUNBOOK §43) | now (M9-P3) |
+| `make onboarding-report` | How long a clinic's onboarding took, from its checklist: `SLUG=<clinic-slug>`; minutes per step and the G4 result (RUNBOOK §44) | now (M9-P5) |
 | `make worker` | Run a job worker in the foreground (`make up` already runs one; a second is safe, `SKIP LOCKED`). `make up` also runs `upload-worker` (`WORKER_QUEUE=uploads`) beside `clamav` (M7b) | now (M5-P1) |
 
 Verification before declaring a phase done: `make lint typecheck test` must pass. API tests include

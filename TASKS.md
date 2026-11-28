@@ -11,10 +11,10 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 
 | Field | Value |
 |---|---|
-| Active milestone | **M9 — Pilot hardening and deployment** (M9-P1 on issue #75, merged in PR #76; M9-P4 on issue #77, branch `m9/77-pilot-hardening`, PR #78; M9-P2, P3 and P5 on a new issue and branch after PR #78 merges) |
-| Active phase | **M9-P4 done 14 Nov 2026** (ops clinic usage, built first for the Phase 2 video, developer 14 Nov 2026). PR #78 carries P4 alone and goes to review now, so `main` matches the live site after the Phase 2 deadline (developer, 16 Nov 2026, option A); M9-P2, P3 and P5 follow on a new issue and branch. M9-P1 done 14 Nov 2026: live at https://mediease.duckdns.org |
+| Active milestone | **M9 — Pilot hardening and deployment** (M9-P1 on issue #75, merged in PR #76; M9-P4 on issue #77, merged in PR #78; M9-P2, P3 and P5 on issue #86, branch `m9/86-alerting-security`) |
+| Active phase | **M9-P5 prepared 28 Nov 2026** (the onboarding rehearsal, RUNBOOK §44; the timed run is the developer's). M9-P2 and P3 built 27–28 Nov 2026; what the developer does on the VM for each is in `docs/DEVELOPER_ACTIONS.md`. M9-P4 done 14 Nov 2026, M9-P1 done 14 Nov 2026: live at https://mediease.duckdns.org |
 | Design notes | `docs/milestones/M9-deploy-demo.md`; M7e (done) in `docs/milestones/M7e-pwa-push.md`; M8 designed in `docs/milestones/M8-multi-clinic-whatsapp.md` (skipped for now by the developer) |
-| Approved plan | `NEXT_STEPS_PLAN.md` §0 (M9-P2..P5); M9-P1, M7e, M7d, M7c and M7 below it as history |
+| Approved plan | `NEXT_STEPS_PLAN.md` §0 (M9-P2..P5); M9-P1, M7e, M7d, M7c and M7 below it as history. **The developer's own steps (VM, Console, accounts): `docs/DEVELOPER_ACTIONS.md`** |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
 | Blockers | W-5: branch protection / CODEOWNERS enforcement on `main` not available on the current GitHub plan (`NEXT_STEPS_PLAN.md` §3.1). `@akhtarjamal10` needs write access before their CODEOWNERS entry takes effect |
 | Open decisions | L-09 (Google sign-in), L-10 (Groq key) and L-11 (Brevo email) are done (9 Nov 2026). The issue #49 title still says "MVP demo" (rename on GitHub by the developer). Deployment and hosting are skipped for now (developer, 20 Oct 2026). Pending from M5: the live WhatsApp test (L-01, L-02; RUNBOOK §9) and the real SMS provider (L-03). For M8: the BSP partner (L-08). Outside the milestones: #30 (an import over 2 MB through the web origin can answer 500 instead of 413); the M4-P3 suggestions timing test checks the index plan in CI and the 150 ms bound locally (11 Nov 2026) |
@@ -317,16 +317,16 @@ PR #72, 12 Nov 2026), PR #74, one PR. Nothing is built yet.
 **Covers:** NFR-03..07, NFR-16, FR-OPS-03. **Exit:** production deployed in India region; restore
 drill completed; security checklist signed; two pilot clinics onboarded. (Was M6 before PRD v1.1.)
 **Issue:** #75, branch `m9/75-deploy-demo` (P1, merged in PR #76); #77, branch
-`m9/77-pilot-hardening` (P4, PR #78); P2, P3 and P5 on a new issue after that. **Design:** `docs/milestones/M9-deploy-demo.md`
+`m9/77-pilot-hardening` (P4, merged in PR #78); #86, branch `m9/86-alerting-security` (P2, P3, P5). **Design:** `docs/milestones/M9-deploy-demo.md`
 (Google Cloud, one VM in Mumbai, approved 13 Nov 2026).
 
 | Phase | Scope | Status |
 |---|---|---|
 | M9-P1 | Go live for the Phase 2 demo: C1 messaging `disabled`, C2 `make import-clinic` (CSV, bundled demo), C3 `infra/gcp/` compose override and Caddy (TLS on `mediease.duckdns.org`), C4 backups and the restore drill, C5 `make smoke-live`, C7 docs; secrets in an owner-only `.env` on the VM | ✅ 14 Nov 2026: live at https://mediease.duckdns.org; deploy, backup and restore drill, smoke-live and the security review recorded (design §9); PR #76 |
-| M9-P2 | Backups, restore drill, uptime and error alerting | ☐ |
-| M9-P3 | Security review against `docs/SECURITY_AND_COMPLIANCE.md` checklist; dependency scan; audited export and `scripts/erase_patient.py` procedures | ☐ |
+| M9-P2 | Backups, restore drill, uptime and error alerting | ✅ 27 Nov 2026 (built; the VM setup is the developer's, RUNBOOK §41): Cloud Monitoring uptime check on `/ready`, `scripts/watch.sh` timer emailing `OPS_ALERT_EMAIL` (design §11); issue #86, branch `m9/86-alerting-security` |
+| M9-P3 | Security review against `docs/SECURITY_AND_COMPLIANCE.md` checklist; dependency scan; audited export and `scripts/erase_patient.py` procedures | ✅ 28 Nov 2026 (built; the VM steps are in `docs/DEVELOPER_ACTIONS.md`): review and dependency scan (design §12), staff sign-in rate limit, PostgreSQL log made terse, `scripts/log-review.sh`, breach clocks, sub-processor list; `make patient-data` export and erasure (spec `patient-data-requests.md`, RUNBOOK §43) |
 | M9-P4 | Ops clinic-health view; usage metrics for the pilot scorecard | ✅ 14 Nov 2026: `/ops/usage` and `GET /api/v1/ops/clinic-usage` (spec `ops-clinic-usage.md`, design §10); issue #77, branch `m9/77-pilot-hardening` |
-| M9-P5 | Pilot runbook rehearsal: onboard a test clinic end-to-end in < 60 min | ☐ |
+| M9-P5 | Pilot runbook rehearsal: onboard a test clinic end-to-end in < 60 min | ▶ 28 Nov 2026: prepared (RUNBOOK §44, `make onboarding-report`, design §13); the timed run is the developer's (`docs/DEVELOPER_ACTIONS.md`) |
 
 ---
 
@@ -337,7 +337,8 @@ Small changes the developer approved as their own issue, branch and PR while a m
 
 | Issue | Change | Requirement | Branch | Status |
 |---|---|---|---|---|
-| #80 | Landing page: full-width, edge-to-edge navbar; phone menu scroll lock and Escape fixes | FR-LND-01 | `m9/80-landing-navbar` | ▶ 27 Nov 2026: draft PR, waits for review |
+| #80 | Landing page: full-width, edge-to-edge navbar; phone menu scroll lock and Escape fixes | FR-LND-01 | `m9/80-landing-navbar` | ✅ 27 Nov 2026: merged in PR #81 |
+| #84 | CI: decode only QR codes in the prescription PDF test (a flaky read of Hindi text as a barcode) | FR-RX-11 | `m9/84-qr-test-flake` | ✅ 27 Nov 2026: merged in PR #85 |
 
 ---
 

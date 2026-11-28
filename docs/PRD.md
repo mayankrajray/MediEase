@@ -664,8 +664,8 @@ product view, not legal advice; obligations must be confirmed with counsel befor
   that include healthcare purposes. Paediatric clinics are core users (A3); the guardian model
   (FR-PAT-06) is built regardless of how the exemption is ultimately applied.
 - **Data principal rights.** Access, correction and erasure requests are handled by the clinic with
-  tooling from MediEase, within the statutory response window. Erasure respects any medical-record
-  retention the clinic is legally required to keep.
+  tooling from MediEase (M9-P3: `make patient-data`, RUNBOOK §43), within the statutory response
+  window. Erasure respects any medical-record retention the clinic is legally required to keep.
 - **Breach notification.** Incident runbook covers notifying the clinic without delay so it can
   meet its obligations to the Board and affected individuals.
 - **Prescription content.** Prescriptions show the doctor's name, qualification and registration
