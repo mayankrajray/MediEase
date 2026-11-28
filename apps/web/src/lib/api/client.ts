@@ -224,6 +224,26 @@ export async function apiPostForm<P extends PostPath>(
   return (await send("POST", path, form, options)) as ApiResult<PostResponse<P>>;
 }
 
+/**
+ * M9-P3: a POST whose body is a file sent as it is, with its own content type (the ops patient
+ * import takes the CSV itself, `text/csv`). A `Blob` keeps the bytes the user picked.
+ */
+export async function apiPostRaw<P extends PostPath>(
+  path: P,
+  body: Blob,
+  contentType: string,
+  options: RequestOptions = {},
+): Promise<ApiResult<PostResponse<P>>> {
+  return (await send("POST", path, new RawBody(body, contentType), options)) as ApiResult<PostResponse<P>>;
+}
+
+class RawBody {
+  constructor(
+    readonly blob: Blob,
+    readonly contentType: string,
+  ) {}
+}
+
 export async function apiPut<P extends PutPath>(
   path: P,
   body: PutBody<P>,
@@ -278,9 +298,12 @@ async function send(
       headers[CSRF_HEADER] = csrf;
     }
   }
-  let payload: string | FormData | undefined;
+  let payload: string | FormData | Blob | undefined;
   if (body instanceof FormData) {
     payload = body;
+  } else if (body instanceof RawBody) {
+    headers["Content-Type"] = body.contentType;
+    payload = body.blob;
   } else if (body !== undefined) {
     headers["Content-Type"] = "application/json";
     payload = JSON.stringify(body);

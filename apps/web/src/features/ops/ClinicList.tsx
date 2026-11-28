@@ -161,6 +161,8 @@ function ClinicRow({ clinic, onChanged }: { clinic: Row; onChanged: (text: strin
             Doctors added: {yesNo(checklist.doctors_added_at)}
             <br />
             Staff invited: {yesNo(checklist.staff_invited_at)}
+            <br />
+            Patients imported: {yesNo(checklist.patients_imported_at)}
           </>
         )}
       </td>
@@ -172,13 +174,21 @@ function ClinicRow({ clinic, onChanged }: { clinic: Row; onChanged: (text: strin
         <ClinicPlanAction clinic={clinic} onChanged={onChanged} />
       </td>
       <td role="cell" data-label="" className={TD}>
-        {clinic.status === "ONBOARDING" && (
-          <Link href={`/ops/clinics/new?clinic=${encodeURIComponent(clinic.id)}`} className="text-brand-800 underline">
-            Continue setup <span className="sr-only">for {clinic.name}</span>
-          </Link>
-        )}
-        {/* M6c-P4 (R56, R58): suspend or reactivate. */}
-        <ClinicStatusAction clinic={clinic} onChanged={onChanged} />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {clinic.status === "ONBOARDING" && (
+            <Link href={`/ops/clinics/new?clinic=${encodeURIComponent(clinic.id)}`} className="text-brand-800 underline">
+              Continue setup <span className="sr-only">for {clinic.name}</span>
+            </Link>
+          )}
+          {/* M9-P3: the clinic's patient list, from a CSV file (checked before anything is saved). */}
+          {clinic.status !== "SUSPENDED" && (
+            <Link href={`/ops/clinics/${encodeURIComponent(clinic.id)}/import`} className="text-brand-800 underline">
+              Import patients <span className="sr-only">for {clinic.name}</span>
+            </Link>
+          )}
+          {/* M6c-P4 (R56, R58): suspend or reactivate. */}
+          <ClinicStatusAction clinic={clinic} onChanged={onChanged} />
+        </div>
       </td>
     </tr>
   );

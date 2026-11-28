@@ -13,6 +13,7 @@ import {
   apiGetConditional,
   apiPatch,
   apiPost,
+  apiPostRaw,
   apiPut,
   newRequestId,
 } from "./client";
@@ -444,5 +445,28 @@ describe("apiGetConditional (M3-P4)", () => {
     });
     const [, init] = fetchImpl.mock.calls[0] ?? [];
     expect(new Headers(init?.headers).has("If-None-Match")).toBe(false);
+  });
+});
+
+describe("apiPostRaw (M9-P3)", () => {
+  it("sends the file's bytes as they are, with its content type, the query and the CSRF header", async () => {
+    vi.stubEnv("API_INTERNAL_URL", API);
+    vi.stubGlobal("document", { cookie: "me_csrf=csrf-raw" });
+    const fetchImpl = fakeFetch(jsonResponse(200, { dry_run: true }, "r-raw"));
+    const file = new Blob(["name,phone\nA,9000000001\n"], { type: "application/vnd.ms-excel" });
+
+    await apiPostRaw("/api/v1/ops/clinics/{clinic_id}/patient-imports", file, "text/csv", {
+      pathParams: { clinic_id: "c-1" },
+      query: { dry_run: "true" },
+      fetchImpl,
+    });
+
+    const [url, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(url).toBe(`${API}/api/v1/ops/clinics/c-1/patient-imports?dry_run=true`);
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBe(file);
+    const headers = new Headers(init?.headers);
+    expect(headers.get("Content-Type")).toBe("text/csv");
+    expect(headers.get(CSRF_HEADER)).toBe("csrf-raw");
   });
 });
