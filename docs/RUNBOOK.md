@@ -54,6 +54,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 41. Alerts: the uptime check and the watch (M9-P2)
 42. Log review for personal data (M9-P3)
 43. Patient data requests: export and erasure (M9-P3)
+44. Onboarding rehearsal: a test clinic end to end in under 60 minutes (M9-P5)
 
 ---
 
@@ -1256,3 +1257,41 @@ same email. Then delete it on the VM: `rm .exports/<file>.zip`. It opens with 7-
    separate request (FR-PRT-10).
 5. Backups keep the old rows for up to 30 days, then they are gone (§39). Audited as
    `patient.erased`, with counts only. It cannot be undone, and a second run is refused.
+
+### 44. Onboarding rehearsal: a test clinic end to end in under 60 minutes (M9-P5)
+
+**Why:** goal G4 (PRD) and the M9 exit criteria. The clock is the clinic's onboarding checklist,
+which the app writes once per step and never overwrites; `make onboarding-report SLUG=<slug>`
+reads it. Rehearse on the production VM, as a real pilot would run, with **invented** data only.
+
+**Before the clock (not timed, about 10 minutes):**
+- A name and slug that are plainly a test: *Rehearsal Clinic*, `rehearsal-clinic-<yyyymmdd>`.
+- Two invented doctors (`Dr. Test One`, qualification `MBBS`, registration `TEST-0001`, council
+  `Test Medical Council`), invented phones (`+919000000xxx`).
+- Addresses you can read, using Gmail's plus addresses: `you+rh-owner@gmail.com`,
+  `you+rh-doctor@gmail.com`, `you+rh-desk@gmail.com` all arrive in your inbox.
+- Four windows: the ops user (normal), owner, doctor and desk (incognito or separate Chrome
+  profiles). A note open to write down anything that slowed you.
+
+**Timed (the clock starts when the ops wizard opens):**
+1. Ops: **Clinics → Create clinic**: the clinic, both doctors, the owner's invitation. Copy the
+   link (shown once).
+2. Owner: open the link, set a password, sign in.
+3. Owner: **Team** → invite the second doctor and the front desk by email; each accepts from the
+   email in their own window.
+4. Owner: **Settings → Schedule**: each doctor's weekly hours. **Settings → Fees**: the
+   consultation fee.
+5. Patients: ops imports the clinic's list with the API (§10 step 6; there is no screen for it
+   yet), or the desk registers three invented patients by hand.
+6. Desk: book one of them today; **Queue** → *Arrived*.
+7. Doctor: open the patient, write and **issue** a prescription. The clock stops here
+   (`first_prescription_at`).
+
+**After:**
+1. `make onboarding-report SLUG=rehearsal-clinic-<yyyymmdd>`: minutes per step and `total N
+   minutes; target under 60 (G4) MET` or `NOT MET`.
+2. Write the result and every slowdown in the M9 design (§13); turn each real slowdown into an
+   issue.
+3. Take the test clinic out of sight: ops **Clinics → Suspend…** on its row, reason *Other* with
+   the note "onboarding rehearsal". It disappears from search, its page and booking; its rows
+   stay (clinics are not deleted).

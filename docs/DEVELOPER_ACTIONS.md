@@ -60,3 +60,19 @@ The VM runs the code of one branch. **Step 0 of each section** puts that code on
       clinic unless you are happy to lose that patient's details for the video.
 - [ ] **4. Counsel (L-04):** confirm the breach clocks in RUNBOOK §15 and that anonymising (not
       deleting) clinical records on erasure meets the clinics' retention duty.
+
+## M9-P5 — Onboarding rehearsal (prepared 28 Nov 2026; RUNBOOK §44)
+
+The rehearsal is yours: the agent prepared the steps and the clock. About 70 minutes in all.
+
+- [ ] **0. Put the code on the VM**, as in P2 step 0 (`make onboarding-report` comes with it).
+- [ ] **1. Prepare** (not timed): the invented clinic, doctors and phones, and your Gmail plus
+      addresses (`you+rh-owner@gmail.com` and so on), as listed in RUNBOOK §44.
+- [ ] **2. Run it** (timed): the seven steps in RUNBOOK §44, from **Create clinic** to the first
+      issued prescription. Note anything that slowed you down.
+- [ ] **3. Read the clock:** `make onboarding-report SLUG=rehearsal-clinic-<yyyymmdd>` on the VM.
+      Expected last line: `total N minutes; target under 60 (G4) MET`.
+- [ ] **4. Suspend the test clinic** (ops → Clinics → *Suspend…*, reason *Other*, note
+      "onboarding rehearsal").
+- [ ] **5. Tell the agent** the report's output and your notes; it records them in the M9 design
+      §13 and opens an issue for each real slowdown.

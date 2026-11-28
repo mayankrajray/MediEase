@@ -26,7 +26,7 @@ export TEST_DATABASE_URL
 # in pyproject.toml. CI runs the same command (.github/workflows/ci.yml).
 CORE_COVERAGE := --include='*/mediease_api/domain/*,*/mediease_api/application/*' --fail-under=80
 
-.PHONY: help env-check up down ps logs psql migrate seed import-clinic config-check watch alert-test patient-data smoke smoke-live install-api install-web api-venv-check \
+.PHONY: help env-check up down ps logs psql migrate seed import-clinic config-check watch alert-test patient-data onboarding-report smoke smoke-live install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
 	typecheck-web dev-web contract contract-check audit e2e worker dose-data vapid-keys
 
@@ -83,6 +83,11 @@ dose-data: env-check ## A patient's dose records on request: ARGS="export <id> -
 patient-data: env-check ## A patient data request: ARGS="export <clinic-slug> <code>" or "erase <clinic-slug> <code>"
 	@mkdir -p .exports && chmod 700 .exports
 	$(COMPOSE) run --rm --no-deps --build -v "$(CURDIR)/.exports:/exports" api python -m mediease_api.delivery.cli.patient_data $(ARGS)
+
+# M9-P5 (RUNBOOK §44): minutes from the ops wizard's start to each onboarding step (goal G4).
+onboarding-report: env-check ## How long a clinic's onboarding took: SLUG=<clinic-slug>
+	@test -n "$(SLUG)" || { echo "usage: make onboarding-report SLUG=<clinic-slug>"; exit 2; }
+	bash scripts/onboarding-report.sh "$(SLUG)"
 
 vapid-keys: env-check ## Print a new VAPID key pair for web push, to put in .env (nothing is stored; RUNBOOK §36)
 	@$(COMPOSE) build --quiet api

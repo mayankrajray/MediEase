@@ -24,7 +24,9 @@ watch timer, verified locally. Open for the developer: `OPS_ALERT_EMAIL`, the ti
 uptime check on the VM (RUNBOOK §41). 27–28 Nov 2026: P3 built (design §12): the review and
 dependency scan; the developer chose the support command, anonymising erasure and an AES zip, and
 `make patient-data` was built (spec `patient-data-requests.md`). The developer's VM steps for P2
-and P3 are in `docs/DEVELOPER_ACTIONS.md`. Next: P5.
+and P3 are in `docs/DEVELOPER_ACTIONS.md`. 28 Nov 2026: P5 prepared (RUNBOOK §44,
+`make onboarding-report`); the timed run is the developer's. Then the milestone PR #87 is ready
+once the developer's steps are done.
 
 ---
 

@@ -246,3 +246,18 @@ clinical record, and an AES-256 zip whose password is told by phone. `make patie
 (`delivery/cli/patient_data.py`, `application/patients/data_requests.py`,
 `adapters/db/patient_data.py`, a reviewed tenancy exception); new dependency `pyzipper` 0.4.0
 (the standard library cannot write encrypted zips; `pip-audit` clean). RUNBOOK §43.
+
+## 13. M9-P5 — Onboarding rehearsal (prepared 28 Nov 2026)
+
+The developer onboards an invented clinic on the production VM, from the ops wizard to the first
+issued prescription, against the 60-minute target (G4). Steps: RUNBOOK §44. The clock is the
+onboarding checklist (written once per step), read by `make onboarding-report SLUG=<slug>`
+(`scripts/onboarding-report.sh`), so the result is a fact in the database, not a stopwatch.
+The test clinic is suspended afterwards (clinics are not deleted).
+
+Known before the run: there is no screen for importing a patient list (ops use the API, §10
+step 6), so the rehearsal registers patients by hand unless the API is used.
+
+| Date | Total (minutes) | Met? | Slowdowns found | Issues |
+|---|---|---|---|---|
+| _to be filled from the developer's run_ | | | | |

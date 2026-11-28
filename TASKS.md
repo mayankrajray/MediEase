@@ -12,7 +12,7 @@ Legend: `▶ ACTIVE` · `☐ todo` · `✅ done` · `⏸ blocked` · Requirement
 | Field | Value |
 |---|---|
 | Active milestone | **M9 — Pilot hardening and deployment** (M9-P1 on issue #75, merged in PR #76; M9-P4 on issue #77, merged in PR #78; M9-P2, P3 and P5 on issue #86, branch `m9/86-alerting-security`) |
-| Active phase | **M9-P5 next** (the onboarding rehearsal). M9-P2 and P3 built 27–28 Nov 2026; what the developer does on the VM for each is in `docs/DEVELOPER_ACTIONS.md`. M9-P4 done 14 Nov 2026, M9-P1 done 14 Nov 2026: live at https://mediease.duckdns.org |
+| Active phase | **M9-P5 prepared 28 Nov 2026** (the onboarding rehearsal, RUNBOOK §44; the timed run is the developer's). M9-P2 and P3 built 27–28 Nov 2026; what the developer does on the VM for each is in `docs/DEVELOPER_ACTIONS.md`. M9-P4 done 14 Nov 2026, M9-P1 done 14 Nov 2026: live at https://mediease.duckdns.org |
 | Design notes | `docs/milestones/M9-deploy-demo.md`; M7e (done) in `docs/milestones/M7e-pwa-push.md`; M8 designed in `docs/milestones/M8-multi-clinic-whatsapp.md` (skipped for now by the developer) |
 | Approved plan | `NEXT_STEPS_PLAN.md` §0 (M9-P2..P5); M9-P1, M7e, M7d, M7c and M7 below it as history. **The developer's own steps (VM, Console, accounts): `docs/DEVELOPER_ACTIONS.md`** |
 | Workflow | One issue, one branch, one PR per milestone; phases land as logical commits on that branch; PR is a draft until the milestone is done → CODEOWNERS review → maintainer merge (ADR-0010, ADR-0011) |
@@ -326,7 +326,7 @@ drill completed; security checklist signed; two pilot clinics onboarded. (Was M6
 | M9-P2 | Backups, restore drill, uptime and error alerting | ✅ 27 Nov 2026 (built; the VM setup is the developer's, RUNBOOK §41): Cloud Monitoring uptime check on `/ready`, `scripts/watch.sh` timer emailing `OPS_ALERT_EMAIL` (design §11); issue #86, branch `m9/86-alerting-security` |
 | M9-P3 | Security review against `docs/SECURITY_AND_COMPLIANCE.md` checklist; dependency scan; audited export and `scripts/erase_patient.py` procedures | ✅ 28 Nov 2026 (built; the VM steps are in `docs/DEVELOPER_ACTIONS.md`): review and dependency scan (design §12), staff sign-in rate limit, PostgreSQL log made terse, `scripts/log-review.sh`, breach clocks, sub-processor list; `make patient-data` export and erasure (spec `patient-data-requests.md`, RUNBOOK §43) |
 | M9-P4 | Ops clinic-health view; usage metrics for the pilot scorecard | ✅ 14 Nov 2026: `/ops/usage` and `GET /api/v1/ops/clinic-usage` (spec `ops-clinic-usage.md`, design §10); issue #77, branch `m9/77-pilot-hardening` |
-| M9-P5 | Pilot runbook rehearsal: onboard a test clinic end-to-end in < 60 min | ☐ |
+| M9-P5 | Pilot runbook rehearsal: onboard a test clinic end-to-end in < 60 min | ▶ 28 Nov 2026: prepared (RUNBOOK §44, `make onboarding-report`, design §13); the timed run is the developer's (`docs/DEVELOPER_ACTIONS.md`) |
 
 ---
 

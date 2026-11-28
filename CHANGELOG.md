@@ -7,6 +7,9 @@ first production release.
 ## [Unreleased]
 
 ### Added
+- M9-P5 (#86): the onboarding rehearsal (RUNBOOK §44) and `make onboarding-report SLUG=<slug>`,
+  which reads a clinic's onboarding checklist and prints the minutes to each step and whether the
+  60-minute goal (G4) was met.
 - M9-P3 (#86): patient data requests (spec patient-data-requests, RUNBOOK §43).
   `make patient-data ARGS="export <clinic-slug> <code>"` writes one patient's whole record and
   files as an AES-256 zip whose password is shown once; `ARGS="erase …"` anonymises the patient
