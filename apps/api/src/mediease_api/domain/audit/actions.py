@@ -45,6 +45,10 @@ class AuditAction(StrEnum):
     PATIENT_OPTED_IN = "patient.opted_in"
     # M2-P4: one row per imported patient, by the ops user. Metadata: the code and the import ID.
     PATIENT_IMPORTED = "patient.imported"
+    # M9-P3 (RUNBOOK §43): a data request run by support on the clinic owner's written request.
+    # Written as SYSTEM (the support command has no session). Metadata: the code and counts only.
+    PATIENT_DATA_EXPORTED = "patient.data_exported"
+    PATIENT_ERASED = "patient.erased"
     # M3-P1: schedules. Metadata: counts, dates and kinds only.
     SCHEDULE_CHANGED = "schedule.changed"
     SCHEDULE_EXCEPTION_ADDED = "schedule.exception_added"

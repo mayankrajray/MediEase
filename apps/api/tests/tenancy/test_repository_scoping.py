@@ -141,6 +141,12 @@ class Tenant:
 # name only, never a row about a patient or a person, and only ops reach it
 # (tests/integration/test_ops_usage_http.py).
 #
+# Reviewed exception (M9-P3, RUNBOOK §43): SqlAlchemyPatientDataStore reads and anonymises one
+# patient across every table that holds their data, for the support command that answers a clinic
+# owner's written request (export, erasure). Every statement is bound to that clinic and that
+# patient (``clinic_id = :c AND patient_id = :p``), table names are module constants, and no HTTP
+# route reaches it (tests/integration/test_patient_data.py checks another clinic is untouched).
+#
 # Reviewed exception (M6b-P1 decision 6A): SqlAlchemyPortalLookup reads patient_account_links and
 # patient_portal_invites across clinics, because a portal caller names no clinic. It returns an
 # account's active links (IDs, method, dates) and an invite digest's clinic ID, nothing else; every

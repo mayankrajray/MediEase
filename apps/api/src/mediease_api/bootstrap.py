@@ -210,6 +210,7 @@ from mediease_api.application.ops.queries import GetClinicOnboarding, ListClinic
 from mediease_api.application.ops.suspension import ReactivateClinic, SuspendClinic
 from mediease_api.application.ops.usage import GetClinicUsage
 from mediease_api.application.patients.consent import OptIn, OptOut, RecordConsent
+from mediease_api.application.patients.data_requests import ErasePatient, ExportPatientData
 from mediease_api.application.patients.import_patients import ImportPatients
 from mediease_api.application.patients.my_patients import ListMyPatients
 from mediease_api.application.patients.queries import GetPatient, LookupPatients
@@ -1381,6 +1382,28 @@ def build_support_uow(settings: AppSettings) -> UnitOfWork:
     """A unit of work for the support commands (``delivery/cli/dose_data.py``, M6b-P3b)."""
     configure_logging(settings)
     return SqlAlchemyUnitOfWork(build_session_factory(build_engine(settings)))
+
+
+@dataclass(frozen=True, slots=True)
+class PatientDataRequests:
+    export: ExportPatientData
+    erase: ErasePatient
+
+
+def build_patient_data_requests(settings: AppSettings) -> PatientDataRequests:
+    """M9-P3 (RUNBOOK §43): the use cases behind ``delivery/cli/patient_data.py``."""
+    configure_logging(settings)
+    factory = build_session_factory(build_engine(settings))
+    storage = build_blob_storage(settings)
+    clock, ids = SystemClock(), Uuid7Generator()
+    return PatientDataRequests(
+        export=ExportPatientData(
+            uow=SqlAlchemyUnitOfWork(factory), storage=storage, clock=clock, ids=ids
+        ),
+        erase=ErasePatient(
+            uow=SqlAlchemyUnitOfWork(factory), storage=storage, clock=clock, ids=ids
+        ),
+    )
 
 
 def _interruptible_sleep(stop: threading.Event) -> Callable[[float], None]:

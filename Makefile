@@ -26,7 +26,7 @@ export TEST_DATABASE_URL
 # in pyproject.toml. CI runs the same command (.github/workflows/ci.yml).
 CORE_COVERAGE := --include='*/mediease_api/domain/*,*/mediease_api/application/*' --fail-under=80
 
-.PHONY: help env-check up down ps logs psql migrate seed import-clinic config-check watch alert-test smoke smoke-live install-api install-web api-venv-check \
+.PHONY: help env-check up down ps logs psql migrate seed import-clinic config-check watch alert-test patient-data smoke smoke-live install-api install-web api-venv-check \
 	web-deps-check test test-api test-web lint lint-api lint-web typecheck typecheck-api \
 	typecheck-web dev-web contract contract-check audit e2e worker dose-data vapid-keys
 
@@ -78,6 +78,11 @@ alert-test: env-check ## Send one test alert to OPS_ALERT_EMAIL (Mailpit locally
 dose-data: env-check ## A patient's dose records on request: ARGS="export <id> --out /exports/<id>.json" or "delete <id> --confirm"
 	@mkdir -p .exports && chmod 700 .exports
 	$(COMPOSE) run --rm --no-deps -v "$(CURDIR)/.exports:/exports" api python -m mediease_api.delivery.cli.dose_data $(ARGS)
+
+# M9-P3 (RUNBOOK §43): a clinic owner's written request for one patient's data, or its erasure.
+patient-data: env-check ## A patient data request: ARGS="export <clinic-slug> <code>" or "erase <clinic-slug> <code>"
+	@mkdir -p .exports && chmod 700 .exports
+	$(COMPOSE) run --rm --no-deps --build -v "$(CURDIR)/.exports:/exports" api python -m mediease_api.delivery.cli.patient_data $(ARGS)
 
 vapid-keys: env-check ## Print a new VAPID key pair for web push, to put in .env (nothing is stored; RUNBOOK §36)
 	@$(COMPOSE) build --quiet api
