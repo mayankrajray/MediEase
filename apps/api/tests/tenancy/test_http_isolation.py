@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import io
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, timedelta
 from uuid import uuid4
 
@@ -246,6 +247,241 @@ CROSS_TENANT_WRITES: dict[str, tuple[str, Body]] = {
     "/api/v1/booking-requests/<uuid:request_id>/propose": ("POST", lambda w: _PROPOSALS[id(w)]),
     "/api/v1/patients/<uuid:patient_id>/portal-link": ("DELETE", {}),
 }
+
+# M9-P3: the other methods of the same URLs (a URL above is tried by one method only). Each:
+# a URL (None: the rule's case above), the body, and whether each clinic's doctor calls it.
+UrlOf = Callable[[World], str] | None
+MORE_METHODS: dict[tuple[str, str], tuple[UrlOf, Body, bool]] = {
+    ("/api/v1/clinic/bills/<uuid:bill_id>", "PUT"): (
+        None,
+        {"lines": [{"description": "Dressing", "unit_price_paise": 20000}]},
+        False,
+    ),
+    ("/api/v1/clinic/bills/<uuid:bill_id>", "DELETE"): (None, {}, False),
+    ("/api/v1/clinic/doctors/<uuid:doctor_id>", "PATCH"): (
+        None,
+        {"specialty": "General medicine"},
+        False,
+    ),
+    ("/api/v1/clinic/doctors/<uuid:doctor_id>/schedule", "PUT"): (None, {"blocks": []}, False),
+    ("/api/v1/patients/<uuid:patient_id>", "PATCH"): (None, {"full_name": "Beta Patient"}, False),
+    ("/api/v1/patients/<uuid:patient_id>/reminders", "POST"): (
+        lambda w: f"{_consented_patient_url(w)}/reminders",
+        lambda w: {
+            "doctor_id": str(w.b.doctor.id),
+            "follow_up_date": (date.today() + timedelta(days=10)).isoformat(),
+        },
+        False,
+    ),
+    ("/api/v1/prescriptions/<uuid:rx_id>", "PUT"): (
+        None,
+        {"revision": 2, "items": [{"medicine_name": "Tab Y"}]},
+        True,
+    ),
+    ("/api/v1/prescriptions/<uuid:rx_id>", "DELETE"): (None, {}, True),
+    ("/api/v1/rx-favourites/<uuid:favourite_id>", "DELETE"): (None, {}, True),
+    ("/api/v1/rx-templates/<uuid:template_id>", "PUT"): (
+        None,
+        {"revision": 1, "name": "Tab Y usual", "items": [{"medicine_name": "Tab Y"}]},
+        True,
+    ),
+    ("/api/v1/rx-templates/<uuid:template_id>", "DELETE"): (None, {}, True),
+    ("/api/v1/visits/<uuid:visit_id>", "PATCH"): (None, {"revision": 1}, True),
+    ("/api/v1/visits/<uuid:visit_id>/attachments", "GET"): (None, {}, False),
+}
+
+
+@dataclass(frozen=True)
+class ForeignIds:
+    """Clinic A's own patient and booking request, and IDs that belong to clinic B."""
+
+    patient_a: str
+    request_a: str
+    patient_b: str
+    session_b: str
+    appointment_b: str
+    service_b: str
+    doctor_b: str
+    user_b: str
+
+    @property
+    def of_b(self) -> tuple[str, ...]:
+        return (
+            self.patient_b,
+            self.session_b,
+            self.appointment_b,
+            self.service_b,
+            self.doctor_b,
+            self.user_b,
+        )
+
+
+_LINE = [{"description": "Dressing", "unit_price_paise": 100}]
+_LATER = (date.today() + timedelta(days=10)).isoformat()
+Probe = tuple[str, str, dict[str, object] | None, int]
+# M9-P3: clinic A's own routes, sent clinic B's IDs in the body or the query string, with the
+# answer each gives (a refusal, or an empty read). A name starting "doctor:" is A's doctor calling.
+FOREIGN_IDS: dict[str, Callable[[ForeignIds], Probe]] = {
+    "book B's patient": lambda i: (
+        "POST",
+        "/api/v1/appointments",
+        {"session_id": i.session_b, "patient_id": i.patient_b},
+        404,
+    ),
+    "book A's patient in B's session": lambda i: (
+        "POST",
+        "/api/v1/appointments",
+        {"session_id": i.session_b, "patient_id": i.patient_a},
+        404,
+    ),
+    "walk in with B's doctor": lambda i: (
+        "POST",
+        "/api/v1/queue/walk-ins",
+        {"doctor_id": i.doctor_b, "patient_id": i.patient_a},
+        404,
+    ),
+    "bill B's patient": lambda i: (
+        "POST",
+        "/api/v1/clinic/bills",
+        {"patient_id": i.patient_b, "lines": _LINE},
+        404,
+    ),
+    "bill with B's doctor": lambda i: (
+        "POST",
+        "/api/v1/clinic/bills",
+        {"patient_id": i.patient_a, "doctor_id": i.doctor_b, "lines": _LINE},
+        404,
+    ),
+    "bill B's service": lambda i: (
+        "POST",
+        "/api/v1/clinic/bills",
+        {"patient_id": i.patient_a, "lines": [{"service_id": i.service_b}]},
+        422,
+    ),
+    "remind with B's doctor": lambda i: (
+        "POST",
+        f"/api/v1/patients/{i.patient_a}/reminders",
+        {"doctor_id": i.doctor_b, "follow_up_date": _LATER},
+        404,
+    ),
+    "doctor: start a visit on B's appointment": lambda i: (
+        "POST",
+        "/api/v1/visits",
+        {"appointment_id": i.appointment_b},
+        404,
+    ),
+    "invite an owner as B's doctor": lambda i: (
+        "POST",
+        "/api/v1/clinic/staff",
+        {"full_name": "X", "role": "OWNER", "phone": "9000000072", "doctor_id": i.doctor_b},
+        422,
+    ),
+    "add a doctor as B's user": lambda i: (
+        "POST",
+        "/api/v1/clinic/doctors",
+        {
+            "display_name": "Dr X",
+            "qualification": "MBBS",
+            "registration_number": "TEST-1",
+            "registration_council": "Test Council",
+            "user_id": i.user_b,
+        },
+        422,
+    ),
+    "accept a request as B's patient": lambda i: (
+        "POST",
+        f"/api/v1/booking-requests/{i.request_a}/accept",
+        {"patient_id": i.patient_b},
+        404,
+    ),
+    "sessions of B's doctor": lambda i: (
+        "GET",
+        f"/api/v1/sessions?date={_LATER}&doctor_id={i.doctor_b}",
+        None,
+        404,
+    ),
+    "queue of B's doctor": lambda i: ("GET", f"/api/v1/queue?doctor_id={i.doctor_b}", None, 404),
+    "bookings to move of B's doctor": lambda i: (
+        "GET",
+        f"/api/v1/appointments/to-move?doctor_id={i.doctor_b}",
+        None,
+        200,
+    ),
+    "bills of B's patient": lambda i: (
+        "GET",
+        f"/api/v1/clinic/bills?patient_id={i.patient_b}",
+        None,
+        200,
+    ),
+    "dues of B's patient": lambda i: (
+        "GET",
+        f"/api/v1/clinic/dues?patient_id={i.patient_b}",
+        None,
+        200,
+    ),
+    "follow-ups of B's doctor": lambda i: (
+        "GET",
+        f"/api/v1/follow-ups/pending?doctor_id={i.doctor_b}",
+        None,
+        200,
+    ),
+    "audit events of B's owner": lambda i: (
+        "GET",
+        f"/api/v1/audit-events?actor_user_id={i.user_b}",
+        None,
+        200,
+    ),
+}
+
+
+def _foreign_ids(world: World) -> ForeignIds:
+    owner_a = world.client_for(world.a.owner)
+    csrf = owner_a.get_cookie("me_csrf", path="/")
+    assert csrf is not None
+    headers = {"X-CSRF-Token": csrf.value}
+    created = owner_a.post(
+        "/api/v1/patients",
+        json={
+            "full_name": "Alpha Pat",
+            "phone": "9000000071",
+            "sex": "UNDISCLOSED",
+            "age_years": 30,
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201, created.get_json()
+    patient_a = created.get_json()["id"]
+    consent = owner_a.put(
+        f"/api/v1/patients/{patient_a}/consent",
+        json={"whatsapp": True, "sms": False},
+        headers=headers,
+    )
+    assert consent.status_code == 200, consent.get_json()
+    appointment = _appointment_url(world)
+    owner_b, _ = _owner_of_b(world)
+    _, request_a = request_in(world, world.a, f"alpha.req.{uuid4().hex[:10]}@example.test")
+    return ForeignIds(
+        patient_a=patient_a,
+        request_a=str(request_a),
+        patient_b=owner_b.get(appointment).get_json()["patient_id"],
+        session_b=_session_of_b(world, days=33),
+        appointment_b=appointment.rsplit("/", 1)[1],
+        service_b=_service_of_b(world),
+        doctor_b=str(world.b.doctor.id),
+        user_b=str(world.b.owner.id),
+    )
+
+
+def _consented_patient_url(world: World) -> str:
+    """Clinic B's patient with WhatsApp consent, so clinic B may schedule a reminder."""
+    url = _patient_url(world)
+    owner_of_b, headers = _owner_of_b(world)
+    consent = owner_of_b.put(
+        f"{url}/consent", json={"whatsapp": True, "sms": False}, headers=headers
+    )
+    assert consent.status_code == 200, consent.get_json()
+    return url
+
 
 # Patients have their own read and write cross-clinic cases in integration/test_patients_http.py;
 # this suite reads one by ID so the "every route with an ID" guard below stays complete.
@@ -582,6 +818,60 @@ def _clinic_rules_with_an_id(world: World) -> set[str]:
 
 def test_nfr_08_every_clinic_route_with_an_id_has_a_cross_tenant_case(world: World) -> None:
     assert _clinic_rules_with_an_id(world) == set(CROSS_TENANT_CASES)
+
+
+def _clinic_methods_with_an_id(world: World) -> set[tuple[str, str]]:
+    found: set[tuple[str, str]] = set()
+    for rule in world.app.url_map.iter_rules():
+        policy = policy_of(world.app.view_functions[rule.endpoint])
+        if "<" in rule.rule and policy is not None and policy.access is Access.CLINIC:
+            found |= {(rule.rule, m) for m in rule.methods or () if m not in {"HEAD", "OPTIONS"}}
+    return found
+
+
+def _covered_methods() -> set[tuple[str, str]]:
+    main = {(rule, CROSS_TENANT_WRITES.get(rule, ("GET", {}))[0]) for rule in CROSS_TENANT_CASES}
+    return main | set(MORE_METHODS)
+
+
+def test_m9_p3_every_method_of_every_clinic_route_with_an_id_has_a_cross_tenant_case(
+    world: World,
+) -> None:
+    """M9-P3: one URL often has several methods (GET, PUT, DELETE); each is tried, not only one."""
+    assert _clinic_methods_with_an_id(world) == _covered_methods()
+
+
+@pytest.mark.parametrize("key", sorted(MORE_METHODS), ids=lambda k: f"{k[1]} {k[0]}")
+def test_m9_p3_nfr_08_another_clinics_resource_is_404_by_every_method(
+    world: World, key: tuple[str, str]
+) -> None:
+    rule, method = key
+    url_of, wanted, doctor = MORE_METHODS[key]
+    url = (url_of or CROSS_TENANT_CASES[rule])(world)
+    body = wanted(world) if callable(wanted) else wanted
+    caller_a = world.client_for(world.a.doctor_user if doctor else world.a.owner)
+    resp = _call(caller_a, method, url, body)
+    assert resp.status_code == 404, resp.get_json()
+    assert resp.get_json()["error"]["code"] == "REQ_NOT_FOUND"
+    caller_b = world.client_for(world.b.doctor_user if doctor else world.b.owner)
+    assert _call(caller_b, method, url, body).status_code in (200, 201, 204)
+
+
+@pytest.mark.parametrize("case", sorted(FOREIGN_IDS), ids=str)
+def test_m9_p3_nfr_08_clinic_bs_ids_in_a_body_or_query_reach_nothing(
+    world: World, case: str
+) -> None:
+    """M9-P3: an ID of clinic B sent in a body or a query string, on clinic A's own route, is
+    refused (no write) or matches nothing (no read): never B's data in the answer."""
+    ids = _foreign_ids(world)
+    method, url, body, wanted = FOREIGN_IDS[case](ids)
+    client = world.client_for(world.a.doctor_user if case.startswith("doctor:") else world.a.owner)
+    resp = _call(client, method, url, body or {})
+    assert resp.status_code == wanted, resp.get_json()
+    for foreign in ids.of_b:
+        assert foreign not in resp.text
+    if wanted == 200:
+        assert resp.get_json().get("items", []) == []
 
 
 @pytest.mark.parametrize("rule", sorted(CROSS_TENANT_CASES))
