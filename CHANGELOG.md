@@ -7,6 +7,12 @@ first production release.
 ## [Unreleased]
 
 ### Added
+- M9-P3 (#86): patient data requests (spec patient-data-requests, RUNBOOK §43).
+  `make patient-data ARGS="export <clinic-slug> <code>"` writes one patient's whole record and
+  files as an AES-256 zip whose password is shown once; `ARGS="erase …"` anonymises the patient
+  and keeps the clinical record the clinic must retain. Both run only on the clinic owner's
+  written request and are audited. New dependency `pyzipper`. `docs/DEVELOPER_ACTIONS.md` lists
+  what the developer does by hand for each phase.
 - M9-P3 (#86): the security review (SECURITY_AND_COMPLIANCE §3, M9 design §12).
   `scripts/log-review.sh` counts phone-, email- and Aadhaar-like values in each service's log
   without printing them (RUNBOOK §42); the breach procedure gains its clocks (RUNBOOK §15); the

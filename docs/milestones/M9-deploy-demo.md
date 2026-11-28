@@ -240,5 +240,9 @@ bodies; owner-granted support access (FR-OPS-05); Row-Level Security (post-pilot
 recovery; the DPA, patient notice and sharing the sub-processor list (L-04); the log review on the
 VM; alerts for sign-in failure spikes and webhook signature failures.
 
-**Patient export and erasure:** designed, not built; they wait for the developer's decisions
-(below, in NEXT_STEPS_PLAN.md §0).
+**Patient export and erasure (built 28 Nov 2026, spec `patient-data-requests.md`):** the
+developer chose (27 Nov 2026) a support command on the VM, erasure that anonymises and keeps the
+clinical record, and an AES-256 zip whose password is told by phone. `make patient-data`
+(`delivery/cli/patient_data.py`, `application/patients/data_requests.py`,
+`adapters/db/patient_data.py`, a reviewed tenancy exception); new dependency `pyzipper` 0.4.0
+(the standard library cannot write encrypted zips; `pip-audit` clean). RUNBOOK §43.

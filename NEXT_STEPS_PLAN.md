@@ -21,7 +21,10 @@ docs). 16 Nov 2026: after the Phase 2 deadline the developer chose to merge P4 a
 PR #78 merged, and `main` made green again (the demo import on a Sunday, PR #78; a flaky QR
 decode, PR #85). Issue #86 and branch opened; P2 built (design §11): the uptime check and the
 watch timer, verified locally. Open for the developer: `OPS_ALERT_EMAIL`, the timer and the
-uptime check on the VM (RUNBOOK §41).
+uptime check on the VM (RUNBOOK §41). 27–28 Nov 2026: P3 built (design §12): the review and
+dependency scan; the developer chose the support command, anonymising erasure and an AES zip, and
+`make patient-data` was built (spec `patient-data-requests.md`). The developer's VM steps for P2
+and P3 are in `docs/DEVELOPER_ACTIONS.md`. Next: P5.
 
 ---
 

@@ -22,7 +22,7 @@
 | Class | Examples | Handling |
 |---|---|---|
 | **C3 Clinical** | Visit notes, diagnosis, vitals, prescription items, advice, attachments; the patient's own dose marks (M6b-P3b, `dose_records`) | Tenant-scoped; never in logs/messages/analytics; access audited; encrypted at rest |
-| **C2 Personal** | Patient name, phone, DOB, guardian, staff contact details | Tenant-scoped; phones masked in logs; export/erasure supported |
+| **C2 Personal** | Patient name, phone, DOB, guardian, staff contact details | Tenant-scoped; phones masked in logs; export/erasure supported (M9-P3: `make patient-data`, RUNBOOK §43) |
 | **C1 Operational** | IDs, statuses, timestamps, counts, error codes | May appear in logs and metrics |
 | **S Secrets** | Passwords, tokens, keys, provider credentials | Environment/secret store only; never logged |
 

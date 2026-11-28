@@ -53,6 +53,7 @@ Severity levels: **SEV1** patient data at risk or clinics cannot work · **SEV2*
 40. Clinic usage and the usage evidence (M9-P4)
 41. Alerts: the uptime check and the watch (M9-P2)
 42. Log review for personal data (M9-P3)
+43. Patient data requests: export and erasure (M9-P3)
 
 ---
 
@@ -293,9 +294,10 @@ timestamp is the G4 measurement. Each step is also in `audit_events` (§18).
 ### 12. Patient data request (access, correction, erasure)
 The **clinic** is the Data Fiduciary and responds to the patient; MediEase assists.
 1. Receive the request via the clinic owner.
-2. Access → export that patient's record. Correction → clinic staff edit demographics; clinical
-   corrections are addenda. Erasure → run the erasure procedure, which respects clinical record
-   retention obligations (confirm with counsel, L-04).
+2. Access → export that patient's record (`make patient-data ARGS="export …"`, §43). Correction →
+   clinic staff edit demographics; clinical corrections are addenda. Erasure → `make
+   patient-data ARGS="erase …"` (§43), which keeps the clinical record the clinic must retain and
+   removes who the patient is (confirm the retention with counsel, L-04).
 3. Log the request and completion date; the statutory response window applies.
 
 ### 13. Secret exposure
@@ -1219,3 +1221,38 @@ into a ticket.
   `log_min_error_statement=panic` (M9-P3). On a VM deployed before that, the old lines stay until
   Docker rotates them; to clear them at once: `docker compose up -d --force-recreate db`
   (a new container starts with an empty log; the data volume is kept).
+
+### 43. Patient data requests: export and erasure (M9-P3, spec patient-data-requests)
+
+**Only on the clinic owner's written request** (an email from the owner's address, naming the
+patient's code). The clinic answers the patient; MediEase does what the clinic asks (§12). Keep
+the request email; note its date and the completion date in the M9 design.
+
+**Export (the patient asks for their data).** On the VM, in `/opt/mediease`:
+```bash
+make patient-data ARGS="export <clinic-slug> <patient-code>"
+```
+It writes `.exports/<slug>-<code>-<date>.zip` (owner-only), an AES-256 zip with `record.json`
+(every row about the patient, by table), the issued prescriptions as printed and the visit
+reports, and prints a password **once**. Copy the file off the VM (the Console's SSH window →
+*Download file*), send it to the owner, and tell them the password **by phone**, never in the
+same email. Then delete it on the VM: `rm .exports/<file>.zip`. It opens with 7-Zip or WinRAR
+(not Windows Explorer). Audited as `patient.data_exported`.
+
+**Erasure (the patient asks to be forgotten).**
+1. If the command says the patient has upcoming appointments or open booking requests, ask the
+   clinic to cancel or answer them first.
+2. `make patient-data ARGS="erase <clinic-slug> <patient-code>"`: it lists what it changes and
+   asks you to type the code again.
+3. What goes: the name (becomes "Erased patient"), phone, exact date of birth (the age at
+   registration stays), guardian, consents (messages stop); their app links, invitations,
+   reminder choices and dose marks; open patient links; scheduled reminders; the phone on
+   messages and on booking requests (with the age, sex and reason given there); the name in staff
+   notifications; the stored prescription and receipt PDFs (drawn again, anonymised, if the clinic
+   downloads them).
+4. What the clinic keeps, under the code, for its legal record-keeping (*Counsel*, L-04): visits
+   and addenda, prescriptions, bills and payments, reports attached to visits, the audit log. A
+   patient app account is the person's own and is not deleted; if they want it gone too, it is a
+   separate request (FR-PRT-10).
+5. Backups keep the old rows for up to 30 days, then they are gone (§39). Audited as
+   `patient.erased`, with counts only. It cannot be undone, and a second run is refused.
