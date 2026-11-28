@@ -255,8 +255,10 @@ onboarding checklist (written once per step), read by `make onboarding-report SL
 (`scripts/onboarding-report.sh`), so the result is a fact in the database, not a stopwatch.
 The test clinic is suspended afterwards (clinics are not deleted).
 
-Known before the run: there is no screen for importing a patient list (ops use the API, §10
-step 6), so the rehearsal registers patients by hand unless the API is used.
+Found before the run, and fixed (28 Nov 2026): there was no screen for importing a patient list;
+ops now have **Clinics → Import patients** (`/ops/clinics/<id>/import`): the file is checked
+first, the report lists each row with a problem, a shared phone or an existing registration, and
+only *Import N patients* writes.
 
 | Date | Total (minutes) | Met? | Slowdowns found | Issues |
 |---|---|---|---|---|

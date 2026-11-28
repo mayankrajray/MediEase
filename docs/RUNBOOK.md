@@ -258,7 +258,11 @@ curl -s -b jar -X PUT -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/jso
    pair. Leave and extra sessions are the owner's (`/api/v1/clinic/doctors/{id}/schedule-exceptions`).
 6. Import patients (M2-P4). Ask the clinic to save their list as **CSV UTF-8** with exactly these
    columns (any order): `name, phone, sex, dob_or_age, guardian_name, language`; a template with
-   synthetic rows is `scripts/fixtures/patients-import-sample.csv`. Dry-run first (the default),
+   synthetic rows is `scripts/fixtures/patients-import-sample.csv`. **In the browser (M9-P3):** ops
+   **Clinics → Import patients** on the clinic's row: choose the file, *Check file* (nothing is
+   saved), read the rows with a problem or a shared phone, fix the spreadsheet and check again if
+   needed, then *Import N patients*; the codes are shown. The same with the API, for scripts:
+   dry-run first (the default),
    fix the rows it reports in the spreadsheet (row numbers match it), dry-run again, then commit:
 
 ```bash
@@ -1284,8 +1288,9 @@ reads it. Rehearse on the production VM, as a real pilot would run, with **inven
    email in their own window.
 4. Owner: **Settings → Schedule**: each doctor's weekly hours. **Settings → Fees**: the
    consultation fee.
-5. Patients: ops imports the clinic's list with the API (§10 step 6; there is no screen for it
-   yet), or the desk registers three invented patients by hand.
+5. Patients: ops **Clinics → Import patients** on the clinic's row, with an invented CSV
+   (`scripts/fixtures/patients-import-sample.csv` is one): *Check file*, read the report, then
+   *Import N patients*. Or the desk registers three invented patients by hand.
 6. Desk: book one of them today; **Queue** → *Arrived*.
 7. Doctor: open the patient, write and **issue** a prescription. The clock stops here
    (`first_prescription_at`).

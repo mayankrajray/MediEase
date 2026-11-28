@@ -7,6 +7,12 @@ first production release.
 ## [Unreleased]
 
 ### Added
+- M9 (#86): ops **Import patients** (`/ops/clinics/<id>/import`, FR-OPS-02, FR-PAT-08), opened from
+  each clinic's row: choose a CSV, *Check file* (a dry run; nothing is saved), read what each row
+  would do (rows with a problem by column, a phone already in use, already registered), then
+  *Import N patients*, which names the new codes. A blank template downloads from the page. The
+  checklist's "Patients imported" step shows in the clinic list.
+- M9-P3 (#86): failed sign-in spikes and webhook signature failures are alerted by the watch.
 - M9-P5 (#86): the onboarding rehearsal (RUNBOOK §44) and `make onboarding-report SLUG=<slug>`,
   which reads a clinic's onboarding checklist and prints the minutes to each step and whether the
   60-minute goal (G4) was met.
