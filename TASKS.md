@@ -337,7 +337,8 @@ Small changes the developer approved as their own issue, branch and PR while a m
 
 | Issue | Change | Requirement | Branch | Status |
 |---|---|---|---|---|
-| #80 | Landing page: full-width, edge-to-edge navbar; phone menu scroll lock and Escape fixes | FR-LND-01 | `m9/80-landing-navbar` | ▶ 27 Nov 2026: draft PR, waits for review |
+| #80 | Landing page: full-width, edge-to-edge navbar; phone menu scroll lock and Escape fixes | FR-LND-01 | `m9/80-landing-navbar` | ✅ 27 Nov 2026: merged in PR #81 |
+| #84 | CI: decode only QR codes in the prescription PDF test (a flaky read of Hindi text as a barcode) | FR-RX-11 | `m9/84-qr-test-flake` | ✅ 27 Nov 2026: merged in PR #85 |
 
 ---
 

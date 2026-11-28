@@ -12,6 +12,8 @@
 #   containers  a service of the stack is not running, or unhealthy   (critical for db, api, web,
 #                                                                       caddy; warning otherwise)
 #   errors      >= WATCH_5XX_THRESHOLD (5) server errors in the API log in the last 5 minutes
+#   signins     >= WATCH_SIGNIN_FAILURES (30) failed sign-ins, or 3 accounts locked, in 5 minutes
+#   webhook     >= WATCH_WEBHOOK_FAILURES (5) webhook calls with a wrong signature in 5 minutes
 #   jobs        dead jobs in 24 h; a running job stuck; the oldest due job waiting more than
 #               WATCH_QUEUE_AGE_SECONDS (600)
 #   backup      the backup service failed, or no successful backup in 26 hours
@@ -41,6 +43,8 @@ env_value() {
   printf '%s' "${value:-$default}"
 }
 FIVE_XX=$(env_value WATCH_5XX_THRESHOLD 5)
+SIGNIN_FAILURES=$(env_value WATCH_SIGNIN_FAILURES 30)
+WEBHOOK_FAILURES=$(env_value WATCH_WEBHOOK_FAILURES 5)
 QUEUE_AGE=$(env_value WATCH_QUEUE_AGE_SECONDS 600)
 DISK_PCT=$(env_value WATCH_DISK_PERCENT 85)
 CERT_DAYS=$(env_value WATCH_CERT_DAYS 14)
@@ -73,11 +77,24 @@ check_containers() {
 }
 
 check_errors() {
-  local count
-  count=$($COMPOSE logs --since 5m --no-log-prefix api 2>/dev/null \
-    | grep -cE '"event": ?"(http\.server_error|app\.unexpected_error)"') || count=0
+  local log count
+  log=$($COMPOSE logs --since 5m --no-log-prefix api 2>/dev/null) || log=""
+  count=$(grep -cE '"event": ?"(http\.server_error|app\.unexpected_error)"' <<<"$log") || count=0
   if [ "$count" -ge "$FIVE_XX" ]; then
     problem errors warning "$count server errors in the API in the last 5 minutes (threshold $FIVE_XX)"
+  fi
+  # M9-P3 follow-up: password guessing shows as many failed sign-ins (staff or patient) or several
+  # accounts locked in a few minutes (RUNBOOK §17, §15).
+  count=$(grep -cE '"event": ?"(auth|portal)\.sign_in_failed"' <<<"$log") || count=0
+  local locked
+  locked=$(grep -cE '"event": ?"auth\.locked"' <<<"$log") || locked=0
+  if [ "$count" -ge "$SIGNIN_FAILURES" ] || [ "$locked" -ge 3 ]; then
+    problem signins warning "$count failed sign-ins and $locked accounts locked in the last 5 minutes (threshold $SIGNIN_FAILURES): possible password guessing"
+  fi
+  # A WhatsApp webhook with a wrong signature or verify token is someone probing the webhook.
+  count=$(grep -cE '"event": ?"webhook\.(signature_invalid|verify_failed)"' <<<"$log") || count=0
+  if [ "$count" -ge "$WEBHOOK_FAILURES" ]; then
+    problem webhook warning "$count webhook calls with a wrong signature or token in the last 5 minutes (threshold $WEBHOOK_FAILURES)"
   fi
 }
 

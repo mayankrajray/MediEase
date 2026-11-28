@@ -1191,6 +1191,8 @@ uptime check*:
 | `[critical] docker compose does not answer` | any hour | `sudo systemctl status docker`; `sudo systemctl restart docker`, then `make up` |
 | `[warning] worker / upload-worker / clamav is not running` | 08:00–22:00 IST | As above. Reminders and scans wait in the queue; nothing is lost |
 | `[warning] N server errors in the API in the last 5 minutes` | 08:00–22:00 | `docker compose logs --since 15m api \| grep -E 'server_error\|unexpected_error'`; each line has a `request_id` (DEBUGGING.md) |
+| `[warning] N failed sign-ins and M accounts locked in the last 5 minutes` | 08:00–22:00 | Possible password guessing: §17 step 3, then §15 if it continues. The per-address limit (30 a minute) already slows one source |
+| `[warning] N webhook calls with a wrong signature or token` | 08:00–22:00 | Someone is probing `/webhooks/whatsapp`; nothing is accepted without the signature. If it is Meta itself, `WHATSAPP_APP_SECRET` changed: §13 |
 | `[warning] N dead jobs in the last 24 hours` | 08:00–22:00 | §6. Clears 24 hours after the last one died |
 | `[warning] N running jobs stuck` / `the oldest due job has waited M minutes` | 08:00–22:00 | `make ps` (is the worker up?), then §6 |
 | `[warning] the last backup failed` / `no backup has finished in 26 hours` | 08:00–22:00 | `journalctl -u mediease-backup.service -n 30`; run it again: `sudo systemctl start mediease-backup.service` (§39) |
@@ -1199,7 +1201,8 @@ uptime check*:
 
 A problem that lasts is repeated once a day ("still failing"). Warnings that start after 22:00
 are held and sent at 08:00 IST. If the email itself fails, the watch tries again on the next run.
-Thresholds can be changed with `WATCH_5XX_THRESHOLD`, `WATCH_QUEUE_AGE_SECONDS`,
+Thresholds can be changed with `WATCH_5XX_THRESHOLD`, `WATCH_SIGNIN_FAILURES`,
+`WATCH_WEBHOOK_FAILURES`, `WATCH_QUEUE_AGE_SECONDS`,
 `WATCH_DISK_PERCENT` and `WATCH_CERT_DAYS` lines in `.env` (the script reads only those).
 Alert emails carry service names, counts and codes only, never patient data (NFR-07).
 

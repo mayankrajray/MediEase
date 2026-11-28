@@ -253,3 +253,31 @@ def test_m9_p2_the_dry_run_shows_the_email_and_keeps_no_state(watch: Watch) -> N
     assert not (watch.root / "state" / "state.tsv").exists()
     watch.run(MORNING + 60)
     assert len(watch.emails) == 1  # the real run still treats it as new
+
+
+def test_m9_p3_many_failed_sign_ins_or_locked_accounts_look_like_guessing(watch: Watch) -> None:
+    failed = '{"event": "auth.sign_in_failed", "reason": "unknown_identifier"}\n'
+    patient = '{"event": "portal.sign_in_failed", "reason": "wrong_password"}\n'
+    watch.put("logs", failed * 20 + patient * 9)
+    watch.run(MORNING)
+    assert watch.emails == []  # 29 in 5 minutes: below the threshold
+
+    watch.put("logs", failed * 20 + patient * 10)
+    watch.run(MORNING + 300)
+    [email] = watch.emails
+    assert "[warning] 30 failed sign-ins and 0 accounts locked in the last 5 minutes" in email
+
+    # Three accounts locked is enough on its own, whatever the threshold.
+    watch.put("logs", '{"event": "auth.locked", "user_id": "x"}\n' * 3)
+    result = watch.run(MORNING + 600, WATCH_SIGNIN_FAILURES="500")
+    assert "0 failed sign-ins and 3 accounts locked" in result.stdout
+
+
+def test_m9_p3_webhook_calls_with_a_wrong_signature_are_reported(watch: Watch) -> None:
+    probe = '{"event": "webhook.signature_invalid", "provider": "whatsapp", "signed": false}\n'
+    watch.put("logs", probe * 4 + '{"event": "webhook.verify_failed", "mode": "x"}\n')
+    watch.run(MORNING)
+    [email] = watch.emails
+    assert (
+        "[warning] 5 webhook calls with a wrong signature or token in the last 5 minutes" in email
+    )
